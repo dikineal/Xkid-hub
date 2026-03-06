@@ -1,7 +1,7 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-Name = "🔥 XKID HUB MOBILE 🔥",
+Name = "🔥 XKIDHUB MOBILE 🔥",
 LoadingTitle = "XKID HUB",
 LoadingSubtitle = "Clean Final",
 ConfigurationSaving = {Enabled = false},
