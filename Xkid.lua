@@ -1,7 +1,7 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-Name = "🔥 XKID HUB MOBILE V4 🔥",
+Name = "🔥 XKID HUB MOBILE 🔥",
 LoadingTitle = "XKID HUB",
 LoadingSubtitle = "Mobile Edition",
 ConfigurationSaving = {Enabled = false},
@@ -18,29 +18,38 @@ local PlayerTab = Window:CreateTab("👤 Player", nil)
 local TPTab = Window:CreateTab("🏝 Teleport", nil)
 local MiscTab = Window:CreateTab("🎲 Misc", nil)
 
-------------------------------------------------
--- NOTIFY
-------------------------------------------------
-
 Rayfield:Notify({
 Title = "XKID HUB",
-Content = "V4 Loaded",
+Content = "Final Version Loaded",
 Duration = 5
 })
 
 ------------------------------------------------
--- ANTI AFK
+-- Anti AFK
 ------------------------------------------------
 
-local VirtualUser = game:GetService("VirtualUser")
+_G.AntiAFK = false
+
+MainTab:CreateToggle({
+Name = "Anti AFK",
+CurrentValue = false,
+Callback = function(v)
+_G.AntiAFK = v
+end
+})
 
 LocalPlayer.Idled:Connect(function()
-VirtualUser:CaptureController()
-VirtualUser:ClickButton2(Vector2.new())
+
+if _G.AntiAFK then
+local vu = game:GetService("VirtualUser")
+vu:CaptureController()
+vu:ClickButton2(Vector2.new())
+end
+
 end)
 
 ------------------------------------------------
--- INFINITE JUMP
+-- Infinite Jump
 ------------------------------------------------
 
 _G.InfiniteJump = false
@@ -54,13 +63,15 @@ end
 })
 
 UIS.JumpRequest:Connect(function()
+
 if _G.InfiniteJump then
 LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
 end
+
 end)
 
 ------------------------------------------------
--- FLY SPEED
+-- Fly Speed
 ------------------------------------------------
 
 _G.FlySpeed = 3
@@ -76,58 +87,45 @@ end
 })
 
 ------------------------------------------------
--- FLY
+-- Fly Mobile
 ------------------------------------------------
 
-local FlyConnection
+_G.Flying = false
 
 MainTab:CreateToggle({
 Name = "Fly",
 CurrentValue = false,
 Callback = function(v)
 
-local char = LocalPlayer.Character
-local hrp = char and char:FindFirstChild("HumanoidRootPart")
+_G.Flying = v
 
-if v and hrp then
+local char = LocalPlayer.Character
+local hrp = char:WaitForChild("HumanoidRootPart")
 
 local bv = Instance.new("BodyVelocity")
-local bg = Instance.new("BodyGyro")
-
 bv.MaxForce = Vector3.new(9e9,9e9,9e9)
 bv.Parent = hrp
 
-bg.MaxTorque = Vector3.new(9e9,9e9,9e9)
-bg.Parent = hrp
+RunService.RenderStepped:Connect(function()
 
-FlyConnection = RunService.RenderStepped:Connect(function()
+if _G.Flying then
 
-local cam = workspace.CurrentCamera
-bg.CFrame = cam.CFrame
-
-local dir = Vector3.zero
-
-if UIS:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
-if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
-if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
-if UIS:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
-
-bv.Velocity = dir * (30 * _G.FlySpeed)
-
-end)
+local moveDir = char.Humanoid.MoveDirection
+bv.Velocity = moveDir * (40 * _G.FlySpeed)
 
 else
 
-if FlyConnection then
-FlyConnection:Disconnect()
-end
+bv:Destroy()
 
 end
+
+end)
+
 end
 })
 
 ------------------------------------------------
--- NOCLIP
+-- Noclip
 ------------------------------------------------
 
 _G.Noclip = false
@@ -155,61 +153,47 @@ end
 end)
 
 ------------------------------------------------
--- ESP BOX + NAME + DISTANCE
+-- ESP PLAYER
 ------------------------------------------------
 
 _G.ESP = false
-
-local function CreateESP(player)
-
-if player ~= LocalPlayer then
-
-player.CharacterAdded:Connect(function(char)
-
-if _G.ESP then
-
-local highlight = Instance.new("Highlight")
-highlight.FillColor = Color3.new(1,0,0)
-highlight.FillTransparency = 0.5
-highlight.Parent = char
-
-local billboard = Instance.new("BillboardGui")
-billboard.Size = UDim2.new(0,100,0,40)
-billboard.AlwaysOnTop = true
-billboard.Adornee = char:WaitForChild("Head")
-billboard.Parent = char
-
-local text = Instance.new("TextLabel")
-text.Size = UDim2.new(1,0,1,0)
-text.BackgroundTransparency = 1
-text.TextColor3 = Color3.new(1,0,0)
-text.Text = player.Name
-text.Parent = billboard
-
-end
-
-end)
-
-end
-
-end
-
-for _,p in pairs(Players:GetPlayers()) do
-CreateESP(p)
-end
-
-Players.PlayerAdded:Connect(CreateESP)
 
 MainTab:CreateToggle({
 Name = "ESP Player",
 CurrentValue = false,
 Callback = function(v)
+
 _G.ESP = v
+
+for _,player in pairs(Players:GetPlayers()) do
+
+if player ~= LocalPlayer and player.Character then
+
+if v then
+
+local highlight = Instance.new("Highlight")
+highlight.Name = "XKIDESP"
+highlight.FillColor = Color3.fromRGB(255,0,0)
+highlight.FillTransparency = 0.5
+highlight.Parent = player.Character
+
+else
+
+if player.Character:FindFirstChild("XKIDESP") then
+player.Character.XKIDESP:Destroy()
+end
+
+end
+
+end
+
+end
+
 end
 })
 
 ------------------------------------------------
--- WALK SPEED
+-- WalkSpeed
 ------------------------------------------------
 
 PlayerTab:CreateSlider({
@@ -223,7 +207,7 @@ end
 })
 
 ------------------------------------------------
--- JUMP POWER
+-- JumpPower
 ------------------------------------------------
 
 PlayerTab:CreateSlider({
@@ -237,7 +221,7 @@ end
 })
 
 ------------------------------------------------
--- PLAYER LIST
+-- Player List
 ------------------------------------------------
 
 local PlayerList = {}
@@ -253,7 +237,7 @@ table.insert(PlayerList,p.Name)
 end)
 
 ------------------------------------------------
--- TELEPORT PLAYER
+-- Teleport Player
 ------------------------------------------------
 
 TPTab:CreateDropdown({
@@ -276,7 +260,7 @@ end
 })
 
 ------------------------------------------------
--- SPECTATE
+-- Spectate Player
 ------------------------------------------------
 
 TPTab:CreateDropdown({
@@ -298,31 +282,18 @@ end
 end
 })
 
-------------------------------------------------
--- FOLLOW PLAYER
-------------------------------------------------
+TPTab:CreateButton({
+Name = "Stop Spectate",
+Callback = function()
 
-TPTab:CreateDropdown({
-Name = "Follow Player",
-Options = PlayerList,
-CurrentOption = {},
-MultipleOptions = false,
-Callback = function(selected)
-
-local target = Players:FindFirstChild(selected[1])
-
-if target and target.Character then
-
-LocalPlayer.Character.HumanoidRootPart.CFrame =
-target.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
-
-end
+workspace.CurrentCamera.CameraSubject =
+LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 
 end
 })
 
 ------------------------------------------------
--- INFINITE YIELD
+-- Infinite Yield
 ------------------------------------------------
 
 MiscTab:CreateButton({
@@ -333,28 +304,40 @@ end
 })
 
 ------------------------------------------------
--- FREECAM
+-- Freecam Mobile
 ------------------------------------------------
 
 MiscTab:CreateToggle({
-Name = "Freecam",
+Name = "Freecam Mobile",
 CurrentValue = false,
 Callback = function(v)
 
 local cam = workspace.CurrentCamera
 
 if v then
+
 cam.CameraType = Enum.CameraType.Scriptable
+
+RunService:BindToRenderStep("Freecam",0,function()
+
+local move = LocalPlayer.Character.Humanoid.MoveDirection
+cam.CFrame = cam.CFrame + move * 2
+
+end)
+
 else
+
+RunService:UnbindFromRenderStep("Freecam")
 cam.CameraType = Enum.CameraType.Custom
 cam.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+
 end
 
 end
 })
 
 ------------------------------------------------
--- REJOIN
+-- Rejoin
 ------------------------------------------------
 
 MiscTab:CreateButton({
@@ -365,7 +348,7 @@ end
 })
 
 ------------------------------------------------
--- SERVER HOP
+-- Server Hop
 ------------------------------------------------
 
 MiscTab:CreateButton({
@@ -390,7 +373,7 @@ end
 })
 
 ------------------------------------------------
--- FULL BRIGHT
+-- Full Bright
 ------------------------------------------------
 
 MiscTab:CreateButton({
@@ -408,4 +391,4 @@ end
 
 ------------------------------------------------
 
-print("XKID HUB MOBILE V4 LOADED")
+print("XKID HUB FINAL LOADED")
