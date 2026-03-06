@@ -1,3 +1,9 @@
+--[[
+    SAWAH INDO HUB - FULL VERSION
+    Fitur: Auto Farming, Teleport, Player Control
+    Game: SAWAH Indo [Voice Chat]
+]]
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- Services
@@ -9,6 +15,7 @@ local Workspace = game:GetService("Workspace")
 local VirtualUser = game:GetService("VirtualUser")
 local StarterGui = game:GetService("StarterGui")
 local HttpService = game:GetService("HttpService")
+local TPService = game:GetService("TeleportService")
 
 -- Notifikasi
 local function Notify(title, content, duration)
@@ -24,9 +31,9 @@ local isMobile = UIS.TouchEnabled and not UIS.MouseEnabled
 
 -- UI Window
 local Window = Rayfield:CreateWindow({
-    Name = "🌾 SAWAH INDO BY:XKID HUB",
+    Name = "🌾 SAWAH INDO BY:XKID_BELUM_TIDUR HUB",
     LoadingTitle = "SAWAH INDO",
-    LoadingSubtitle = "Farming Auto",
+    LoadingSubtitle = "Full Features",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "SawahIndoHub",
@@ -42,106 +49,144 @@ Notify("SAWAH INDO HUB", "Loading...", 2)
 ------------------------------------------------
 local MainTab = Window:CreateTab("🏠 Main", nil)
 local FarmTab = Window:CreateTab("🌾 Farming", nil)
-local SeedTab = Window:CreateTab("🌱 Bibit", nil)
-local SellTab = Window:CreateTab("💰 Jual", nil)
+local TeleportTab = Window:CreateTab("📍 Teleport", nil)
 local PlayerTab = Window:CreateTab("👤 Player", nil)
-local TeleportTab = Window:CreateTab("🏝 Teleport", nil)
 local UtilityTab = Window:CreateTab("⚙ Utility", nil)
 
 ------------------------------------------------
 -- VARIABEL GLOBAL
 ------------------------------------------------
+_G.InfiniteJump = false
+_G.Noclip = false
 _G.AutoPlant = false
 _G.AutoHarvest = false
 _G.AutoSell = false
-_G.SelectedSeed = "Bibit Tomat"
-_G.FarmRadius = 20
 _G.WalkSpeed = 16
 _G.JumpPower = 50
+_G.FarmRadius = 20
+_G.SelectedSeed = "Bibit Tomat"
 
--- Daftar bibit berdasarkan screenshot
+-- Daftar bibit
 local seeds = {
-    ["Bibit Padi"] = {level = 0, price = 5, owned = 11}, -- Dari screenshot 42891
-    ["Bibit Jagung"] = {level = 20, price = 15, owned = 0},
-    ["Bibit Tomat"] = {level = 40, price = 25, owned = 0},
-    ["Bibit Terong"] = {level = 60, price = 40, owned = 0},
-    ["Bibit Strawberry"] = {level = 80, price = 60, owned = 0},
-    ["Bibit Savit"] = {level = 80, price = 1000, owned = 0},
-    ["Bibit Durian"] = {level = 120, price = 2000, owned = 0}
+    ["Bibit Padi"] = {level = 0, price = 5},
+    ["Bibit Jagung"] = {level = 20, price = 15},
+    ["Bibit Tomat"] = {level = 40, price = 25},
+    ["Bibit Terong"] = {level = 60, price = 40},
+    ["Bibit Strawberry"] = {level = 80, price = 60},
+    ["Bibit Savit"] = {level = 80, price = 1000},
+    ["Bibit Durian"] = {level = 120, price = 2000}
+}
+
+-- Lokasi-lokasi penting (akan diisi auto scan)
+local Locations = {
+    tokoBibit = nil,
+    tempatJual = nil,
+    npcs = {},
+    lahan = {}
 }
 
 ------------------------------------------------
--- FUNGSI UTILITY
+-- FUNGSI SCANNER OTOMATIS
 ------------------------------------------------
--- Cari object berdasarkan nama (case insensitive)
-local function findObjects(namePattern)
-    local objects = {}
+local function scanLocations()
+    Locations = {tokoBibit = nil, tempatJual = nil, npcs = {}, lahan = {}}
+    
     for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj.Name:lower():find(namePattern:lower()) then
-            table.insert(objects, obj)
-        end
-    end
-    return objects
-end
-
--- Cari tanah/lahan pertanian
-local function findFarmLands()
-    local lands = {}
-    -- Coba beberapa kemungkinan nama
-    local patterns = {"tanah", "lahan", "farm", "soil", "ground", "field"}
-    for _, pattern in pairs(patterns) do
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj.Name:lower():find(pattern) and obj:IsA("Part") then
-                table.insert(lands, obj)
+        local name = obj.Name:lower()
+        
+        -- Cari toko bibit
+        if (name:find("toko") and name:find("bibit")) or name:find("seed") then
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                Locations.tokoBibit = obj
             end
         end
-    end
-    return lands
-end
-
--- Cari tanaman yang siap panen
-local function findHarvestablePlants()
-    local plants = {}
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        -- Asumsi tanaman memiliki kata "tomat", "terong", dll di namanya
-        for seedName in pairs(seeds) do
-            local seedKeyword = seedName:gsub("Bibit ", ""):lower()
-            if obj.Name:lower():find(seedKeyword) then
-                -- Cek apakah siap panen (biasanya ada indikator visual atau properti)
-                -- Ini perlu disesuaikan dengan game aslinya
-                table.insert(plants, obj)
-                break
+        
+        -- Cari tempat jual
+        if name:find("jual") or name:find("sell") or name:find("market") then
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                Locations.tempatJual = obj
             end
         end
-    end
-    return plants
-end
-
--- Cari tempat jual
-local function findSellZone()
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj.Name:lower():find("jual") or obj.Name:lower():find("sell") or obj.Name:lower():find("toko") then
-            return obj
+        
+        -- Cari NPC
+        if obj.ClassName == "Model" and obj:FindFirstChild("Humanoid") and obj ~= LocalPlayer.Character then
+            table.insert(Locations.npcs, obj)
+        end
+        
+        -- Cari lahan/tanah
+        if (name:find("tanah") or name:find("lahan") or name:find("field") or name:find("soil")) and obj:IsA("BasePart") then
+            table.insert(Locations.lahan, obj)
         end
     end
-    return nil
+    
+    -- Tampilkan hasil
+    print("=== HASIL SCAN LOKASI ===")
+    print("Toko Bibit:", Locations.tokoBibit and Locations.tokoBibit.Name or "Tidak ditemukan")
+    print("Tempat Jual:", Locations.tempatJual and Locations.tempatJual.Name or "Tidak ditemukan")
+    print("NPC Ditemukan:", #Locations.npcs)
+    print("Lahan Ditemukan:", #Locations.lahan)
+    
+    return Locations
 end
 
--- Interaksi dengan object (simulasi klik/touch)
+-- Fungsi teleport aman
+local function safeTeleport(target)
+    if not target then return false end
+    
+    local cframe
+    if target:IsA("BasePart") then
+        cframe = target.CFrame
+    elseif target:IsA("Model") and target:FindFirstChild("HumanoidRootPart") then
+        cframe = target.HumanoidRootPart.CFrame
+    elseif target:IsA("Model") and target:FindFirstChild("Head") then
+        cframe = target.Head.CFrame
+    else
+        return false
+    end
+    
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = cframe + Vector3.new(0, 3, 0)
+        return true
+    end
+    return false
+end
+
+-- Fungsi interaksi dengan object
 local function interactWith(obj)
     if not obj then return end
-    -- Simulasi touch
-    firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 0)
-    wait(0.1)
-    firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 1)
+    
+    -- Metode 1: Touch
+    pcall(function()
+        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 0)
+        wait(0.1)
+        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 1)
+    end)
+    
+    -- Metode 2: ClickDetector
+    pcall(function()
+        for _, detector in pairs(obj:GetDescendants()) do
+            if detector:IsA("ClickDetector") then
+                detector:MouseClick()
+            end
+        end
+    end)
+    
+    -- Metode 3: ProximityPrompt
+    pcall(function()
+        for _, prompt in pairs(obj:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                prompt:InputHoldBegin()
+                wait(0.2)
+                prompt:InputHoldEnd()
+            end
+        end
+    end)
 end
 
 ------------------------------------------------
 -- MAIN TAB
 ------------------------------------------------
-_G.InfiniteJump = false
 local infiniteJumpConnection
-
 MainTab:CreateToggle({
     Name = "Infinite Jump",
     CurrentValue = false,
@@ -161,9 +206,7 @@ MainTab:CreateToggle({
     end
 })
 
-_G.Noclip = false
 local noclipHeartbeat
-
 MainTab:CreateToggle({
     Name = "Noclip",
     CurrentValue = false,
@@ -190,79 +233,96 @@ MainTab:CreateToggle({
 })
 
 MainTab:CreateButton({
+    Name = "🔄 Scan Ulang Lokasi",
+    Callback = function()
+        scanLocations()
+        Notify("Scan", "Lokasi telah diupdate", 2)
+    end
+})
+
+MainTab:CreateButton({
     Name = "Reset Character",
     Callback = function()
         if LocalPlayer.Character then
             LocalPlayer.Character:BreakJoints()
-            Notify("Reset", "Character reset", 1)
         end
     end
 })
 
 ------------------------------------------------
--- FARMING TAB (Auto Plant, Auto Harvest)
+-- FARMING TAB
 ------------------------------------------------
 local farmingConnections = {}
 
 local function startFarming()
-    -- Cleanup koneksi lama
     for _, conn in pairs(farmingConnections) do
         if conn then conn:Disconnect() end
     end
     
+    -- Auto Plant
     if _G.AutoPlant then
         farmingConnections.plant = RunService.Heartbeat:Connect(function()
             if not _G.AutoPlant or not LocalPlayer.Character then return end
+            if #Locations.lahan == 0 then scanLocations() end
             
-            local lands = findFarmLands()
-            local targetLand = nil
-            
-            -- Cari lahan kosong terdekat
-            for _, land in pairs(lands) do
+            for _, land in pairs(Locations.lahan) do
                 local dist = (land.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
                 if dist < _G.FarmRadius then
-                    targetLand = land
+                    LocalPlayer.Character.Humanoid:MoveTo(land.Position)
+                    if dist < 5 then
+                        interactWith(land)
+                        wait(0.3)
+                    end
                     break
-                end
-            end
-            
-            if targetLand then
-                -- Arahkan ke lahan
-                LocalPlayer.Character.Humanoid:MoveTo(targetLand.Position)
-                
-                -- Jika sudah dekat, tanam
-                if (targetLand.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 5 then
-                    -- Simulasi buka menu bibit (perlu disesuaikan)
-                    -- Biasanya dengan menyentuh object atau menekan tombol
-                    interactWith(targetLand)
-                    
-                    -- Pilih bibit
-                    wait(0.5)
-                    -- Di sini perlu simulasi klik pada UI, sangat spesifik game
-                    -- Untuk sementara, kita notifikasi saja
-                    Notify("Auto Plant", "Menanam " .. _G.SelectedSeed, 1)
                 end
             end
         end)
     end
     
+    -- Auto Harvest
     if _G.AutoHarvest then
         farmingConnections.harvest = RunService.Heartbeat:Connect(function()
             if not _G.AutoHarvest or not LocalPlayer.Character then return end
             
-            local plants = findHarvestablePlants()
-            for _, plant in pairs(plants) do
-                local dist = (plant.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-                if dist < 10 then
-                    LocalPlayer.Character.Humanoid:MoveTo(plant.Position)
-                    if dist < 5 then
-                        interactWith(plant)
-                        wait(0.3)
+            for seedName in pairs(seeds) do
+                local keyword = seedName:gsub("Bibit ", ""):lower()
+                for _, obj in pairs(Workspace:GetDescendants()) do
+                    if obj.Name:lower():find(keyword) and obj:IsA("BasePart") then
+                        local dist = (obj.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                        if dist < 10 then
+                            LocalPlayer.Character.Humanoid:MoveTo(obj.Position)
+                            if dist < 5 then
+                                interactWith(obj)
+                                wait(0.2)
+                            end
+                        end
                     end
                 end
             end
         end)
     end
+end
+
+-- Auto Sell
+local sellConnection
+local function startAutoSell()
+    if sellConnection then sellConnection:Disconnect() end
+    if not _G.AutoSell then return end
+    
+    sellConnection = RunService.Heartbeat:Connect(function()
+        if not _G.AutoSell or not LocalPlayer.Character then return end
+        if not Locations.tempatJual then scanLocations() end
+        
+        if Locations.tempatJual then
+            local dist = (Locations.tempatJual.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+            if dist > 5 then
+                LocalPlayer.Character.Humanoid:MoveTo(Locations.tempatJual.Position)
+            else
+                interactWith(Locations.tempatJual)
+                wait(1)
+            end
+        end
+    end)
 end
 
 FarmTab:CreateToggle({
@@ -283,6 +343,15 @@ FarmTab:CreateToggle({
     end
 })
 
+FarmTab:CreateToggle({
+    Name = "Auto Sell",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.AutoSell = v
+        startAutoSell()
+    end
+})
+
 FarmTab:CreateDropdown({
     Name = "Pilih Bibit",
     Options = {"Bibit Padi", "Bibit Jagung", "Bibit Tomat", "Bibit Terong", "Bibit Strawberry", "Bibit Savit", "Bibit Durian"},
@@ -300,122 +369,98 @@ FarmTab:CreateSlider({
     Callback = function(v) _G.FarmRadius = v end
 })
 
-FarmTab:CreateButton({
-    Name = "Cari Lahan Kosong",
-    Callback = function()
-        local lands = findFarmLands()
-        Notify("Lahan", "Ditemukan " .. #lands .. " lahan", 2)
-    end
-})
-
-FarmTab:CreateButton({
-    Name = "Cek Tanaman Siap Panen",
-    Callback = function()
-        local plants = findHarvestablePlants()
-        Notify("Panen", #plants .. " tanaman siap panen", 2)
-    end
-})
-
 ------------------------------------------------
--- SEED TAB (Info Bibit)
+-- TELEPORT TAB
 ------------------------------------------------
-for seedName, data in pairs(seeds) do
-    SeedTab:CreateButton({
-        Name = seedName .. " (Lv." .. data.level .. " | $" .. data.price .. ")",
-        Callback = function()
-            _G.SelectedSeed = seedName
-            Notify("Bibit Dipilih", seedName, 1)
-        end
-    })
-end
-
-SeedTab:CreateInput({
-    Name = "Beli Bibit (Jumlah)",
-    PlaceholderText = "Masukkan jumlah",
-    Callback = function(input)
-        local count = tonumber(input)
-        if count and count > 0 then
-            Notify("Beli Bibit", "Membeli " .. count .. " " .. _G.SelectedSeed, 2)
-            -- Implementasi beli: perlu akses ke GUI toko
-            -- Biasanya dengan menyentuh NPC/toko dan klik tombol beli
+-- Fungsi teleport dengan pilihan
+TeleportTab:CreateButton({
+    Name = "🏪 Teleport ke Toko Bibit",
+    Callback = function()
+        if not Locations.tokoBibit then scanLocations() end
+        if Locations.tokoBibit then
+            safeTeleport(Locations.tokoBibit)
+            Notify("Teleport", "Ke toko bibit", 1)
+        else
+            Notify("Error", "Toko bibit tidak ditemukan", 2)
         end
     end
 })
 
-SeedTab:CreateButton({
-    Name = "Buka Toko Bibit",
+TeleportTab:CreateButton({
+    Name = "💰 Teleport ke Tempat Jual",
     Callback = function()
-        -- Cari object toko bibit
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj.Name:lower():find("toko") and obj.Name:lower():find("bibit") then
-                LocalPlayer.Character:SetPrimaryPartCFrame(obj.CFrame + Vector3.new(0,3,0))
-                wait(1)
-                interactWith(obj)
-                return
-            end
-        end
-        Notify("Error", "Toko bibit tidak ditemukan", 2)
-    end
-})
-
-------------------------------------------------
--- SELL TAB (Auto Jual)
-------------------------------------------------
-_G.AutoSell = false
-local sellConnection
-
-local function startAutoSell()
-    if sellConnection then sellConnection:Disconnect() end
-    if not _G.AutoSell then return end
-    
-    sellConnection = RunService.Heartbeat:Connect(function()
-        if not _G.AutoSell or not LocalPlayer.Character then return end
-        
-        local sellZone = findSellZone()
-        if sellZone then
-            local dist = (sellZone.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-            if dist > 5 then
-                LocalPlayer.Character.Humanoid:MoveTo(sellZone.Position)
-            else
-                interactWith(sellZone)
-                wait(0.5)
-                -- Simulasi klik "Jual Semua"
-                Notify("Auto Sell", "Menjual hasil panen", 1)
-                wait(1)
-            end
-        end
-    end)
-end
-
-SellTab:CreateToggle({
-    Name = "Auto Sell",
-    CurrentValue = false,
-    Callback = function(v)
-        _G.AutoSell = v
-        startAutoSell()
-    end
-})
-
-SellTab:CreateButton({
-    Name = "Jual Semua Sekarang",
-    Callback = function()
-        local sellZone = findSellZone()
-        if sellZone then
-            LocalPlayer.Character:SetPrimaryPartCFrame(sellZone.CFrame + Vector3.new(0,3,0))
-            wait(1)
-            interactWith(sellZone)
-            Notify("Jual", "Menjual semua item", 1)
+        if not Locations.tempatJual then scanLocations() end
+        if Locations.tempatJual then
+            safeTeleport(Locations.tempatJual)
+            Notify("Teleport", "Ke tempat jual", 1)
         else
             Notify("Error", "Tempat jual tidak ditemukan", 2)
         end
     end
 })
 
-SellTab:CreateButton({
-    Name = "Cek Hasil Panen",
+-- Dropdown NPC
+local npcDropdown = TeleportTab:CreateDropdown({
+    Name = "Pilih NPC",
+    Options = {},
+    CurrentOption = {""},
+    Callback = function(selected)
+        if selected and #selected > 0 then
+            for _, npc in pairs(Locations.npcs) do
+                if npc.Name == selected[1] then
+                    safeTeleport(npc)
+                    break
+                end
+            end
+        end
+    end
+})
+
+local function updateNPCDropdown()
+    local npcNames = {}
+    for _, npc in pairs(Locations.npcs) do
+        table.insert(npcNames, npc.Name)
+    end
+    npcDropdown:SetOptions(npcNames)
+end
+
+TeleportTab:CreateButton({
+    Name = "🔄 Refresh NPC List",
     Callback = function()
-        -- Buka menu inventory
-        Notify("Inventory", "Fitur inventory perlu implementasi spesifik", 2)
+        scanLocations()
+        updateNPCDropdown()
+        Notify("NPC", #Locations.npcs .. " ditemukan", 2)
+    end
+})
+
+-- Teleport ke lahan
+TeleportTab:CreateButton({
+    Name = "🌱 Teleport ke Lahan Pertama",
+    Callback = function()
+        if #Locations.lahan > 0 then
+            safeTeleport(Locations.lahan[1])
+        else
+            scanLocations()
+            if #Locations.lahan > 0 then
+                safeTeleport(Locations.lahan[1])
+            else
+                Notify("Error", "Tidak ada lahan", 2)
+            end
+        end
+    end
+})
+
+TeleportTab:CreateInput({
+    Name = "Teleport ke Koordinat",
+    PlaceholderText = "x y z",
+    Callback = function(input)
+        local coords = {}
+        for num in input:gmatch("%-?%d+%.?%d*") do
+            table.insert(coords, tonumber(num))
+        end
+        if #coords >= 3 and LocalPlayer.Character then
+            LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(coords[1], coords[2], coords[3]))
+        end
     end
 })
 
@@ -485,76 +530,6 @@ PlayerTab:CreateSlider({
 })
 
 ------------------------------------------------
--- TELEPORT TAB
-------------------------------------------------
-local SelectedPlayer = nil
-
-local function updatePlayerList()
-    local list = {}
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then table.insert(list, player.Name) end
-    end
-    return list
-end
-
-local playerDropdown = TeleportTab:CreateDropdown({
-    Name = "Select Player",
-    Options = updatePlayerList(),
-    CurrentOption = {""},
-    Callback = function(selected) SelectedPlayer = selected and selected[1] end
-})
-
-Players.PlayerAdded:Connect(function() playerDropdown:SetOptions(updatePlayerList()) end)
-Players.PlayerRemoving:Connect(function() playerDropdown:SetOptions(updatePlayerList()) end)
-
-TeleportTab:CreateButton({
-    Name = "Teleport to Player",
-    Callback = function()
-        if not SelectedPlayer then Notify("Error", "Select player first", 2) return end
-        local target = Players:FindFirstChild(SelectedPlayer)
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character:SetPrimaryPartCFrame(target.Character.HumanoidRootPart.CFrame)
-        end
-    end
-})
-
-TeleportTab:CreateButton({
-    Name = "Teleport ke Toko Bibit",
-    Callback = function()
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj.Name:lower():find("toko") and obj.Name:lower():find("bibit") then
-                LocalPlayer.Character:SetPrimaryPartCFrame(obj.CFrame + Vector3.new(0,5,0))
-                return
-            end
-        end
-    end
-})
-
-TeleportTab:CreateButton({
-    Name = "Teleport ke Tempat Jual",
-    Callback = function()
-        local sellZone = findSellZone()
-        if sellZone then
-            LocalPlayer.Character:SetPrimaryPartCFrame(sellZone.CFrame + Vector3.new(0,5,0))
-        end
-    end
-})
-
-TeleportTab:CreateInput({
-    Name = "Teleport ke Koordinat",
-    PlaceholderText = "x y z",
-    Callback = function(input)
-        local coords = {}
-        for num in input:gmatch("%-?%d+%.?%d*") do
-            table.insert(coords, tonumber(num))
-        end
-        if #coords >= 3 and LocalPlayer.Character then
-            LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(coords[1], coords[2], coords[3]))
-        end
-    end
-})
-
-------------------------------------------------
 -- UTILITY TAB
 ------------------------------------------------
 _G.AntiAFK = false
@@ -578,8 +553,7 @@ UtilityTab:CreateToggle({
 UtilityTab:CreateButton({
     Name = "Rejoin Server",
     Callback = function()
-        local TPService = game:GetService("TeleportService")
-        pcall(function() TPService:Teleport(game.PlaceId, LocalPlayer) end)
+        TPService:Teleport(game.PlaceId, LocalPlayer)
     end
 })
 
@@ -587,14 +561,10 @@ UtilityTab:CreateButton({
     Name = "Server Hop",
     Callback = function()
         Notify("Server Hop", "Mencari server...", 2)
-        local TPService = game:GetService("TeleportService")
-        local HttpService = game:GetService("HttpService")
-        
         local success, servers = pcall(function()
             local res = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100")
             return HttpService:JSONDecode(res)
         end)
-        
         if success and servers and servers.data then
             for _, server in ipairs(servers.data) do
                 if server.playing < server.maxPlayers and server.id ~= game.JobId then
@@ -606,6 +576,24 @@ UtilityTab:CreateButton({
         end
     end
 })
+
+UtilityTab:CreateInput({
+    Name = "Load Script",
+    PlaceholderText = "URL script...",
+    Callback = function(url)
+        if url:match("^https?://") then
+            pcall(function() loadstring(game:HttpGet(url))() end)
+        end
+    end
+})
+
+------------------------------------------------
+-- INITIAL SCAN
+------------------------------------------------
+wait(1)
+scanLocations()
+updateNPCDropdown()
+Notify("SAWAH INDO HUB", "Siap digunakan! " .. #Locations.lahan .. " lahan ditemukan", 3)
 
 ------------------------------------------------
 -- CLEANUP
@@ -628,5 +616,4 @@ end
 
 game:BindToClose(OnCleanup)
 
-Notify("SAWAH INDO HUB", "Siap digunakan!", 2)
-print("SAWAH INDO HUB loaded")
+print("SAWAH INDO HUB - FULL VERSION LOADED")
