@@ -374,14 +374,14 @@ FarmTab:CreateSlider({
 ------------------------------------------------
 -- Fungsi teleport dengan pilihan
 TeleportTab:CreateButton({
-    Name = "🏪 Teleport ke Toko Bibit",
+    Name = "🏪 Teleport ke Toko Beli",
     Callback = function()
-        if not Locations.tokoBibit then scanLocations() end
-        if Locations.tokoBibit then
-            safeTeleport(Locations.tokoBibit)
-            Notify("Teleport", "Ke toko bibit", 1)
+        if not Locations.tokoBeli then scanLocations() end
+        if Locations.tokoBeli then
+            safeTeleport(Locations.tokoBeli)
+            Notify("Teleport", "Ke toko beli", 1)
         else
-            Notify("Error", "Toko bibit tidak ditemukan", 2)
+            Notify("Error", "Toko beli tidak ditemukan", 2)
         end
     end
 })
@@ -419,7 +419,7 @@ local npcDropdown = TeleportTab:CreateDropdown({
 local function updateNPCDropdown()
     local npcNames = {}
     for _, npc in pairs(Locations.npcs) do
-        table.insert(npcNames, npc.Name)
+        table.insert(npcNaame, npc.Name)
     end
     npcDropdown:SetOptions(npcNames)
 end
