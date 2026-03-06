@@ -605,4 +605,557 @@ local function scanForSellZone()
     for _, obj in pairs(Workspace:GetDescendants()) do
         if obj.Name:lower():match("sell") or obj.Name:lower():match("market") or obj.Name:lower():match("shop") then
             return obj
- 
+        end
+    end
+    return nil
+end
+
+local function startFarming()
+    if farmConnections.plant then farmConnections.plant:Disconnect() end
+    if farmConnections.water then farmConnections.water:Disconnect() end
+    if farmConnections.harvest then farmConnections.harvest:Disconnect() end
+    if farmConnections.sell then farmConnections.sell:Disconnect() end
+    if farmConnections.collect then farmConnections.collect:Disconnect() end
+    
+    farmConnections.plant = RunService.Heartbeat:Connect(function()
+        if _G.AutoPlant and LocalPlayer.Character then
+            -- Cari tanah kosong atau seed
+            -- Implementasi spesifik tergantung game
+        end
+    end)
+    
+    farmConnections.water = RunService.Heartbeat:Connect(function()
+        if _G.AutoWater and LocalPlayer.Character then
+            local waterSource = scanForWater()
+            if waterSource then
+                -- Arahkan ke water source
+            end
+        end
+    end)
+    
+    farmConnections.harvest = RunService.Heartbeat:Connect(function()
+        if _G.AutoHarvest and LocalPlayer.Character then
+            local plants = scanForPlants()
+            for _, plant in pairs(plants) do
+                -- Cek jika siap panen
+            end
+        end
+    end)
+    
+    farmConnections.sell = RunService.Heartbeat:Connect(function()
+        if _G.AutoSell and LocalPlayer.Character then
+            local sellZone = scanForSellZone()
+            if sellZone then
+                LocalPlayer.Character:SetPrimaryPartCFrame(sellZone.CFrame)
+                -- Trigger jual
+            end
+        end
+    end)
+    
+    farmConnections.collect = RunService.Heartbeat:Connect(function()
+        if _G.ItemCollector and LocalPlayer.Character then
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("Part") and obj.Name:lower():match("item") or obj.Name:lower():match("drop") then
+                    if (obj.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 20 then
+                        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 0)
+                        wait(0.1)
+                        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 1)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+FarmTab:CreateToggle({
+    Name = "Auto Plant",
+    CurrentValue = false,
+    Callback = function(v) _G.AutoPlant = v startFarming() end
+})
+
+FarmTab:CreateToggle({
+    Name = "Auto Water",
+    CurrentValue = false,
+    Callback = function(v) _G.AutoWater = v startFarming() end
+})
+
+FarmTab:CreateToggle({
+    Name = "Auto Harvest",
+    CurrentValue = false,
+    Callback = function(v) _G.AutoHarvest = v startFarming() end
+})
+
+FarmTab:CreateToggle({
+    Name = "Auto Sell",
+    CurrentValue = false,
+    Callback = function(v) _G.AutoSell = v startFarming() end
+})
+
+FarmTab:CreateToggle({
+    Name = "Item Collector",
+    CurrentValue = false,
+    Callback = function(v) _G.ItemCollector = v startFarming() end
+})
+
+FarmTab:CreateToggle({
+    Name = "Growth Boost (Simulated)",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.GrowthBoost = v
+        Notify("Growth Boost", v and "Activated (visual only)" or "Deactivated", 2)
+    end
+})
+
+FarmTab:CreateButton({
+    Name = "Teleport to Farm",
+    Callback = function()
+        local farm = scanForPlants()
+        if #farm > 0 then
+            LocalPlayer.Character:SetPrimaryPartCFrame(farm[1].CFrame + Vector3.new(0,5,0))
+        end
+    end
+})
+
+FarmTab:CreateButton({
+    Name = "Teleport to Shop",
+    Callback = function()
+        local shop = scanForSellZone()
+        if shop then
+            LocalPlayer.Character:SetPrimaryPartCFrame(shop.CFrame + Vector3.new(0,5,0))
+        end
+    end
+})
+
+FarmTab:CreateToggle({
+    Name = "ESP Plants",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.ESPPlants = v
+        if v then
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj.Name:lower():match("plant") then
+                    local highlight = Instance.new("Highlight")
+                    highlight.FillColor = Color3.fromRGB(0, 255, 0)
+                    highlight.Parent = obj
+                end
+            end
+        end
+    end
+})
+
+------------------------------------------------
+-- MOUNTAIN TAB (Climb Assist, Anti Fall, Pathfinder)
+------------------------------------------------
+_G.ClimbAssist = false
+_G.AntiFall = false
+local climbConnection = nil
+local pathfinderWaypoints = {}
+local pathfinderActive = false
+
+local function toggleClimbAssist(state)
+    _G.ClimbAssist = state
+    if climbConnection then climbConnection:Disconnect() end
+    if state then
+        climbConnection = RunService.Heartbeat:Connect(function()
+            if not LocalPlayer.Character then return end
+            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not humanoid or not rootPart then return end
+            
+            -- Raycast ke depan
+            local ray = Ray.new(rootPart.Position, rootPart.CFrame.LookVector * 5)
+            local part, pos = Workspace:FindPartOnRay(ray, LocalPlayer.Character)
+            
+            if part and not part:IsDescendantOf(LocalPlayer.Character) then
+                -- Jika ada dinding, bantu lompat
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    end
+end
+
+local function toggleAntiFall(state)
+    _G.AntiFall = state
+end
+
+-- Simple anti-fall
+RunService.Heartbeat:Connect(function()
+    if _G.AntiFall and LocalPlayer.Character then
+        local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if rootPart and rootPart.Position.Y < -50 then
+            rootPart.CFrame = CFrame.new(0, 50, 0)
+        end
+    end
+end)
+
+local function findPeak()
+    local highest = 0
+    local peakPos = nil
+    for _, part in pairs(Workspace:GetDescendants()) do
+        if part:IsA("BasePart") and part.Position.Y > highest then
+            highest = part.Position.Y
+            peakPos = part.Position
+        end
+    end
+    return peakPos
+end
+
+local function findPathToPeak()
+    local peak = findPeak()
+    if not peak or not LocalPlayer.Character then return end
+    
+    pathfinderWaypoints = {}
+    local currentPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local step = (peak - currentPos).Unit * 10
+    
+    for i = 1, 20 do
+        table.insert(pathfinderWaypoints, currentPos + step * i)
+    end
+    pathfinderActive = true
+end
+
+MountainTab:CreateToggle({
+    Name = "Climb Assist",
+    CurrentValue = false,
+    Callback = toggleClimbAssist
+})
+
+MountainTab:CreateToggle({
+    Name = "Anti Fall Damage",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.AntiFallDamage = v
+        if v then
+            -- Bisa dengan mengubah property humanoid
+            pcall(function()
+                if LocalPlayer.Character then
+                    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    if humanoid then
+                        humanoid.MaxHealth = math.huge
+                    end
+                end
+            end)
+        end
+    end
+})
+
+MountainTab:CreateToggle({
+    Name = "Anti Fall (Teleport)",
+    CurrentValue = false,
+    Callback = toggleAntiFall
+})
+
+MountainTab:CreateButton({
+    Name = "Teleport to Peak",
+    Callback = function()
+        local peak = findPeak()
+        if peak then
+            LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(peak + Vector3.new(0,5,0)))
+        end
+    end
+})
+
+MountainTab:CreateButton({
+    Name = "Find Path to Peak",
+    Callback = function()
+        findPathToPeak()
+        Notify("Pathfinder", "Path generated, follow waypoints", 2)
+    end
+})
+
+MountainTab:CreateToggle({
+    Name = "Follow Path",
+    CurrentValue = false,
+    Callback = function(v)
+        if v and #pathfinderWaypoints > 0 then
+            spawn(function()
+                while v and #pathfinderWaypoints > 0 do
+                    local target = pathfinderWaypoints[1]
+                    if LocalPlayer.Character then
+                        local dist = (LocalPlayer.Character.HumanoidRootPart.Position - target).Magnitude
+                        if dist < 5 then
+                            table.remove(pathfinderWaypoints, 1)
+                        else
+                            LocalPlayer.Character.Humanoid:MoveTo(target)
+                        end
+                    end
+                    wait(0.5)
+                end
+                Notify("Pathfinder", "Destination reached", 2)
+            end)
+        end
+    end
+})
+
+MountainTab:CreateInput({
+    Name = "Set Waypoint",
+    PlaceholderText = "x, y, z",
+    Callback = function(input)
+        local coords = {}
+        for num in input:gmatch("%-?%d+%.?%d*") do
+            table.insert(coords, tonumber(num))
+        end
+        if #coords >= 3 then
+            table.insert(pathfinderWaypoints, Vector3.new(coords[1], coords[2], coords[3]))
+            Notify("Waypoint", "Added", 1)
+        end
+    end
+})
+
+------------------------------------------------
+-- ESP TAB (Player ESP)
+------------------------------------------------
+_G.ESP = false
+local ESPObjects = {}
+setmetatable(ESPObjects, {__mode = "v"})
+
+local function createESP(player)
+    if player == LocalPlayer then return end
+    local function onCharacterAdded(char)
+        if not _G.ESP then return end
+        local head = char:WaitForChild("Head", 5)
+        local hrp = char:WaitForChild("HumanoidRootPart", 5)
+        if not head or not hrp then return end
+
+        local highlight = Instance.new("Highlight")
+        highlight.FillColor = player.Team and player.Team.TeamColor.Color or Color3.fromRGB(255, 50, 50)
+        highlight.FillTransparency = 0.5
+        highlight.OutlineColor = Color3.new(1,1,1)
+        highlight.Parent = char
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Size = UDim2.new(0, 150, 0, 50)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Adornee = head
+        billboard.Parent = char
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, 0, 0.6, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = player.Name
+        nameLabel.TextColor3 = Color3.new(1,1,1)
+        nameLabel.TextScaled = true
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.Parent = billboard
+
+        local distLabel = Instance.new("TextLabel")
+        distLabel.Size = UDim2.new(1, 0, 0.4, 0)
+        distLabel.Position = UDim2.new(0, 0, 0.6, 0)
+        distLabel.BackgroundTransparency = 1
+        distLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        distLabel.TextScaled = true
+        distLabel.Font = Enum.Font.Gotham
+        distLabel.Parent = billboard
+
+        ESPObjects[player] = {
+            char = char,
+            highlight = highlight,
+            distLabel = distLabel,
+            hrp = hrp
+        }
+    end
+    if player.Character then onCharacterAdded(player.Character) end
+    player.CharacterAdded:Connect(onCharacterAdded)
+end
+
+ESPTab:CreateToggle({
+    Name = "Player ESP",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.ESP = v
+        if v then
+            for _, player in pairs(Players:GetPlayers()) do createESP(player) end
+            Players.PlayerAdded:Connect(createESP)
+        else
+            for player, data in pairs(ESPObjects) do
+                if data.highlight then data.highlight:Destroy() end
+            end
+            ESPObjects = {}
+        end
+    end
+})
+
+RunService.RenderStepped:Connect(function()
+    if not _G.ESP or not LocalPlayer.Character then return end
+    local myPos = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myPos then return end
+    for player, data in pairs(ESPObjects) do
+        pcall(function()
+            if data.hrp and data.distLabel then
+                local dist = (myPos.Position - data.hrp.Position).Magnitude
+                data.distLabel.Text = string.format("%.1fm", dist)
+            end
+        end)
+    end
+end)
+
+------------------------------------------------
+-- TELEPORT TAB (Ringkas)
+------------------------------------------------
+local SelectedPlayer = nil
+
+local function updatePlayerList()
+    local list = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then table.insert(list, player.Name) end
+    end
+    return list
+end
+
+local playerDropdown = TeleportTab:CreateDropdown({
+    Name = "Select Player",
+    Options = updatePlayerList(),
+    CurrentOption = {""},
+    Callback = function(selected) SelectedPlayer = selected and selected[1] end
+})
+
+Players.PlayerAdded:Connect(function() playerDropdown:SetOptions(updatePlayerList()) end)
+Players.PlayerRemoving:Connect(function() playerDropdown:SetOptions(updatePlayerList()) end)
+
+TeleportTab:CreateButton({
+    Name = "Teleport to Player",
+    Callback = function()
+        if not SelectedPlayer then Notify("Error", "Select player first", 2) return end
+        local target = Players:FindFirstChild(SelectedPlayer)
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character:SetPrimaryPartCFrame(target.Character.HumanoidRootPart.CFrame)
+        end
+    end
+})
+
+TeleportTab:CreateInput({
+    Name = "Teleport to XYZ",
+    PlaceholderText = "x y z",
+    Callback = function(input)
+        local coords = {}
+        for num in input:gmatch("%-?%d+%.?%d*") do
+            table.insert(coords, tonumber(num))
+        end
+        if #coords >= 3 and LocalPlayer.Character then
+            LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(coords[1], coords[2], coords[3]))
+        end
+    end
+})
+
+------------------------------------------------
+-- UTILITY TAB (Ringkas)
+------------------------------------------------
+_G.AntiAFK = false
+local antiAFKConnection
+
+UtilityTab:CreateToggle({
+    Name = "Anti AFK",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.AntiAFK = v
+        if antiAFKConnection then antiAFKConnection:Disconnect() end
+        if v then
+            antiAFKConnection = LocalPlayer.Idled:Connect(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+        end
+    end
+})
+
+UtilityTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        pcall(function() TPService:Teleport(game.PlaceId, LocalPlayer) end)
+    end
+})
+
+UtilityTab:CreateButton({
+    Name = "Server Hop",
+    Callback = function()
+        Notify("Server Hop", "Searching...", 2)
+        local success, servers = pcall(function()
+            local res = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100")
+            return HttpService:JSONDecode(res)
+        end)
+        if success and servers and servers.data then
+            for _, server in ipairs(servers.data) do
+                if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                    TPService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
+                    return
+                end
+            end
+        end
+    end
+})
+
+UtilityTab:CreateInput({
+    Name = "Load Script",
+    PlaceholderText = "URL...",
+    Callback = function(url)
+        if url:match("^https?://") then
+            pcall(function() loadstring(game:HttpGet(url))() end)
+        end
+    end
+})
+
+------------------------------------------------
+-- VISUAL TAB (Ringkas)
+------------------------------------------------
+_G.FullBright = false
+
+VisualTab:CreateToggle({
+    Name = "Full Bright",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.FullBright = v
+        Lighting.Brightness = v and 2 or 1
+        Lighting.ClockTime = v and 14 or 12
+        Lighting.FogEnd = v and 100000 or 50000
+        Lighting.GlobalShadows = not v
+    end
+})
+
+VisualTab:CreateToggle({
+    Name = "X-Ray Vision",
+    CurrentValue = false,
+    Callback = function(v)
+        for _, part in pairs(Workspace:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.LocalTransparencyModifier = v and 0.7 or 0
+            end
+        end
+    end
+})
+
+VisualTab:CreateSlider({
+    Name = "FOV",
+    Range = {40, 120},
+    CurrentValue = 70,
+    Callback = function(v) Workspace.CurrentCamera.FieldOfView = v end
+})
+
+------------------------------------------------
+-- CLEANUP
+------------------------------------------------
+local function OnCleanup()
+    _G.InfiniteJump = false
+    if infiniteJumpConnection then infiniteJumpConnection:Disconnect() end
+    _G.Noclip = false
+    if noclipHeartbeat then noclipHeartbeat:Disconnect() end
+    _G.Fly = false
+    if flyConnection then flyConnection:Disconnect() end
+    if flyBodyVelocity then flyBodyVelocity:Destroy() end
+    if flyBodyGyro then flyBodyGyro:Destroy() end
+    _G.FreeCam = false
+    if freeCamMouseConnection then freeCamMouseConnection:Disconnect() end
+    if freeCamMoveConnection then freeCamMoveConnection:Disconnect() end
+    destroyJoystick()
+    _G.ESP = false
+    for _, data in pairs(ESPObjects) do
+        if data.highlight then data.highlight:Destroy() end
+    end
+    if antiAFKConnection then antiAFKConnection:Disconnect() end
+    Workspace.Gravity = 196.2
+end
+
+game:BindToClose(OnCleanup)
+
+Notify("XKID MEGA HUB", "All features ready", 2)
+print("XKID MEGA HUB loaded")
