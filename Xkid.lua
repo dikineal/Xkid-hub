@@ -425,4 +425,143 @@ end)
 end
 })
 
+------------------------------------------------
+-- FLY
+------------------------------------------------
+
+_G.Flying = false
+_G.FlySpeed = 50
+
+local FlyBV
+local FlyBG
+
+MainTab:CreateSlider({
+Name = "Fly Speed",
+Range = {20,200},
+Increment = 5,
+CurrentValue = 50,
+
+Callback = function(v)
+_G.FlySpeed = v
+end
+})
+
+MainTab:CreateToggle({
+
+Name = "Fly",
+
+CurrentValue = false,
+
+Callback = function(v)
+
+_G.Flying = v
+
+local char = LocalPlayer.Character
+if not char then return end
+
+local hrp = char:FindFirstChild("HumanoidRootPart")
+if not hrp then return end
+
+if v then
+
+FlyBV = Instance.new("BodyVelocity")
+FlyBV.MaxForce = Vector3.new(9e9,9e9,9e9)
+FlyBV.Parent = hrp
+
+FlyBG = Instance.new("BodyGyro")
+FlyBG.MaxTorque = Vector3.new(9e9,9e9,9e9)
+FlyBG.Parent = hrp
+
+else
+
+if FlyBV then FlyBV:Destroy() end
+if FlyBG then FlyBG:Destroy() end
+
+end
+
+end
+
+})
+
+RunService.RenderStepped:Connect(function()
+
+if not _G.Flying then return end
+if not LocalPlayer.Character then return end
+
+local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+if not hrp then return end
+
+local cam = Workspace.CurrentCamera
+local dir = Vector3.zero
+
+if UIS:IsKeyDown(Enum.KeyCode.W) then
+dir += cam.CFrame.LookVector
+end
+
+if UIS:IsKeyDown(Enum.KeyCode.S) then
+dir -= cam.CFrame.LookVector
+end
+
+if UIS:IsKeyDown(Enum.KeyCode.A) then
+dir -= cam.CFrame.RightVector
+end
+
+if UIS:IsKeyDown(Enum.KeyCode.D) then
+dir += cam.CFrame.RightVector
+end
+
+if UIS:IsKeyDown(Enum.KeyCode.Space) then
+dir += Vector3.new(0,1,0)
+end
+
+if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+dir -= Vector3.new(0,1,0)
+end
+
+FlyBV.Velocity = dir * _G.FlySpeed
+FlyBG.CFrame = cam.CFrame
+
+end)
+------------------------------------------------
+-- FREECAM
+------------------------------------------------
+
+_G.Freecam = false
+
+UtilityTab:CreateToggle({
+
+Name = "Freecam",
+
+CurrentValue = false,
+
+Callback = function(v)
+
+_G.Freecam = v
+
+local cam = Workspace.CurrentCamera
+
+if v then
+
+cam.CameraType = Enum.CameraType.Scriptable
+
+RunService:BindToRenderStep("FreecamMove",0,function()
+
+local move = LocalPlayer.Character.Humanoid.MoveDirection
+
+cam.CFrame = cam.CFrame + move * 2
+
+end)
+
+else
+
+RunService:UnbindFromRenderStep("FreecamMove")
+
+cam.CameraType = Enum.CameraType.Custom
+cam.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+
+end
+
+end
+})
+
 print("XKID HUB FINAL CLEAN LOADED")
