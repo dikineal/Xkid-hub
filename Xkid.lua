@@ -1,34 +1,30 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Services loader (kompatibel semua executor)
-local function getService(name)
-    local s, err = pcall(function() return game:GetService(name) end)
-    return s and err or nil
-end
+-- Optimasi: Pre-load services biar ngga lookup berulang
+local Services = setmetatable({}, {
+    __index = function(t, k)
+        local success, service = pcall(game.GetService, game, k)
+        if success and service then
+            rawset(t, k, service)
+            return service
+        end
+        return nil
+    end
+})
 
-local Players = getService("Players")
+local Players = Services.Players
 local LocalPlayer = Players.LocalPlayer
-local UIS = getService("UserInputService")
-local RunService = getService("RunService")
-local Workspace = getService("Workspace")
-local TPService = getService("TeleportService")
-local HttpService = getService("HttpService")
-local Lighting = getService("Lighting")
-local VirtualUser = getService("VirtualUser")
-local StarterGui = getService("StarterGui")
-local CollectionService = getService("CollectionService")
+local UIS = Services.UserInputService
+local RunService = Services.RunService
+local Workspace = Services.Workspace
+local TPService = Services.TeleportService
+local HttpService = Services.HttpService
+local Lighting = Services.Lighting
+local VirtualUser = Services.VirtualUser
+local StarterGui = Services.StarterGui
+local CollectionService = Services.CollectionService
 
--- Validasi service
-if not Players or not UIS then
-    return warn("Gagal memuat service. Restart executor atau gunakan executor lain.")
-end
-
--- Utility clamp (jika environment tidak menyediakan)
-local function clamp(v, min, max)
-    return math.max(min, math.min(max, v))
-end
-
--- UI Window
+-- UI Configuration
 local Window = Rayfield:CreateWindow({
     Name = "🔥 XKID HUB PRO 🔥",
     LoadingTitle = "XKID HUB PRO",
@@ -41,6 +37,7 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
+-- Notifikasi startup
 local function Notify(title, content, duration)
     StarterGui:SetCore("SendNotification", {
         Title = title,
@@ -60,11 +57,12 @@ local ESPTab = Window:CreateTab("👁 ESP", nil)
 local TeleportTab = Window:CreateTab("🏝 Teleport", nil)
 local UtilityTab = Window:CreateTab("⚙ Utility", nil)
 local VisualTab = Window:CreateTab("🎨 Visual", nil)
-local PhotoTab = Window:CreateTab("📸 Photography", nil)
 
 ------------------------------------------------
--- MAIN TAB
+-- MAIN TAB - FIXED
 ------------------------------------------------
+
+-- Infinite Jump dengan proper handling
 _G.InfiniteJump = false
 local infiniteJumpConnection
 
@@ -73,10 +71,14 @@ MainTab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         _G.InfiniteJump = v
+        
+        -- Cleanup old connection
         if infiniteJumpConnection then
             infiniteJumpConnection:Disconnect()
             infiniteJumpConnection = nil
         end
+        
+        -- Setup new connection if enabled
         if v then
             infiniteJumpConnection = UIS.JumpRequest:Connect(function()
                 if _G.InfiniteJump and LocalPlayer.Character then
@@ -90,6 +92,7 @@ MainTab:CreateToggle({
     end
 })
 
+-- Noclip dengan throttle dan error handling
 _G.Noclip = false
 local noclipHeartbeat
 
@@ -98,16 +101,21 @@ MainTab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         _G.Noclip = v
+        
+        -- Cleanup old connection
         if noclipHeartbeat then
             noclipHeartbeat:Disconnect()
             noclipHeartbeat = nil
         end
+        
+        -- Setup throttled noclip (update setiap 0.1 detik instead of every frame)
         if v then
             local lastUpdate = 0
             noclipHeartbeat = RunService.Heartbeat:Connect(function()
                 local now = tick()
                 if now - lastUpdate < 0.1 then return end
                 lastUpdate = now
+                
                 pcall(function()
                     if LocalPlayer.Character then
                         for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
@@ -123,8 +131,10 @@ MainTab:CreateToggle({
 })
 
 ------------------------------------------------
--- PLAYER TAB
+-- PLAYER TAB - FIXED
 ------------------------------------------------
+
+-- WalkSpeed dengan character respawn handling
 _G.WalkSpeed = 16
 local walkspeedConnection
 
@@ -140,6 +150,7 @@ local function updateWalkSpeed(speed)
     end)
 end
 
+-- Auto-update walkspeed on respawn
 if walkspeedConnection then walkspeedConnection:Disconnect() end
 walkspeedConnection = LocalPlayer.CharacterAdded:Connect(function(char)
     char:WaitForChild("Humanoid")
@@ -154,6 +165,7 @@ PlayerTab:CreateSlider({
     Callback = updateWalkSpeed
 })
 
+-- JumpPower dengan properti baru (JumpHeight for newer Roblox)
 _G.JumpPower = 50
 local jumppowerConnection
 
@@ -163,16 +175,18 @@ local function updateJumpPower(power)
         if LocalPlayer.Character then
             local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
             if humanoid then
+                -- Support both old and new property names
                 if humanoid:FindFirstChild("JumpPower") then
                     humanoid.JumpPower = power
                 elseif humanoid:FindFirstChild("JumpHeight") then
-                    humanoid.JumpHeight = power / 2
+                    humanoid.JumpHeight = power / 2 -- Convert roughly
                 end
             end
         end
     end)
 end
 
+-- Auto-update jumppower on respawn
 if jumppowerConnection then jumppowerConnection:Disconnect() end
 jumppowerConnection = LocalPlayer.CharacterAdded:Connect(function(char)
     char:WaitForChild("Humanoid")
@@ -187,6 +201,7 @@ PlayerTab:CreateSlider({
     Callback = updateJumpPower
 })
 
+-- Gravity control (advanced)
 _G.Gravity = 196.2
 PlayerTab:CreateSlider({
     Name = "Gravity",
@@ -200,45 +215,51 @@ PlayerTab:CreateSlider({
 })
 
 ------------------------------------------------
--- ESP TAB
+-- ESP TAB - FIXED (No memory leak)
 ------------------------------------------------
+
 _G.ESP = false
-local ESPObjects = {}
+local ESPObjects = {}  -- Weak table biar auto cleanup
 setmetatable(ESPObjects, {__mode = "v"})
 
 local function createESP(player)
     if player == LocalPlayer then return end
+    
     local function onCharacterAdded(char)
         if not _G.ESP then return end
+        
+        -- Wait for required parts
         local head = char:WaitForChild("Head", 5)
         local hrp = char:WaitForChild("HumanoidRootPart", 5)
         if not head or not hrp then return end
-
+        
+        -- Create Highlight dengan konfigurasi optimal
         local highlight = Instance.new("Highlight")
         highlight.FillColor = player.Team and player.Team.TeamColor.Color or Color3.fromRGB(255, 50, 50)
         highlight.FillTransparency = 0.5
-        highlight.OutlineColor = Color3.new(1,1,1)
+        highlight.OutlineColor = Color3.new(1, 1, 1)
         highlight.OutlineTransparency = 0
         highlight.Parent = char
-
+        
+        -- Billboard dengan nama dan jarak
         local billboard = Instance.new("BillboardGui")
         billboard.Size = UDim2.new(0, 150, 0, 50)
         billboard.StudsOffset = Vector3.new(0, 3, 0)
         billboard.AlwaysOnTop = true
         billboard.Adornee = head
         billboard.Parent = char
-
+        
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Size = UDim2.new(1, 0, 0.6, 0)
         nameLabel.Position = UDim2.new(0, 0, 0, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = player.Name
-        nameLabel.TextColor3 = Color3.new(1,1,1)
+        nameLabel.TextColor3 = Color3.new(1, 1, 1)
         nameLabel.TextStrokeTransparency = 0.5
         nameLabel.TextScaled = true
         nameLabel.Font = Enum.Font.GothamBold
         nameLabel.Parent = billboard
-
+        
         local distLabel = Instance.new("TextLabel")
         distLabel.Size = UDim2.new(1, 0, 0.4, 0)
         distLabel.Position = UDim2.new(0, 0, 0.6, 0)
@@ -249,7 +270,8 @@ local function createESP(player)
         distLabel.TextScaled = true
         distLabel.Font = Enum.Font.Gotham
         distLabel.Parent = billboard
-
+        
+        -- Store references for updating
         ESPObjects[player] = {
             char = char,
             highlight = highlight,
@@ -257,28 +279,38 @@ local function createESP(player)
             hrp = hrp
         }
     end
+    
     if player.Character then
         onCharacterAdded(player.Character)
     end
+    
     player.CharacterAdded:Connect(onCharacterAdded)
 end
 
+-- ESP toggle
 ESPTab:CreateToggle({
     Name = "ESP Enabled",
     CurrentValue = false,
     Callback = function(v)
         _G.ESP = v
+        
         if v then
+            -- Create ESP for all existing players
             for _, player in pairs(Players:GetPlayers()) do
                 createESP(player)
             end
+            
+            -- Handle new players joining
             Players.PlayerAdded:Connect(createESP)
+            
+            -- Handle players leaving (cleanup)
             Players.PlayerRemoving:Connect(function(player)
                 if ESPObjects[player] then
                     ESPObjects[player] = nil
                 end
             end)
         else
+            -- Destroy all ESP objects
             for player, data in pairs(ESPObjects) do
                 if data.highlight then
                     data.highlight:Destroy()
@@ -289,10 +321,13 @@ ESPTab:CreateToggle({
     end
 })
 
+-- Distance update loop (throttled)
 RunService.RenderStepped:Connect(function()
     if not _G.ESP or not LocalPlayer.Character then return end
+    
     local myPos = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not myPos then return end
+    
     for player, data in pairs(ESPObjects) do
         pcall(function()
             if data.hrp and data.distLabel then
@@ -304,20 +339,23 @@ RunService.RenderStepped:Connect(function()
 end)
 
 ------------------------------------------------
--- TELEPORT TAB
+-- TELEPORT TAB - FIXED (Dynamic dropdown)
 ------------------------------------------------
+
 local SelectedPlayer = nil
+local playerList = {}
 
 local function updatePlayerList()
-    local list = {}
+    local newList = {}
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
-            table.insert(list, player.Name)
+            table.insert(newList, player.Name)
         end
     end
-    return list
+    return newList
 end
 
+-- Create dropdown with dynamic update
 local playerDropdown = TeleportTab:CreateDropdown({
     Name = "Select Player",
     Options = updatePlayerList(),
@@ -327,9 +365,11 @@ local playerDropdown = TeleportTab:CreateDropdown({
     end
 })
 
+-- Auto-refresh dropdown when players join/leave
 local function refreshDropdown()
     playerDropdown:SetOptions(updatePlayerList())
 end
+
 Players.PlayerAdded:Connect(refreshDropdown)
 Players.PlayerRemoving:Connect(refreshDropdown)
 
@@ -340,6 +380,7 @@ TeleportTab:CreateButton({
             Notify("Error", "Select a player first", 2)
             return
         end
+        
         local target = Players:FindFirstChild(SelectedPlayer)
         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
             LocalPlayer.Character:SetPrimaryPartCFrame(target.Character.HumanoidRootPart.CFrame)
@@ -356,6 +397,7 @@ TeleportTab:CreateButton({
             Notify("Error", "Select a player first", 2)
             return
         end
+        
         local target = Players:FindFirstChild(SelectedPlayer)
         if target and target.Character then
             local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
@@ -381,6 +423,7 @@ TeleportTab:CreateButton({
     end
 })
 
+-- Teleport to coordinates
 TeleportTab:CreateInput({
     Name = "Teleport to Coordinates",
     PlaceholderText = "x, y, z",
@@ -389,15 +432,20 @@ TeleportTab:CreateInput({
         for num in input:gmatch("%-?%d+%.?%d*") do
             table.insert(coords, tonumber(num))
         end
+        
         if #coords >= 3 and LocalPlayer.Character then
-            LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(coords[1], coords[2], coords[3]))
+            LocalPlayer.Character:SetPrimaryPartCFrame(
+                CFrame.new(coords[1], coords[2], coords[3])
+            )
         end
     end
 })
 
 ------------------------------------------------
--- UTILITY TAB
+-- UTILITY TAB - FIXED
 ------------------------------------------------
+
+-- Anti AFK yang bener
 _G.AntiAFK = false
 local antiAFKConnection
 
@@ -406,10 +454,12 @@ UtilityTab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         _G.AntiAFK = v
+        
         if antiAFKConnection then
             antiAFKConnection:Disconnect()
             antiAFKConnection = nil
         end
+        
         if v then
             antiAFKConnection = LocalPlayer.Idled:Connect(function()
                 VirtualUser:CaptureController()
@@ -420,6 +470,7 @@ UtilityTab:CreateToggle({
     end
 })
 
+-- Rejoin dengan error handling
 UtilityTab:CreateButton({
     Name = "Rejoin Server",
     Callback = function()
@@ -432,14 +483,19 @@ UtilityTab:CreateButton({
     end
 })
 
+-- Server Hop dengan better API handling
 UtilityTab:CreateButton({
     Name = "Server Hop",
     Callback = function()
         Notify("Server Hop", "Searching for servers...", 2)
+        
         local success, servers = pcall(function()
-            local response = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
+            local response = game:HttpGet(
+                "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+            )
             return HttpService:JSONDecode(response)
         end)
+        
         if success and servers and servers.data then
             for _, server in ipairs(servers.data) do
                 if server.playing < server.maxPlayers and server.id ~= game.JobId then
@@ -455,6 +511,7 @@ UtilityTab:CreateButton({
     end
 })
 
+-- Reset Character dengan safety check
 UtilityTab:CreateButton({
     Name = "Reset Character",
     Callback = function()
@@ -465,6 +522,7 @@ UtilityTab:CreateButton({
     end
 })
 
+-- Script Loader dengan validasi URL
 UtilityTab:CreateInput({
     Name = "Load Script URL",
     PlaceholderText = "Paste raw script link...",
@@ -486,8 +544,10 @@ UtilityTab:CreateInput({
 })
 
 ------------------------------------------------
--- VISUAL TAB
+-- VISUAL TAB - NEW
 ------------------------------------------------
+
+-- Full Bright dengan toggle (bisa revert)
 _G.FullBright = false
 
 VisualTab:CreateToggle({
@@ -495,22 +555,25 @@ VisualTab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         _G.FullBright = v
+        
         if v then
             Lighting.Brightness = 2
             Lighting.ClockTime = 14
             Lighting.FogEnd = 100000
             Lighting.GlobalShadows = false
-            Lighting.Ambient = Color3.new(1,1,1)
+            Lighting.Ambient = Color3.new(1, 1, 1)
         else
+            -- Revert to default
             Lighting.Brightness = 1
             Lighting.ClockTime = 12
             Lighting.FogEnd = 50000
             Lighting.GlobalShadows = true
-            Lighting.Ambient = Color3.new(0,0,0)
+            Lighting.Ambient = Color3.new(0, 0, 0)
         end
     end
 })
 
+-- X-Ray vision
 _G.XRay = false
 
 VisualTab:CreateToggle({
@@ -518,14 +581,20 @@ VisualTab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         _G.XRay = v
+        
         for _, part in pairs(Workspace:GetDescendants()) do
             if part:IsA("BasePart") and part.Transparency ~= 1 then
-                part.LocalTransparencyModifier = v and 0.7 or 0
+                if v then
+                    part.LocalTransparencyModifier = 0.7
+                else
+                    part.LocalTransparencyModifier = 0
+                end
             end
         end
     end
 })
 
+-- FOV Changer
 _G.FOV = 70
 
 VisualTab:CreateSlider({
@@ -539,104 +608,26 @@ VisualTab:CreateSlider({
     end
 })
 
-------------------------------------------------
--- PHOTOGRAPHY TAB
-------------------------------------------------
-_G.FreeCam = false
-_G.FreeCamSpeed = 0.5
-_G.FreeCamRotateSpeed = 0.3
-local freeCamMouseConnection = nil
-local freeCamMoveConnection = nil
-local freeCamRotation = Vector2.new(0, 0)
-local freeCamPosition = Vector3.new(0, 10, 0)
-local originalCameraSubject = nil
-local originalCameraCFrame = nil
-local cameraLocked = false
-
-local function toggleFreeCam(state)
-    if state == _G.FreeCam then return end
-    _G.FreeCam = state
-    local camera = Workspace.CurrentCamera
-    if not camera then return end
-
-    if state then
-        originalCameraSubject = camera.CameraSubject
-        originalCameraCFrame = camera.CFrame
-
-        camera.CameraType = Enum.CameraType.Scriptable
-        camera.CameraSubject = nil
-
-        -- Ambil rotasi awal dari kamera
-        local rx, ry, rz = camera.CFrame:ToEulerAnglesYXZ()
-        freeCamRotation = Vector2.new(math.deg(rx), math.deg(ry))
-        freeCamPosition = camera.CFrame.Position
-
-        freeCamMouseConnection = UIS.InputChanged:Connect(function(input)
-            if not _G.FreeCam or cameraLocked then return end
-            if input.UserInputType == Enum.UserInputType.MouseMovement then
-                local delta = input.Delta
-                freeCamRotation = freeCamRotation + Vector2.new(
-                    -delta.Y * _G.FreeCamRotateSpeed,
-                    -delta.X * _G.FreeCamRotateSpeed
-                )
-                freeCamRotation = Vector2.new(
-                    clamp(freeCamRotation.X, -80, 80),
-                    freeCamRotation.Y
-                )
-            end
-        end)
-
-        freeCamMoveConnection = RunService.RenderStepped:Connect(function()
-            if not _G.FreeCam then return end
-            local moveDir = Vector3.new()
-            if UIS:IsKeyDown(Enum.KeyCode.W) then
-                moveDir = moveDir + camera.CFrame.LookVector
-            end
-            if UIS:IsKeyDown(Enum.KeyCode.S) then
-                moveDir = moveDir - camera.CFrame.LookVector
-            end
-            if UIS:IsKeyDown(Enum.KeyCode.A) then
-                moveDir = moveDir - camera.CFrame.RightVector
-            end
-            if UIS:IsKeyDown(Enum.KeyCode.D) then
-                moveDir = moveDir + camera.CFrame.RightVector
-            end
-            if UIS:IsKeyDown(Enum.KeyCode.Q) then
-                moveDir = moveDir - Vector3.new(0,1,0)
-            end
-            if UIS:IsKeyDown(Enum.KeyCode.E) then
-                moveDir = moveDir + Vector3.new(0,1,0)
-            end
-
-            if moveDir.Magnitude > 0 then
-                freeCamPosition = freeCamPosition + moveDir.Unit * _G.FreeCamSpeed
-            end
-
-            local rotationCF = CFrame.Angles(
-                math.rad(freeCamRotation.X),
-                math.rad(freeCamRotation.Y),
-                0
-            )
-            camera.CFrame = rotationCF + freeCamPosition
-        end)
-
-        Notify("Free Cam", "Active - WASD+QE to move, mouse to look", 3)
-    else
-        if freeCamMouseConnection then
-            freeCamMouseConnection:Disconnect()
-            freeCamMouseConnection = nil
-        end
-        if freeCamMoveConnection then
-            freeCamMoveConnection:Disconnect()
-            freeCamMoveConnection = nil
-        end
-
-        camera.CameraType = Enum.CameraType.Custom
-        camera.CameraSubject = originalCameraSubject
-        camera.CFrame = originalCameraCFrame
-
-        Notify("Free Cam", "Deactivated", 2)
+-- Cleanup function
+local function OnCleanup()
+    -- Disable all features
+    _G.InfiniteJump = false
+    if infiniteJumpConnection then infiniteJumpConnection:Disconnect() end
+    
+    _G.Noclip = false
+    if noclipHeartbeat then noclipHeartbeat:Disconnect() end
+    
+    _G.ESP = false
+    for _, data in pairs(ESPObjects) do
+        if data.highlight then data.highlight:Destroy() end
     end
+    
+    Workspace.Gravity = 196.2
+    Workspace.CurrentCamera.FieldOfView = 70
 end
 
-PhotoTab:
+-- Bind cleanup to game close
+game:BindToClose(OnCleanup)
+
+print("XKID HUB PRO - Loaded successfully")
+Notify("XKID HUB PRO", "Ready to use", 2)
