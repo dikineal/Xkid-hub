@@ -1,9 +1,4 @@
--- MacLib Script untuk xkid_hub
--- Anti AFK + Fly Script
--- Copy-paste ke Roblox Executor
-
-local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
-
+local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.tx
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
