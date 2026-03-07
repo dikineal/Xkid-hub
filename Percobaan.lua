@@ -1,12 +1,5 @@
--- Load WindUI dengan proteksi
-local success, WindUI = pcall(function()
-    return loadstring(game:HttpGet("https://tree-hub.vercel.app/api/library/windui"))()
-end)
-
-if not success or not WindUI then
-    warn("WindUI gagal dimuat")
-    return
-end
+-- Load WindUI
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/main.lua"))()
 
 -- Services
 local Players = game:GetService("Players")
@@ -27,22 +20,27 @@ local Window = WindUI:CreateWindow({
     AccentColor = Color3.fromRGB(0,102,255)
 })
 
+-- Tab
 local MainTab = Window:Tab({
     Name = "Main",
     Icon = "house"
 })
 
+-- Section
 MainTab:Section({
-    Name = "Karakter Control",
-    TextSize = 18
+    Name = "Character Control"
 })
 
 -- Button
 MainTab:Button({
-    Title = "Print Status",
-    Desc = "Klik untuk cek status",
+    Title = "Test Script",
+    Desc = "Cek apakah script berjalan",
     Callback = function()
-        print("Script berhasil dijalankan")
+        WindUI:Notify({
+            Title = "Success",
+            Content = "Script berhasil di execute!",
+            Duration = 3
+        })
     end
 })
 
@@ -82,6 +80,24 @@ MainTab:Slider({
             local hum = char:FindFirstChildOfClass("Humanoid")
             if hum then
                 hum.WalkSpeed = v
+            end
+        end
+    end
+})
+
+-- Jump Power
+MainTab:Slider({
+    Title = "JumpPower",
+    Min = 50,
+    Max = 300,
+    Step = 5,
+    Value = 50,
+    Callback = function(v)
+        local char = Player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.JumpPower = v
             end
         end
     end
