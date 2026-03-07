@@ -667,4 +667,4 @@ TabLog:CreateButton({Name="Clear Log", Callback=function()
 end})
 
 print("SAWAH INDO v5.2 | "..myName)
-notif("SAWAH INDO v5.2", "Halo "..myName.."! Ke tab Lahan > Simpan Posisi dulu!", 6)
+notif("SAWAH INDO v5.2", "Halo "..myName.."! Ke tab Lahan > Simpan Posisi dulu!", 6) 
