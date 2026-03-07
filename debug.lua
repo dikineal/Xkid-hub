@@ -10,30 +10,18 @@ local Window = Rayfield:CreateWindow({
         FileName = "Config"
     },
     KeySystem = false
-})--[[
-    DEBUG MASTER - DETEKSI SELURUH MAP
-    Tambahkan ini di hub lo
-]]
+})
 
--- ========== DEBUG TAB ==========
-local DebugTab = Window:CreateTab("🐞 DEBUG MASTER", nil)
+-- ========== Mulai Script Debug ==========
+local DebugTab = Window:CreateTab("🐞 DEBUG MAP", nil)
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-
--- Variabel debug
-_G.Debug = {
-    scanning = false,
-    tracking = false,
-    trackedObject = nil,
-    scanResults = {},
-    objectCount = 0
-}
+local HttpService = game:GetService("HttpService")
 
 -- Fungsi untuk mendapatkan posisi object
-local function getObjectPosition(obj)
+local function getPosition(obj)
     if obj:IsA("BasePart") then
         return obj.Position
     elseif obj:IsA("Model") then
@@ -41,417 +29,309 @@ local function getObjectPosition(obj)
             return obj.HumanoidRootPart.Position
         elseif obj:FindFirstChild("Head") then
             return obj.Head.Position
-        elseif obj:FindFirstChild("Torso") then
-            return obj.Torso.Position
-        else
-            -- Coba cari part pertama
-            for _, child in pairs(obj:GetChildren()) do
-                if child:IsA("BasePart") then
-                    return child.Position
-                end
-            end
         end
     end
     return nil
 end
 
--- ========== SCAN FULL MAP ==========
+-- Fungsi untuk menampilkan hasil di console
+local function printResult(title, data)
+    print("\n" .. string.rep("=", 60))
+    print(title)
+    print(string.rep("=", 60))
+    for i, line in ipairs(data) do
+        print(line)
+    end
+    print(string.rep("=", 60) .. "\n")
+end
+
+-- ========== SCAN LENGKAP ==========
 DebugTab:CreateButton({
-    Name = "🔍 SCAN FULL MAP (1000 stud)",
+    Name = "🔍 SCAN SEMUA OBJECT",
     Callback = function()
-        _G.Debug.scanning = true
-        _G.Debug.scanResults = {}
-        
-        if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            print("❌ Character tidak ditemukan")
-            _G.Debug.scanning = false
+        if not LocalPlayer.Character then
+            print("❌ Tunggu karakter muncul")
             return
         end
         
         local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-        print("\n" .. string.rep("=", 60))
-        print("🔍 SCAN FULL MAP DIMULAI")
-        print("📍 Posisi saya: " .. string.format("(%.1f, %.1f, %.1f)", myPos.X, myPos.Y, myPos.Z))
-        print(string.rep("=", 60))
-        
+        local results = {}
         local categories = {
-            ["🌾 FARMING"] = {"tanah", "lahan", "bibit", "seed", "crop", "plant", "farm", "sawah", "padi", "tomat", "jagung", "terong", "strawberry", "durian", "sawit"},
-            ["👥 NPC"] = {"npc", "pedagang", "penjual", "petani", "merchant", "farmer", "guard", "king", "quest"},
-            ["🏪 TOKO"] = {"toko", "shop", "buy", "sell", "jual", "beli", "market"},
-            ["🥚 COLLECT"] = {"egg", "telur", "coin", "money", "crystal", "gem", "diamond"},
-            ["🌳 OBJECT"] = {"tree", "pohon", "rock", "batu", "flower", "bunga"}
+            NPC = {},
+            Toko = {},
+            Lahan = {},
+            Tanaman = {},
+            Lainnya = {}
         }
         
-        local totalObjects = 0
-        local foundObjects = {}
+        print("\n🔍 MULAI SCAN...")
         
-        -- Inisialisasi kategori
-        for catName, _ in pairs(categories) do
-            foundObjects[catName] = {}
-        end
-        foundObjects["❓ LAINNYA"] = {}
-        
-        -- Scan semua object
         for _, obj in pairs(Workspace:GetDescendants()) do
-            totalObjects = totalObjects + 1
-            
-            local objName = obj.Name:lower()
-            local objPos = getObjectPosition(obj)
-            if not objPos then goto continue end
-            
-            local dist = (myPos - objPos).Magnitude
-            if dist > 1000 then goto continue end -- Batasi radius 1000 stud
-            
-            local categorized = false
-            
-            -- Cek kategori
-            for catName, keywords in pairs(categories) do
-                for _, kw in ipairs(keywords) do
-                    if objName:find(kw) then
-                        table.insert(foundObjects[catName], {
-                            name = obj.Name,
-                            class = obj.ClassName,
-                            pos = objPos,
-                            dist = dist,
-                            obj = obj
-                        })
-                        categorized = true
-                        break
-                    end
+            local pos = getPosition(obj)
+            if pos and (myPos - pos).Magnitude < 500 then
+                local name = obj.Name:lower()
+                local dist = (myPos - pos).Magnitude
+                
+                -- Kategorisasi
+                if name:find("npc") or obj:FindFirstChild("Humanoid") then
+                    table.insert(categories.NPC, {name = obj.Name, dist = dist, pos = pos})
+                elseif name:find("toko") or name:find("shop") or name:find("buy") or name:find("sell") or name:find("jual") or name:find("beli") then
+                    table.insert(categories.Toko, {name = obj.Name, dist = dist, pos = pos})
+                elseif name:find("tanah") or name:find("lahan") or name:find("field") or name:find("soil") then
+                    table.insert(categories.Lahan, {name = obj.Name, dist = dist, pos = pos})
+                elseif name:find("tomat") or name:find("jagung") or name:find("padi") or name:find("terong") or name:find("strawberry") or name:find("durian") or name:find("sawit") then
+                    table.insert(categories.Tanaman, {name = obj.Name, dist = dist, pos = pos})
+                elseif (myPos - pos).Magnitude < 20 then
+                    table.insert(categories.Lainnya, {name = obj.Name, class = obj.ClassName, dist = dist})
                 end
-                if categorized then break end
             end
-            
-            if not categorized then
-                table.insert(foundObjects["❓ LAINNYA"], {
-                    name = obj.Name,
-                    class = obj.ClassName,
-                    pos = objPos,
-                    dist = dist,
-                    obj = obj
-                })
-            end
-            
-            ::continue::
         end
         
         -- Urutkan berdasarkan jarak
-        for catName, list in pairs(foundObjects) do
+        for cat, list in pairs(categories) do
             table.sort(list, function(a, b) return a.dist < b.dist end)
         end
         
         -- Tampilkan hasil
-        print("\n📊 HASIL SCAN:")
-        for catName, list in pairs(foundObjects) do
-            print(string.format("%s: %d object", catName, #list))
-        end
+        local output = {}
+        table.insert(output, "📍 POSISI SAYA: " .. string.format("%.1f, %.1f, %.1f", myPos.X, myPos.Y, myPos.Z))
+        table.insert(output, "")
+        table.insert(output, "📊 HASIL SCAN (radius 500 stud):")
+        table.insert(output, string.format("👥 NPC: %d", #categories.NPC))
+        table.insert(output, string.format("🏪 TOKO: %d", #categories.Toko))
+        table.insert(output, string.format("🌾 LAHAN: %d", #categories.Lahan))
+        table.insert(output, string.format("🌽 TANAMAN: %d", #categories.Tanaman))
+        table.insert(output, string.format("📦 LAINNYA: %d", #categories.Lainnya))
+        table.insert(output, "")
         
-        print("\n" .. string.rep("=", 60))
-        
-        -- Tampilkan detail per kategori
-        for catName, list in pairs(foundObjects) do
-            if #list > 0 then
-                print("\n" .. catName .. " (" .. #list .. "):")
-                for i = 1, math.min(20, #list) do -- Tampilkan max 20 per kategori
-                    local obj = list[i]
-                    print(string.format("  %d. [%s] %s - jarak: %.1f stud", 
-                        i, obj.class, obj.name, obj.dist))
-                end
-                if #list > 20 then
-                    print("  ... dan " .. (#list - 20) .. " lainnya")
-                end
+        -- Detail NPC
+        if #categories.NPC > 0 then
+            table.insert(output, "👥 DAFTAR NPC:")
+            for i, npc in ipairs(categories.NPC) do
+                table.insert(output, string.format("  %d. %s - %.1f stud", i, npc.name, npc.dist))
             end
+            table.insert(output, "")
         end
         
-        print("\n" .. string.rep("=", 60))
-        print("✅ SCAN SELESAI! Total object: " .. totalObjects)
-        print("📌 Object terdeteksi: " .. (#foundObjects["🌾 FARMING"] + #foundObjects["👥 NPC"] + #foundObjects["🏪 TOKO"] + #foundObjects["🥚 COLLECT"] + #foundObjects["🌳 OBJECT"] + #foundObjects["❓ LAINNYA"]))
+        -- Detail Toko
+        if #categories.Toko > 0 then
+            table.insert(output, "🏪 DAFTAR TOKO:")
+            for i, toko in ipairs(categories.Toko) do
+                table.insert(output, string.format("  %d. %s - %.1f stud", i, toko.name, toko.dist))
+            end
+            table.insert(output, "")
+        end
         
-        _G.Debug.scanResults = foundObjects
-        _G.Debug.scanning = false
-        _G.Debug.objectCount = totalObjects
+        printResult("🔍 HASIL SCAN LENGKAP", output)
     end
 })
 
--- ========== EXPORT KOORDINAT ==========
+-- ========== SCAN NPC ONLY ==========
 DebugTab:CreateButton({
-    Name = "📥 EXPORT KOORDINAT NPC",
-    Callback = function()
-        if not _G.Debug.scanResults or not _G.Debug.scanResults["👥 NPC"] then
-            print("❌ Jalankan SCAN FULL MAP dulu")
-            return
-        end
-        
-        print("\n📋 DAFTAR KOORDINAT NPC:")
-        for i, npc in ipairs(_G.Debug.scanResults["👥 NPC"]) do
-            print(string.format("%d. %s: (%.1f, %.1f, %.1f)", 
-                i, npc.name, npc.pos.X, npc.pos.Y, npc.pos.Z))
-        end
-        
-        -- Simpan ke file (jika executor support)
-        local success, result = pcall(function()
-            local fileContent = "-- DAFTAR NPC\n"
-            for i, npc in ipairs(_G.Debug.scanResults["👥 NPC"]) do
-                fileContent = fileContent .. string.format('["%s"] = CFrame.new(%.1f, %.1f, %.1f),\n', 
-                    npc.name, npc.pos.X, npc.pos.Y, npc.pos.Z)
-            end
-            writefile("NPC_Coordinates.txt", fileContent)
-            return true
-        end)
-        
-        if success then
-            print("✅ File NPC_Coordinates.txt tersimpan")
-        end
-    end
-})
-
-DebugTab:CreateButton({
-    Name = "📥 EXPORT KOORDINAT FARMING",
-    Callback = function()
-        if not _G.Debug.scanResults or not _G.Debug.scanResults["🌾 FARMING"] then
-            print("❌ Jalankan SCAN FULL MAP dulu")
-            return
-        end
-        
-        print("\n📋 DAFTAR KOORDINAT FARMING:")
-        for i, farm in ipairs(_G.Debug.scanResults["🌾 FARMING"]) do
-            print(string.format("%d. %s: (%.1f, %.1f, %.1f)", 
-                i, farm.name, farm.pos.X, farm.pos.Y, farm.pos.Z))
-        end
-        
-        local success, result = pcall(function()
-            local fileContent = "-- DAFTAR FARMING\n"
-            for i, farm in ipairs(_G.Debug.scanResults["🌾 FARMING"]) do
-                fileContent = fileContent .. string.format('["%s"] = CFrame.new(%.1f, %.1f, %.1f),\n', 
-                    farm.name, farm.pos.X, farm.pos.Y, farm.pos.Z)
-            end
-            writefile("Farming_Coordinates.txt", fileContent)
-            return true
-        end)
-        
-        if success then
-            print("✅ File Farming_Coordinates.txt tersimpan")
-        end
-    end
-})
-
--- ========== TRACK OBJECT ==========
-DebugTab:CreateInput({
-    Name = "🎯 TRACK OBJECT (ketik nama)",
-    PlaceholderText = "Contoh: npcbibit",
-    Callback = function(input)
-        if input == "" then return end
-        
-        _G.Debug.tracking = true
-        _G.Debug.trackedObject = nil
-        
-        -- Cari object dengan nama mengandung keyword
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj.Name:lower():find(input:lower()) then
-                _G.Debug.trackedObject = obj
-                break
-            end
-        end
-        
-        if _G.Debug.trackedObject then
-            print("🎯 Melacak: " .. _G.Debug.trackedObject.Name)
-            
-            -- Loop tracking
-            spawn(function()
-                while _G.Debug.tracking do
-                    local pos = getObjectPosition(_G.Debug.trackedObject)
-                    if pos and LocalPlayer.Character then
-                        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-                        local dist = (myPos - pos).Magnitude
-                        print(string.format("📍 %s - posisi: (%.1f, %.1f, %.1f) | jarak: %.1f stud", 
-                            _G.Debug.trackedObject.Name, pos.X, pos.Y, pos.Z, dist))
-                    else
-                        print("❌ Object hilang")
-                        _G.Debug.tracking = false
-                    end
-                    wait(2)
-                end
-            end)
-        else
-            print("❌ Object dengan nama '" .. input .. "' tidak ditemukan")
-        end
-    end
-})
-
-DebugTab:CreateButton({
-    Name = "⏹️ STOP TRACKING",
-    Callback = function()
-        _G.Debug.tracking = false
-        print("🛑 Tracking dihentikan")
-    end
-})
-
--- ========== DETEKSI OBJECT BERGERAK ==========
-DebugTab:CreateButton({
-    Name = "🔄 DETEKSI OBJECT BERGERAK",
-    Callback = function()
-        print("\n🔍 Mencari object bergerak...")
-        
-        local moving = {}
-        local checkPositions = {}
-        
-        -- Simpan posisi awal
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("BasePart") or (obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart")) then
-                local pos = getObjectPosition(obj)
-                if pos then
-                    checkPositions[obj] = pos
-                end
-            end
-        end
-        
-        wait(1) -- Tunggu 1 detik
-        
-        -- Cek perubahan posisi
-        for obj, oldPos in pairs(checkPositions) do
-            local newPos = getObjectPosition(obj)
-            if newPos and (oldPos - newPos).Magnitude > 1 then -- Bergerak lebih dari 1 stud
-                table.insert(moving, {
-                    name = obj.Name,
-                    class = obj.ClassName,
-                    oldPos = oldPos,
-                    newPos = newPos,
-                    distance = (oldPos - newPos).Magnitude
-                })
-            end
-        end
-        
-        print("\n📊 OBJECT BERGERAK DITEMUKAN: " .. #moving)
-        for i, obj in ipairs(moving) do
-            print(string.format("%d. %s [%s] - bergerak %.1f stud", 
-                i, obj.name, obj.class, obj.distance))
-        end
-    end
-})
-
--- ========== PETA SEDERHANA ==========
-DebugTab:CreateButton({
-    Name = "🗺️ TAMPILKAN PETA 2D",
+    Name = "👥 SCAN NPC SAJA",
     Callback = function()
         if not LocalPlayer.Character then return end
         
         local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-        local mapSize = 200 -- Ukuran peta 200x200 stud
+        local npcs = {}
         
-        print("\n🗺️ PETA LOKASI (X-Z axis)")
-        print("📍 Kamu di posisi: " .. string.format("(%.1f, %.1f)", myPos.X, myPos.Z))
-        print(string.rep("-", 50))
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and obj ~= LocalPlayer.Character then
+                local pos = getPosition(obj)
+                if pos then
+                    local dist = (myPos - pos).Magnitude
+                    table.insert(npcs, {name = obj.Name, dist = dist, pos = pos})
+                end
+            end
+        end
         
-        -- Buat grid sederhana
-        for z = -mapSize/2, mapSize/2, 20 do
-            local line = ""
-            for x = -mapSize/2, mapSize/2, 20 do
-                local worldX = myPos.X + x
-                local worldZ = myPos.Z + z
-                
-                -- Cek object di sekitar
-                local found = false
-                for _, obj in ipairs(_G.Debug.scanResults["👥 NPC"] or {}) do
-                    if math.abs(obj.pos.X - worldX) < 10 and math.abs(obj.pos.Z - worldZ) < 10 then
-                        line = line .. "👥"
-                        found = true
+        table.sort(npcs, function(a, b) return a.dist < b.dist end)
+        
+        local output = {}
+        table.insert(output, "📍 POSISI SAYA: " .. tostring(myPos))
+        table.insert(output, "")
+        table.insert(output, "👥 TOTAL NPC: " .. #npcs)
+        table.insert(output, "")
+        
+        for i, npc in ipairs(npcs) do
+            table.insert(output, string.format("%d. %s - %.1f stud", i, npc.name, npc.dist))
+        end
+        
+        printResult("👥 DAFTAR NPC", output)
+    end
+})
+
+-- ========== SCAN TOKO ==========
+DebugTab:CreateButton({
+    Name = "🏪 SCAN TOKO/SELL/BUY",
+    Callback = function()
+        if not LocalPlayer.Character then return end
+        
+        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+        local toko = {}
+        local keywords = {"toko", "shop", "buy", "sell", "jual", "beli", "merchant"}
+        
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            local name = obj.Name:lower()
+            for _, kw in ipairs(keywords) do
+                if name:find(kw) then
+                    local pos = getPosition(obj)
+                    if pos then
+                        local dist = (myPos - pos).Magnitude
+                        table.insert(toko, {name = obj.Name, dist = dist, pos = pos})
                         break
                     end
                 end
-                if not found then
-                    for _, obj in ipairs(_G.Debug.scanResults["🏪 TOKO"] or {}) do
-                        if math.abs(obj.pos.X - worldX) < 10 and math.abs(obj.pos.Z - worldZ) < 10 then
-                            line = line .. "🏪"
-                            found = true
-                            break
-                        end
-                    end
-                end
-                if not found then
-                    if math.abs(x) < 5 and math.abs(z) < 5 then
-                        line = line .. "🔴" -- Posisi player
-                    else
-                        line = line .. "⬜"
-                    end
-                end
             end
-            print(line)
         end
-        print(string.rep("-", 50))
+        
+        table.sort(toko, function(a, b) return a.dist < b.dist end)
+        
+        local output = {}
+        table.insert(output, "📍 POSISI SAYA: " .. tostring(myPos))
+        table.insert(output, "")
+        table.insert(output, "🏪 TOTAL TOKO: " .. #toko)
+        table.insert(output, "")
+        
+        for i, t in ipairs(toko) do
+            table.insert(output, string.format("%d. %s - %.1f stud", i, t.name, t.dist))
+        end
+        
+        printResult("🏪 DAFTAR TOKO", output)
     end
 })
 
--- ========== STATISTIK MAP ==========
+-- ========== SCAN LAHAN ==========
 DebugTab:CreateButton({
-    Name = "📊 STATISTIK MAP",
+    Name = "🌾 SCAN LAHAN/TANAH",
     Callback = function()
-        print("\n" .. string.rep("=", 60))
-        print("📊 STATISTIK MAP")
-        print(string.rep("=", 60))
+        if not LocalPlayer.Character then return end
         
-        print("📍 Posisi player: " .. (LocalPlayer.Character and tostring(LocalPlayer.Character.HumanoidRootPart.Position) or "Unknown"))
-        print("👥 Jumlah player: " .. #Players:GetPlayers())
-        print("🌍 Nama game: " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
-        print("🆔 Place ID: " .. game.PlaceId)
-        print("⏰ Job ID: " .. game.JobId)
+        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+        local lahan = {}
+        local keywords = {"tanah", "lahan", "field", "soil", "farm"}
         
-        if _G.Debug.scanResults then
-            print("\n📦 OBJECT TERDETEKSI:")
-            for catName, list in pairs(_G.Debug.scanResults) do
-                print(string.format("  %s: %d", catName, #list))
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                local name = obj.Name:lower()
+                for _, kw in ipairs(keywords) do
+                    if name:find(kw) then
+                        local dist = (myPos - obj.Position).Magnitude
+                        table.insert(lahan, {name = obj.Name, dist = dist, pos = obj.Position})
+                        break
+                    end
+                end
             end
         end
         
-        print(string.rep("=", 60))
+        table.sort(lahan, function(a, b) return a.dist < b.dist end)
+        
+        local output = {}
+        table.insert(output, "📍 POSISI SAYA: " .. tostring(myPos))
+        table.insert(output, "")
+        table.insert(output, "🌾 TOTAL LAHAN: " .. #lahan)
+        table.insert(output, "")
+        
+        for i, l in ipairs(lahan) do
+            table.insert(output, string.format("%d. %s - %.1f stud", i, l.name, l.dist))
+        end
+        
+        printResult("🌾 DAFTAR LAHAN", output)
     end
 })
 
--- ========== FIND NEAREST ==========
+-- ========== SCAN TANAMAN ==========
+DebugTab:CreateButton({
+    Name = "🌽 SCAN TANAMAN",
+    Callback = function()
+        if not LocalPlayer.Character then return end
+        
+        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+        local tanaman = {}
+        local keywords = {"tomat", "jagung", "padi", "terong", "strawberry", "durian", "sawit", "plant", "crop"}
+        
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            local name = obj.Name:lower()
+            for _, kw in ipairs(keywords) do
+                if name:find(kw) then
+                    local pos = getPosition(obj)
+                    if pos then
+                        local dist = (myPos - pos).Magnitude
+                        table.insert(tanaman, {name = obj.Name, dist = dist, pos = pos})
+                        break
+                    end
+                end
+            end
+        end
+        
+        table.sort(tanaman, function(a, b) return a.dist < b.dist end)
+        
+        local output = {}
+        table.insert(output, "📍 POSISI SAYA: " .. tostring(myPos))
+        table.insert(output, "")
+        table.insert(output, "🌽 TOTAL TANAMAN: " .. #tanaman)
+        table.insert(output, "")
+        
+        for i, t in ipairs(tanaman) do
+            table.insert(output, string.format("%d. %s - %.1f stud", i, t.name, t.dist))
+        end
+        
+        printResult("🌽 DAFTAR TANAMAN", output)
+    end
+})
+
+-- ========== CARI OBJECT ==========
 DebugTab:CreateInput({
-    Name = "🎯 CARI OBJECT TERDEKAT",
-    PlaceholderText = "Nama object...",
+    Name = "🔎 CARI OBJECT (ketik nama)",
+    PlaceholderText = "Contoh: npc, toko, tanah",
     Callback = function(input)
         if input == "" or not LocalPlayer.Character then return end
         
         local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-        local nearest = nil
-        local nearestDist = math.huge
+        local found = {}
         
         for _, obj in pairs(Workspace:GetDescendants()) do
             if obj.Name:lower():find(input:lower()) then
-                local pos = getObjectPosition(obj)
+                local pos = getPosition(obj)
                 if pos then
                     local dist = (myPos - pos).Magnitude
-                    if dist < nearestDist then
-                        nearestDist = dist
-                        nearest = obj
-                    end
+                    table.insert(found, {name = obj.Name, class = obj.ClassName, dist = dist, pos = pos, obj = obj})
                 end
             end
         end
         
-        if nearest then
-            local pos = getObjectPosition(nearest)
-            print(string.format("✅ %s ditemukan - jarak: %.1f stud", nearest.Name, nearestDist))
-            print(string.format("📍 Koordinat: (%.1f, %.1f, %.1f)", pos.X, pos.Y, pos.Z))
-            
-            -- Tawarkan teleport
-            print("📌 Ketik 'teleport' untuk pergi ke object ini")
-            _G.LastFoundObject = nearest
-        else
-            print("❌ Object tidak ditemukan")
+        table.sort(found, function(a, b) return a.dist < b.dist end)
+        
+        local output = {}
+        table.insert(output, "📍 POSISI SAYA: " .. tostring(myPos))
+        table.insert(output, "")
+        table.insert(output, "🔎 PENCARIAN: '" .. input .. "'")
+        table.insert(output, "📦 DITEMUKAN: " .. #found)
+        table.insert(output, "")
+        
+        for i, f in ipairs(found) do
+            table.insert(output, string.format("%d. [%s] %s - %.1f stud", i, f.class, f.name, f.dist))
         end
+        
+        if #found > 0 then
+            table.insert(output, "")
+            table.insert(output, "📌 Ketik 'tp' di chat untuk teleport ke object pertama")
+            _G.LastFound = found[1].obj
+        end
+        
+        printResult("🔎 HASIL PENCARIAN", output)
     end
 })
 
+-- ========== TELEPORT KE OBJECT TERAKHIR ==========
 DebugTab:CreateButton({
     Name = "🚀 TELEPORT KE OBJECT TERAKHIR",
     Callback = function()
-        if _G.LastFoundObject and LocalPlayer.Character then
-            local pos = getObjectPosition(_G.LastFoundObject)
+        if _G.LastFound and LocalPlayer.Character then
+            local pos = getPosition(_G.LastFound)
             if pos then
                 LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y + 3, pos.Z)
-                print("✅ Teleport ke " .. _G.LastFoundObject.Name)
+                print("✅ Teleport ke " .. _G.LastFound.Name)
             end
         else
             print("❌ Tidak ada object terakhir")
@@ -459,17 +339,51 @@ DebugTab:CreateButton({
     end
 })
 
--- ========== RESET DEBUG ==========
+-- ========== EKSPOR KOORDINAT ==========
 DebugTab:CreateButton({
-    Name = "🔄 RESET DEBUG",
+    Name = "📥 EKSPOR KOORDINAT NPC",
     Callback = function()
-        _G.Debug.scanning = false
-        _G.Debug.tracking = false
-        _G.Debug.trackedObject = nil
-        _G.Debug.scanResults = {}
-        _G.LastFoundObject = nil
-        print("✅ Debug di-reset")
+        local npcs = {}
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and obj ~= LocalPlayer.Character then
+                local pos = getPosition(obj)
+                if pos then
+                    table.insert(npcs, {name = obj.Name, pos = pos})
+                end
+            end
+        end
+        
+        local output = "-- DAFTAR NPC\n"
+        for _, npc in ipairs(npcs) do
+            output = output .. string.format('["%s"] = CFrame.new(%.1f, %.1f, %.1f),\n', 
+                npc.name, npc.pos.X, npc.pos.Y, npc.pos.Z)
+        end
+        
+        print("\n📋 KOORDINAT NPC (" .. #npcs .. "):")
+        print(output)
+        
+        -- Simpan ke file
+        pcall(function()
+            writefile("NPC_Coords.txt", output)
+            print("✅ File NPC_Coords.txt tersimpan")
+        end)
     end
 })
 
-print("🐞 DEBUG MASTER LOADED - Gunakan tab DEBUG MASTER")
+-- ========== INFO GAME ==========
+DebugTab:CreateButton({
+    Name = "ℹ️ INFO GAME",
+    Callback = function()
+        local output = {}
+        table.insert(output, "🎮 Nama Game: " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
+        table.insert(output, "🆔 Place ID: " .. game.PlaceId)
+        table.insert(output, "⏰ Job ID: " .. game.JobId)
+        table.insert(output, "👥 Player: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers)
+        table.insert(output, "📍 Posisi: " .. (LocalPlayer.Character and tostring(LocalPlayer.Character.HumanoidRootPart.Position) or "Unknown"))
+        
+        printResult("ℹ️ INFORMASI GAME", output)
+    end
+})
+
+-- ========== NOTIFIKASI ==========
+print("🐞 DEBUG MAP TELAH DITAMBAHKAN")
