@@ -1,5 +1,6 @@
 -- SCRIPT DEBUG RAYFIELD UNTUK SAWAH INDO
-loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
+
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
 
 local Window = Rayfield:CreateWindow({
     Name = "🔍 DEBUG SAWAH INDO",
@@ -71,205 +72,97 @@ end
 Tab:CreateButton({
     Name = "🔍 SCAN OBJECT DI SEKITAR",
     Callback = function()
+
         clearLog()
         log("=== MULAI SCAN ===")
-        
+
         local plr = game:GetService("Players").LocalPlayer
         if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
             log("ERROR: Character tidak ditemukan")
             return
         end
-        
+
         local myPos = plr.Character.HumanoidRootPart.Position
         log("Posisi saya: " .. tostring(myPos))
         log("")
-        
-        local keywords = {"toko", "buy", "sell", "jual", "beli", "npc", "merchant", "farmer", "petani", "egg", "telur", "tool", "alat", "bibit", "seed", "tanah", "lahan", "sawit", "palm"}
+
+        local keywords = {"toko","buy","sell","jual","beli","npc","merchant","farmer","petani","egg","telur","tool","alat","bibit","seed","tanah","lahan","sawit","palm"}
         local found = {}
-        
+
         for _, obj in pairs(workspace:GetDescendants()) do
+
             local objPos = nil
-            
+
             if obj:IsA("BasePart") then
                 objPos = obj.Position
+
             elseif obj:IsA("Model") then
+
                 if obj:FindFirstChild("HumanoidRootPart") then
                     objPos = obj.HumanoidRootPart.Position
+
                 elseif obj:FindFirstChild("Head") then
                     objPos = obj.Head.Position
+
                 elseif obj:FindFirstChild("Torso") then
                     objPos = obj.Torso.Position
                 end
             end
-            
+
             if objPos then
+
                 local dist = (myPos - objPos).Magnitude
+
                 if dist < 150 then
-                    table.insert(found, {
+
+                    table.insert(found,{
                         name = obj.Name,
                         class = obj.ClassName,
                         dist = dist,
                         pos = objPos
                     })
+
                 end
             end
         end
-        
-        table.sort(found, function(a, b) return a.dist < b.dist end)
-        
+
+        table.sort(found,function(a,b)
+            return a.dist < b.dist
+        end)
+
         log("50 OBJECT TERDEKAT:")
-        for i = 1, math.min(50, #found) do
-            log(string.format("%d. [%s] %s (%.1f stud)", i, found[i].class, found[i].name, found[i].dist))
+
+        for i = 1, math.min(50,#found) do
+            log(string.format("%d. [%s] %s (%.1f stud)",i,found[i].class,found[i].name,found[i].dist))
         end
-        
+
         log("")
         log("=== PENCARIAN KEYWORD ===")
-        
-        for _, kw in ipairs(keywords) do
-            log("Keyword: " .. kw)
+
+        for _,kw in ipairs(keywords) do
+
+            log("Keyword: "..kw)
+
             local count = 0
-            for _, obj in ipairs(found) do
+
+            for _,obj in ipairs(found) do
+
                 if obj.name:lower():find(kw) then
                     count = count + 1
-                    log(string.format("  - %s (%.1f stud)", obj.name, obj.dist))
+                    log(string.format("  - %s (%.1f stud)",obj.name,obj.dist))
                 end
+
             end
-            if count == 0 then log("  (Tidak ditemukan)") end
+
+            if count == 0 then
+                log("  (Tidak ditemukan)")
+            end
+
             log("")
         end
-        
+
         log("=== SCAN SELESAI ===")
-    end
-})
 
-Tab:CreateButton({
-    Name = "🧹 CLEAR LOG",
-    Callback = clearLog
-})
-
-Tab:CreateButton({
-    Name = "📍 CEK POSISI SAYA",
-    Callback = function()
-        local plr = game:GetService("Players").LocalPlayer
-        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local pos = plr.Character.HumanoidRootPart.Position
-            log("Posisi: " .. tostring(pos))
-        else
-            log("Character tidak ditemukan")
-        end
-    end
-})
-
-Tab:CreateButton({
-    Name = "🎯 SCAN KHUSUS TOKO",
-    Callback = function()
-        clearLog()
-        log("=== SCAN TOKO ===")
-        local plr = game:GetService("Players").LocalPlayer
-        if not plr.Character then return end
-        
-        local myPos = plr.Character.HumanoidRootPart.Position
-        local tokoList = {"buy", "sell", "jual", "beli", "tool", "alat"}
-        
-        for _, obj in pairs(workspace:GetDescendants()) do
-            local name = obj.Name:lower()
-            for _, kw in ipairs(tokoList) do
-                if name:find(kw) then
-                    local pos = nil
-                    if obj:IsA("BasePart") then
-                        pos = obj.Position
-                    elseif obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
-                        pos = obj.HumanoidRootPart.Position
-                    end
-                    
-                    if pos then
-                        local dist = (myPos - pos).Magnitude
-                        log(string.format("%s - jarak: %.1f stud", obj.Name, dist))
-                        if dist < 10 then
-                            log("  ▶️ ADA DI DEKAT SINI!")
-                        end
-                    end
-                    break
-                end
-            end
-        end
-        log("=== SELESAI ===")
-    end
-})
-
-Tab:CreateButton({
-    Name = "👥 SCAN NPC",
-    Callback = function()
-        clearLog()
-        log("=== SCAN NPC ===")
-        local plr = game:GetService("Players").LocalPlayer
-        if not plr.Character then return end
-        
-        local myPos = plr.Character.HumanoidRootPart.Position
-        local count = 0
-        
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj.ClassName == "Model" and obj:FindFirstChild("Humanoid") and obj ~= plr.Character then
-                count = count + 1
-                local pos = nil
-                if obj:FindFirstChild("HumanoidRootPart") then
-                    pos = obj.HumanoidRootPart.Position
-                elseif obj:FindFirstChild("Head") then
-                    pos = obj.Head.Position
-                end
-                
-                if pos then
-                    local dist = (myPos - pos).Magnitude
-                    log(string.format("%d. %s - jarak: %.1f stud", count, obj.Name, dist))
-                else
-                    log(string.format("%d. %s - (posisi tidak diketahui)", count, obj.Name))
-                end
-            end
-        end
-        
-        if count == 0 then
-            log("Tidak ada NPC ditemukan")
-        end
-        log("=== SELESAI ===")
-    end
-})
-
-Tab:CreateButton({
-    Name = "🌱 SCAN LAHAN/TANAH",
-    Callback = function()
-        clearLog()
-        log("=== SCAN LAHAN ===")
-        local plr = game:GetService("Players").LocalPlayer
-        if not plr.Character then return end
-        
-        local myPos = plr.Character.HumanoidRootPart.Position
-        local keywords = {"tanah", "lahan", "soil", "field", "farm", "sawit", "palm"}
-        local count = 0
-        
-        for _, obj in pairs(workspace:GetDescendants()) do
-            local name = obj.Name:lower()
-            for _, kw in ipairs(keywords) do
-                if name:find(kw) and obj:IsA("BasePart") then
-                    count = count + 1
-                    local dist = (myPos - obj.Position).Magnitude
-                    log(string.format("%d. %s - jarak: %.1f stud", count, obj.Name, dist))
-                    break
-                end
-            end
-        end
-        
-        if count == 0 then
-            log("Tidak ada lahan ditemukan")
-        end
-        log("=== SELESAI ===")
-    end
-})
-
-Tab:CreateButton({
-    Name = "❌ TUTUP DEBUG",
-    Callback = function()
-        ScreenGui:Destroy()
-        Rayfield:Destroy()
     end
 })
 
