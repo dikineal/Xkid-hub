@@ -186,14 +186,30 @@ local function autoBeliBibit()
 end
 
 local function autoJual()
-    if not bukaToko("npcpenjual", 1.5) then return false end
+    local npc = cari("npcpenjual")
+    if not npc then notif("NPC", "npcpenjual kagak ketemu!", 3); return false end
+    tp(npc)
+    task.wait(0.8)
+    klikObject(npc)
+    task.wait(0.5)
+    local prompt = getPPDekat(15)
+    if prompt then firePrompt(prompt) end
+    task.wait(0.8)
     local gui = LocalPlayer.PlayerGui
-    task.wait(0.3)
     for _, v in pairs(gui:GetDescendants()) do
         if v:IsA("TextButton") and v.Visible then
             local t = v.Text:lower()
             if (t:find("jual") or t:find("sell")) and not t:find("tutup") then
                 klikBeli(v); task.wait(0.2)
+            end
+        end
+    end
+    task.wait(0.3)
+    for _, v in pairs(gui:GetDescendants()) do
+        if v:IsA("TextButton") and v.Visible then
+            local t = v.Text:lower()
+            if t == "ok" or t == "ya" or t == "iya" or t == "confirm" then
+                klikBeli(v); task.wait(0.2); break
             end
         end
     end
@@ -206,19 +222,59 @@ local function autoJual()
     return true
 end
 
+local function klikObject(obj)
+    -- Klik langsung ke object di dunia 3D (seperti tap di HP)
+    local root = getRoot()
+    if not root or not obj then return false end
+
+    -- Cara 1: ClickDetector
+    pcall(function()
+        local cd = obj:FindFirstChildOfClass("ClickDetector")
+            or (obj.Parent and obj.Parent:FindFirstChildOfClass("ClickDetector"))
+        if cd then fireclickdetector(cd) end
+    end)
+    task.wait(0.1)
+
+    -- Cara 2: Simulasi mouse click ke tengah object via WorldToScreenPoint
+    pcall(function()
+        local cam = workspace.CurrentCamera
+        local pos = obj:IsA("BasePart") and obj.Position or obj.PrimaryPart and obj.PrimaryPart.Position
+        if not pos then return end
+        local screenPos, onScreen = cam:WorldToScreenPoint(pos)
+        if onScreen then
+            local VIM = game:GetService("VirtualInputManager")
+            VIM:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 0)
+            task.wait(0.1)
+            VIM:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 0)
+        end
+    end)
+    task.wait(0.1)
+
+    -- Cara 3: ProximityPrompt fallback
+    local prompt = getPPDekat(10)
+    if prompt then firePrompt(prompt) end
+
+    return true
+end
+
 local function interakLahan(lahanObj, delay)
     delay = delay or 1.5
     if not lahanObj then return false end
     tp(lahanObj)
     task.wait(delay)
-    local prompt = getPPDekat(10)
-    if prompt then firePrompt(prompt) end
-    task.wait(0.3)
+
+    -- Klik langsung ke lahan
+    klikObject(lahanObj)
+    task.wait(0.4)
+
+    -- Klik tombol Tanam kalau GUI muncul
     local gui = LocalPlayer.PlayerGui
     for _, v in pairs(gui:GetDescendants()) do
         if v:IsA("TextButton") and v.Visible then
             local t = v.Text:lower()
-            if t:find("tanam") or t:find("plant") then klikBeli(v); break end
+            if t:find("tanam") or t:find("plant") or t:find("semai") then
+                klikBeli(v); break
+            end
         end
     end
     return true
