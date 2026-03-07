@@ -1,298 +1,505 @@
-local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.tx
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
+--[[
+		Example Compkiller UI
+	
+	Author: 4lpaca
+	
+	Press Left Alt to open / close
+]]
 
-local player = Players.LocalPlayer
-local humanoid = player.Character:WaitForChild("Humanoid")
-local rootPart = player.Character:WaitForChild("HumanoidRootPart")
+local Compkiller = loadstring(game:HttpGet("https://raw.githubusercontent.com/4lpaca-pin/CompKiller/refs/heads/main/src/source.luau"))();
 
--- ===== VARIABLES =====
-local antiAFKEnabled = false
-local flyEnabled = false
-local flySpeed = 50
-local bodyVelocity = nil
-local flyConnection = nil
-local antiAFKConnection = nil
+-- Create Notification --
+local Notifier = Compkiller.newNotify();
 
--- ===== MEMBUAT WINDOW =====
-local Window = MacLib:CreateWindow({
-    Title = "xkid_hub Script",
-    Subtitle = "v1.0 - MacLib UI",
-    Size = UDim2.new(0, 520, 0, 400),
-    HasExitButton = true,
-    Icon = "rbxasset://textures/Cursor.png",
-    ShowDragBar = true
+-- Create Config Mamager --
+local ConfigManager = Compkiller:ConfigManager({
+	Directory = "Compkiller-UI",
+	Config = "Example-Configs"
+});
+
+-- Loading UI (Icon <string> , Duration <number>) --
+Compkiller:Loader("rbxassetid://120245531583106" , 2.5).yield();
+
+-- Creating Window --
+local Window = Compkiller.new({
+	Name = "COMPKILLER",
+	Keybind = "LeftAlt",
+	Logo = "rbxassetid://120245531583106",
+	Scale = Compkiller.Scale.Window, -- Leave blank if you want automatic scale [PC, Mobile].
+	TextSize = 15,
+});
+
+-- Notification --
+
+Notifier.new({
+	Title = "Notification",
+	Content = "Thank you for use this script!",
+	Duration = 10,
+	Icon = "rbxassetid://120245531583106"
+});
+
+-- Watermark --
+local Watermark = Window:Watermark();
+
+Watermark:AddText({
+	Icon = "user",
+	Text = "4lpaca",
+});
+
+Watermark:AddText({
+	Icon = "clock",
+	Text = Compkiller:GetDate(),
+});
+
+local Time = Watermark:AddText({
+	Icon = "timer",
+	Text = "TIME",
+});
+
+task.spawn(function()
+	while true do task.wait()
+		Time:SetText(Compkiller:GetTimeNow());
+	end
+end)
+
+Watermark:AddText({
+	Icon = "server",
+	Text = Compkiller.Version,
+});
+
+-- Creating Tab Category --
+Window:DrawCategory({
+	Name = "Example"
+});
+
+-- Creating Tab --
+local NormalTab = Window:DrawTab({
+	Name = "Example Tab",
+	Icon = "apple",
+	EnableScrolling = true
+});
+
+-- Creating Section --
+local NormalSection = NormalTab:DrawSection({
+	Name = "Section",
+	Position = 'left'	
+});
+
+local Toggle = NormalSection:AddToggle({
+	Name = "Toggle",
+	Flag = "Toggle_Example", -- Leave it blank will not save to config
+	Default = false,
+	Callback = print,
+});
+
+-- Add Keybind To Toggle --
+local Keybind = Toggle.Link:AddKeybind({
+	Default = "E",
+	Flag = "Option_Keybind",
+	Callback = print
+});
+
+-- Helper --
+Toggle.Link:AddHelper({
+	Text = "Very cool toggle!"
 })
 
--- ===== TAB 1: HOME =====
-local HomeTab = Window:CreateTab({
-    Name = "Home",
-    Icon = "🏠"
+-- Add Option To Toggle --
+local Toggle2 = NormalSection:AddToggle({
+	Name = "Toggle",
+	Flag = "Toggle_Example2", -- Leave it blank will not save to config
+	Default = false,
+	Callback = print,
+});
+
+local Option = Toggle2.Link:AddOption()
+
+Option:AddToggle({
+	Name= "Example",
+	Flag = "Toggle_Example3",
+	Callback = print
+});
+
+do
+	local Toggle2 = NormalSection:AddToggle({
+		Name = "Risky Feature",
+		Flag = "Toggle_Example5", -- Leave it blank will not save to config
+		Default = false,
+		Risky = true,
+		Callback = print,
+	});
+
+	local Option = Toggle2.Link:AddOption()
+
+	Option:AddToggle({
+		Risky = true,
+		Name= "Risky Feature",
+		Flag = "Toggle_Example6",
+		Callback = print
+	});
+end
+
+NormalSection:AddKeybind({
+	Name = "Keybind",
+	Default = "LeftAlt",
+	Flag = "Keybind_Example",
+	Callback = print,
+});
+
+NormalSection:AddSlider({
+	Name = "Slider",
+	Min = 0,
+	Max = 100,
+	Default = 50,
+	Round = 0,
+	Flag = "Slider_Example",
+	Callback = print
+});
+
+NormalSection:AddColorPicker({
+	Name = "ColorPicker",
+	Default = Color3.fromRGB(0, 255, 140),
+	Flag = "Color_Picker_Example",
+	Callback = print
 })
 
-HomeTab:CreateLabel({
-    Text = "Welcome to xkid_hub Script!",
-    TextSize = 16
+NormalSection:AddDropdown({
+	Name = "Single Dropdown",
+	Default = "Head",
+	Flag = "Single_Dropdown",
+	Values = {"Head","Body","Arms","Legs"},
+	Callback = print
 })
 
-HomeTab:CreateLabel({
-    Text = "Features:",
-    TextSize = 14
+NormalSection:AddDropdown({
+	Name = "Multi Dropdown",
+	Default = {"Head"},
+	Multi = true,
+	Flag = "Multi_Dropdown",
+	Values = {"Head","Body","Arms","Legs"},
+	Callback = print
 })
 
-HomeTab:CreateLabel({
-    Text = "✓ Anti AFK",
-    TextSize = 12
+NormalSection:AddButton({
+	Name = "Button",
+	Callback = function()
+		print('PRINT!')
+	end,
 })
 
-HomeTab:CreateLabel({
-    Text = "✓ Fly dengan speed control",
-    TextSize = 12
+NormalSection:AddParagraph({
+	Title = "Paragraph",
+	Content = "Very cool paragraph\nAll element in this scrtion\nwill be saved to the config!"
 })
 
-HomeTab:CreateLabel({
-    Text = "✓ MacOS Style UI",
-    TextSize = 12
+NormalSection:AddTextBox({
+	Name = "Textbox",
+	Placeholder = "Placeholder",
+	Default = "Hello, World",
+	Callback = print
 })
 
-HomeTab:CreateButton({
-    Name = "Destroy UI",
-    Callback = function()
-        Window:Destroy()
-        print("UI destroyed!")
-    end
+local DrawElements = function(Tab,Position)
+	do
+		local NormalSectionRight = Tab:DrawSection({
+			Name = "Section",
+			Position = Position
+		});
+
+		local Toggle = NormalSectionRight:AddToggle({
+			Name = "Toggle",
+			Default = false,
+			Callback = print,
+		});
+
+		-- Add Keybind To Toggle --
+		local Keybind = Toggle.Link:AddKeybind({
+			Default = "E",
+			Callback = print
+		});
+
+		-- Add Option To Toggle --
+		local Toggle2 = NormalSectionRight:AddToggle({
+			Name = "Toggle",
+			Default = false,
+			Callback = print,
+		});
+
+		local Option = Toggle2.Link:AddOption()
+
+		Option:AddToggle({
+			Name= "Example",
+			Callback = print
+		});
+
+		NormalSectionRight:AddKeybind({
+			Name = "Keybind",
+			Default = "LeftAlt",
+			Callback = print,
+		});
+
+		NormalSectionRight:AddSlider({
+			Name = "Slider",
+			Min = 0,
+			Max = 100,
+			Default = 50,
+			Round = 0,
+			Callback = print
+		});
+
+		NormalSectionRight:AddColorPicker({
+			Name = "ColorPicker",
+			Default = Color3.fromRGB(0, 255, 140),
+			Callback = print
+		})
+
+		NormalSectionRight:AddDropdown({
+			Name = "Single Dropdown",
+			Default = "Head",
+			Values = {"Head","Body","Arms","Legs"},
+			Callback = print
+		})
+
+		NormalSectionRight:AddDropdown({
+			Name = "Multi Dropdown",
+			Default = {"Head"},
+			Multi = true,
+			Values = {"Head","Body","Arms","Legs"},
+			Callback = print
+		})
+
+		NormalSectionRight:AddButton({
+			Name = "Button",
+			Callback = function()
+				print('PRINT!')
+			end,
+		})
+
+		NormalSectionRight:AddParagraph({
+			Title = "Paragraph",
+			Content = "Very cool paragraph\nAll elements in this section\nwill not be save to the config"
+		})
+	end;
+end;
+
+DrawElements(NormalTab,'right')
+
+-- Single Tab --
+local SingleTab = Window:DrawTab({
+	Name = "Single Tab",
+	Icon = "banana",
+	Type = "Single"
+});
+
+DrawElements(SingleTab,'left')
+
+-- Container Tab --
+local ContainerTab = Window:DrawContainerTab({
+	Name = "Extract Tabs",
+	Icon = "contact",
+});
+
+local ExtractTab = ContainerTab:DrawTab({
+	Name = "Tab 1",
+	Type = "Double"
+});
+
+local SingleExtractTab = ContainerTab:DrawTab({
+	Name = "Tab 2",
+	Type = "Single",
+	EnableScrolling = true, -- this will make tab can scrolling (recommend)
+});
+
+DrawElements(ExtractTab,"left");
+DrawElements(ExtractTab,"right");
+
+DrawElements(SingleExtractTab,"left");
+DrawElements(SingleExtractTab,"right");
+
+Window:DrawCategory({
+	Name = "Misc"
+});
+
+local SettingTab = Window:DrawTab({
+	Icon = "settings-3",
+	Name = "Settings",
+	Type = "Single",
+	EnableScrolling = true
+});
+
+local ThemeTab = Window:DrawTab({
+	Icon = "paintbrush",
+	Name = "Themes",
+	Type = "Single"
+});
+
+local Settings = SettingTab:DrawSection({
+	Name = "UI Settings",
+});
+
+Settings:AddToggle({
+	Name = "Alway Show Frame",
+	Default = false,
+	Callback = function(v)
+		Window.AlwayShowTab = v;
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Highlight",
+	Default = Compkiller.Colors.Highlight,
+	Callback = function(v)
+		Compkiller.Colors.Highlight = v;
+		Compkiller:RefreshCurrentColor();
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Toggle Color",
+	Default = Compkiller.Colors.Toggle,
+	Callback = function(v)
+		Compkiller.Colors.Toggle = v;
+		
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Drop Color",
+	Default = Compkiller.Colors.DropColor,
+	Callback = function(v)
+		Compkiller.Colors.DropColor = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Risky",
+	Default = Compkiller.Colors.Risky,
+	Callback = function(v)
+		Compkiller.Colors.Risky = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Mouse Enter",
+	Default = Compkiller.Colors.MouseEnter,
+	Callback = function(v)
+		Compkiller.Colors.MouseEnter = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Block Color",
+	Default = Compkiller.Colors.BlockColor,
+	Callback = function(v)
+		Compkiller.Colors.BlockColor = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Background Color",
+	Default = Compkiller.Colors.BGDBColor,
+	Callback = function(v)
+		Compkiller.Colors.BGDBColor = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Block Background Color",
+	Default = Compkiller.Colors.BlockBackground,
+	Callback = function(v)
+		Compkiller.Colors.BlockBackground = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Stroke Color",
+	Default = Compkiller.Colors.StrokeColor,
+	Callback = function(v)
+		Compkiller.Colors.StrokeColor = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "High Stroke Color",
+	Default = Compkiller.Colors.HighStrokeColor,
+	Callback = function(v)
+		Compkiller.Colors.HighStrokeColor = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Switch Color",
+	Default = Compkiller.Colors.SwitchColor,
+	Callback = function(v)
+		Compkiller.Colors.SwitchColor = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddColorPicker({
+	Name = "Line Color",
+	Default = Compkiller.Colors.LineColor,
+	Callback = function(v)
+		Compkiller.Colors.LineColor = v;
+
+		Compkiller:RefreshCurrentColor(v);
+	end,
+});
+
+Settings:AddButton({
+	Name = "Get Theme",
+	Callback = function()
+		print(Compkiller:GetTheme())
+		
+		Notifier.new({
+			Title = "Notification",
+			Content = "Copied Them Color to your clipboard",
+			Duration = 5,
+			Icon = "rbxassetid://120245531583106"
+		});
+	end,
+});
+
+ThemeTab:DrawSection({
+	Name = "UI Themes"
+}):AddDropdown({
+	Name = "Select Theme",
+	Default = "Default",
+	Values = {
+		"Default",
+		"Dark Green",
+		"Dark Blue",
+		"Purple Rose",
+		"Skeet"
+	},
+	Callback = function(v)
+		Compkiller:SetTheme(v)
+	end,
 })
 
--- ===== TAB 2: ANTI AFK =====
-local AntiAFKTab = Window:CreateTab({
-    Name = "Anti AFK",
-    Icon = "⏱️"
-})
+-- Creating Config Tab --
+local ConfigUI = Window:DrawConfig({
+	Name = "Config",
+	Icon = "folder",
+	Config = ConfigManager
+});
 
-AntiAFKTab:CreateLabel({
-    Text = "Anti AFK Settings"
-})
-
-AntiAFKTab:CreateToggle({
-    Name = "Enable Anti AFK",
-    State = false,
-    Callback = function(state)
-        antiAFKEnabled = state
-        
-        if antiAFKEnabled then
-            print("Anti AFK: Enabled")
-            
-            -- Disconnect existing connection
-            if antiAFKConnection then
-                antiAFKConnection:Disconnect()
-            end
-            
-            -- Anti AFK loop
-            antiAFKConnection = RunService.Heartbeat:Connect(function()
-                if antiAFKEnabled and humanoid then
-                    -- Gerak karakter maju mundur
-                    humanoid:Move(Vector3.new(1, 0, 0), false)
-                    wait(3)
-                    
-                    if antiAFKEnabled then
-                        humanoid:Move(Vector3.new(-1, 0, 0), false)
-                        wait(3)
-                    end
-                else
-                    if antiAFKConnection then
-                        antiAFKConnection:Disconnect()
-                    end
-                end
-            end)
-        else
-            print("Anti AFK: Disabled")
-            if antiAFKConnection then
-                antiAFKConnection:Disconnect()
-            end
-            humanoid:Move(Vector3.new(0, 0, 0), false)
-        end
-    end
-})
-
-AntiAFKTab:CreateLabel({
-    Text = "Karakter akan bergerak otomatis"
-})
-
-AntiAFKTab:CreateLabel({
-    Text = "Cegah AFK kick dari server"
-})
-
--- ===== TAB 3: FLY =====
-local FlyTab = Window:CreateTab({
-    Name = "Fly",
-    Icon = "🚀"
-})
-
-FlyTab:CreateLabel({
-    Text = "Fly Settings"
-})
-
-FlyTab:CreateToggle({
-    Name = "Enable Fly",
-    State = false,
-    Callback = function(state)
-        flyEnabled = state
-        
-        if flyEnabled then
-            print("Fly: Enabled")
-            
-            -- Hapus bodyVelocity lama jika ada
-            if bodyVelocity then
-                bodyVelocity:Destroy()
-            end
-            
-            -- Buat bodyVelocity baru
-            bodyVelocity = Instance.new("BodyVelocity")
-            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-            bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
-            bodyVelocity.Parent = rootPart
-            
-            -- Disconnect fly connection lama
-            if flyConnection then
-                flyConnection:Disconnect()
-            end
-            
-            -- Fly loop
-            flyConnection = RunService.RenderStepped:Connect(function()
-                if flyEnabled and bodyVelocity and bodyVelocity.Parent then
-                    local moveDirection = Vector3.new(0, 0, 0)
-                    
-                    -- Kontrol dengan WASD
-                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                        moveDirection = moveDirection + (Camera.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit
-                    end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                        moveDirection = moveDirection - (Camera.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit
-                    end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                        moveDirection = moveDirection - Camera.CFrame.RightVector
-                    end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                        moveDirection = moveDirection + Camera.CFrame.RightVector
-                    end
-                    
-                    -- Naik dengan SPACE, turun dengan LSHIFT
-                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                        moveDirection = moveDirection + Vector3.new(0, 1, 0)
-                    end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                        moveDirection = moveDirection - Vector3.new(0, 1, 0)
-                    end
-                    
-                    -- Normalize direction
-                    if moveDirection.Magnitude > 0 then
-                        moveDirection = moveDirection.Unit
-                    end
-                    
-                    -- Set velocity
-                    bodyVelocity.Velocity = moveDirection * flySpeed
-                else
-                    if bodyVelocity then
-                        bodyVelocity:Destroy()
-                        bodyVelocity = nil
-                    end
-                    if flyConnection then
-                        flyConnection:Disconnect()
-                    end
-                end
-            end)
-        else
-            print("Fly: Disabled")
-            if bodyVelocity then
-                bodyVelocity:Destroy()
-                bodyVelocity = nil
-            end
-            if flyConnection then
-                flyConnection:Disconnect()
-            end
-        end
-    end
-})
-
-FlyTab:CreateSlider({
-    Name = "Fly Speed",
-    Min = 10,
-    Max = 200,
-    Default = 50,
-    Increment = 5,
-    ValueChanged = function(value)
-        flySpeed = value
-        print("Fly Speed:", flySpeed)
-    end
-})
-
-FlyTab:CreateLabel({
-    Text = "Kontrol Terbang:"
-})
-
-FlyTab:CreateLabel({
-    Text = "W/A/S/D = Bergerak"
-})
-
-FlyTab:CreateLabel({
-    Text = "SPACE = Naik"
-})
-
-FlyTab:CreateLabel({
-    Text = "LSHIFT = Turun"
-})
-
--- ===== TAB 4: INFO =====
-local InfoTab = Window:CreateTab({
-    Name = "Info",
-    Icon = "ℹ️"
-})
-
-InfoTab:CreateLabel({
-    Text = "xkid_hub Script"
-})
-
-InfoTab:CreateLabel({
-    Text = "Version: 1.0"
-})
-
-InfoTab:CreateLabel({
-    Text = "UI Library: MacLib"
-})
-
-InfoTab:CreateLabel({
-    Text = ""
-})
-
-InfoTab:CreateLabel({
-    Text = "Features:"
-})
-
-InfoTab:CreateLabel({
-    Text = "• Anti AFK"
-})
-
-InfoTab:CreateLabel({
-    Text = "• Fly dengan kontrol penuh"
-})
-
-InfoTab:CreateLabel({
-    Text = "• Speed control slider"
-})
-
-InfoTab:CreateLabel({
-    Text = "• MacOS style interface"
-})
-
-InfoTab:CreateButton({
-    Name = "Copy GitHub Link",
-    Callback = function()
-        setclipboard("https://github.com/dikineal/Xkid-hub")
-        print("GitHub link copied!")
-    end
-})
-
-print("xkid_hub Script (MacLib) loaded successfully!")
-print("Enjoy your script!")
+ConfigUI:Init();
