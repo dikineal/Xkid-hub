@@ -1,8 +1,8 @@
--- WindUI Script untuk xkid_hub
+-- Vape Script untuk xkid_hub
 -- Anti AFK + Fly Script
 -- Copy-paste ke Roblox Executor
 
-local WindUI = loadstring(game:HttpGet('https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.client.lua'))()
+local Vape = loadstring(game:HttpGet("https://raw.githubusercontent.com/7GrandDadPGN/VapeV4/main/main.lua"))()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -17,31 +17,37 @@ local rootPart = player.Character:WaitForChild("HumanoidRootPart")
 local antiAFKEnabled = false
 local flyEnabled = false
 local flySpeed = 50
+local bodyVelocity = nil
 local flyConnection = nil
+local antiAFKConnection = nil
 
 -- ===== MEMBUAT WINDOW =====
-local Window = WindUI:CreateWindow({
+local Window = Vape:AddWindow({
     Title = "xkid_hub Script",
     Icon = "rbxasset://textures/Cursor.png",
     Author = "xkid_hub",
-    Folder = "xkid_hub_Config",
-    HideOnClose = true,
-    IntroEnabled = true,
-    IntroText = "Welcome to xkid_hub!"
+    HideKeyPress = false,
+    KeyPress = Enum.KeyCode.RightControl
 })
 
 -- ===== TAB 1: HOME =====
-local TabHome = Window:CreateTab({
+local HomeTab = Window:AddTab({
     Name = "Home",
     Icon = "rbxasset://textures/Cursor.png"
 })
 
-TabHome:CreateLabel("Welcome to xkid_hub Script!")
-TabHome:CreateLabel("Features: Anti AFK, Fly")
-TabHome:CreateLabel("Version: 1.0")
+HomeTab:AddLabel({
+    Title = "Welcome!",
+    Text = "Selamat datang di xkid_hub Script"
+})
 
-TabHome:CreateButton({
-    Name = "Destroy UI",
+HomeTab:AddLabel({
+    Title = "Features",
+    Text = "✓ Anti AFK\n✓ Fly dengan speed control\n✓ Auto config save"
+})
+
+HomeTab:AddButton({
+    Title = "Destroy UI",
     Callback = function()
         Window:Destroy()
         print("UI destroyed!")
@@ -49,29 +55,41 @@ TabHome:CreateButton({
 })
 
 -- ===== TAB 2: ANTI AFK =====
-local TabAntiAFK = Window:CreateTab({
+local AntiAFKTab = Window:AddTab({
     Name = "Anti AFK",
     Icon = "rbxasset://textures/Cursor.png"
 })
 
-TabAntiAFK:CreateLabel("Anti AFK Settings")
+AntiAFKTab:AddLabel({
+    Title = "Anti AFK Settings",
+    Text = "Aktifkan untuk mencegah AFK kick"
+})
 
-TabAntiAFK:CreateToggle({
-    Name = "Enable Anti AFK",
-    StartingToggle = false,
-    Callback = function(toggleState)
-        antiAFKEnabled = toggleState
+AntiAFKTab:AddToggle({
+    Title = "Enable Anti AFK",
+    Default = false,
+    Callback = function(state)
+        antiAFKEnabled = state
+        
         if antiAFKEnabled then
             print("Anti AFK: Enabled")
-            -- Mulai anti AFK
-            local antiAFKConnection
+            
+            -- Disconnect existing connection
+            if antiAFKConnection then
+                antiAFKConnection:Disconnect()
+            end
+            
+            -- Anti AFK loop
             antiAFKConnection = RunService.Heartbeat:Connect(function()
-                if antiAFKEnabled then
-                    -- Gerak karakter agar tidak AFK
+                if antiAFKEnabled and humanoid then
+                    -- Gerak karakter maju mundur
                     humanoid:Move(Vector3.new(1, 0, 0), false)
-                    wait(2)
-                    humanoid:Move(Vector3.new(-1, 0, 0), false)
-                    wait(2)
+                    wait(3)
+                    
+                    if antiAFKEnabled then
+                        humanoid:Move(Vector3.new(-1, 0, 0), false)
+                        wait(3)
+                    end
                 else
                     if antiAFKConnection then
                         antiAFKConnection:Disconnect()
@@ -80,38 +98,58 @@ TabAntiAFK:CreateToggle({
             end)
         else
             print("Anti AFK: Disabled")
+            if antiAFKConnection then
+                antiAFKConnection:Disconnect()
+            end
             humanoid:Move(Vector3.new(0, 0, 0), false)
         end
     end
 })
 
-TabAntiAFK:CreateLabel("Anti AFK akan menggerakkan karakter secara otomatis")
+AntiAFKTab:AddLabel({
+    Title = "Info",
+    Text = "Karakter akan bergerak otomatis setiap 3 detik"
+})
 
 -- ===== TAB 3: FLY =====
-local TabFly = Window:CreateTab({
+local FlyTab = Window:AddTab({
     Name = "Fly",
     Icon = "rbxasset://textures/Cursor.png"
 })
 
-TabFly:CreateLabel("Fly Settings")
+FlyTab:AddLabel({
+    Title = "Fly Settings",
+    Text = "Aktifkan untuk terbang"
+})
 
-TabFly:CreateToggle({
-    Name = "Enable Fly",
-    StartingToggle = false,
-    Callback = function(toggleState)
-        flyEnabled = toggleState
+FlyTab:AddToggle({
+    Title = "Enable Fly",
+    Default = false,
+    Callback = function(state)
+        flyEnabled = state
         
         if flyEnabled then
             print("Fly: Enabled")
             
-            -- Buat bodyVelocity untuk fly
-            local bodyVelocity = Instance.new("BodyVelocity")
+            -- Hapus bodyVelocity lama jika ada
+            if bodyVelocity then
+                bodyVelocity:Destroy()
+            end
+            
+            -- Buat bodyVelocity baru
+            bodyVelocity = Instance.new("BodyVelocity")
             bodyVelocity.Velocity = Vector3.new(0, 0, 0)
             bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
             bodyVelocity.Parent = rootPart
             
+            -- Disconnect fly connection lama
+            if flyConnection then
+                flyConnection:Disconnect()
+            end
+            
+            -- Fly loop
             flyConnection = RunService.RenderStepped:Connect(function()
-                if flyEnabled then
+                if flyEnabled and bodyVelocity and bodyVelocity.Parent then
                     local moveDirection = Vector3.new(0, 0, 0)
                     
                     -- Kontrol dengan WASD
@@ -136,14 +174,18 @@ TabFly:CreateToggle({
                         moveDirection = moveDirection - Vector3.new(0, 1, 0)
                     end
                     
-                    -- Set velocity
+                    -- Normalize direction
                     if moveDirection.Magnitude > 0 then
                         moveDirection = moveDirection.Unit
                     end
                     
+                    -- Set velocity
                     bodyVelocity.Velocity = moveDirection * flySpeed
                 else
-                    bodyVelocity:Destroy()
+                    if bodyVelocity then
+                        bodyVelocity:Destroy()
+                        bodyVelocity = nil
+                    end
                     if flyConnection then
                         flyConnection:Disconnect()
                     end
@@ -151,6 +193,10 @@ TabFly:CreateToggle({
             end)
         else
             print("Fly: Disabled")
+            if bodyVelocity then
+                bodyVelocity:Destroy()
+                bodyVelocity = nil
+            end
             if flyConnection then
                 flyConnection:Disconnect()
             end
@@ -158,42 +204,46 @@ TabFly:CreateToggle({
     end
 })
 
-TabFly:CreateSlider({
-    Name = "Fly Speed",
+FlyTab:AddSlider({
+    Title = "Fly Speed",
     Min = 10,
     Max = 200,
-    Decimals = 0,
-    StartingValue = 50,
+    Default = 50,
+    Rounding = 0,
     Callback = function(value)
         flySpeed = value
-        print("Fly Speed:", flySpeed)
+        print("Fly Speed set to:", flySpeed)
     end
 })
 
-TabFly:CreateLabel("Kontrol Terbang:")
-TabFly:CreateLabel("W/A/S/D = Bergerak")
-TabFly:CreateLabel("SPACE = Naik")
-TabFly:CreateLabel("LSHIFT = Turun")
+FlyTab:AddLabel({
+    Title = "Kontrol Terbang",
+    Text = "W/A/S/D = Bergerak\nSPACE = Naik\nLSHIFT = Turun"
+})
 
 -- ===== TAB 4: INFO =====
-local TabInfo = Window:CreateTab({
+local InfoTab = Window:AddTab({
     Name = "Info",
     Icon = "rbxasset://textures/Cursor.png"
 })
 
-TabInfo:CreateLabel("xkid_hub Script Info")
-TabInfo:CreateLabel("Script ini dilengkapi dengan:")
-TabInfo:CreateLabel("✓ Anti AFK")
-TabInfo:CreateLabel("✓ Fly dengan speed control")
-TabInfo:CreateLabel("✓ Config auto-save")
+InfoTab:AddLabel({
+    Title = "xkid_hub Script",
+    Text = "Version: 1.0\nUI Library: Vape"
+})
 
-TabInfo:CreateButton({
-    Name = "Copy Script Link",
+InfoTab:AddLabel({
+    Title = "Features",
+    Text = "✓ Anti AFK - Cegah AFK kick\n✓ Fly - Terbang dengan kontrol penuh\n✓ Speed Control - Atur kecepatan terbang"
+})
+
+InfoTab:AddButton({
+    Title = "GitHub Repository",
     Callback = function()
-        setclipboard("loadstring(game:HttpGet('https://raw.githubusercontent.com/xkid_hub/script/main/windui_script.lua'))()")
-        print("Script link copied!")
+        setclipboard("https://github.com/dikineal/Xkid-hub")
+        print("GitHub link copied!")
     end
 })
 
-print("xkid_hub Script loaded successfully!")
+print("xkid_hub Script (Vape) loaded successfully!")
 print("Press RIGHT CONTROL to toggle UI")
