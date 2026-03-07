@@ -1,8 +1,3 @@
---====================================================================--
---          XKID SUPER EPIC UNIVERSAL HUB - VERSION 9000             --
---          Auto Detect + Auto Farm + Auto Everything                --
---====================================================================--
-
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -15,728 +10,466 @@ local Window = Rayfield:CreateWindow({
         FileName = "Config"
     },
     KeySystem = false
-})
+})--[[
+    DEBUG MASTER - DETEKSI SELURUH MAP
+    Tambahkan ini di hub lo
+]]
 
---====================================================================--
---                    SERVICES & VARIABLES                           --
---====================================================================--
+-- ========== DEBUG TAB ==========
+local DebugTab = Window:CreateTab("🐞 DEBUG MASTER", nil)
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser")
-local HttpService = game:GetService("HttpService")
-local TPService = game:GetService("TeleportService")
-local Marketplace = game:GetService("MarketplaceService")
-local Lighting = game:GetService("Lighting")
-local CoreGui = game:GetService("CoreGui")
-local StarterGui = game:GetService("StarterGui")
 
---====================================================================--
---                    GLOBAL VARIABLES                               --
---====================================================================--
-
-_G.Settings = {
-    AutoFarm = false,
-    AutoCollect = false,
-    AutoSell = false,
-    AutoBuy = false,
-    AutoQuest = false,
-    AutoRebirth = false,
-    AutoUpgrade = false,
-    WalkSpeed = 16,
-    JumpPower = 50,
-    Gravity = 196.2,
-    FarmRadius = 50,
-    CollectionRadius = 30,
-    Delay = 1
+-- Variabel debug
+_G.Debug = {
+    scanning = false,
+    tracking = false,
+    trackedObject = nil,
+    scanResults = {},
+    objectCount = 0
 }
 
-_G.GameInfo = {
-    name = "Unknown",
-    placeId = game.PlaceId,
-    genre = "Unknown",
-    type = "Unknown",
-    players = #Players:GetPlayers(),
-    maxPlayers = Players.MaxPlayers,
-    serverTime = 0,
-    detectedObjects = {},
-    importantNPCs = {},
-    farmables = {},
-    collectables = {},
-    sellZones = {},
-    safeZones = {}
-}
-
---====================================================================--
---                    SUPER DETECTOR ENGINE                          --
---====================================================================--
-
-local function notify(title, msg, time)
-    StarterGui:SetCore("SendNotification", {
-        Title = title,
-        Text = msg,
-        Duration = time or 3
-    })
-end
-
-local function scanAllObjects()
-    print("🔍 MULAI SCAN SUPER EPIC...")
-    notify("SUPER EPIC", "Memindai game...", 2)
-    
-    local startTime = tick()
-    local totalObjects = 0
-    local categories = {
-        farming = {"tanah", "lahan", "bibit", "seed", "crop", "plant", "farm", "sawah", "padi", "tomat", "jagung", "terong", "strawberry", "durian", "sawit", "palm"},
-        fighting = {"sword", "weapon", "enemy", "boss", "battle", "fight", "pvp", "arena", "monster", "zombie", "dungeon"},
-        simulator = {"simulator", "coin", "money", "cash", "pet", "egg", "hatch", "breed", "evolve"},
-        tycoon = {"tycoon", "generator", "dropper", "conveyor", "upgrade", "sell", "button", "press"},
-        obby = {"obby", "jump", "checkpoint", "stage", "level", "platform", "finish", "start"},
-        racing = {"car", "vehicle", "race", "track", "speed", "drive", "wheel", "nitro"},
-        rpg = {"quest", "npc", "shop", "merchant", "guild", "dungeon", "king", "guard"},
-        building = {"brick", "block", "build", "structure", "house", "base", "wall", "door"}
-    }
-    
-    -- Reset data
-    _G.GameInfo.detectedObjects = {}
-    _G.GameInfo.importantNPCs = {}
-    _G.GameInfo.farmables = {}
-    _G.GameInfo.collectables = {}
-    _G.GameInfo.sellZones = {}
-    
-    -- Scan semua object
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        totalObjects = totalObjects + 1
-        
-        -- Skip yang ngga penting
-        if not obj:IsA("BasePart") and not obj:IsA("Model") then continue end
-        
-        local objName = obj.Name:lower()
-        local objClass = obj.ClassName
-        local objPos = nil
-        
-        -- Dapatkan posisi
-        if obj:IsA("BasePart") then
-            objPos = obj.Position
-        elseif obj:IsA("Model") then
-            if obj:FindFirstChild("HumanoidRootPart") then
-                objPos = obj.HumanoidRootPart.Position
-            elseif obj:FindFirstChild("Head") then
-                objPos = obj.Head.Position
-            elseif obj:FindFirstChild("Torso") then
-                objPos = obj.Torso.Position
-            end
-        end
-        
-        if not objPos then continue end
-        
-        -- Kategorisasi
-        for cat, keywords in pairs(categories) do
-            for _, kw in ipairs(keywords) do
-                if objName:find(kw) then
-                    table.insert(_G.GameInfo.detectedObjects, {
-                        name = obj.Name,
-                        class = objClass,
-                        category = cat,
-                        position = objPos,
-                        object = obj
-                    })
-                    
-                    -- Khusus untuk farming
-                    if cat == "farming" then
-                        table.insert(_G.GameInfo.farmables, obj)
-                    end
-                    
-                    -- Cari NPC (model dengan Humanoid)
-                    if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and obj ~= LocalPlayer.Character then
-                        table.insert(_G.GameInfo.importantNPCs, obj)
-                        
-                        if objName:find("sell") or objName:find("jual") or objName:find("merchant") then
-                            table.insert(_G.GameInfo.sellZones, obj)
-                        end
-                    end
-                    
-                    break
-                end
-            end
-        end
-        
-        -- Cari collectables (coins, eggs, etc)
-        if objName:find("coin") or objName:find("egg") or objName:find("gem") or objName:find("crystal") then
-            table.insert(_G.GameInfo.collectables, obj)
-        end
-    end
-    
-    -- Deteksi tipe game
-    local scores = {}
-    for cat, keywords in pairs(categories) do
-        scores[cat] = 0
-    end
-    
-    for _, obj in ipairs(_G.GameInfo.detectedObjects) do
-        scores[obj.category] = (scores[obj.category] or 0) + 1
-    end
-    
-    local bestType = "unknown"
-    local bestScore = 0
-    for cat, score in pairs(scores) do
-        if score > bestScore then
-            bestScore = score
-            bestType = cat
-        end
-    end
-    
-    _G.GameInfo.type = bestType
-    _G.GameInfo.serverTime = tick() - startTime
-    
-    print("✅ SCAN SELESAI dalam " .. math.floor(_G.GameInfo.serverTime * 1000) .. "ms")
-    print("📊 Tipe Game: " .. bestType)
-    print("📊 Total Object: " .. totalObjects)
-    print("📊 Detected: " .. #_G.GameInfo.detectedObjects)
-    print("📊 NPC: " .. #_G.GameInfo.importantNPCs)
-    print("📊 Farmables: " .. #_G.GameInfo.farmables)
-    print("📊 Collectables: " .. #_G.GameInfo.collectables)
-    
-    notify("SUPER EPIC", "Game: " .. bestType .. " | NPC: " .. #_G.GameInfo.importantNPCs, 3)
-    
-    return _G.GameInfo
-end
-
---====================================================================--
---                    AUTO FARM ENGINE                               --
---====================================================================--
-
-local farmConnections = {}
-
-local function teleportTo(obj)
-    if not obj or not LocalPlayer.Character then return false end
-    
-    local pos = nil
+-- Fungsi untuk mendapatkan posisi object
+local function getObjectPosition(obj)
     if obj:IsA("BasePart") then
-        pos = obj.Position
+        return obj.Position
     elseif obj:IsA("Model") then
         if obj:FindFirstChild("HumanoidRootPart") then
-            pos = obj.HumanoidRootPart.Position
+            return obj.HumanoidRootPart.Position
         elseif obj:FindFirstChild("Head") then
-            pos = obj.Head.Position
-        end
-    end
-    
-    if pos then
-        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y + 3, pos.Z)
-        return true
-    end
-    return false
-end
-
-local function interactWith(obj)
-    if not obj then return end
-    
-    pcall(function()
-        -- Touch
-        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 0)
-        wait(0.1)
-        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 1)
-    end)
-    
-    pcall(function()
-        -- ClickDetector
-        for _, d in pairs(obj:GetDescendants()) do
-            if d:IsA("ClickDetector") then
-                d:MouseClick()
+            return obj.Head.Position
+        elseif obj:FindFirstChild("Torso") then
+            return obj.Torso.Position
+        else
+            -- Coba cari part pertama
+            for _, child in pairs(obj:GetChildren()) do
+                if child:IsA("BasePart") then
+                    return child.Position
+                end
             end
         end
-    end)
-    
-    pcall(function()
-        -- ProximityPrompt
-        for _, p in pairs(obj:GetDescendants()) do
-            if p:IsA("ProximityPrompt") then
-                p:InputHoldBegin()
-                wait(0.2)
-                p:InputHoldEnd()
-            end
-        end
-    end)
+    end
+    return nil
 end
 
-local function startAutoFarm()
-    -- Bersihkan koneksi lama
-    for _, conn in pairs(farmConnections) do
-        pcall(function() conn:Disconnect() end)
-    end
-    farmConnections = {}
-    
-    if not _G.Settings.AutoFarm then return end
-    
-    -- Auto Farm berdasarkan tipe game
-    if _G.GameInfo.type == "farming" then
-        farmConnections.farm = RunService.Heartbeat:Connect(function()
-            if not _G.Settings.AutoFarm then return end
+-- ========== SCAN FULL MAP ==========
+DebugTab:CreateButton({
+    Name = "🔍 SCAN FULL MAP (1000 stud)",
+    Callback = function()
+        _G.Debug.scanning = true
+        _G.Debug.scanResults = {}
+        
+        if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            print("❌ Character tidak ditemukan")
+            _G.Debug.scanning = false
+            return
+        end
+        
+        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+        print("\n" .. string.rep("=", 60))
+        print("🔍 SCAN FULL MAP DIMULAI")
+        print("📍 Posisi saya: " .. string.format("(%.1f, %.1f, %.1f)", myPos.X, myPos.Y, myPos.Z))
+        print(string.rep("=", 60))
+        
+        local categories = {
+            ["🌾 FARMING"] = {"tanah", "lahan", "bibit", "seed", "crop", "plant", "farm", "sawah", "padi", "tomat", "jagung", "terong", "strawberry", "durian", "sawit"},
+            ["👥 NPC"] = {"npc", "pedagang", "penjual", "petani", "merchant", "farmer", "guard", "king", "quest"},
+            ["🏪 TOKO"] = {"toko", "shop", "buy", "sell", "jual", "beli", "market"},
+            ["🥚 COLLECT"] = {"egg", "telur", "coin", "money", "crystal", "gem", "diamond"},
+            ["🌳 OBJECT"] = {"tree", "pohon", "rock", "batu", "flower", "bunga"}
+        }
+        
+        local totalObjects = 0
+        local foundObjects = {}
+        
+        -- Inisialisasi kategori
+        for catName, _ in pairs(categories) do
+            foundObjects[catName] = {}
+        end
+        foundObjects["❓ LAINNYA"] = {}
+        
+        -- Scan semua object
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            totalObjects = totalObjects + 1
             
-            -- Auto tanam
-            if #_G.GameInfo.farmables > 0 then
-                for _, farmObj in ipairs(_G.GameInfo.farmables) do
-                    local dist = (LocalPlayer.Character.HumanoidRootPart.Position - farmObj.Position).Magnitude
-                    if dist < _G.Settings.FarmRadius then
-                        LocalPlayer.Character.Humanoid:MoveTo(farmObj.Position)
-                        if dist < 5 then
-                            interactWith(farmObj)
-                            wait(_G.Settings.Delay)
-                        end
+            local objName = obj.Name:lower()
+            local objPos = getObjectPosition(obj)
+            if not objPos then goto continue end
+            
+            local dist = (myPos - objPos).Magnitude
+            if dist > 1000 then goto continue end -- Batasi radius 1000 stud
+            
+            local categorized = false
+            
+            -- Cek kategori
+            for catName, keywords in pairs(categories) do
+                for _, kw in ipairs(keywords) do
+                    if objName:find(kw) then
+                        table.insert(foundObjects[catName], {
+                            name = obj.Name,
+                            class = obj.ClassName,
+                            pos = objPos,
+                            dist = dist,
+                            obj = obj
+                        })
+                        categorized = true
                         break
                     end
                 end
+                if categorized then break end
             end
-        end)
-    elseif _G.GameInfo.type == "simulator" then
-        farmConnections.farm = RunService.Heartbeat:Connect(function()
-            if not _G.Settings.AutoFarm then return end
             
-            -- Auto collect coins/eggs
-            if #_G.GameInfo.collectables > 0 then
-                for _, collectable in ipairs(_G.GameInfo.collectables) do
-                    local dist = (LocalPlayer.Character.HumanoidRootPart.Position - collectable.Position).Magnitude
-                    if dist < _G.Settings.CollectionRadius then
-                        LocalPlayer.Character.Humanoid:MoveTo(collectable.Position)
-                        if dist < 5 then
-                            firetouchinterest(LocalPlayer.Character.HumanoidRootPart, collectable, 0)
-                            wait(0.1)
-                            firetouchinterest(LocalPlayer.Character.HumanoidRootPart, collectable, 1)
-                        end
+            if not categorized then
+                table.insert(foundObjects["❓ LAINNYA"], {
+                    name = obj.Name,
+                    class = obj.ClassName,
+                    pos = objPos,
+                    dist = dist,
+                    obj = obj
+                })
+            end
+            
+            ::continue::
+        end
+        
+        -- Urutkan berdasarkan jarak
+        for catName, list in pairs(foundObjects) do
+            table.sort(list, function(a, b) return a.dist < b.dist end)
+        end
+        
+        -- Tampilkan hasil
+        print("\n📊 HASIL SCAN:")
+        for catName, list in pairs(foundObjects) do
+            print(string.format("%s: %d object", catName, #list))
+        end
+        
+        print("\n" .. string.rep("=", 60))
+        
+        -- Tampilkan detail per kategori
+        for catName, list in pairs(foundObjects) do
+            if #list > 0 then
+                print("\n" .. catName .. " (" .. #list .. "):")
+                for i = 1, math.min(20, #list) do -- Tampilkan max 20 per kategori
+                    local obj = list[i]
+                    print(string.format("  %d. [%s] %s - jarak: %.1f stud", 
+                        i, obj.class, obj.name, obj.dist))
+                end
+                if #list > 20 then
+                    print("  ... dan " .. (#list - 20) .. " lainnya")
+                end
+            end
+        end
+        
+        print("\n" .. string.rep("=", 60))
+        print("✅ SCAN SELESAI! Total object: " .. totalObjects)
+        print("📌 Object terdeteksi: " .. (#foundObjects["🌾 FARMING"] + #foundObjects["👥 NPC"] + #foundObjects["🏪 TOKO"] + #foundObjects["🥚 COLLECT"] + #foundObjects["🌳 OBJECT"] + #foundObjects["❓ LAINNYA"]))
+        
+        _G.Debug.scanResults = foundObjects
+        _G.Debug.scanning = false
+        _G.Debug.objectCount = totalObjects
+    end
+})
+
+-- ========== EXPORT KOORDINAT ==========
+DebugTab:CreateButton({
+    Name = "📥 EXPORT KOORDINAT NPC",
+    Callback = function()
+        if not _G.Debug.scanResults or not _G.Debug.scanResults["👥 NPC"] then
+            print("❌ Jalankan SCAN FULL MAP dulu")
+            return
+        end
+        
+        print("\n📋 DAFTAR KOORDINAT NPC:")
+        for i, npc in ipairs(_G.Debug.scanResults["👥 NPC"]) do
+            print(string.format("%d. %s: (%.1f, %.1f, %.1f)", 
+                i, npc.name, npc.pos.X, npc.pos.Y, npc.pos.Z))
+        end
+        
+        -- Simpan ke file (jika executor support)
+        local success, result = pcall(function()
+            local fileContent = "-- DAFTAR NPC\n"
+            for i, npc in ipairs(_G.Debug.scanResults["👥 NPC"]) do
+                fileContent = fileContent .. string.format('["%s"] = CFrame.new(%.1f, %.1f, %.1f),\n', 
+                    npc.name, npc.pos.X, npc.pos.Y, npc.pos.Z)
+            end
+            writefile("NPC_Coordinates.txt", fileContent)
+            return true
+        end)
+        
+        if success then
+            print("✅ File NPC_Coordinates.txt tersimpan")
+        end
+    end
+})
+
+DebugTab:CreateButton({
+    Name = "📥 EXPORT KOORDINAT FARMING",
+    Callback = function()
+        if not _G.Debug.scanResults or not _G.Debug.scanResults["🌾 FARMING"] then
+            print("❌ Jalankan SCAN FULL MAP dulu")
+            return
+        end
+        
+        print("\n📋 DAFTAR KOORDINAT FARMING:")
+        for i, farm in ipairs(_G.Debug.scanResults["🌾 FARMING"]) do
+            print(string.format("%d. %s: (%.1f, %.1f, %.1f)", 
+                i, farm.name, farm.pos.X, farm.pos.Y, farm.pos.Z))
+        end
+        
+        local success, result = pcall(function()
+            local fileContent = "-- DAFTAR FARMING\n"
+            for i, farm in ipairs(_G.Debug.scanResults["🌾 FARMING"]) do
+                fileContent = fileContent .. string.format('["%s"] = CFrame.new(%.1f, %.1f, %.1f),\n', 
+                    farm.name, farm.pos.X, farm.pos.Y, farm.pos.Z)
+            end
+            writefile("Farming_Coordinates.txt", fileContent)
+            return true
+        end)
+        
+        if success then
+            print("✅ File Farming_Coordinates.txt tersimpan")
+        end
+    end
+})
+
+-- ========== TRACK OBJECT ==========
+DebugTab:CreateInput({
+    Name = "🎯 TRACK OBJECT (ketik nama)",
+    PlaceholderText = "Contoh: npcbibit",
+    Callback = function(input)
+        if input == "" then return end
+        
+        _G.Debug.tracking = true
+        _G.Debug.trackedObject = nil
+        
+        -- Cari object dengan nama mengandung keyword
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj.Name:lower():find(input:lower()) then
+                _G.Debug.trackedObject = obj
+                break
+            end
+        end
+        
+        if _G.Debug.trackedObject then
+            print("🎯 Melacak: " .. _G.Debug.trackedObject.Name)
+            
+            -- Loop tracking
+            spawn(function()
+                while _G.Debug.tracking do
+                    local pos = getObjectPosition(_G.Debug.trackedObject)
+                    if pos and LocalPlayer.Character then
+                        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+                        local dist = (myPos - pos).Magnitude
+                        print(string.format("📍 %s - posisi: (%.1f, %.1f, %.1f) | jarak: %.1f stud", 
+                            _G.Debug.trackedObject.Name, pos.X, pos.Y, pos.Z, dist))
+                    else
+                        print("❌ Object hilang")
+                        _G.Debug.tracking = false
+                    end
+                    wait(2)
+                end
+            end)
+        else
+            print("❌ Object dengan nama '" .. input .. "' tidak ditemukan")
+        end
+    end
+})
+
+DebugTab:CreateButton({
+    Name = "⏹️ STOP TRACKING",
+    Callback = function()
+        _G.Debug.tracking = false
+        print("🛑 Tracking dihentikan")
+    end
+})
+
+-- ========== DETEKSI OBJECT BERGERAK ==========
+DebugTab:CreateButton({
+    Name = "🔄 DETEKSI OBJECT BERGERAK",
+    Callback = function()
+        print("\n🔍 Mencari object bergerak...")
+        
+        local moving = {}
+        local checkPositions = {}
+        
+        -- Simpan posisi awal
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") or (obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart")) then
+                local pos = getObjectPosition(obj)
+                if pos then
+                    checkPositions[obj] = pos
+                end
+            end
+        end
+        
+        wait(1) -- Tunggu 1 detik
+        
+        -- Cek perubahan posisi
+        for obj, oldPos in pairs(checkPositions) do
+            local newPos = getObjectPosition(obj)
+            if newPos and (oldPos - newPos).Magnitude > 1 then -- Bergerak lebih dari 1 stud
+                table.insert(moving, {
+                    name = obj.Name,
+                    class = obj.ClassName,
+                    oldPos = oldPos,
+                    newPos = newPos,
+                    distance = (oldPos - newPos).Magnitude
+                })
+            end
+        end
+        
+        print("\n📊 OBJECT BERGERAK DITEMUKAN: " .. #moving)
+        for i, obj in ipairs(moving) do
+            print(string.format("%d. %s [%s] - bergerak %.1f stud", 
+                i, obj.name, obj.class, obj.distance))
+        end
+    end
+})
+
+-- ========== PETA SEDERHANA ==========
+DebugTab:CreateButton({
+    Name = "🗺️ TAMPILKAN PETA 2D",
+    Callback = function()
+        if not LocalPlayer.Character then return end
+        
+        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+        local mapSize = 200 -- Ukuran peta 200x200 stud
+        
+        print("\n🗺️ PETA LOKASI (X-Z axis)")
+        print("📍 Kamu di posisi: " .. string.format("(%.1f, %.1f)", myPos.X, myPos.Z))
+        print(string.rep("-", 50))
+        
+        -- Buat grid sederhana
+        for z = -mapSize/2, mapSize/2, 20 do
+            local line = ""
+            for x = -mapSize/2, mapSize/2, 20 do
+                local worldX = myPos.X + x
+                local worldZ = myPos.Z + z
+                
+                -- Cek object di sekitar
+                local found = false
+                for _, obj in ipairs(_G.Debug.scanResults["👥 NPC"] or {}) do
+                    if math.abs(obj.pos.X - worldX) < 10 and math.abs(obj.pos.Z - worldZ) < 10 then
+                        line = line .. "👥"
+                        found = true
                         break
                     end
                 end
-            end
-        end)
-    end
-    
-    -- Auto sell
-    if _G.Settings.AutoSell and #_G.GameInfo.sellZones > 0 then
-        farmConnections.sell = RunService.Heartbeat:Connect(function()
-            if not _G.Settings.AutoSell then return end
-            
-            local sellZone = _G.GameInfo.sellZones[1]
-            local dist = (LocalPlayer.Character.HumanoidRootPart.Position - sellZone.Position).Magnitude
-            
-            if dist > 5 then
-                LocalPlayer.Character.Humanoid:MoveTo(sellZone.Position)
-            else
-                interactWith(sellZone)
-                wait(2)
-            end
-        end)
-    end
-end
-
---====================================================================--
---                    TELEPORT ENGINE                                --
---====================================================================--
-
-local function teleportToNearest(category)
-    local nearest = nil
-    local nearestDist = math.huge
-    
-    for _, obj in ipairs(_G.GameInfo.detectedObjects) do
-        if obj.category == category then
-            local dist = (LocalPlayer.Character.HumanoidRootPart.Position - obj.position).Magnitude
-            if dist < nearestDist then
-                nearestDist = dist
-                nearest = obj.object
-            end
-        end
-    end
-    
-    if nearest then
-        teleportTo(nearest)
-        return true
-    end
-    return false
-end
-
---====================================================================--
---                    GUI CREATION                                   --
---====================================================================--
-
--- TAB: INFO
-local InfoTab = Window:CreateTab("📊 INFO", nil)
-
-InfoTab:CreateButton({
-    Name = "🔍 SCAN GAME (SUPER EPIC)",
-    Callback = function()
-        scanAllObjects()
-    end
-})
-
-InfoTab:CreateButton({
-    Name = "📋 TAMPILKAN HASIL SCAN",
-    Callback = function()
-        print("\n=== SUPER EPIC SCAN RESULTS ===")
-        print("Game: " .. _G.GameInfo.name)
-        print("Type: " .. _G.GameInfo.type)
-        print("Place ID: " .. _G.GameInfo.placeId)
-        print("Players: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers)
-        print("\n📌 NPC Ditemukan: " .. #_G.GameInfo.importantNPCs)
-        for i, npc in ipairs(_G.GameInfo.importantNPCs) do
-            print("  " .. i .. ". " .. npc.Name)
-        end
-        print("\n🌾 Farmables: " .. #_G.GameInfo.farmables)
-        print("💰 Sell Zones: " .. #_G.GameInfo.sellZones)
-        print("💎 Collectables: " .. #_G.GameInfo.collectables)
-        print("================================")
-    end
-})
-
-InfoTab:CreateButton({
-    Name = "🎮 INFO GAME DARI ROBLOX",
-    Callback = function()
-        local info = Marketplace:GetProductInfo(game.PlaceId)
-        print("\n=== ROBLOX GAME INFO ===")
-        print("Name: " .. info.Name)
-        print("Description: " .. info.Description)
-        print("Creator: " .. info.Creator.Name)
-        print("Created: " .. info.Created)
-        print("Updated: " .. info.Updated)
-        print("Visits: " .. (info.Visits or "Unknown"))
-        print("Genre: " .. info.Genre)
-        print("Price: " .. (info.PriceInRobux or "Free"))
-    end
-})
-
--- TAB: AUTO FARM
-local AutoTab = Window:CreateTab("⚡ AUTO FARM", nil)
-
-AutoTab:CreateToggle({
-    Name = "🌾 AUTO FARM (Otomatis)",
-    CurrentValue = false,
-    Callback = function(v)
-        _G.Settings.AutoFarm = v
-        startAutoFarm()
-        notify("AUTO FARM", v and "AKTIF" or "MATI", 1)
-    end
-})
-
-AutoTab:CreateToggle({
-    Name = "💰 AUTO SELL (Otomatis Jual)",
-    CurrentValue = false,
-    Callback = function(v)
-        _G.Settings.AutoSell = v
-        startAutoFarm()
-    end
-})
-
-AutoTab:CreateSlider({
-    Name = "📏 Radius Farm",
-    Range = {10, 100},
-    Increment = 5,
-    CurrentValue = 50,
-    Callback = function(v) _G.Settings.FarmRadius = v end
-})
-
-AutoTab:CreateSlider({
-    Name = "⏱️ Delay (detik)",
-    Range = {0.5, 5},
-    Increment = 0.5,
-    CurrentValue = 1,
-    Callback = function(v) _G.Settings.Delay = v end
-})
-
--- TAB: TELEPORT
-local TeleportTab = Window:CreateTab("📍 TELEPORT", nil)
-
-TeleportTab:CreateButton({
-    Name = "🏃 KE NPC TERDEKAT",
-    Callback = function()
-        if #_G.GameInfo.importantNPCs > 0 then
-            teleportTo(_G.GameInfo.importantNPCs[1])
-        else
-            notify("ERROR", "Tidak ada NPC", 2)
-        end
-    end
-})
-
-TeleportTab:CreateButton({
-    Name = "🌾 KE FARMABLE TERDEKAT",
-    Callback = function()
-        teleportToNearest("farming")
-    end
-})
-
-TeleportTab:CreateButton({
-    Name = "💰 KE SELL ZONE TERDEKAT",
-    Callback = function()
-        if #_G.GameInfo.sellZones > 0 then
-            teleportTo(_G.GameInfo.sellZones[1])
-        end
-    end
-})
-
-TeleportTab:CreateButton({
-    Name = "💎 KE COLLECTABLE TERDEKAT",
-    Callback = function()
-        if #_G.GameInfo.collectables > 0 then
-            teleportTo(_G.GameInfo.collectables[1])
-        end
-    end
-})
-
--- TAB: PLAYER
-local PlayerTab = Window:CreateTab("👤 PLAYER", nil)
-
-PlayerTab:CreateSlider({
-    Name = "🚶 WalkSpeed",
-    Range = {16, 350},
-    Increment = 1,
-    CurrentValue = 16,
-    Callback = function(v)
-        _G.Settings.WalkSpeed = v
-        pcall(function()
-            if LocalPlayer.Character then
-                LocalPlayer.Character.Humanoid.WalkSpeed = v
-            end
-        end)
-    end
-})
-
-PlayerTab:CreateSlider({
-    Name = "🦘 JumpPower",
-    Range = {50, 500},
-    Increment = 1,
-    CurrentValue = 50,
-    Callback = function(v)
-        _G.Settings.JumpPower = v
-        pcall(function()
-            if LocalPlayer.Character then
-                LocalPlayer.Character.Humanoid.JumpPower = v
-            end
-        end)
-    end
-})
-
-PlayerTab:CreateSlider({
-    Name = "🌍 Gravity",
-    Range = {0, 500},
-    Increment = 5,
-    CurrentValue = 196.2,
-    Callback = function(v)
-        _G.Settings.Gravity = v
-        Workspace.Gravity = v
-    end
-})
-
-PlayerTab:CreateToggle({
-    Name = "🔄 Infinite Jump",
-    CurrentValue = false,
-    Callback = function(v)
-        _G.InfiniteJump = v
-        if v then
-            UIS.JumpRequest:Connect(function()
-                if _G.InfiniteJump and LocalPlayer.Character then
-                    LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                if not found then
+                    for _, obj in ipairs(_G.Debug.scanResults["🏪 TOKO"] or {}) do
+                        if math.abs(obj.pos.X - worldX) < 10 and math.abs(obj.pos.Z - worldZ) < 10 then
+                            line = line .. "🏪"
+                            found = true
+                            break
+                        end
+                    end
                 end
-            end)
+                if not found then
+                    if math.abs(x) < 5 and math.abs(z) < 5 then
+                        line = line .. "🔴" -- Posisi player
+                    else
+                        line = line .. "⬜"
+                    end
+                end
+            end
+            print(line)
         end
+        print(string.rep("-", 50))
     end
 })
 
-PlayerTab:CreateToggle({
-    Name = "🛡️ Anti AFK",
-    CurrentValue = false,
-    Callback = function(v)
-        if v then
-            LocalPlayer.Idled:Connect(function()
-                VirtualUser:CaptureController()
-                VirtualUser:ClickButton2(Vector2.new())
-            end)
-        end
-    end
-})
-
-PlayerTab:CreateButton({
-    Name = "💀 Reset Character",
+-- ========== STATISTIK MAP ==========
+DebugTab:CreateButton({
+    Name = "📊 STATISTIK MAP",
     Callback = function()
-        if LocalPlayer.Character then
-            LocalPlayer.Character:BreakJoints()
-        end
-    end
-})
-
--- TAB: VISUAL
-local VisualTab = Window:CreateTab("🎨 VISUAL", nil)
-
-VisualTab:CreateToggle({
-    Name = "☀️ Full Bright",
-    CurrentValue = false,
-    Callback = function(v)
-        if v then
-            Lighting.Brightness = 2
-            Lighting.ClockTime = 14
-            Lighting.FogEnd = 100000
-            Lighting.GlobalShadows = false
-            Lighting.Ambient = Color3.new(1,1,1)
-        else
-            Lighting.Brightness = 1
-            Lighting.ClockTime = 12
-            Lighting.FogEnd = 50000
-            Lighting.GlobalShadows = true
-            Lighting.Ambient = Color3.new(0,0,0)
-        end
-    end
-})
-
-VisualTab:CreateToggle({
-    Name = "👁️ X-Ray Vision",
-    CurrentValue = false,
-    Callback = function(v)
-        for _, part in pairs(Workspace:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.LocalTransparencyModifier = v and 0.7 or 0
+        print("\n" .. string.rep("=", 60))
+        print("📊 STATISTIK MAP")
+        print(string.rep("=", 60))
+        
+        print("📍 Posisi player: " .. (LocalPlayer.Character and tostring(LocalPlayer.Character.HumanoidRootPart.Position) or "Unknown"))
+        print("👥 Jumlah player: " .. #Players:GetPlayers())
+        print("🌍 Nama game: " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
+        print("🆔 Place ID: " .. game.PlaceId)
+        print("⏰ Job ID: " .. game.JobId)
+        
+        if _G.Debug.scanResults then
+            print("\n📦 OBJECT TERDETEKSI:")
+            for catName, list in pairs(_G.Debug.scanResults) do
+                print(string.format("  %s: %d", catName, #list))
             end
         end
+        
+        print(string.rep("=", 60))
     end
 })
 
-VisualTab:CreateSlider({
-    Name = "🎥 Field of View",
-    Range = {40, 120},
-    Increment = 1,
-    CurrentValue = 70,
-    Callback = function(v)
-        Workspace.CurrentCamera.FieldOfView = v
-    end
-})
-
--- TAB: UTILITY
-local UtilityTab = Window:CreateTab("⚙ UTILITY", nil)
-
-UtilityTab:CreateButton({
-    Name = "🔄 Rejoin Server",
-    Callback = function()
-        TPService:Teleport(game.PlaceId, LocalPlayer)
-    end
-})
-
-UtilityTab:CreateButton({
-    Name = "🌐 Server Hop",
-    Callback = function()
-        notify("Server Hop", "Mencari server...", 2)
-        local success, servers = pcall(function()
-            local res = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100")
-            return HttpService:JSONDecode(res)
-        end)
-        if success and servers and servers.data then
-            for _, server in ipairs(servers.data) do
-                if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                    TPService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
-                    return
+-- ========== FIND NEAREST ==========
+DebugTab:CreateInput({
+    Name = "🎯 CARI OBJECT TERDEKAT",
+    PlaceholderText = "Nama object...",
+    Callback = function(input)
+        if input == "" or not LocalPlayer.Character then return end
+        
+        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+        local nearest = nil
+        local nearestDist = math.huge
+        
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj.Name:lower():find(input:lower()) then
+                local pos = getObjectPosition(obj)
+                if pos then
+                    local dist = (myPos - pos).Magnitude
+                    if dist < nearestDist then
+                        nearestDist = dist
+                        nearest = obj
+                    end
                 end
             end
         end
-    end
-})
-
-UtilityTab:CreateInput({
-    Name = "📥 Load Script",
-    PlaceholderText = "URL script...",
-    Callback = function(url)
-        if url:match("^https?://") then
-            pcall(function() loadstring(game:HttpGet(url))() end)
-        end
-    end
-})
-
--- TAB: SCRIPT RECOMMENDATIONS
-local ScriptTab = Window:CreateTab("💡 REKOMENDASI", nil)
-
-ScriptTab:CreateButton({
-    Name = "📋 REKOMENDASI SCRIPT UNTUK GAME INI",
-    Callback = function()
-        print("\n=== REKOMENDASI SCRIPT UNTUK " .. _G.GameInfo.type .. " GAME ===")
         
-        if _G.GameInfo.type == "farming" then
-            print("🌾 GAME FARMING:")
-            print("1. Auto Plant/Harvest/Sell")
-            print("2. Auto Buy Seeds")
-            print("3. ESP Tanaman")
-            print("4. Teleport ke NPC")
-            print("\n🔗 Link Script Farming:")
-            print("https://pastebin.com/raw/FarmingScript1")
+        if nearest then
+            local pos = getObjectPosition(nearest)
+            print(string.format("✅ %s ditemukan - jarak: %.1f stud", nearest.Name, nearestDist))
+            print(string.format("📍 Koordinat: (%.1f, %.1f, %.1f)", pos.X, pos.Y, pos.Z))
             
-        elseif _G.GameInfo.type == "simulator" then
-            print("🎮 GAME SIMULATOR:")
-            print("1. Auto Collect Coins/Eggs")
-            print("2. Auto Hatch Pets")
-            print("3. Auto Upgrade")
-            print("4. Auto Rebirth")
-            print("\n🔗 Link Script Simulator:")
-            print("https://pastebin.com/raw/SimulatorScript1")
-            
-        elseif _G.GameInfo.type == "fighting" then
-            print("⚔️ GAME FIGHTING:")
-            print("1. Auto Attack Enemies")
-            print("2. Auto Farm Boss")
-            print("3. ESP Enemies")
-            print("4. Auto Collect Drops")
-            print("\n🔗 Link Script Fighting:")
-            print("https://pastebin.com/raw/FightingScript1")
-            
+            -- Tawarkan teleport
+            print("📌 Ketik 'teleport' untuk pergi ke object ini")
+            _G.LastFoundObject = nearest
         else
-            print("❓ GAME TIDAK TERDETEKSI")
-            print("Coba jalankan SCAN GAME dulu")
+            print("❌ Object tidak ditemukan")
         end
-        
-        print("\n📌 Untuk script spesifik, cari di:")
-        print("- V3rmillion.net")
-        print("- Robloxscripts.com")
-        print("- Pastebin.com")
     end
 })
 
-ScriptTab:CreateButton({
-    Name = "🎯 SCRIPT FARMING UNIVERSAL",
+DebugTab:CreateButton({
+    Name = "🚀 TELEPORT KE OBJECT TERAKHIR",
     Callback = function()
-        print("\n=== SCRIPT FARMING UNIVERSAL ===")
-        print([[
-loadstring(game:HttpGet('https://raw.githubusercontent.com/SomeUser/FarmingHub/main/script.lua'))()
-        ]])
+        if _G.LastFoundObject and LocalPlayer.Character then
+            local pos = getObjectPosition(_G.LastFoundObject)
+            if pos then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y + 3, pos.Z)
+                print("✅ Teleport ke " .. _G.LastFoundObject.Name)
+            end
+        else
+            print("❌ Tidak ada object terakhir")
+        end
     end
 })
 
-ScriptTab:CreateButton({
-    Name = "⚡ SCRIPT SIMULATOR UNIVERSAL",
+-- ========== RESET DEBUG ==========
+DebugTab:CreateButton({
+    Name = "🔄 RESET DEBUG",
     Callback = function()
-        print("\n=== SCRIPT SIMULATOR UNIVERSAL ===")
-        print([[
-loadstring(game:HttpGet('https://raw.githubusercontent.com/SomeUser/SimHub/main/script.lua'))()
-        ]])
+        _G.Debug.scanning = false
+        _G.Debug.tracking = false
+        _G.Debug.trackedObject = nil
+        _G.Debug.scanResults = {}
+        _G.LastFoundObject = nil
+        print("✅ Debug di-reset")
     end
 })
 
---====================================================================--
---                    INITIAL SCAN                                   --
---====================================================================--
-
--- Auto scan saat pertama kali load
-spawn(function()
-    wait(3)
-    scanAllObjects()
-    notify("SUPER EPIC HUB", "Scan otomatis selesai!", 2)
-end)
-
---====================================================================--
---                    CLEANUP                                        --
---====================================================================--
-
-local function OnCleanup()
-    for _, conn in pairs(farmConnections) do
-        pcall(function() conn:Disconnect() end)
-    end
-    Workspace.Gravity = 196.2
-end
-
-game:BindToClose(OnCleanup)
-
-print("⚡⚡⚡ SUPER EPIC HUB LOADED ⚡⚡⚡")
-print("📌 Klik SCAN GAME untuk mulai")
+print("🐞 DEBUG MASTER LOADED - Gunakan tab DEBUG MASTER")
