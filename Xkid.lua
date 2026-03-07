@@ -74,9 +74,9 @@ AntiAFKTab:CreateLabel("")
 
 AntiAFKTab:CreateToggle({
     Name = "Enable Anti AFK",
-    StartingState = false,
-    Callback = function(state)
-        antiAFKEnabled = state
+    Default = false,
+    Callback = function(value)
+        antiAFKEnabled = value
         
         if antiAFKEnabled then
             print("Anti AFK: Enabled")
@@ -124,9 +124,9 @@ FlyTab:CreateLabel("")
 
 FlyTab:CreateToggle({
     Name = "Enable Fly",
-    StartingState = false,
-    Callback = function(state)
-        flyEnabled = state
+    Default = false,
+    Callback = function(value)
+        flyEnabled = value
         
         if flyEnabled then
             print("Fly: Enabled")
