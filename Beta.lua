@@ -1,325 +1,403 @@
--- SCRIPT SAWAH INDO FIXED - SIRIUS.MENU
--- Versi: 2.0 FIXED ALL FEATURES
+-- SCRIPT SAWAH INDO v3.0 - AUTO FARM PROXIMITY PROMPT
+-- Support: Android + Delta Executor
+-- Sistem: ProximityPrompt trigger otomatis
 
 local ok, Rayfield = pcall(function()
     return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 end)
 
 if not ok or not Rayfield then
-    warn("❌ Gagal load Rayfield. Coba lagi.")
+    warn("❌ Gagal load Rayfield.")
     return
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "🌾 SAWAH INDO HUB v2.0",
+    Name = "🌾 SAWAH INDO BY:XKID ",
     LoadingTitle = "SAWAH INDO",
-    LoadingSubtitle = "Script Fixed - All Features Active",
+    LoadingSubtitle = "Auto Farm ProximityPrompt Edition",
     ConfigurationSaving = { Enabled = false },
     KeySystem = false
 })
 
 -- ========== SERVICES ==========
 local Players       = game:GetService("Players")
-local RunService    = game:GetService("RunService")
 local LocalPlayer   = Players.LocalPlayer
 
--- ========== GLOBAL FLAGS ==========
-_G.AutoNPC      = false
-_G.AutoCollect  = false
-_G.AutoJual     = false
-_G.AutoFarm     = false
+-- ========== FLAGS ==========
+_G.AutoFarm    = false
+_G.AutoJual    = false
+_G.AutoBeli    = false
+_G.StopAll     = false
 
 -- ========== UTILITY ==========
 local function notify(title, content, duration)
     pcall(function()
         Rayfield:Notify({
-            Title   = title,
-            Content = content,
+            Title    = title,
+            Content  = content,
             Duration = duration or 3,
-            Image   = 4483362458
+            Image    = 4483362458
         })
     end)
-    print("[SAWAH INDO] " .. title .. ": " .. content)
+    print("[SAWAH] " .. title .. ": " .. content)
 end
 
-local function getChar()
-    return LocalPlayer.Character
-end
-
-local function getRootPart()
-    local char = getChar()
+local function getRoot()
+    local char = LocalPlayer.Character
     return char and char:FindFirstChild("HumanoidRootPart")
 end
 
--- Cari object di workspace dengan berbagai nama
-local function findObject(name)
-    if not name then return nil end
-    -- Cari exact match dulu
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v.Name == name then
-            return v
-        end
-    end
-    -- Cari case-insensitive
-    local lower = name:lower()
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v.Name:lower() == lower then
-            return v
-        end
-    end
-    return nil
-end
-
--- Cari posisi dari object (Model atau BasePart)
-local function getPos(obj)
-    if not obj then return nil end
+-- Teleport ke posisi
+local function teleportTo(obj)
+    local root = getRoot()
+    if not root or not obj then return false end
+    local pos
     if obj:IsA("BasePart") then
-        return obj.Position
+        pos = obj.Position
     elseif obj:IsA("Model") then
-        -- Prioritas: PrimaryPart > HumanoidRootPart > Head > GetPivot
-        if obj.PrimaryPart then
-            return obj.PrimaryPart.Position
-        elseif obj:FindFirstChild("HumanoidRootPart") then
-            return obj.HumanoidRootPart.Position
-        elseif obj:FindFirstChild("Head") then
-            return obj.Head.Position
-        else
-            local ok2, pivot = pcall(function() return obj:GetPivot().Position end)
-            if ok2 then return pivot end
+        if obj.PrimaryPart then pos = obj.PrimaryPart.Position
+        elseif obj:FindFirstChild("HumanoidRootPart") then pos = obj.HumanoidRootPart.Position
+        elseif obj:FindFirstChild("Head") then pos = obj.Head.Position
         end
+    end
+    if not pos then return false end
+    root.CFrame = CFrame.new(pos.X, pos.Y + 3, pos.Z)
+    return true
+end
+
+-- Cari object by nama (case-insensitive)
+local function findObj(name)
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v.Name:lower() == name:lower() then return v end
     end
     return nil
 end
 
--- Teleport utama
-local function teleportTo(name, obj)
-    local root = getRootPart()
-    if not root then
-        notify("❌ Error", "Character belum spawn!", 3)
-        return false
-    end
+-- ========== CORE: TRIGGER PROXIMITY PROMPT ==========
+-- Cara paling andal trigger ProximityPrompt tanpa tap layar
+local function fireProximityPrompt(prompt)
+    -- Method 1: FireProximityPrompt (executor method, Delta support)
+    local ok1 = pcall(function()
+        fireclickdetector(prompt)
+    end)
+    -- Method 2: Trigger langsung via internal
+    local ok2 = pcall(function()
+        local VIM = game:GetService("VirtualInputManager")
+        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+        task.wait(0.1)
+        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end)
+    -- Method 3: Fire ProximityPrompt Triggered langsung
+    local ok3 = pcall(function()
+        local PP = game:GetService("ProximityPromptService")
+        PP:PromptTriggered(prompt, LocalPlayer)
+    end)
+    -- Method 4: Paling reliable - fire remote prompt
+    pcall(function()
+        fireproximityprompt(prompt)
+    end)
+end
 
-    -- Jika obj tidak diberikan, cari by name
-    if not obj and name then
-        obj = findObject(name)
+-- Cari semua ProximityPrompt di dalam object/model
+local function getPrompts(obj)
+    local prompts = {}
+    if not obj then return prompts end
+    -- Cari di parent model juga
+    local target = obj
+    if obj:IsA("BasePart") then
+        target = obj.Parent or obj
     end
+    for _, v in pairs(target:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            table.insert(prompts, v)
+        end
+    end
+    -- Cek di object itu sendiri juga
+    if obj:IsA("ProximityPrompt") then
+        table.insert(prompts, obj)
+    end
+    return prompts
+end
 
+-- Teleport ke NPC lalu trigger semua prompt-nya
+local function interactWithNPC(npcName, waitTime)
+    waitTime = waitTime or 2
+    local obj = findObj(npcName)
     if not obj then
-        notify("❌ Tidak Ditemukan", (name or "Object") .. " tidak ada di map!", 3)
+        notify("❌", npcName .. " tidak ditemukan!", 3)
         return false
     end
 
-    local pos = getPos(obj)
-    if not pos then
-        notify("❌ Error", "Gagal ambil posisi " .. (name or "object"), 3)
-        return false
+    -- Teleport deket NPC
+    teleportTo(obj)
+    task.wait(waitTime)
+
+    -- Cari & trigger ProximityPrompt
+    local prompts = getPrompts(obj)
+    if #prompts == 0 then
+        -- Coba cari di sekitar posisi NPC (radius 10 stud)
+        local root = getRoot()
+        if root then
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("ProximityPrompt") then
+                    local pp = v.Parent
+                    if pp and pp:IsA("BasePart") then
+                        if (pp.Position - root.Position).Magnitude < 15 then
+                            table.insert(prompts, v)
+                        end
+                    end
+                end
+            end
+        end
     end
 
-    -- Teleport dengan offset Y agar tidak nyangkut di tanah
-    root.CFrame = CFrame.new(pos.X, pos.Y + 4, pos.Z)
-    notify("✅ Teleport", "Berhasil ke " .. (name or obj.Name), 2)
-    return true
+    if #prompts > 0 then
+        for _, prompt in ipairs(prompts) do
+            fireProximityPrompt(prompt)
+            task.wait(0.5)
+        end
+        print("✅ Interaksi dengan " .. npcName .. " (" .. #prompts .. " prompt)")
+        return true
+    else
+        -- Fallback: kirim keypress E
+        pcall(function()
+            local VIM = game:GetService("VirtualInputManager")
+            VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+            task.wait(0.3)
+            VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        end)
+        print("⚠️ Prompt tidak ditemukan di " .. npcName .. ", coba keypress E")
+        return false
+    end
+end
+
+-- Interact dengan lahan (Tanah)
+local function interactWithLahan(lahanObj, waitTime)
+    waitTime = waitTime or 1.5
+    if not lahanObj then return false end
+    teleportTo(lahanObj)
+    task.wait(waitTime)
+
+    local prompts = getPrompts(lahanObj)
+
+    -- Cari juga di sekitar posisi lahan
+    if #prompts == 0 then
+        local root = getRoot()
+        if root then
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("ProximityPrompt") then
+                    local pp = v.Parent
+                    if pp and pp:IsA("BasePart") then
+                        if (pp.Position - root.Position).Magnitude < 10 then
+                            table.insert(prompts, v)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if #prompts > 0 then
+        for _, prompt in ipairs(prompts) do
+            fireProximityPrompt(prompt)
+            task.wait(0.5)
+        end
+        return true
+    else
+        pcall(function()
+            local VIM = game:GetService("VirtualInputManager")
+            VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+            task.wait(0.3)
+            VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        end)
+        return false
+    end
+end
+
+-- ========== KUMPULKAN SEMUA LAHAN ==========
+local function getAllLahan()
+    local lahans = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj.Name == "Tanah" and obj:IsA("BasePart") then
+            table.insert(lahans, obj)
+        end
+    end
+    return lahans
 end
 
 -- ========== TABS ==========
 local TeleportTab = Window:CreateTab("📍 TELEPORT", nil)
-local NPCTab      = Window:CreateTab("👥 NPC", nil)
-local LahanTab    = Window:CreateTab("🌱 LAHAN", nil)
-local AutoTab     = Window:CreateTab("⚙ AUTO FARM", nil)
-local InfoTab     = Window:CreateTab("ℹ INFO", nil)
+local AutoTab     = Window:CreateTab("🤖 AUTO FARM", nil)
+local ScanTab     = Window:CreateTab("🔍 SCAN", nil)
+local ToolTab     = Window:CreateTab("🛠 TOOLS", nil)
 
 -- ========== TELEPORT TAB ==========
-TeleportTab:CreateSection("Toko & Pedagang")
+TeleportTab:CreateSection("Teleport NPC")
 
 local npcList = {
-    { icon = "🛒", name = "npcbibit",          label = "npcbibit — Beli Bibit"        },
-    { icon = "💰", name = "npcpenjual",         label = "npcpenjual — Jual Hasil"      },
-    { icon = "🔧", name = "npcalat",            label = "npcalat — Beli Alat"          },
-    { icon = "🥚", name = "NPCPedagangTelur",   label = "NPCPedagangTelur — Jual Telur"},
-    { icon = "🌴", name = "NPCPedagangSawit",   label = "NPCPedagangSawit — Jual Sawit"},
+    { icon = "🛒", name = "NPC BIBIT"          },
+    { icon = "💰", name = "NPC PENJUAL"         },
+    { icon = "🔧", name = "NPC ALAT"            },
+    { icon = "🥚", name = "NPC PEDAGANG TELUR"   },
+    { icon = "🌴", name = "NPC PEDAGANG SAWIT"   },
 }
 
 for _, npc in ipairs(npcList) do
     TeleportTab:CreateButton({
-        Name     = npc.icon .. " " .. npc.label,
+        Name = npc.icon .. " Teleport → " .. npc.name,
         Callback = function()
-            teleportTo(npc.name)
+            local obj = findObj(npc.name)
+            if obj then
+                teleportTo(obj)
+                notify("📍", "Teleport ke " .. npc.name, 2)
+            else
+                notify("❌", npc.name .. " tidak ditemukan", 3)
+            end
         end
     })
 end
 
-TeleportTab:CreateSection("Lokasi Khusus")
+TeleportTab:CreateSection("Teleport Lahan")
 
 TeleportTab:CreateButton({
-    Name     = "🏠 Spawn / Awal",
+    Name = "🌾 Teleport ke Lahan Pertama",
     Callback = function()
-        local spawns = {"SpawnLocation", "Spawn", "SpawnPoint"}
-        local found = false
-        for _, sname in ipairs(spawns) do
-            if teleportTo(sname) then
-                found = true
-                break
-            end
+        local lahans = getAllLahan()
+        if #lahans > 0 then
+            teleportTo(lahans[1])
+            notify("📍", "Teleport ke lahan pertama", 2)
+        else
+            notify("❌", "Lahan tidak ditemukan", 3)
         end
-        if not found then
-            notify("❌", "Spawn tidak ditemukan", 3)
-        end
-    end
-})
-
--- ========== NPC TAB ==========
-NPCTab:CreateSection("Scan & Teleport NPC")
-
-NPCTab:CreateButton({
-    Name     = "🔍 SCAN SEMUA NPC DI MAP",
-    Callback = function()
-        local targets = {
-            "npcbibit","npcpenjual","npcalat",
-            "NPCPedagangTelur","NPCPedagangSawit",
-            "NPC","Pedagang","Penjual","Petani"
-        }
-        local result = {}
-        for _, tname in ipairs(targets) do
-            local obj = findObject(tname)
-            table.insert(result, tname .. ": " .. (obj and "✅ ADA" or "❌ TIDAK ADA"))
-        end
-        -- Juga cari NPC yang tidak terdaftar
-        local extra = {}
-        for _, v in pairs(workspace:GetDescendants()) do
-            if (v:IsA("Model") or v:IsA("NPC")) and v:FindFirstChildOfClass("Humanoid") then
-                local isKnown = false
-                for _, tname in ipairs(targets) do
-                    if v.Name == tname then isKnown = true; break end
-                end
-                if not isKnown and not extra[v.Name] then
-                    extra[v.Name] = true
-                    table.insert(result, "🆕 NPC Baru: " .. v.Name)
-                end
-            end
-        end
-        for _, line in ipairs(result) do
-            print(line)
-        end
-        notify("🔍 Scan Selesai", "Lihat output di console (F9)", 4)
-    end
-})
-
-for _, npc in ipairs(npcList) do
-    NPCTab:CreateButton({
-        Name     = npc.icon .. " " .. npc.name,
-        Callback = function()
-            teleportTo(npc.name)
-        end
-    })
-end
-
--- ========== LAHAN TAB ==========
-LahanTab:CreateSection("Lahan Pertanian")
-
-LahanTab:CreateButton({
-    Name     = "🌾 Scan Semua Lahan (Tanah)",
-    Callback = function()
-        local count = 0
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj.Name == "Tanah" and obj:IsA("BasePart") then
-                count = count + 1
-            end
-        end
-        notify("🌾 Scan Lahan", "Ditemukan " .. count .. " lahan Tanah", 4)
-        print("Total lahan Tanah: " .. count)
-    end
-})
-
-LahanTab:CreateButton({
-    Name     = "📍 Teleport ke Lahan Pertama",
-    Callback = function()
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj.Name == "Tanah" and obj:IsA("BasePart") then
-                teleportTo(nil, obj)
-                return
-            end
-        end
-        notify("❌", "Lahan Tanah tidak ditemukan", 3)
-    end
-})
-
-LahanTab:CreateButton({
-    Name     = "🌴 Teleport ke Pohon Sawit",
-    Callback = function()
-        local keywords = {"Palm_tree","PalmTree","Sawit","palm"}
-        for _, keyword in ipairs(keywords) do
-            for _, obj in pairs(workspace:GetDescendants()) do
-                if obj.Name:lower():find(keyword:lower()) and obj:IsA("BasePart") then
-                    teleportTo(nil, obj)
-                    return
-                end
-            end
-        end
-        notify("❌", "Pohon Sawit tidak ditemukan", 3)
-    end
-})
-
-LahanTab:CreateButton({
-    Name     = "📋 Daftar Semua Tanaman",
-    Callback = function()
-        local found = {}
-        local keywords = {"Tanah","Padi","Sawit","Jagung","Palm","Crop","Plant","Farm"}
-        for _, obj in pairs(workspace:GetDescendants()) do
-            for _, kw in ipairs(keywords) do
-                if obj.Name:lower():find(kw:lower()) then
-                    if not found[obj.Name] then
-                        found[obj.Name] = 0
-                    end
-                    found[obj.Name] = found[obj.Name] + 1
-                    break
-                end
-            end
-        end
-        print("=== DAFTAR OBJEK PERTANIAN ===")
-        for name, count in pairs(found) do
-            print(name .. ": " .. count .. " buah")
-        end
-        notify("📋 Selesai", "Cek console (F9) untuk detail", 4)
     end
 })
 
 -- ========== AUTO FARM TAB ==========
-AutoTab:CreateSection("Auto Rotasi NPC")
+AutoTab:CreateSection("⚙ Pengaturan Delay")
+
+local delayBeli  = 2
+local delayTanam = 1.5
+local delayJual  = 2
+
+AutoTab:CreateSlider({
+    Name = "⏱ Delay Beli Bibit (detik)",
+    Range = {1, 6},
+    Increment = 0.5,
+    CurrentValue = 2,
+    Callback = function(v) delayBeli = v end
+})
+
+AutoTab:CreateSlider({
+    Name = "⏱ Delay Tanam per Lahan (detik)",
+    Range = {1, 5},
+    Increment = 0.5,
+    CurrentValue = 1.5,
+    Callback = function(v) delayTanam = v end
+})
+
+AutoTab:CreateSlider({
+    Name = "⏱ Delay Jual (detik)",
+    Range = {1, 6},
+    Increment = 0.5,
+    CurrentValue = 2,
+    Callback = function(v) delayJual = v end
+})
+
+AutoTab:CreateSection("🤖 Auto Farm Lengkap")
 
 AutoTab:CreateToggle({
-    Name         = "🔄 Auto Teleport NPC (Semua)",
+    Name = "🌾 AUTO FARM (Beli → Tanam → Jual)",
     CurrentValue = false,
-    Callback     = function(v)
-        _G.AutoNPC = v
+    Callback = function(v)
+        _G.AutoFarm = v
+        _G.StopAll  = not v
         if v then
-            notify("✅ Auto NPC", "Aktif! Rotasi tiap 4 detik", 3)
+            notify("✅ AUTO FARM", "Dimulai! Beli → Tanam → Jual", 4)
             task.spawn(function()
-                local idx = 1
-                while _G.AutoNPC do
-                    teleportTo(npcList[idx].name)
-                    idx = idx % #npcList + 1
-                    task.wait(4)
+                local cycle = 0
+                while _G.AutoFarm do
+                    cycle = cycle + 1
+                    print("🔄 Siklus Auto Farm #" .. cycle)
+
+                    -- STEP 1: Beli bibit
+                    print("  [1/3] Beli bibit...")
+                    interactWithNPC("npcbibit", delayBeli)
+                    task.wait(delayBeli)
+
+                    if not _G.AutoFarm then break end
+
+                    -- STEP 2: Tanam di semua lahan
+                    print("  [2/3] Tanam di lahan...")
+                    local lahans = getAllLahan()
+                    local tanam = 0
+                    for _, lahan in ipairs(lahans) do
+                        if not _G.AutoFarm then break end
+                        if interactWithLahan(lahan, delayTanam) then
+                            tanam = tanam + 1
+                        end
+                        task.wait(0.3)
+                    end
+                    print("  ✅ Tanam selesai di " .. tanam .. " lahan")
+
+                    if not _G.AutoFarm then break end
+
+                    -- STEP 3: Tunggu panen (opsional, bisa ubah waktu tunggu)
+                    print("  ⏳ Tunggu panen 5 detik...")
+                    task.wait(5)
+
+                    if not _G.AutoFarm then break end
+
+                    -- STEP 4: Jual hasil
+                    print("  [3/3] Jual hasil...")
+                    interactWithNPC("npcpenjual", delayJual)
+                    task.wait(delayJual)
+
+                    print("  ✅ Siklus #" .. cycle .. " selesai!")
+                    task.wait(1)
                 end
+                notify("⛔ AUTO FARM", "Dihentikan", 2)
             end)
         else
-            notify("⛔ Auto NPC", "Dimatikan", 2)
+            _G.StopAll = true
+            notify("⛔ AUTO FARM", "Dimatikan", 2)
+        end
+    end
+})
+
+AutoTab:CreateSection("Auto Terpisah")
+
+AutoTab:CreateToggle({
+    Name = "🛒 Auto Beli Bibit Saja",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.AutoBeli = v
+        if v then
+            task.spawn(function()
+                while _G.AutoBeli do
+                    interactWithNPC("npcbibit", delayBeli)
+                    task.wait(delayBeli + 1)
+                end
+            end)
+            notify("✅ Auto Beli", "Loop beli bibit aktif", 3)
+        else
+            notify("⛔ Auto Beli", "Dimatikan", 2)
         end
     end
 })
 
 AutoTab:CreateToggle({
-    Name         = "💰 Auto Jual (Loop ke npcpenjual)",
+    Name = "💰 Auto Jual Saja",
     CurrentValue = false,
-    Callback     = function(v)
+    Callback = function(v)
         _G.AutoJual = v
         if v then
-            notify("✅ Auto Jual", "Aktif! Teleport ke penjual tiap 5 detik", 3)
             task.spawn(function()
                 while _G.AutoJual do
-                    teleportTo("npcpenjual")
-                    task.wait(5)
+                    interactWithNPC("npcpenjual", delayJual)
+                    task.wait(delayJual + 1)
                 end
             end)
+            notify("✅ Auto Jual", "Loop jual aktif", 3)
         else
             notify("⛔ Auto Jual", "Dimatikan", 2)
         end
@@ -327,103 +405,160 @@ AutoTab:CreateToggle({
 })
 
 AutoTab:CreateToggle({
-    Name         = "🌾 Auto Farm (Beli Bibit → Lahan → Jual)",
+    Name = "🌱 Auto Tanam Semua Lahan",
     CurrentValue = false,
-    Callback     = function(v)
-        _G.AutoFarm = v
+    Callback = function(v)
+        _G.AutoTanam = v
         if v then
-            notify("✅ Auto Farm", "Aktif! Siklus: Bibit → Lahan → Jual", 3)
             task.spawn(function()
-                while _G.AutoFarm do
-                    -- Step 1: ke bibit
-                    teleportTo("npcbibit")
-                    task.wait(3)
-                    -- Step 2: ke lahan pertama
-                    for _, obj in pairs(workspace:GetDescendants()) do
-                        if obj.Name == "Tanah" and obj:IsA("BasePart") then
-                            teleportTo(nil, obj)
-                            break
-                        end
+                while _G.AutoTanam do
+                    local lahans = getAllLahan()
+                    for _, lahan in ipairs(lahans) do
+                        if not _G.AutoTanam then break end
+                        interactWithLahan(lahan, delayTanam)
                     end
-                    task.wait(5)
-                    -- Step 3: jual
-                    teleportTo("npcpenjual")
                     task.wait(3)
                 end
             end)
+            notify("✅ Auto Tanam", "Loop tanam semua lahan aktif", 3)
         else
-            notify("⛔ Auto Farm", "Dimatikan", 2)
+            notify("⛔ Auto Tanam", "Dimatikan", 2)
         end
     end
 })
 
-AutoTab:CreateSection("Utilitas")
+AutoTab:CreateSection("Kontrol")
 
 AutoTab:CreateButton({
-    Name     = "📍 Koordinat Saya Sekarang",
+    Name = "⛔ STOP SEMUA AUTO",
     Callback = function()
-        local root = getRootPart()
-        if root then
-            local p = root.Position
-            local msg = string.format("X=%.1f | Y=%.1f | Z=%.1f", p.X, p.Y, p.Z)
-            notify("📍 Posisi", msg, 5)
-            print("📍 " .. msg)
-        else
-            notify("❌", "Character tidak ditemukan", 3)
-        end
+        _G.AutoFarm  = false
+        _G.AutoJual  = false
+        _G.AutoBeli  = false
+        _G.AutoTanam = false
+        _G.StopAll   = true
+        notify("⛔ STOP", "Semua auto dimatikan!", 3)
     end
 })
 
-AutoTab:CreateButton({
-    Name     = "🔄 Reset Character",
+-- ========== SCAN TAB ==========
+ScanTab:CreateSection("Scan ProximityPrompt")
+
+ScanTab:CreateButton({
+    Name = "🔍 Scan Semua ProximityPrompt",
     Callback = function()
-        local char = getChar()
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.Health = 0
-                notify("🔄 Reset", "Character di-reset!", 2)
+        local count = 0
+        local found = {}
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("ProximityPrompt") then
+                count = count + 1
+                local info = v:GetFullName() .. " | Action: " .. v.ActionText
+                table.insert(found, info)
+                print(info)
             end
         end
+        notify("🔍 Scan PP", "Ditemukan " .. count .. " ProximityPrompt (cek console F9)", 5)
     end
 })
 
-AutoTab:CreateButton({
-    Name     = "⛔ STOP SEMUA AUTO",
+ScanTab:CreateButton({
+    Name = "🔍 Scan NPC di Map",
     Callback = function()
-        _G.AutoNPC     = false
-        _G.AutoCollect = false
-        _G.AutoJual    = false
-        _G.AutoFarm    = false
-        notify("⛔ STOP", "Semua auto feature dimatikan!", 3)
+        local found = {}
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("Model") and v:FindFirstChildOfClass("Humanoid") then
+                if not found[v.Name] then
+                    found[v.Name] = true
+                    print("NPC: " .. v.Name .. " | Path: " .. v:GetFullName())
+                end
+            end
+        end
+        notify("🔍 Scan NPC", "Selesai! Cek console (F9)", 4)
     end
 })
 
--- ========== INFO TAB ==========
-InfoTab:CreateSection("Info Script")
+ScanTab:CreateButton({
+    Name = "🔍 Scan RemoteEvent",
+    Callback = function()
+        local RS = game:GetService("ReplicatedStorage")
+        local count = 0
+        for _, v in pairs(RS:GetDescendants()) do
+            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+                count = count + 1
+                print(v.ClassName .. ": " .. v:GetFullName())
+            end
+        end
+        notify("🔍 Remote", "Ditemukan " .. count .. " remote (cek console)", 4)
+    end
+})
 
-InfoTab:CreateLabel("Script: SAWAH INDO HUB v2.0")
-InfoTab:CreateLabel("GUI: Rayfield via sirius.menu")
-InfoTab:CreateLabel("Status: Fixed & All Active ✅")
+ScanTab:CreateButton({
+    Name = "🔍 Scan Lahan (Tanah)",
+    Callback = function()
+        local lahans = getAllLahan()
+        notify("🌾 Lahan", "Ditemukan " .. #lahans .. " lahan Tanah", 4)
+        print("Total lahan Tanah: " .. #lahans)
+    end
+})
 
-InfoTab:CreateSection("NPC Terdaftar")
-for _, npc in ipairs(npcList) do
-    InfoTab:CreateLabel(npc.icon .. " " .. npc.name)
-end
+-- ========== TOOLS TAB ==========
+ToolTab:CreateSection("Utilitas")
 
-InfoTab:CreateSection("Tips")
-InfoTab:CreateLabel("Gunakan SCAN di tab NPC untuk cek NPC aktif")
-InfoTab:CreateLabel("F9 = Console untuk melihat log detail")
-InfoTab:CreateLabel("STOP SEMUA AUTO jika lag")
+ToolTab:CreateButton({
+    Name = "📍 Posisi Saya",
+    Callback = function()
+        local root = getRoot()
+        if root then
+            local p = root.Position
+            notify("📍 Posisi", string.format("X=%.1f Y=%.1f Z=%.1f", p.X, p.Y, p.Z), 5)
+        end
+    end
+})
+
+ToolTab:CreateButton({
+    Name = "🔄 Reset Character",
+    Callback = function()
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then hum.Health = 0 end
+        end
+    end
+})
+
+ToolTab:CreateButton({
+    Name = "🧪 Test Trigger E (Posisi Ini)",
+    Callback = function()
+        -- Cari PP terdekat dan fire
+        local root = getRoot()
+        if not root then return end
+        local nearest, dist = nil, 20
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("ProximityPrompt") then
+                local pp = v.Parent
+                if pp and pp:IsA("BasePart") then
+                    local d = (pp.Position - root.Position).Magnitude
+                    if d < dist then
+                        nearest = v
+                        dist = d
+                    end
+                end
+            end
+        end
+        if nearest then
+            fireProximityPrompt(nearest)
+            notify("🧪 Test", "Trigger PP terdekat: " .. nearest:GetFullName(), 3)
+        else
+            notify("⚠️ Test", "Tidak ada PP dalam radius 20 stud", 3)
+        end
+    end
+})
 
 -- ========== INIT ==========
-print("╔══════════════════════════════╗")
-print("║  🌾 SAWAH INDO HUB v2.0      ║")
-print("║  Status: ✅ AKTIF SEMUA      ║")
-print("╚══════════════════════════════╝")
-print("NPC Terdaftar:")
-for _, npc in ipairs(npcList) do
-    print("  " .. npc.icon .. " " .. npc.name)
-end
+print("╔══════════════════════════════════╗")
+print("║  🌾 SAWAH INDO v3.0 AUTO FARM    ║")
+print("║  ProximityPrompt Edition          ║")
+print("║  Support: Android + Delta         ║")
+print("╚══════════════════════════════════╝")
 
-notify("🌾 SAWAH INDO", "Script v2.0 berhasil dimuat! Semua fitur aktif.", 5)
+notify("🌾 SAWAH INDO v3.0", "Script siap! Auto Farm ProximityPrompt aktif.", 5)
