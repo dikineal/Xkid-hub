@@ -1,6 +1,6 @@
 -- SCRIPT DEBUG RAYFIELD UNTUK SAWAH INDO
 
-local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
     Name = "🔍 DEBUG SAWAH INDO",
