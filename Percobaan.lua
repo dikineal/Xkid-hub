@@ -1,63 +1,60 @@
--- Load WindUI
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/main.lua"))()
-
--- Services
-local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
-
-local Player = Players.LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
+-- Load Linoria Library
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/addons/SaveManager.lua"))()
 
 -- Window
-local Window = WindUI:CreateWindow({
-    Title = "Diki Project",
-    Author = "by Diki",
-    Folder = "DikiConfig",
-    Size = UDim2.fromOffset(580,460),
-    Transparent = true,
-    Theme = "Dark",
-    AccentColor = Color3.fromRGB(0,102,255)
+local Window = Library:CreateWindow({
+    Title = "Diki Hub",
+    Center = true,
+    AutoShow = true,
 })
 
--- Tab
-local MainTab = Window:Tab({
-    Name = "Main",
-    Icon = "house"
-})
-
--- Section
-MainTab:Section({
-    Name = "Character Control"
-})
+-- Tabs
+local Tabs = {
+    Main = Window:AddTab("Main"),
+    Player = Window:AddTab("Player"),
+    Settings = Window:AddTab("Settings")
+}
 
 -- Button
-MainTab:Button({
-    Title = "Test Script",
-    Desc = "Cek apakah script berjalan",
-    Callback = function()
-        WindUI:Notify({
-            Title = "Success",
-            Content = "Script berhasil di execute!",
-            Duration = 3
-        })
+Tabs.Main:AddButton("Print Hello", function()
+    print("Hello dari Linoria GUI")
+end)
+
+-- Toggle
+local InfiniteJump = false
+
+Tabs.Player:AddToggle("InfJump", {
+    Text = "Infinite Jump",
+    Default = false,
+    Callback = function(Value)
+        InfiniteJump = Value
     end
 })
 
--- Infinite Jump
-local InfJump = false
-
-MainTab:Toggle({
-    Title = "Infinite Jump",
-    Value = false,
-    Callback = function(v)
-        InfJump = v
+-- Slider WalkSpeed
+Tabs.Player:AddSlider("WalkSpeed", {
+    Text = "Walk Speed",
+    Default = 16,
+    Min = 16,
+    Max = 200,
+    Rounding = 1,
+    Callback = function(Value)
+        local char = game.Players.LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = Value
+            end
+        end
     end
 })
 
-UIS.JumpRequest:Connect(function()
-    if InfJump then
-        local char = Player.Character
+-- Infinite Jump Logic
+game:GetService("UserInputService").JumpRequest:Connect(function()
+    if InfiniteJump then
+        local char = game.Players.LocalPlayer.Character
         if char then
             local hum = char:FindFirstChildOfClass("Humanoid")
             if hum then
@@ -67,38 +64,14 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- WalkSpeed
-MainTab:Slider({
-    Title = "WalkSpeed",
-    Min = 16,
-    Max = 200,
-    Step = 1,
-    Value = 16,
-    Callback = function(v)
-        local char = Player.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = v
-            end
-        end
-    end
-})
+-- Theme + Save
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
 
--- Jump Power
-MainTab:Slider({
-    Title = "JumpPower",
-    Min = 50,
-    Max = 300,
-    Step = 5,
-    Value = 50,
-    Callback = function(v)
-        local char = Player.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.JumpPower = v
-            end
-        end
-    end
-})
+SaveManager:IgnoreThemeSettings()
+
+ThemeManager:SetFolder("DikiHub")
+SaveManager:SetFolder("DikiHub/config")
+
+SaveManager:BuildConfigSection(Tabs.Settings)
+ThemeManager:ApplyToTab(Tabs.Settings)
