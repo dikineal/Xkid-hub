@@ -1,5 +1,12 @@
--- Load Library
-local WindUI = loadstring(game:HttpGet("https://tree-hub.vercel.app/api/library/windui"))()
+-- Load WindUI dengan proteksi
+local success, WindUI = pcall(function()
+    return loadstring(game:HttpGet("https://tree-hub.vercel.app/api/library/windui"))()
+end)
+
+if not success or not WindUI then
+    warn("WindUI gagal dimuat")
+    return
+end
 
 -- Services
 local Players = game:GetService("Players")
@@ -20,13 +27,11 @@ local Window = WindUI:CreateWindow({
     AccentColor = Color3.fromRGB(0,102,255)
 })
 
--- Tab
 local MainTab = Window:Tab({
     Name = "Main",
     Icon = "house"
 })
 
--- Section
 MainTab:Section({
     Name = "Karakter Control",
     TextSize = 18
@@ -37,12 +42,7 @@ MainTab:Button({
     Title = "Print Status",
     Desc = "Klik untuk cek status",
     Callback = function()
-        print("WindUI Berhasil di Execute!")
-        WindUI:Notify({
-            Title = "Success",
-            Content = "Script berjalan dengan lancar!",
-            Duration = 3
-        })
+        print("Script berhasil dijalankan")
     end
 })
 
@@ -51,62 +51,38 @@ local InfJump = false
 
 MainTab:Toggle({
     Title = "Infinite Jump",
-    Desc = "Lompat tanpa batas",
     Value = false,
-    Callback = function(state)
-        InfJump = state
+    Callback = function(v)
+        InfJump = v
     end
 })
 
 UIS.JumpRequest:Connect(function()
     if InfJump then
-        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        local char = Player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
     end
 end)
 
 -- WalkSpeed
 MainTab:Slider({
     Title = "WalkSpeed",
-    Desc = "Atur kecepatan lari",
     Min = 16,
     Max = 200,
     Step = 1,
     Value = 16,
     Callback = function(v)
-        Humanoid.WalkSpeed = v
-    end
-})
-
--- Jump Power
-MainTab:Input({
-    Title = "Jump Power",
-    Placeholder = "Masukkan angka...",
-    Callback = function(v)
-        local num = tonumber(v)
-        if num then
-            Humanoid.JumpPower = num
+        local char = Player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = v
+            end
         end
-    end
-})
-
--- Teleport Dropdown
-MainTab:Dropdown({
-    Title = "Pilih Lokasi TP",
-    Multi = false,
-    Options = {"Lobby","Farm Zone","Shop"},
-    Callback = function(v)
-
-        local root = Character:WaitForChild("HumanoidRootPart")
-
-        if v == "Lobby" then
-            root.CFrame = CFrame.new(0,5,0)
-
-        elseif v == "Farm Zone" then
-            root.CFrame = CFrame.new(100,5,100)
-
-        elseif v == "Shop" then
-            root.CFrame = CFrame.new(-50,5,200)
-        end
-
     end
 })
