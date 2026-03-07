@@ -666,5 +666,6 @@ TabLog:CreateButton({Name="Clear Log", Callback=function()
     notif("Clear", "Re-execute untuk reset tampilan log", 2)
 end})
 
+
 print("SAWAH INDO v5.2 | "..myName)
 notif("SAWAH INDO v5.2", "Halo "..myName.."! Ke tab Lahan > Simpan Posisi dulu!", 6)
