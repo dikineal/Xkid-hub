@@ -1,12 +1,12 @@
--- 🧪 TEST REMOTE — XKID HUB
--- Support: Android + Delta Executor
+-- 🧪 TEST REMOTE — XKID HUB v2.0
+-- Support: Android + Delta/Arceus/Fluxus
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "🧪 Test Remote",
+    Name = "🧪 Test Remote v2.0",
     LoadingTitle = "XKID HUB",
-    LoadingSubtitle = "test & log",
+    LoadingSubtitle = "Remote Debugger",
     ConfigurationSaving = {Enabled = false},
     KeySystem = false
 })
@@ -14,115 +14,341 @@ local Window = Rayfield:CreateWindow({
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
+-- ============================================
+-- NOTIFIKASI
+-- ============================================
 local function notif(judul, isi, dur)
     pcall(function()
-        Rayfield:Notify({Title=judul, Content=isi, Duration=dur or 3, Image=4483362458})
+        Rayfield:Notify({
+            Title = judul, 
+            Content = isi, 
+            Duration = dur or 3, 
+            Image = 4483362458
+        })
     end)
 end
 
+-- ============================================
+-- CARI REMOTE (REKURSIF + WORKSPACE)
+-- ============================================
 local function getRemote(name)
+    -- Cari di ReplicatedStorage
     for _, v in pairs(RS:GetDescendants()) do
-        if v.Name == name then return v end
+        if v.Name == name and (v:IsA("RemoteEvent") or v:IsA("RemoteFunction")) then
+            return v
+        end
+    end
+    -- Cari di Workspace (kadang remote di sini)
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v.Name == name and (v:IsA("RemoteEvent") or v:IsA("RemoteFunction")) then
+            return v
+        end
     end
     return nil
 end
 
-local function fire(name, ...)
+-- ============================================
+-- FIRE REMOTE (DENGAN ERROR HANDLING)
+-- ============================================
+local function fireRemote(name, ...)
     local r = getRemote(name)
-    if not r then return "❌ Tidak ketemu: "..name end
-    local ok, err = pcall(function()
-        if r:IsA("RemoteEvent") then r:FireServer(...)
-        else r:InvokeServer(...) end
-    end)
-    if ok then return "✅ Fired: "..name
-    else return "❌ Error: "..tostring(err) end
+    if not r then 
+        return false, "❌ Remote tidak ditemukan: "..name 
+    end
+    
+    local ok, result = pcall(function(...)
+        if r:IsA("RemoteEvent") then
+            r:FireServer(...)
+            return "Fired (no return)"
+        else
+            return r:InvokeServer(...)
+        end
+    end, ...)
+    
+    if ok then
+        return true, "✅ Success: "..tostring(result)
+    else
+        return false, "❌ Error: "..tostring(result)
+    end
 end
 
+-- ============================================
+-- TABS
+-- ============================================
 local TabTest = Window:CreateTab("🧪 Test", nil)
-local TabLog  = Window:CreateTab("📋 Log",  nil)
+local TabLog = Window:CreateTab("📋 Log", nil)
 local TabList = Window:CreateTab("📜 List", nil)
+local TabAuto = Window:CreateTab("🤖 Auto", nil)
 
--- LOG SYSTEM
-local logCount = 0
-local logSection = TabLog:CreateSection("Hasil Log")
-TabLog:CreateLabel("Log muncul otomatis di sini!")
+-- ============================================
+-- LOG SYSTEM (FIXED)
+-- ============================================
+local Logs = {}
+local MaxLogs = 20
+
+local LogSection = TabLog:CreateSection("Log Terbaru")
 
 local function addLog(teks)
-    logCount = logCount + 1
-    TabLog:CreateLabel("["..logCount.."] "..teks)
+    table.insert(Logs, 1, "["..os.date("%H:%M:%S").."] "..teks)
+    if #Logs > MaxLogs then
+        table.remove(Logs, #Logs)
+    end
+    
+    -- Update display (Rayfield tidak support dynamic label, pakai paragraph)
+    local display = ""
+    for i = 1, math.min(10, #Logs) do
+        display = display .. Logs[i] .. "\n"
+    end
+    
+    -- Buat paragraph baru (workaround)
+    pcall(function()
+        TabLog:CreateParagraph({
+            Title = "Log #"..#Logs,
+            Content = teks
+        })
+    end)
 end
 
--- Hook response remote penting
-local hooks = {"PlantCrop","PlantLahanCrop","HarvestCrop","SellCrop","GetBibit","RequestShop","Request Sell","LahanUpdate","RequestLahan","ConfirmAction"}
-for _, name in ipairs(hooks) do
+-- Clear log button
+TabLog:CreateButton({
+    Name = "🗑 Clear Log",
+    Callback = function()
+        Logs = {}
+        notif("Log", "Cleared!", 2)
+    end
+})
+
+-- ============================================
+-- AUTO HOOK REMOTE RESPONSE
+-- ============================================
+local HookedRemotes = {
+    "PlantCrop","PlantLahanCrop","HarvestCrop","SellCrop",
+    "GetBibit","RequestShop","Request Sell","LahanUpdate",
+    "RequestLahan","ConfirmAction","UpdateStep","Notification"
+}
+
+for _, name in ipairs(HookedRemotes) do
     local r = getRemote(name)
     if r and r:IsA("RemoteEvent") then
-        r.OnClientEvent:Connect(function(a, b, c)
-            local msg = "←"..name..": "..tostring(a)
-            if b ~= nil then msg = msg.." | "..tostring(b) end
-            if c ~= nil then msg = msg.." | "..tostring(c) end
+        r.OnClientEvent:Connect(function(...)
+            local args = {...}
+            local msg = "← "..name.." | "
+            for i, v in ipairs(args) do
+                msg = msg .. "["..i.."]="..tostring(v):sub(1, 30) .. " "
+            end
             addLog(msg)
         end)
     end
 end
 
--- TAB TEST
-TabTest:CreateSection("🌱 Tanam")
-TabTest:CreateLabel("Berdiri di lahan sebelum test!")
-TabTest:CreateButton({Name="🌱 PlantCrop", Callback=function()
-    local h = fire("PlantCrop"); addLog(h); notif("PlantCrop", h, 3)
-end})
-TabTest:CreateButton({Name="🌱 PlantLahanCrop", Callback=function()
-    local h = fire("PlantLahanCrop"); addLog(h); notif("PlantLahanCrop", h, 3)
-end})
+-- ============================================
+-- TAB TEST (DENGAN ARGUMENT INPUT)
+-- ============================================
+TabTest:CreateSection("🎯 Remote + Arguments")
 
-TabTest:CreateSection("🌿 Panen")
-TabTest:CreateButton({Name="🌿 HarvestCrop", Callback=function()
-    local h = fire("HarvestCrop"); addLog(h); notif("HarvestCrop", h, 3)
-end})
+local SelectedRemote = ""
+local Arg1 = ""
+local Arg2 = ""
 
-TabTest:CreateSection("💰 Jual")
-TabTest:CreateButton({Name="💰 SellCrop", Callback=function()
-    local h = fire("SellCrop"); addLog(h); notif("SellCrop", h, 3)
-end})
-TabTest:CreateButton({Name="💰 Request Sell", Callback=function()
-    local h = fire("Request Sell"); addLog(h); notif("Request Sell", h, 3)
-end})
+TabTest:CreateInput({
+    Name = "Remote Name",
+    PlaceholderText = "contoh: PlantCrop",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        SelectedRemote = text
+    end
+})
 
-TabTest:CreateSection("🛒 Beli")
-TabTest:CreateButton({Name="🛒 GetBibit", Callback=function()
-    local h = fire("GetBibit"); addLog(h); notif("GetBibit", h, 3)
-end})
-TabTest:CreateButton({Name="🛒 RequestShop", Callback=function()
-    local h = fire("RequestShop"); addLog(h); notif("RequestShop", h, 3)
-end})
+TabTest:CreateInput({
+    Name = "Argument 1 (opsional)",
+    PlaceholderText = "string/number/bool",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        Arg1 = text
+    end
+})
 
-TabTest:CreateSection("🌾 Lahan")
-TabTest:CreateButton({Name="🌾 RequestLahan", Callback=function()
-    local h = fire("RequestLahan"); addLog(h); notif("RequestLahan", h, 3)
-end})
-TabTest:CreateButton({Name="✅ ConfirmAction", Callback=function()
-    local h = fire("ConfirmAction"); addLog(h); notif("ConfirmAction", h, 3)
-end})
+TabTest:CreateInput({
+    Name = "Argument 2 (opsional)",
+    PlaceholderText = "string/number/bool",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        Arg2 = text
+    end
+})
 
--- TAB LIST
-TabList:CreateSection("Semua Remote (49 total)")
-local allRemotes = {
-    "UpdateStep","PlantCrop","HarvestCrop","SellCrop","GetBibit",
-    "Notification","UpdateLevel","Skip Tutorial","RainSync","PromptGamepassRemote",
-    "Lightning Strike","SummonRain","WeatherSync","LahanUpdate","PlantLahanCrop",
-    "TransferPromptOpen","KiteEvent","HygieneSync","Admin SendMessage","Admin ShowMessage",
-    "BikeRemote","Toggle AutoHarvest","SyncData","RequestShop","Request Sell",
-    "Request ToolShop","RequestGamepass","RequestLahan","RequestTransfer","ConfirmAction",
-    "Chewy","RefreshShop","RequestGift","GiftNotify","AdminSetTitle",
-    "Admin Remove Title","AdminIsAdmin","Admin TitleStats","PromptDonation",
-    "RequestDonation","Bike Sound","RefreshEvent","Sync","UnSync",
-    "PromptCarry","RespondToCarry","UpdateStatus","RequestCarry","Notify","StopCarry"
+TabTest:CreateButton({
+    Name = "🔥 FIRE REMOTE",
+    Callback = function()
+        if SelectedRemote == "" then
+            notif("Error", "Masukkan nama remote!", 3)
+            return
+        end
+        
+        -- Parse arguments
+        local args = {}
+        if Arg1 ~= "" then
+            -- Coba parse sebagai number
+            local num = tonumber(Arg1)
+            if num then
+                table.insert(args, num)
+            elseif Arg1 == "true" then
+                table.insert(args, true)
+            elseif Arg1 == "false" then
+                table.insert(args, false)
+            else
+                table.insert(args, Arg1)
+            end
+        end
+        
+        if Arg2 ~= "" then
+            local num = tonumber(Arg2)
+            if num then
+                table.insert(args, num)
+            elseif Arg2 == "true" then
+                table.insert(args, true)
+            elseif Arg2 == "false" then
+                table.insert(args, false)
+            else
+                table.insert(args, Arg2)
+            end
+        end
+        
+        -- Fire
+        local success, msg = fireRemote(SelectedRemote, unpack(args))
+        addLog(msg)
+        notif("Fire Remote", msg, 3)
+    end
+})
+
+-- ============================================
+-- QUICK BUTTONS (REMOTE POPULER)
+-- ============================================
+TabTest:CreateSection("⚡ Quick Fire (Tanpa Argumen)")
+
+local QuickRemotes = {
+    {Name = "🌱 PlantCrop", Remote = "PlantCrop"},
+    {Name = "🌿 HarvestCrop", Remote = "HarvestCrop"},
+    {Name = "💰 SellCrop", Remote = "SellCrop"},
+    {Name = "🛒 GetBibit", Remote = "GetBibit"},
+    {Name = "📦 RequestShop", Remote = "RequestShop"},
+    {Name = "🏞 RequestLahan", Remote = "RequestLahan"},
+    {Name = "✅ ConfirmAction", Remote = "ConfirmAction"},
+    {Name = "🔄 UpdateStep", Remote = "UpdateStep"},
 }
-for _, name in ipairs(allRemotes) do
-    local r = getRemote(name)
-    TabList:CreateLabel((r and "✅ " or "❌ ")..name)
+
+for _, btn in ipairs(QuickRemotes) do
+    TabTest:CreateButton({
+        Name = btn.Name,
+        Callback = function()
+            local success, msg = fireRemote(btn.Remote)
+            addLog(msg)
+            notif(btn.Remote, msg, 2)
+        end
+    })
 end
 
-notif("Test Remote", "Ke tab Test, berdiri di lahan lalu test!", 4)
+-- ============================================
+-- TAB LIST (DROPDOWN + SEARCH)
+-- ============================================
+TabList:CreateSection("📜 Cari Remote")
+
+local AllRemotes = {}
+local function scanAllRemotes()
+    AllRemotes = {}
+    for _, v in pairs(RS:GetDescendants()) do
+        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+            table.insert(AllRemotes, v.Name)
+        end
+    end
+    -- Remove duplicates
+    local seen = {}
+    local unique = {}
+    for _, name in ipairs(AllRemotes) do
+        if not seen[name] then
+            seen[name] = true
+            table.insert(unique, name)
+        end
+    end
+    AllRemotes = unique
+    table.sort(AllRemotes)
+end
+
+scanAllRemotes()
+
+TabList:CreateLabel("Total: "..#AllRemotes.." unique remotes")
+
+TabList:CreateDropdown({
+    Name = "Pilih Remote",
+    Options = AllRemotes,
+    CurrentOption = {},
+    MultipleOptions = false,
+    Callback = function(option)
+        SelectedRemote = option[1]
+        notif("Selected", option[1], 2)
+    end
+})
+
+TabList:CreateButton({
+    Name = "🔄 Refresh List",
+    Callback = function()
+        scanAllRemotes()
+        notif("Refresh", "Found "..#AllRemotes.." remotes", 2)
+    end
+})
+
+-- ============================================
+-- TAB AUTO (AUTO FARM TEST)
+-- ============================================
+TabAuto:CreateSection("🤖 Auto Farm Test")
+
+_G.AutoFarm = false
+
+TabAuto:CreateToggle({
+    Name = "Auto Plant → Harvest → Sell",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.AutoFarm = v
+        
+        if v then
+            task.spawn(function()
+                while _G.AutoFarm do
+                    -- Plant
+                    local ok1, msg1 = fireRemote("PlantCrop")
+                    addLog(msg1)
+                    task.wait(0.5)
+                    
+                    -- Harvest
+                    local ok2, msg2 = fireRemote("HarvestCrop")
+                    addLog(msg2)
+                    task.wait(0.5)
+                    
+                    -- Sell
+                    local ok3, msg3 = fireRemote("SellCrop")
+                    addLog(msg3)
+                    task.wait(1)
+                end
+            end)
+        end
+    end
+})
+
+TabAuto:CreateSlider({
+    Name = "Delay (detik)",
+    Range = {0.5, 5},
+    Increment = 0.5,
+    CurrentValue = 1,
+    Callback = function(v)
+        _G.AutoDelay = v
+    end
+})
+
+-- ============================================
+-- INIT
+-- ============================================
+notif("Test Remote v2.0", "Ready! Pilih remote di tab List atau Test", 4)
+addLog("System initialized")
+addLog("Found "..#AllRemotes.." remotes")
