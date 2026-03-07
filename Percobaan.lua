@@ -1,77 +1,68 @@
--- Load Linoria Library
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/Library.lua"))()
-local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/addons/ThemeManager.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/addons/SaveManager.lua"))()
+local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/R3TH-PRIV/R3THPRIV/main/RedzLibV2.lua"))()
 
--- Window
-local Window = Library:CreateWindow({
-    Title = "Diki Hub",
-    Center = true,
-    AutoShow = true,
+-- Membuat Window Utama
+local Window = Lib:MakeWindow({
+  Title = "DIKI HUB",
+  SubTitle = "Mobile Edition",
+  SaveFolder = "DikiConfig.json"
 })
 
--- Tabs
-local Tabs = {
-    Main = Window:AddTab("Main"),
-    Player = Window:AddTab("Player"),
-    Settings = Window:AddTab("Settings")
-}
-
--- Button
-Tabs.Main:AddButton("Print Hello", function()
-    print("Hello dari Linoria GUI")
-end)
-
--- Toggle
-local InfiniteJump = false
-
-Tabs.Player:AddToggle("InfJump", {
-    Text = "Infinite Jump",
-    Default = false,
-    Callback = function(Value)
-        InfiniteJump = Value
-    end
+-- Menambahkan Tab (Kategori)
+Window:AddTab({
+  Name = "Main",
+  Icon = "rbxassetid://4483345998" -- Ikon Rumah
 })
 
--- Slider WalkSpeed
-Tabs.Player:AddSlider("WalkSpeed", {
-    Text = "Walk Speed",
-    Default = 16,
-    Min = 16,
-    Max = 200,
-    Rounding = 1,
-    Callback = function(Value)
-        local char = game.Players.LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = Value
-            end
-        end
-    end
+-- Membuat Section (Pemisah)
+Window:AddSection({
+  Name = "Player Menu"
 })
 
--- Infinite Jump Logic
-game:GetService("UserInputService").JumpRequest:Connect(function()
-    if InfiniteJump then
-        local char = game.Players.LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end
-    end
-end)
+-- Tombol (Button)
+Window:AddButton({
+  Name = "Anti-AFK",
+  Callback = function()
+      local vu = game:GetService("VirtualUser")
+      game:GetService("Players").LocalPlayer.Idled:Connect(function()
+          vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+          wait(1)
+          vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+      end)
+      print("Anti-AFK Aktif")
+  end
+})
 
--- Theme + Save
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
+-- On/Off (Toggle)
+Window:AddToggle({
+  Name = "Auto Jump",
+  Default = false,
+  Callback = function(Value)
+      _G.AutoJump = Value
+      while _G.AutoJump do
+          game:GetService("Players").LocalPlayer.Character.Humanoid.Jump = true
+          wait(0.1)
+      end
+  end
+})
 
-SaveManager:IgnoreThemeSettings()
+-- Pengaturan Angka (Slider)
+Window:AddSlider({
+  Name = "Speed",
+  Min = 16,
+  Max = 300,
+  Increase = 1,
+  Default = 16,
+  Callback = function(Value)
+      game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
+  end
+})
 
-ThemeManager:SetFolder("DikiHub")
-SaveManager:SetFolder("DikiHub/config")
-
-SaveManager:BuildConfigSection(Tabs.Settings)
-ThemeManager:ApplyToTab(Tabs.Settings)
+-- Pilihan (Dropdown)
+Window:AddDropdown({
+  Name = "Pilih Senjata",
+  Options = {"Melee", "Sword", "Gun"},
+  Default = "Melee",
+  Callback = function(Value)
+      print("Kamu memilih: " .. Value)
+  end
+})
