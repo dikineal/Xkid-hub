@@ -1,6 +1,5 @@
--- 🌾 SAWAH INDO v5.0 — Auto Beli Bibit FULL GUI
--- ProximityPrompt: "Buy Seeds" (Farmer NPC)
--- GUI: Toko Bibit → tombol Beli + jumlah
+-- 🌾 SAWAH INDO v6.0 — ALL IN ONE
+-- Auto scan lahan milik sendiri + Auto Farm
 -- Support: Android + Delta Executor
 
 local ok, Rayfield = pcall(function()
@@ -9,9 +8,9 @@ end)
 if not ok or not Rayfield then warn("❌ Gagal load UI!") return end
 
 local Window = Rayfield:CreateWindow({
-    Name          = "🌾 SAWAH INDO [BETA] BY:XKID 💸",
-    LoadingTitle  = "XKID_HUB",
-    LoadingSubtitle = "auto cuan, no cap 🔥",
+    Name            = "🌾 SAWAH INDO v6.0 💸",
+    LoadingTitle    = "SAWAH INDO HUB",
+    LoadingSubtitle = "Auto scan lahan sendiri 🔥",
     ConfigurationSaving = { Enabled = false },
     KeySystem = false
 })
@@ -19,6 +18,7 @@ local Window = Rayfield:CreateWindow({
 -- ===== SERVICES =====
 local Players     = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local myName      = LocalPlayer.Name
 
 -- ===== FLAGS =====
 _G.AutoFarm  = false
@@ -51,7 +51,8 @@ local function tp(obj)
     elseif obj:IsA("Model") then
         if obj.PrimaryPart then pos = obj.PrimaryPart.Position
         elseif obj:FindFirstChild("HumanoidRootPart") then pos = obj.HumanoidRootPart.Position
-        elseif obj:FindFirstChild("Head") then pos = obj.Head.Position end
+        elseif obj:FindFirstChild("Head") then pos = obj.Head.Position
+        end
     end
     if not pos then return false end
     root.CFrame = CFrame.new(pos.X, pos.Y + 4, pos.Z)
@@ -67,191 +68,26 @@ local function cari(nama)
     return nil
 end
 
--- ===== CARI LAHAN =====
-local function getAllLahan()
-    local t = {}
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v.Name == "Tanah" and v:IsA("BasePart") then
-            table.insert(t, v)
-        end
-    end
-    return t
-end
-
--- ================================================
--- ✅ BUKA TOKO BIBIT via ProximityPrompt "Buy Seeds"
--- ================================================
-local function bukaTokoBibit()
-    -- Step 1: Temukan NPC npcbibit
-    local npc = cari("npcbibit")
-    if not npc then
-        notif("❌ NPC", "npcbibit kagak ketemu bro!", 3)
-        return false
-    end
-
-    -- Step 2: Teleport ke NPC
-    tp(npc)
-    task.wait(0.8)
-
-    -- Step 3: Cari ProximityPrompt "Buy Seeds" atau ActionText apapun di NPC
-    local prompt = nil
-    local searchTarget = npc:IsA("Model") and npc or (npc.Parent or npc)
-    for _, v in pairs(searchTarget:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then
-            prompt = v
-            break
-        end
-    end
-
-    -- Fallback: cari PP terdekat di workspace
-    if not prompt then
-        local root = getRoot()
-        if root then
-            local nearDist = 15
-            for _, v in pairs(workspace:GetDescendants()) do
-                if v:IsA("ProximityPrompt") then
-                    local par = v.Parent
-                    if par and par:IsA("BasePart") then
-                        local d = (par.Position - root.Position).Magnitude
-                        if d < nearDist then
-                            -- Prioritaskan yang ActionText-nya "Buy Seeds"
-                            if v.ActionText:lower():find("seed") or v.ActionText:lower():find("bibit") or v.ActionText:lower():find("buy") then
-                                prompt = v
-                                nearDist = d
-                            elseif not prompt then
-                                prompt = v
-                                nearDist = d
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    if not prompt then
-        notif("❌ Prompt", "ProximityPrompt 'Buy Seeds' kagak ketemu!", 3)
-        return false
-    end
-
-    -- Step 4: Fire prompt buat buka GUI Toko
+-- ===== FIRE PROXIMITY PROMPT =====
+local function firePrompt(prompt)
+    if not prompt then return end
     pcall(function() fireproximityprompt(prompt) end)
-    task.wait(0.3)
+    task.wait(0.15)
     pcall(function()
         local VIM = game:GetService("VirtualInputManager")
         VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
         task.wait(0.15)
         VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
     end)
-
-    -- Tunggu GUI muncul (max 3 detik)
-    local timeout = 0
-    while timeout < 3 do
-        local gui = LocalPlayer.PlayerGui
-        for _, v in pairs(gui:GetDescendants()) do
-            local n = v.Name:lower()
-            if n:find("toko") or n:find("bibit") or n:find("shop") or n:find("seed") then
-                return true -- GUI berhasil terbuka
-            end
-        end
-        task.wait(0.3)
-        timeout = timeout + 0.3
-    end
-
-    -- Mungkin GUI sudah terbuka tapi namanya beda, lanjut saja
-    return true
 end
 
--- ================================================
--- ✅ KLIK TOMBOL BELI DI GUI TOKO BIBIT
--- ================================================
-
--- Pilih bibit berdasarkan nama (scan semua TextLabel di GUI)
-local function pilihBibitDiGUI(namaBibit)
-    local gui = LocalPlayer.PlayerGui
-    for _, label in pairs(gui:GetDescendants()) do
-        if label:IsA("TextLabel") or label:IsA("TextButton") then
-            local teks = label.Text or ""
-            if teks:lower():find(namaBibit:lower()) then
-                -- Cari tombol Beli di parent yang sama
-                local container = label.Parent
-                for _, sibling in pairs(container:GetChildren()) do
-                    if sibling:IsA("TextButton") then
-                        local st = sibling.Text:lower()
-                        if st == "beli" or st == "buy" then
-                            return sibling -- return tombol Beli
-                        end
-                    end
-                end
-                -- Cek parent satu level di atas
-                if container.Parent then
-                    for _, cousin in pairs(container.Parent:GetChildren()) do
-                        if cousin ~= container then
-                            for _, btn in pairs(cousin:GetDescendants()) do
-                                if btn:IsA("TextButton") then
-                                    local bt = btn.Text:lower()
-                                    if bt == "beli" or bt == "buy" then
-                                        return btn
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return nil
-end
-
--- Set jumlah beli dengan klik tombol +
-local function setJumlah(namaBibit, jumlah)
-    local gui = LocalPlayer.PlayerGui
-    for _, label in pairs(gui:GetDescendants()) do
-        if (label:IsA("TextLabel") or label:IsA("TextButton")) and (label.Text or ""):lower():find(namaBibit:lower()) then
-            local container = label.Parent
-            -- Cari tombol + di area ini
-            local function cariPlus(frame)
-                for _, v in pairs(frame:GetDescendants()) do
-                    if v:IsA("TextButton") and (v.Text == "+" or v.Text == "▲") then
-                        return v
-                    end
-                end
-                return nil
-            end
-            local plusBtn = cariPlus(container) or (container.Parent and cariPlus(container.Parent))
-            if plusBtn then
-                -- Klik + sebanyak (jumlah - 1) kali (default sudah 1)
-                for i = 1, jumlah - 1 do
-                    pcall(function()
-                        local mt = getmetatable(plusBtn).__index
-                        plusBtn.MouseButton1Click:Fire()
-                    end)
-                    pcall(function() fireclickdetector(plusBtn) end)
-                    pcall(function()
-                        -- Simulasi klik GUI
-                        local pos = plusBtn.AbsolutePosition + (plusBtn.AbsoluteSize / 2)
-                        game:GetService("VirtualInputManager"):SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
-                        task.wait(0.05)
-                        game:GetService("VirtualInputManager"):SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
-                    end)
-                    task.wait(0.1)
-                end
-                return true
-            end
-        end
-    end
-    return false
-end
-
--- Klik tombol Beli
-local function klikBeli(tombolBeli)
-    if not tombolBeli then return false end
-    -- 3 cara klik tombol GUI
-    pcall(function() tombolBeli.MouseButton1Click:Fire() end)
+-- ===== KLIK TOMBOL GUI =====
+local function klikGUI(tombol)
+    if not tombol then return false end
+    pcall(function() tombol.MouseButton1Click:Fire() end)
     task.wait(0.05)
     pcall(function()
-        local pos = tombolBeli.AbsolutePosition + (tombolBeli.AbsoluteSize / 2)
+        local pos = tombol.AbsolutePosition + (tombol.AbsoluteSize / 2)
         local VIM = game:GetService("VirtualInputManager")
         VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
         task.wait(0.05)
@@ -261,179 +97,435 @@ local function klikBeli(tombolBeli)
     return true
 end
 
--- ================================================
--- ✅ FUNGSI UTAMA: AUTO BELI BIBIT
--- ================================================
-local function autoBeliBibit(namaBibit, jumlahBeli, delay)
-    delay = delay or 1
-
-    -- Buka toko
-    if not bukaTokoBibit() then return false end
-    task.wait(delay)
-
-    -- Set jumlah kalau > 1
-    if jumlahBeli and jumlahBeli > 1 then
-        setJumlah(namaBibit, jumlahBeli)
-        task.wait(0.3)
-    end
-
-    -- Cari dan klik tombol Beli
-    local tombol = pilihBibitDiGUI(namaBibit)
-    if not tombol then
-        -- Fallback: klik semua tombol yang teksnya "Beli"
-        local gui = LocalPlayer.PlayerGui
-        local fallback = false
-        for _, v in pairs(gui:GetDescendants()) do
-            if v:IsA("TextButton") and (v.Text:lower() == "beli" or v.Text:lower() == "buy") then
-                -- Pastiin tombolnya visible dan bukan "Tutup"
-                if v.Visible then
-                    klikBeli(v)
-                    fallback = true
-                    break
+-- ===== CARI PP TERDEKAT =====
+local function getPPDekat(radius, keyword)
+    radius = radius or 12
+    local root = getRoot()
+    if not root then return nil end
+    local best, bestD = nil, radius
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            local par = v.Parent
+            if par and par:IsA("BasePart") then
+                local d = (par.Position - root.Position).Magnitude
+                if d < bestD then
+                    if keyword then
+                        if v.ActionText:lower():find(keyword:lower()) then
+                            best = v; bestD = d
+                        end
+                    else
+                        best = v; bestD = d
+                    end
                 end
             end
         end
-        if not fallback then
-            notif("❌ Tombol", "Tombol Beli '"..namaBibit.."' kagak ketemu!", 3)
-            return false
+    end
+    return best
+end
+
+-- ================================================
+-- ✅ SCAN OTOMATIS — cari nama & attribute lahan
+-- ================================================
+local lahanOwnerAttr = nil  -- nama attribute owner yang ketemu
+local lahanNamaObj   = nil  -- nama object lahan yang ketemu
+local scanDone       = false
+
+local function scanLahan()
+    print("\n🔍 SCAN LAHAN — User: "..myName)
+    local keywords = {"tanah","lahan","plot","farm","field","sawah","land"}
+    local attrKemungkinan = {"Owner","owner","PlayerName","playername","Username","username","Player","player","OwnedBy","ownedby","UserId","userid"}
+
+    local contohLahan = nil
+
+    for _, v in pairs(workspace:GetDescendants()) do
+        local namaLower = v.Name:lower()
+        local isLahan = false
+        for _, kw in ipairs(keywords) do
+            if namaLower:find(kw) then isLahan = true; break end
         end
-    else
-        klikBeli(tombol)
+
+        if isLahan and (v:IsA("BasePart") or v:IsA("Model")) then
+            local attrs = v:GetAttributes()
+
+            -- Cek semua kemungkinan attribute owner
+            for _, aName in ipairs(attrKemungkinan) do
+                local val = attrs[aName]
+                if val then
+                    print("  ✅ Lahan: "..v.Name.." | Attr: "..aName.."="..tostring(val))
+                    -- Simpan kalau ini milik kita
+                    if tostring(val):lower() == myName:lower() then
+                        lahanOwnerAttr = aName
+                        lahanNamaObj   = v.Name
+                        contohLahan    = v
+                        print("  🎯 KETEMU! Lahan milik "..myName..": "..v.Name.." via Attr["..aName.."]")
+                    end
+                end
+            end
+
+            -- Cek nama object mengandung username
+            if v.Name:lower():find(myName:lower()) then
+                lahanNamaObj = v.Name
+                print("  🎯 Lahan nama match: "..v.Name)
+            end
+
+            if contohLahan and not lahanNamaObj then
+                lahanNamaObj = v.Name
+            end
+        end
     end
 
-    task.wait(0.5)
+    -- Scan ProximityPrompt di lahan
+    print("\n🔍 SCAN PP DI LAHAN:")
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            local par = v.Parent
+            if par then
+                local parNama = par.Name:lower()
+                for _, kw in ipairs(keywords) do
+                    if parNama:find(kw) then
+                        print("  PP di lahan: ["..v.ActionText.."] path: "..v:GetFullName())
+                        break
+                    end
+                end
+            end
+        end
+    end
 
-    -- Tutup GUI biar bersih
+    -- Scan semua PP
+    print("\n🔍 SEMUA PROXIMITY PROMPT:")
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            print("  PP: ["..v.ActionText.."] | ["..( v.ObjectText or "").."] | "..v:GetFullName())
+        end
+    end
+
+    -- Scan Remote Events
+    print("\n🔍 REMOTE EVENTS:")
+    for _, v in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+            print("  "..v.ClassName..": "..v.Name)
+        end
+    end
+
+    scanDone = true
+
+    if lahanNamaObj then
+        notif("✅ Scan Selesai", "Lahan ketemu: "..lahanNamaObj.." 🎉", 5)
+    else
+        notif("⚠️ Scan Selesai", "Lahan belum ketemu, coba berdiri di lahan kamu lalu scan lagi!", 5)
+    end
+
+    print("\n📋 HASIL SCAN:")
+    print("  Nama Object Lahan : "..(lahanNamaObj or "BELUM KETEMU"))
+    print("  Attribute Owner   : "..(lahanOwnerAttr or "BELUM KETEMU"))
+    print("  Cek console Delta untuk detail lengkap!")
+end
+
+-- ================================================
+-- ✅ AMBIL LAHAN MILIK SENDIRI
+-- ================================================
+local function getLahanSendiri()
+    local lahans = {}
+    local keywords = {"tanah","lahan","plot","farm","field","sawah","land"}
+
+    for _, v in pairs(workspace:GetDescendants()) do
+        local namaLower = v.Name:lower()
+        local isLahan = false
+
+        -- Pakai nama yang sudah di-scan kalau ada
+        if lahanNamaObj then
+            if v.Name == lahanNamaObj then isLahan = true end
+        else
+            for _, kw in ipairs(keywords) do
+                if namaLower:find(kw) then isLahan = true; break end
+            end
+        end
+
+        if isLahan and (v:IsA("BasePart") or v:IsA("Model")) then
+            -- Cek attribute owner
+            if lahanOwnerAttr then
+                local val = v:GetAttribute(lahanOwnerAttr)
+                if val and tostring(val):lower() == myName:lower() then
+                    table.insert(lahans, v)
+                end
+            elseif v.Name:lower():find(myName:lower()) then
+                table.insert(lahans, v)
+            else
+                -- Fallback: semua lahan kalau belum scan
+                table.insert(lahans, v)
+            end
+        end
+    end
+
+    return lahans
+end
+
+-- ================================================
+-- ✅ BUKA TOKO VIA PROXIMITY PROMPT
+-- ================================================
+local function bukaToko(npcName, ppKeyword, tunggу)
+    local npc = cari(npcName)
+    if not npc then
+        notif("❌", npcName.." kagak ketemu!", 3)
+        return false
+    end
+
+    tp(npc)
+    task.wait(0.8)
+
+    local prompt = nil
+    local searchIn = npc:IsA("Model") and npc or (npc.Parent or npc)
+    for _, v in pairs(searchIn:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            if ppKeyword then
+                if v.ActionText:lower():find(ppKeyword:lower()) then prompt = v; break end
+            else
+                prompt = v; break
+            end
+        end
+    end
+
+    if not prompt then
+        prompt = getPPDekat(15, ppKeyword) or getPPDekat(15)
+    end
+
+    if not prompt then
+        notif("❌ PP", "ProximityPrompt kagak ketemu di "..npcName, 3)
+        return false
+    end
+
+    firePrompt(prompt)
+    task.wait(tunggу or 1.2)
+    return true
+end
+
+-- ================================================
+-- ✅ AUTO BELI BIBIT
+-- ================================================
+local selectedBibit = "Padi"
+local jumlahBeli    = 1
+
+local function autoBeliBibit()
+    if not bukaToko("npcbibit", nil, 1.5) then return false end
+
     local gui = LocalPlayer.PlayerGui
+    task.wait(0.3)
+
+    -- Klik + untuk set jumlah
+    if jumlahBeli > 1 then
+        for _, v in pairs(gui:GetDescendants()) do
+            if v:IsA("TextButton") and v.Text == "+" and v.Visible then
+                for i = 1, jumlahBeli - 1 do
+                    klikGUI(v)
+                    task.wait(0.08)
+                end
+                break
+            end
+        end
+        task.wait(0.2)
+    end
+
+    -- Klik Beli
+    local berhasil = false
     for _, v in pairs(gui:GetDescendants()) do
-        if v:IsA("TextButton") and (v.Text:lower() == "tutup" or v.Text:lower() == "close") then
-            pcall(function() v.MouseButton1Click:Fire() end)
-            pcall(function()
-                local pos = v.AbsolutePosition + (v.AbsoluteSize / 2)
-                local VIM = game:GetService("VirtualInputManager")
-                VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
-                task.wait(0.05)
-                VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
-            end)
+        if v:IsA("TextButton") and (v.Text:lower() == "beli" or v.Text:lower() == "buy") and v.Visible then
+            klikGUI(v)
+            berhasil = true
+            print("✅ Beli "..jumlahBeli.."x Bibit "..selectedBibit)
             break
         end
     end
 
-    return true
-end
-
--- ===== INTERAKSI NPC JUAL =====
-local function interakJual(delay)
-    delay = delay or 2
-    local npc = cari("npcpenjual")
-    if not npc then notif("❌", "npcpenjual kagak ada!", 3) return false end
-    tp(npc)
-    task.wait(delay)
-    -- Cari PP terdekat
-    local root = getRoot()
-    if not root then return false end
-    local best, bestD = nil, 15
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then
-            local par = v.Parent
-            if par and par:IsA("BasePart") then
-                local d = (par.Position - root.Position).Magnitude
-                if d < bestD then best = v; bestD = d end
-            end
-        end
-    end
-    if best then
-        pcall(function() fireproximityprompt(best) end)
-        task.wait(0.3)
-    end
-    -- Klik tombol Jual kalau ada GUI
     task.wait(0.5)
-    local gui = LocalPlayer.PlayerGui
+
+    -- Tutup GUI
     for _, v in pairs(gui:GetDescendants()) do
-        if v:IsA("TextButton") and (v.Text:lower():find("jual") or v.Text:lower():find("sell")) and v.Visible then
-            klikBeli(v)
-            task.wait(0.3)
+        if v:IsA("TextButton") and (v.Text:lower() == "tutup" or v.Text:lower() == "close") and v.Visible then
+            klikGUI(v)
+            break
         end
     end
-    return true
+
+    return berhasil
 end
 
--- ===== INTERAKSI LAHAN =====
-local function interakLahan(lahanObj, delay)
-    delay = delay or 1.5
-    if not lahanObj then return false end
-    tp(lahanObj)
-    task.wait(delay)
-    local root = getRoot()
-    if not root then return false end
-    -- Cari PP di lahan
-    local best, bestD = nil, 10
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then
-            local par = v.Parent
-            if par and par:IsA("BasePart") then
-                local d = (par.Position - root.Position).Magnitude
-                if d < bestD then best = v; bestD = d end
+-- ================================================
+-- ✅ AUTO JUAL
+-- ================================================
+local function autoJual()
+    if not bukaToko("npcpenjual", nil, 1.5) then return false end
+
+    local gui = LocalPlayer.PlayerGui
+    task.wait(0.5)
+
+    local n = 0
+    for _, v in pairs(gui:GetDescendants()) do
+        if v:IsA("TextButton") and v.Visible then
+            local t = v.Text:lower()
+            if (t:find("jual") or t:find("sell")) and not t:find("tutup") and not t:find("close") then
+                klikGUI(v)
+                n = n + 1
+                task.wait(0.2)
             end
         end
     end
-    if best then
-        pcall(function() fireproximityprompt(best) end)
-        task.wait(0.2)
+
+    task.wait(0.3)
+    -- Konfirmasi kalau ada
+    for _, v in pairs(gui:GetDescendants()) do
+        if v:IsA("TextButton") and v.Visible then
+            local t = v.Text:lower()
+            if t == "ok" or t == "ya" or t == "iya" or t == "confirm" then
+                klikGUI(v); break
+            end
+        end
     end
-    pcall(function()
-        local VIM = game:GetService("VirtualInputManager")
-        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-        task.wait(0.15)
-        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-    end)
+
+    task.wait(0.3)
+    -- Tutup
+    for _, v in pairs(gui:GetDescendants()) do
+        if v:IsA("TextButton") and (v.Text:lower() == "tutup" or v.Text:lower() == "close") and v.Visible then
+            klikGUI(v); break
+        end
+    end
+
+    print("✅ Jual selesai ("..n.." item)")
     return true
 end
 
--- ========================================
--- DAFTAR BIBIT (sesuai screenshot game)
--- ========================================
-local BIBIT = {
-    { name = "Padi",       emoji = "⚡", minLv = 1,   harga = 5    },
-    { name = "Jagung",     emoji = "🌽", minLv = 20,  harga = 15   },
-    { name = "Tomat",      emoji = "🍅", minLv = 40,  harga = 25   },
-    { name = "Terong",     emoji = "🍆", minLv = 60,  harga = 40   },
-    { name = "Strawberry", emoji = "🍓", minLv = 80,  harga = 60   },
-    { name = "Sawit",      emoji = "🌴", minLv = 80,  harga = 1000 },
-    { name = "Durian",     emoji = "🟢", minLv = 120, harga = 2000 },
-}
+-- ================================================
+-- ✅ AUTO TANAM DI LAHAN SENDIRI
+-- ================================================
+local function autoTanam(delayTanam)
+    delayTanam = delayTanam or 1.5
+    local lahans = getLahanSendiri()
+
+    if #lahans == 0 then
+        notif("❌ Lahan", "Lahan kagak ketemu! Scan dulu bro", 4)
+        return 0
+    end
+
+    local berhasil = 0
+    for i, lahan in ipairs(lahans) do
+        if not _G.AutoFarm and not _G.AutoTanam then break end
+
+        tp(lahan)
+        task.wait(delayTanam)
+
+        -- Cari PP di lahan
+        local prompt = nil
+        local searchIn = lahan:IsA("Model") and lahan or (lahan.Parent or lahan)
+        for _, v in pairs(searchIn:GetDescendants()) do
+            if v:IsA("ProximityPrompt") then prompt = v; break end
+        end
+        if not prompt then prompt = getPPDekat(10) end
+
+        if prompt then
+            firePrompt(prompt)
+        else
+            -- Keypress E fallback
+            pcall(function()
+                local VIM = game:GetService("VirtualInputManager")
+                VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                task.wait(0.15)
+                VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+            end)
+        end
+
+        -- Klik tombol Tanam di GUI kalau muncul
+        task.wait(0.4)
+        local gui = LocalPlayer.PlayerGui
+        for _, v in pairs(gui:GetDescendants()) do
+            if v:IsA("TextButton") and v.Visible then
+                local t = v.Text:lower()
+                if t:find("tanam") or t:find("plant") or t:find("tebar") then
+                    klikGUI(v); break
+                end
+            end
+        end
+
+        berhasil = berhasil + 1
+        task.wait(0.2)
+        print("  🌱 Lahan "..i.."/"..#lahans.." selesai")
+    end
+
+    return berhasil
+end
 
 -- ========== TABS ==========
-local TabBibit = Window:CreateTab("🛒 Beli Bibit",  nil)
-local TabFarm  = Window:CreateTab("🤖 Auto Farm",   nil)
-local TabTP    = Window:CreateTab("📍 Teleport",    nil)
-local TabScan  = Window:CreateTab("🔍 Scan",        nil)
-local TabTools = Window:CreateTab("🛠️ Tools",       nil)
+local TabScan  = Window:CreateTab("🔍 Scan Dulu",  nil)
+local TabBibit = Window:CreateTab("🛒 Beli Bibit", nil)
+local TabFarm  = Window:CreateTab("🤖 Auto Farm",  nil)
+local TabTP    = Window:CreateTab("📍 Teleport",   nil)
+local TabTools = Window:CreateTab("🛠️ Tools",      nil)
 
 -- ==========================================
--- TAB BELI BIBIT — Pilih Jenis + Jumlah
+-- TAB SCAN — WAJIB PERTAMA KALI
 -- ==========================================
-TabBibit:CreateSection("🌱 Pilih Bibit & Jumlah")
+TabScan:CreateSection("🔍 Scan Lahan Milik Kamu")
 
--- Dropdown pilih bibit
-local pilihanBibit = {}
+TabScan:CreateLabel("⚠️ PENTING: Berdiri di lahan kamu dulu sebelum scan!")
+
+TabScan:CreateButton({
+    Name = "🔍  SCAN SEKARANG — Cari Lahan Milik Kamu",
+    Callback = function()
+        notif("🔍 Scanning...", "Lagi nyari lahan milik "..myName.."...", 3)
+        task.spawn(scanLahan)
+    end
+})
+
+TabScan:CreateButton({
+    Name = "📋  Lihat Hasil Scan",
+    Callback = function()
+        if not scanDone then
+            notif("⚠️", "Belum scan bro! Scan dulu!", 3)
+            return
+        end
+        notif("📋 Hasil Scan",
+            "Lahan: "..(lahanNamaObj or "?").." | Attr: "..(lahanOwnerAttr or "?"), 6)
+        print("Nama Lahan  : "..(lahanNamaObj   or "BELUM KETEMU"))
+        print("Attr Owner  : "..(lahanOwnerAttr  or "BELUM KETEMU"))
+    end
+})
+
+TabScan:CreateButton({
+    Name = "🌾  Hitung Lahan Milik Kamu",
+    Callback = function()
+        local lahans = getLahanSendiri()
+        notif("🌾 Lahan Kamu", "Ditemukan "..#lahans.." lahan milik "..myName, 4)
+        print("Lahan milik "..myName..": "..#lahans.." buah")
+    end
+})
+
+-- ==========================================
+-- TAB BELI BIBIT
+-- ==========================================
+TabBibit:CreateSection("🌱 Pilih Bibit")
+
+local BIBIT = {
+    {name="Padi",       emoji="⚡", minLv=1,   harga=5    },
+    {name="Jagung",     emoji="🌽", minLv=20,  harga=15   },
+    {name="Tomat",      emoji="🍅", minLv=40,  harga=25   },
+    {name="Terong",     emoji="🍆", minLv=60,  harga=40   },
+    {name="Strawberry", emoji="🍓", minLv=80,  harga=60   },
+    {name="Sawit",      emoji="🌴", minLv=80,  harga=1000 },
+    {name="Durian",     emoji="🟢", minLv=120, harga=2000 },
+}
+
+local opsiDropdown = {}
 for _, b in ipairs(BIBIT) do
-    table.insert(pilihanBibit, b.emoji .. " " .. b.name .. " (Lv." .. b.minLv .. " | " .. b.harga .. "/bibit)")
+    table.insert(opsiDropdown, b.emoji.." "..b.name.." | Lv."..b.minLv.." | "..b.harga.."/bibit")
 end
 
-local selectedBibit = BIBIT[1].name
-local jumlahBeli = 1
-
 TabBibit:CreateDropdown({
-    Name    = "🌱  Pilih Jenis Bibit",
-    Options = pilihanBibit,
-    CurrentOption = { pilihanBibit[1] },
-    Callback = function(v)
-        -- Ambil nama bibit dari pilihan
+    Name          = "🌱  Pilih Jenis Bibit",
+    Options       = opsiDropdown,
+    CurrentOption = { opsiDropdown[1] },
+    Callback      = function(v)
         for _, b in ipairs(BIBIT) do
             if v[1]:find(b.name) then
                 selectedBibit = b.name
-                notif("✅ Dipilih", "Bibit: " .. b.emoji .. " " .. b.name, 2)
+                notif("✅", "Bibit dipilih: "..b.emoji.." "..b.name, 2)
                 break
             end
         end
@@ -441,67 +533,42 @@ TabBibit:CreateDropdown({
 })
 
 TabBibit:CreateSlider({
-    Name         = "🔢  Jumlah Beli per Sesi",
-    Range        = {1, 50},
-    Increment    = 1,
-    CurrentValue = 1,
-    Callback     = function(v) jumlahBeli = v end
+    Name="🔢  Jumlah Beli", Range={1,50}, Increment=1, CurrentValue=1,
+    Callback=function(v) jumlahBeli=v end
 })
 
-TabBibit:CreateSection("🚀 Aksi Beli")
+TabBibit:CreateSection("🚀 Aksi")
 
 TabBibit:CreateButton({
-    Name = "🛒  BELI SEKARANG — " .. "Bibit Pilihan",
+    Name = "🛒  BELI SEKARANG",
     Callback = function()
-        notif("🛒 Beli", "Gas beli " .. jumlahBeli .. "x " .. selectedBibit .. "!", 3)
         task.spawn(function()
-            local result = autoBeliBibit(selectedBibit, jumlahBeli, 1.2)
-            if result then
-                notif("✅ Berhasil!", "Beli " .. jumlahBeli .. "x " .. selectedBibit .. " sukses 🎉", 3)
-            end
+            notif("🛒", "Gas beli "..jumlahBeli.."x "..selectedBibit.."!", 2)
+            local r = autoBeliBibit()
+            if r then notif("✅ Berhasil!", "Beli "..jumlahBeli.."x "..selectedBibit.." done 🎉", 3) end
         end)
     end
 })
 
-TabBibit:CreateSection("⚡ Beli Cepat Per Bibit")
-
-for _, b in ipairs(BIBIT) do
-    TabBibit:CreateButton({
-        Name = b.emoji .. "  Beli " .. b.name .. "  (Lv." .. b.minLv .. " | " .. b.harga .. " coin/bibit)",
-        Callback = function()
-            task.spawn(function()
-                notif("🛒", "Gas beli " .. jumlahBeli .. "x Bibit " .. b.name .. "!", 2)
-                autoBeliBibit(b.name, jumlahBeli, 1.2)
-            end)
-        end
-    })
-end
-
-TabBibit:CreateSection("🔁 Auto Beli Loop")
-
 local autoBibitDelay = 3
 TabBibit:CreateSlider({
-    Name = "⏱️  Delay Auto Beli (detik)",
-    Range = {2, 15}, Increment = 1, CurrentValue = 3,
-    Callback = function(v) autoBibitDelay = v end
+    Name="⏱️  Delay Auto Beli (detik)", Range={2,15}, Increment=1, CurrentValue=3,
+    Callback=function(v) autoBibitDelay=v end
 })
 
 TabBibit:CreateToggle({
-    Name         = "🔁  Auto Beli Bibit Terus (Bibit Pilihan)",
-    CurrentValue = false,
-    Callback     = function(v)
+    Name="🔁  Auto Beli Loop", CurrentValue=false,
+    Callback=function(v)
         _G.AutoBeli = v
         if v then
-            notif("🔁 Auto Beli ON", "Loop beli " .. selectedBibit .. " tiap " .. autoBibitDelay .. "s", 3)
+            notif("🔁 Auto Beli ON", "Loop beli "..selectedBibit.." tiap "..autoBibitDelay.."s", 3)
             task.spawn(function()
                 while _G.AutoBeli do
-                    autoBeliBibit(selectedBibit, jumlahBeli, 1.2)
+                    autoBeliBibit()
                     task.wait(autoBibitDelay)
                 end
             end)
-        else
-            notif("⛔ Auto Beli", "Distop!", 2)
-        end
+        else notif("⛔ Auto Beli","Off",2) end
     end
 })
 
@@ -512,66 +579,64 @@ TabFarm:CreateSection("⚙️ Setting Delay")
 
 local dBeli  = 1.2
 local dTanam = 1.5
-local dJual  = 2
-local dPanen = 10
+local dJual  = 2.0
+local dPanen = 15
 
-TabFarm:CreateSlider({ Name="⏱️ Delay Beli",  Range={1,6},  Increment=0.5, CurrentValue=1.2, Callback=function(v) dBeli=v  end })
-TabFarm:CreateSlider({ Name="⏱️ Delay Tanam", Range={1,5},  Increment=0.5, CurrentValue=1.5, Callback=function(v) dTanam=v end })
-TabFarm:CreateSlider({ Name="⏱️ Delay Jual",  Range={1,6},  Increment=0.5, CurrentValue=2,   Callback=function(v) dJual=v  end })
-TabFarm:CreateSlider({ Name="⏳ Tunggu Panen",Range={3,60}, Increment=1,   CurrentValue=10,  Callback=function(v) dPanen=v end })
+TabFarm:CreateSlider({Name="⏱️ Delay Beli",   Range={1,6},  Increment=0.5, CurrentValue=1.2,  Callback=function(v) dBeli=v  end})
+TabFarm:CreateSlider({Name="⏱️ Delay Tanam",  Range={1,5},  Increment=0.5, CurrentValue=1.5,  Callback=function(v) dTanam=v end})
+TabFarm:CreateSlider({Name="⏱️ Delay Jual",   Range={1,6},  Increment=0.5, CurrentValue=2.0,  Callback=function(v) dJual=v  end})
+TabFarm:CreateSlider({Name="⏳ Tunggu Panen", Range={5,120},Increment=5,   CurrentValue=15,   Callback=function(v) dPanen=v end})
 
 TabFarm:CreateSection("🤖 Auto Farm Full")
 
 TabFarm:CreateToggle({
-    Name         = "🌾  AUTO FARM — Beli » Tanam » Panen » Jual",
-    CurrentValue = false,
-    Callback     = function(v)
+    Name="🌾  AUTO FARM FULL — Beli » Tanam » Panen » Jual",
+    CurrentValue=false,
+    Callback=function(v)
         _G.AutoFarm = v
         if v then
-            notif("🚀 AUTO FARM ON", "Gas brooo! Cuan incoming 💸", 4)
+            if not scanDone then
+                notif("⚠️ Scan Dulu!", "Bro, scan lahan dulu di tab 'Scan Dulu'!", 5)
+                _G.AutoFarm = false
+                return
+            end
+            notif("🚀 AUTO FARM ON","Gas brooo! Cuan incoming 💸",4)
             task.spawn(function()
                 local siklus = 0
                 while _G.AutoFarm do
                     siklus += 1
                     print("\n🔄 ===== SIKLUS #"..siklus.." =====")
 
-                    -- 1. Beli bibit
-                    print("  🛒 Beli bibit "..selectedBibit.."...")
-                    autoBeliBibit(selectedBibit, jumlahBeli, dBeli)
+                    -- 1. Beli
+                    print("  🛒 Beli "..selectedBibit.."...")
+                    autoBeliBibit()
                     if not _G.AutoFarm then break end
                     task.wait(0.5)
 
-                    -- 2. Tanam semua lahan
-                    print("  🌱 Tanam di semua lahan...")
-                    local lahans = getAllLahan()
-                    local ok2 = 0
-                    for i, lahan in ipairs(lahans) do
-                        if not _G.AutoFarm then break end
-                        print("    Lahan "..i.."/"..#lahans)
-                        if interakLahan(lahan, dTanam) then ok2 += 1 end
-                        task.wait(0.2)
-                    end
-                    print("  ✅ Tanam "..ok2.."/"..#lahans.." lahan")
+                    -- 2. Tanam
+                    print("  🌱 Tanam di lahan sendiri...")
+                    local n = autoTanam(dTanam)
+                    print("  ✅ Tanam "..n.." lahan")
                     if not _G.AutoFarm then break end
 
                     -- 3. Tunggu panen
                     print("  ⏳ Nunggu panen "..dPanen.."s...")
-                    notif("⏳ Nunggu", "Panen dalam "..dPanen.."s...", dPanen)
+                    notif("⏳ Nunggu Panen","Panen dalam "..dPanen.."s...",dPanen)
                     task.wait(dPanen)
                     if not _G.AutoFarm then break end
 
                     -- 4. Jual
                     print("  💰 Jual hasil...")
-                    interakJual(dJual)
+                    autoJual()
                     task.wait(0.5)
 
-                    notif("✅ Siklus #"..siklus, "Done! Auto loop lagi 🔁", 3)
+                    notif("✅ Siklus #"..siklus,"Done! Loop lagi 🔁",3)
                     task.wait(1)
                 end
-                notif("⛔ AUTO FARM", "Distop, santai dulu 😴", 3)
+                notif("⛔ AUTO FARM","Distop 😴",3)
             end)
         else
-            notif("⛔ AUTO FARM", "Off!", 2)
+            notif("⛔ AUTO FARM","Off!",2)
         end
     end
 })
@@ -579,21 +644,19 @@ TabFarm:CreateToggle({
 TabFarm:CreateSection("🎛️ Auto Satuan")
 
 TabFarm:CreateToggle({
-    Name="🌱  Auto Tanam Semua Lahan", CurrentValue=false,
+    Name="🌱  Auto Tanam Lahan Sendiri", CurrentValue=false,
     Callback=function(v)
         _G.AutoTanam = v
         if v then
+            if not scanDone then notif("⚠️","Scan lahan dulu bro!",4) _G.AutoTanam=false return end
             task.spawn(function()
                 while _G.AutoTanam do
-                    for _, l in ipairs(getAllLahan()) do
-                        if not _G.AutoTanam then break end
-                        interakLahan(l, dTanam)
-                    end
+                    autoTanam(dTanam)
                     task.wait(3)
                 end
             end)
-            notif("🌱 Auto Tanam ON","Loop tanam aktif~",3)
-        else notif("⛔ Auto Tanam","Distop",2) end
+            notif("🌱 Auto Tanam ON","Tanam di lahan sendiri~",3)
+        else notif("⛔ Auto Tanam","Off",2) end
     end
 })
 
@@ -603,19 +666,19 @@ TabFarm:CreateToggle({
         _G.AutoJual = v
         if v then
             task.spawn(function()
-                while _G.AutoJual do interakJual(dJual) task.wait(dJual+1) end
+                while _G.AutoJual do autoJual() task.wait(dJual+1) end
             end)
             notif("💰 Auto Jual ON","Selling machine 🤑",3)
-        else notif("⛔ Auto Jual","Distop",2) end
+        else notif("⛔ Auto Jual","Off",2) end
     end
 })
 
 TabFarm:CreateSection("🔴 Kill Switch")
 TabFarm:CreateButton({
-    Name="⛔  STOP SEMUA — Panik Mode",
+    Name="⛔  STOP SEMUA",
     Callback=function()
         _G.AutoFarm=false _G.AutoBeli=false _G.AutoTanam=false _G.AutoJual=false
-        notif("🛑 STOP SEMUA","Semua auto dimatiin, aman bro!",3)
+        notif("🛑 STOP","Semua auto dimatiin!",3)
     end
 })
 
@@ -624,80 +687,34 @@ TabFarm:CreateButton({
 -- ==========================================
 TabTP:CreateSection("NPC 🏪")
 local npcList = {
-    {icon="🛒", name="npcbibit",          label="Beli Bibit"},
-    {icon="💰", name="npcpenjual",         label="Jual Hasil"},
-    {icon="🔧", name="npcalat",            label="Beli Alat"},
-    {icon="🥚", name="NPCPedagangTelur",   label="Jual Telur"},
-    {icon="🌴", name="NPCPedagangSawit",   label="Jual Sawit"},
+    {icon="🛒",name="npcbibit",       label="Beli Bibit"},
+    {icon="💰",name="npcpenjual",      label="Jual Hasil"},
+    {icon="🔧",name="npcalat",         label="Beli Alat"},
+    {icon="🥚",name="NPCPedagangTelur",label="Jual Telur"},
+    {icon="🌴",name="NPCPedagangSawit",label="Jual Sawit"},
 }
 for _, npc in ipairs(npcList) do
     TabTP:CreateButton({
-        Name = npc.icon.."  "..npc.name.." — "..npc.label,
-        Callback = function()
-            local o = cari(npc.name)
+        Name=npc.icon.."  "..npc.name.." — "..npc.label,
+        Callback=function()
+            local o=cari(npc.name)
             if o then tp(o) notif("📍",npc.name.." ✅",2)
-            else notif("❌ Zonk",npc.name.." kagak ada",3) end
+            else notif("❌",npc.name.." kagak ada",3) end
         end
     })
 end
+
 TabTP:CreateSection("Lahan 🌾")
 TabTP:CreateButton({
-    Name="🌾  Lahan Pertama",
+    Name="🌾  Teleport ke Lahan Kamu",
     Callback=function()
-        local l=getAllLahan()
-        if #l>0 then tp(l[1]) notif("📍","Di lahan pertama!",2)
-        else notif("❌","Lahan kagak ada",3) end
-    end
-})
-
--- ==========================================
--- TAB SCAN
--- ==========================================
-TabScan:CreateSection("Deteksi 🔍")
-TabScan:CreateButton({
-    Name="🔍  Scan GUI PlayerGui (Toko Bibit)",
-    Callback=function()
-        local gui = LocalPlayer.PlayerGui
-        print("=== GUI SCAN ===")
-        for _, v in pairs(gui:GetDescendants()) do
-            if v:IsA("TextButton") or v:IsA("TextLabel") then
-                if (v.Text or "") ~= "" then
-                    print(v.ClassName.." | Name:"..v.Name.." | Text:"..v.Text.." | Path:"..v:GetFullName())
-                end
-            end
+        local lahans = getLahanSendiri()
+        if #lahans > 0 then
+            tp(lahans[1])
+            notif("📍","Di lahan pertama milik "..myName.."!",2)
+        else
+            notif("❌","Lahan kagak ketemu, scan dulu!",3)
         end
-        notif("🔍 GUI Scan","Selesai! Cek console F9",4)
-    end
-})
-TabScan:CreateButton({
-    Name="🔍  Scan ProximityPrompt",
-    Callback=function()
-        local n=0
-        for _, v in pairs(workspace:GetDescendants()) do
-            if v:IsA("ProximityPrompt") then
-                n+=1
-                print("PP: "..v:GetFullName().." | Action: "..v.ActionText.." | Object: "..(v.ObjectText or ""))
-            end
-        end
-        notif("🔍 PP Scan",n.." ProximityPrompt ketemu!",4)
-    end
-})
-TabScan:CreateButton({
-    Name="📡  Scan RemoteEvent",
-    Callback=function()
-        local n=0
-        for _, v in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
-            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-                n+=1 print(v.ClassName..": "..v:GetFullName())
-            end
-        end
-        notif("📡 Remote",n.." remote ketemu!",4)
-    end
-})
-TabScan:CreateButton({
-    Name="🌾  Hitung Lahan",
-    Callback=function()
-        notif("🌾 Lahan","Ada "..#getAllLahan().." lahan Tanah!",4)
     end
 })
 
@@ -726,29 +743,40 @@ TabTools:CreateButton({
     Name="🧪  Test Buka Toko Bibit",
     Callback=function()
         task.spawn(function()
-            local r = bukaTokoBibit()
-            notif(r and "✅ Toko Terbuka!" or "❌ Gagal Buka Toko",
-                  r and "GUI Toko Bibit berhasil dibuka!" or "Coba scan PP dulu bro", 4)
+            local r=bukaToko("npcbibit",nil,1.5)
+            notif(r and "✅ Toko Terbuka!" or "❌ Gagal",
+                  r and "GUI Toko Bibit berhasil!" or "Coba scan PP dulu",4)
         end)
     end
 })
 TabTools:CreateButton({
-    Name="💡  Cara Pakai",
+    Name="🧪  Test Jual Manual",
     Callback=function()
-        print("=== CARA PAKAI SAWAH INDO v5.0 ===")
-        print("1. Tab SCAN → Scan PP & GUI dulu")
-        print("2. Tab TOOLS → Test Buka Toko Bibit")
-        print("3. Tab BELI BIBIT → Pilih bibit + jumlah → Beli!")
-        print("4. Tab AUTO FARM → Setting delay → ON")
-        notif("💡 Tips","Scan dulu → Test → Baru Auto Farm! 🚀",6)
+        task.spawn(function()
+            local r=autoJual()
+            notif(r and "✅ Jual OK!" or "❌ Gagal Jual",
+                  r and "Jual berhasil!" or "GUI jual gak muncul",4)
+        end)
+    end
+})
+TabTools:CreateButton({
+    Name="💡  Cara Pakai (Baca Ini Dulu!)",
+    Callback=function()
+        print("=== CARA PAKAI SAWAH INDO v6.0 ===")
+        print("1. Berdiri di LAHAN MILIK KAMU SENDIRI")
+        print("2. Tab 'Scan Dulu' → tekan SCAN SEKARANG")
+        print("3. Tunggu notif hasil scan")
+        print("4. Tab 'Beli Bibit' → pilih bibit → test beli dulu")
+        print("5. Tab 'Auto Farm' → setting delay → ON!")
+        notif("💡 Tips","1)Scan → 2)Test → 3)Auto Farm! 🚀",6)
     end
 })
 
--- ===== READY =====
-print("╔══════════════════════════════════╗")
-print("║  🌾 SAWAH INDO v5.0  💸          ║")
-print("║  Auto Beli Bibit via GUI Toko    ║")
-print("║  ProximityPrompt: Buy Seeds ✅   ║")
-print("║  Android + Delta Ready ✅        ║")
-print("╚══════════════════════════════════╝")
-notif("🌾 SAWAH INDO v5.0","Siap gas! Auto cuan mode: ON 💸🔥",5)
+-- ===== INIT =====
+print("╔══════════════════════════════════════╗")
+print("║  🌾 SAWAH INDO v6.0 ALL IN ONE 💸    ║")
+print("║  User: "..myName)
+print("║  Auto scan lahan sendiri ✅           ║")
+print("║  Android + Delta Ready ✅             ║")
+print("╚══════════════════════════════════════╝")
+notif("🌾 SAWAH INDO v6.0","Halo "..myName.."! Scan lahan dulu ya di tab pertama 🔍",6)
