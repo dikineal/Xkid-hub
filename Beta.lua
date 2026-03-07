@@ -225,112 +225,62 @@ local function interakLahan(lahanObj, delay)
 end
 
 local BIBIT = {
-    {name="Padi",       emoji="Padi",        minLv=1,   harga=5},
-    {name="Jagung",     emoji="Jagung",      minLv=20,  harga=15},
-    {name="Tomat",      emoji="Tomat",       minLv=40,  harga=25},
-    {name="Terong",     emoji="Terong",      minLv=60,  harga=40},
-    {name="Strawberry", emoji="Strawberry",  minLv=80,  harga=60},
-    {name="Sawit",      emoji="Sawit",       minLv=80,  harga=1000},
-    {name="Durian",     emoji="Durian",      minLv=120, harga=2000},
+    {name="Padi",       emoji="⚡", minLv=1,   harga=5},
+    {name="Jagung",     emoji="🌽", minLv=20,  harga=15},
+    {name="Tomat",      emoji="🍅", minLv=40,  harga=25},
+    {name="Terong",     emoji="🍆", minLv=60,  harga=40},
+    {name="Strawberry", emoji="🍓", minLv=80,  harga=60},
+    {name="Sawit",      emoji="🌴", minLv=80,  harga=1000},
+    {name="Durian",     emoji="🟢", minLv=120, harga=2000},
 }
 
-local TabBibit = Window:CreateTab("Beli Bibit", nil)
-local TabFarm  = Window:CreateTab("Auto Farm",  nil)
-local TabTP    = Window:CreateTab("Teleport",   nil)
-local TabLahan = Window:CreateTab("Lahan",      nil)
-local TabTools = Window:CreateTab("Tools",      nil)
-local TabTest  = Window:CreateTab("Test",       nil)
-local TabLog   = Window:CreateTab("Log",        nil)
-
--- REMOTE SYSTEM
-local RS = game:GetService("ReplicatedStorage")
-
-local function getRemote(name)
-    for _, v in pairs(RS:GetDescendants()) do
-        if v.Name == name then return v end
-    end
-    return nil
-end
-
-local function fireR(name, ...)
-    local r = getRemote(name)
-    if not r then return false, "tidak ketemu" end
-    local ok, err = pcall(function()
-        if r:IsA("RemoteEvent") then r:FireServer(...)
-        else r:InvokeServer(...) end
-    end)
-    return ok, tostring(err)
-end
-
--- LOG SYSTEM
-local logCount = 0
-TabLog:CreateSection("Hasil Response Remote")
-TabLog:CreateLabel("Log muncul otomatis setelah test!")
-
-local function addLog(teks)
-    logCount = logCount + 1
-    TabLog:CreateLabel("["..logCount.."] "..teks)
-end
-
--- Hook response dari server
-local hookList = {
-    "PlantCrop","PlantLahanCrop","HarvestCrop",
-    "SellCrop","GetBibit","RequestShop",
-    "Request Sell","LahanUpdate","RequestLahan","ConfirmAction"
-}
-for _, name in ipairs(hookList) do
-    local r = getRemote(name)
-    if r and r:IsA("RemoteEvent") then
-        r.OnClientEvent:Connect(function(a, b, c)
-            local msg = "<-"..name..": "..tostring(a)
-            if b ~= nil then msg = msg.." | "..tostring(b) end
-            if c ~= nil then msg = msg.." | "..tostring(c) end
-            addLog(msg)
-        end)
-    end
-end
+local TabBibit = Window:CreateTab("🛒 Beli Bibit", nil)
+local TabFarm  = Window:CreateTab("🤖 Auto Farm",  nil)
+local TabTP    = Window:CreateTab("📍 Teleport",   nil)
+local TabLahan = Window:CreateTab("🌾 Lahan",      nil)
+local TabTools = Window:CreateTab("🛠 Tools",      nil)
 
 -- TAB BELI BIBIT
-TabBibit:CreateSection("Pilih Bibit")
+TabBibit:CreateSection("🌱 Pilih Bibit")
 local opsi = {}
 for _, b in ipairs(BIBIT) do
-    opsi[#opsi+1] = b.name.." Lv."..b.minLv.." "..b.harga.."/bibit"
+    opsi[#opsi+1] = b.emoji.." "..b.name.." | Lv."..b.minLv.." | "..b.harga.."/bibit"
 end
 TabBibit:CreateDropdown({
-    Name = "Pilih Jenis Bibit",
+    Name = "🌱 Pilih Jenis Bibit",
     Options = opsi,
     CurrentOption = {opsi[1]},
     Callback = function(v)
         for _, b in ipairs(BIBIT) do
             if v[1]:find(b.name) then
                 selectedBibit = b.name
-                notif("Dipilih", b.name, 2)
+                notif("Dipilih", b.emoji.." "..b.name, 2)
                 break
             end
         end
     end
 })
 TabBibit:CreateSlider({
-    Name = "Jumlah Beli",
+    Name = "🔢 Jumlah Beli",
     Range = {1, 50}, Increment = 1, CurrentValue = 1,
     Callback = function(v) jumlahBeli = v end
 })
-TabBibit:CreateSection("Aksi Beli")
+TabBibit:CreateSection("🚀 Aksi Beli")
 TabBibit:CreateButton({
-    Name = "BELI SEKARANG",
+    Name = "🛒 BELI SEKARANG",
     Callback = function()
         task.spawn(function()
             notif("Beli", "Gas beli "..jumlahBeli.."x "..selectedBibit.."!", 2)
             if autoBeliBibit() then
-                notif("Berhasil!", jumlahBeli.."x "..selectedBibit.." sukses", 3)
+                notif("Berhasil!", jumlahBeli.."x "..selectedBibit.." sukses 🎉", 3)
             end
         end)
     end
 })
-TabBibit:CreateSection("Beli Cepat")
+TabBibit:CreateSection("⚡ Beli Cepat")
 for _, b in ipairs(BIBIT) do
     TabBibit:CreateButton({
-        Name = b.name.." Lv."..b.minLv.." "..b.harga.." coin",
+        Name = b.emoji.." "..b.name.." | Lv."..b.minLv.." | "..b.harga.." coin",
         Callback = function()
             task.spawn(function()
                 selectedBibit = b.name
@@ -339,20 +289,20 @@ for _, b in ipairs(BIBIT) do
         end
     })
 end
-TabBibit:CreateSection("Auto Beli")
+TabBibit:CreateSection("🔁 Auto Beli")
 local autoBibitDelay = 3
 TabBibit:CreateSlider({
-    Name = "Delay Auto Beli (detik)",
+    Name = "⏱ Delay Auto Beli (detik)",
     Range = {2, 15}, Increment = 1, CurrentValue = 3,
     Callback = function(v) autoBibitDelay = v end
 })
 TabBibit:CreateToggle({
-    Name = "Auto Beli Terus",
+    Name = "🔁 Auto Beli Terus",
     CurrentValue = false,
     Callback = function(v)
         _G.AutoBeli = v
         if v then
-            notif("Auto Beli ON", "Loop beli "..selectedBibit, 3)
+            notif("Auto Beli ON", "Loop beli "..selectedBibit.."~", 3)
             task.spawn(function()
                 while _G.AutoBeli do autoBeliBibit(); task.wait(autoBibitDelay) end
             end)
@@ -361,32 +311,33 @@ TabBibit:CreateToggle({
 })
 
 -- TAB AUTO FARM
-TabFarm:CreateSection("Setting Delay")
+TabFarm:CreateSection("⚙ Setting Delay")
 local dBeli = 1.2
 local dTanam = 1.5
 local dJual = 2
 local dPanen = 10
-TabFarm:CreateSlider({Name="Delay Beli",   Range={1,6},  Increment=0.5, CurrentValue=1.2, Callback=function(v) dBeli=v  end})
-TabFarm:CreateSlider({Name="Delay Tanam",  Range={1,5},  Increment=0.5, CurrentValue=1.5, Callback=function(v) dTanam=v end})
-TabFarm:CreateSlider({Name="Delay Jual",   Range={1,6},  Increment=0.5, CurrentValue=2,   Callback=function(v) dJual=v  end})
-TabFarm:CreateSlider({Name="Tunggu Panen", Range={3,120},Increment=1,   CurrentValue=10,  Callback=function(v) dPanen=v end})
-TabFarm:CreateSection("Auto Farm Full")
+TabFarm:CreateSlider({Name="⏱ Delay Beli",   Range={1,6},  Increment=0.5, CurrentValue=1.2, Callback=function(v) dBeli=v  end})
+TabFarm:CreateSlider({Name="⏱ Delay Tanam",  Range={1,5},  Increment=0.5, CurrentValue=1.5, Callback=function(v) dTanam=v end})
+TabFarm:CreateSlider({Name="⏱ Delay Jual",   Range={1,6},  Increment=0.5, CurrentValue=2,   Callback=function(v) dJual=v  end})
+TabFarm:CreateSlider({Name="⏳ Tunggu Panen", Range={3,120},Increment=1,   CurrentValue=10,  Callback=function(v) dPanen=v end})
+TabFarm:CreateSection("🤖 Auto Farm Full")
 TabFarm:CreateToggle({
-    Name = "AUTO FARM - Beli > Tanam > Panen > Jual",
+    Name = "🌾 AUTO FARM — Beli > Tanam > Panen > Jual",
     CurrentValue = false,
     Callback = function(v)
         _G.AutoFarm = v
         if v then
             if not savedLahanPos then
-                notif("Simpan Lahan Dulu!", "Ke tab Lahan > Simpan Posisi!", 5)
+                notif("Simpan Lahan Dulu!", "Ke tab Lahan > Simpan Posisi Lahan!", 5)
                 _G.AutoFarm = false
                 return
             end
-            notif("AUTO FARM ON", "Gas brooo! Cuan incoming", 4)
+            notif("AUTO FARM ON", "Gas brooo! Cuan incoming 💸", 4)
             task.spawn(function()
                 local siklus = 0
                 while _G.AutoFarm do
                     siklus = siklus + 1
+                    print("SIKLUS #"..siklus)
                     autoBeliBibit()
                     if not _G.AutoFarm then break end
                     task.wait(0.5)
@@ -397,23 +348,24 @@ TabFarm:CreateToggle({
                         if interakLahan(lahan, dTanam) then ok2 = ok2 + 1 end
                         task.wait(0.2)
                     end
+                    print("Tanam "..ok2.."/"..#lahans)
                     if not _G.AutoFarm then break end
                     notif("Nunggu Panen", dPanen.."s...", dPanen)
                     task.wait(dPanen)
                     if not _G.AutoFarm then break end
                     autoJual()
                     task.wait(0.5)
-                    notif("Siklus #"..siklus, "Done! Loop lagi", 3)
+                    notif("Siklus #"..siklus, "Done! Loop lagi 🔁", 3)
                     task.wait(1)
                 end
-                notif("AUTO FARM", "Distop", 3)
+                notif("AUTO FARM", "Distop 😴", 3)
             end)
         else notif("AUTO FARM", "Off!", 2) end
     end
 })
-TabFarm:CreateSection("Auto Satuan")
+TabFarm:CreateSection("🎛 Auto Satuan")
 TabFarm:CreateToggle({
-    Name = "Auto Tanam Lahan Sendiri",
+    Name = "🌱 Auto Tanam Lahan Sendiri",
     CurrentValue = false,
     Callback = function(v)
         _G.AutoTanam = v
@@ -427,12 +379,12 @@ TabFarm:CreateToggle({
                     task.wait(3)
                 end
             end)
-            notif("Auto Tanam ON", "Loop tanam lahan sendiri", 3)
+            notif("Auto Tanam ON", "Loop tanam lahan sendiri~", 3)
         else notif("Auto Tanam", "Off", 2) end
     end
 })
 TabFarm:CreateToggle({
-    Name = "Auto Jual Aja",
+    Name = "💰 Auto Jual Aja",
     CurrentValue = false,
     Callback = function(v)
         _G.AutoJual = v
@@ -440,13 +392,13 @@ TabFarm:CreateToggle({
             task.spawn(function()
                 while _G.AutoJual do autoJual(); task.wait(dJual+1) end
             end)
-            notif("Auto Jual ON", "Selling machine", 3)
+            notif("Auto Jual ON", "Selling machine 🤑", 3)
         else notif("Auto Jual", "Off", 2) end
     end
 })
-TabFarm:CreateSection("Kill Switch")
+TabFarm:CreateSection("🔴 Kill Switch")
 TabFarm:CreateButton({
-    Name = "STOP SEMUA",
+    Name = "⛔ STOP SEMUA",
     Callback = function()
         _G.AutoFarm=false; _G.AutoBeli=false; _G.AutoTanam=false; _G.AutoJual=false
         notif("STOP", "Semua auto dimatiin!", 3)
@@ -456,15 +408,15 @@ TabFarm:CreateButton({
 -- TAB TELEPORT
 TabTP:CreateSection("NPC")
 local npcList = {
-    {name="npcbibit",        label="Beli Bibit"},
-    {name="npcpenjual",      label="Jual Hasil"},
-    {name="npcalat",         label="Beli Alat"},
-    {name="NPCPedagangTelur",label="Jual Telur"},
-    {name="NPCPedagangSawit",label="Jual Sawit"},
+    {icon="🛒", name="npcbibit",        label="Beli Bibit"},
+    {icon="💰", name="npcpenjual",       label="Jual Hasil"},
+    {icon="🔧", name="npcalat",          label="Beli Alat"},
+    {icon="🥚", name="NPCPedagangTelur", label="Jual Telur"},
+    {icon="🌴", name="NPCPedagangSawit", label="Jual Sawit"},
 }
 for _, npc in ipairs(npcList) do
     TabTP:CreateButton({
-        Name = npc.name.." - "..npc.label,
+        Name = npc.icon.." "..npc.name.." - "..npc.label,
         Callback = function()
             local o = cari(npc.name)
             if o then tp(o); notif("Teleport", npc.name.." OK", 2)
@@ -474,7 +426,7 @@ for _, npc in ipairs(npcList) do
 end
 TabTP:CreateSection("Lahan")
 TabTP:CreateButton({
-    Name = "Teleport ke Lahan Kamu",
+    Name = "🌾 Teleport ke Lahan Kamu",
     Callback = function()
         if savedLahanPos then
             tpCoord(savedLahanPos.X, savedLahanPos.Y, savedLahanPos.Z)
@@ -486,10 +438,10 @@ TabTP:CreateButton({
 })
 
 -- TAB LAHAN
-TabLahan:CreateSection("Simpan Posisi Lahan Kamu")
+TabLahan:CreateSection("💾 Simpan Posisi Lahan Kamu")
 TabLahan:CreateLabel("Berdiri di tengah LAHAN KAMU lalu tekan Simpan!")
 TabLahan:CreateButton({
-    Name = "SIMPAN POSISI LAHAN SEKARANG",
+    Name = "💾 SIMPAN POSISI LAHAN SEKARANG",
     Callback = function()
         local root = getRoot()
         if root then
@@ -505,32 +457,32 @@ TabLahan:CreateButton({
     end
 })
 TabLahan:CreateButton({
-    Name = "Lihat Posisi & Jumlah Lahan",
+    Name = "📋 Lihat Posisi & Jumlah Lahan",
     Callback = function()
         if savedLahanPos then
             local p = savedLahanPos
             local n = #getAllLahan()
-            notif("Posisi Lahan", ("X=%.1f Z=%.1f | %d lahan"):format(p.X, p.Z, n), 5)
+            notif("Posisi Lahan", ("X=%.1f Y=%.1f Z=%.1f | %d lahan"):format(p.X, p.Y, p.Z, n), 5)
         else
             notif("Belum Simpan", "Berdiri di lahan lalu tekan Simpan!", 4)
         end
     end
 })
 TabLahan:CreateSlider({
-    Name = "Radius Pencarian Lahan (stud)",
+    Name = "📏 Radius Pencarian Lahan (stud)",
     Range = {10, 200}, Increment = 10, CurrentValue = 50,
     Callback = function(v) lahanRadius = v end
 })
 TabLahan:CreateButton({
-    Name = "Reset Posisi Lahan",
+    Name = "🔄 Reset Posisi Lahan",
     Callback = function()
         savedLahanPos = nil
         notif("Reset", "Posisi lahan dihapus", 2)
     end
 })
-TabLahan:CreateSection("Debug")
+TabLahan:CreateSection("🔍 Debug")
 TabLahan:CreateButton({
-    Name = "Scan Object Sekitar (radius 30)",
+    Name = "🔍 Scan Object Sekitar (radius 30)",
     Callback = function()
         local root = getRoot()
         if not root then return end
@@ -551,7 +503,7 @@ TabLahan:CreateButton({
     end
 })
 TabLahan:CreateButton({
-    Name = "Scan PP Sekitar (radius 20)",
+    Name = "🔍 Scan PP Sekitar (radius 20)",
     Callback = function()
         local root = getRoot()
         if not root then return end
@@ -575,7 +527,7 @@ TabLahan:CreateButton({
 -- TAB TOOLS
 TabTools:CreateSection("Utilitas")
 TabTools:CreateButton({
-    Name = "Koordinat Gue",
+    Name = "📍 Koordinat Gue",
     Callback = function()
         local r = getRoot()
         if r then
@@ -585,14 +537,14 @@ TabTools:CreateButton({
     end
 })
 TabTools:CreateButton({
-    Name = "Reset Karakter",
+    Name = "🔄 Reset Karakter",
     Callback = function()
         local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
         if h then h.Health = 0; notif("Reset", "Respawn~", 2) end
     end
 })
 TabTools:CreateButton({
-    Name = "Test Buka Toko Bibit",
+    Name = "🧪 Test Buka Toko Bibit",
     Callback = function()
         task.spawn(function()
             local r = bukaToko("npcbibit", 1.5)
@@ -601,7 +553,7 @@ TabTools:CreateButton({
     end
 })
 TabTools:CreateButton({
-    Name = "Test Jual Manual",
+    Name = "🧪 Test Jual Manual",
     Callback = function()
         task.spawn(function()
             local r = autoJual()
@@ -609,63 +561,6 @@ TabTools:CreateButton({
         end)
     end
 })
-
--- TAB TEST
-TabTest:CreateSection("Tanam - berdiri di lahan dulu!")
-TabTest:CreateButton({Name="Test PlantCrop", Callback=function()
-    local ok, err = fireR("PlantCrop")
-    local h = ok and "OK PlantCrop fired!" or "GAGAL: "..err
-    addLog(h); notif("PlantCrop", h, 3)
-end})
-TabTest:CreateButton({Name="Test PlantLahanCrop", Callback=function()
-    local ok, err = fireR("PlantLahanCrop")
-    local h = ok and "OK PlantLahanCrop fired!" or "GAGAL: "..err
-    addLog(h); notif("PlantLahanCrop", h, 3)
-end})
-TabTest:CreateSection("Panen")
-TabTest:CreateButton({Name="Test HarvestCrop", Callback=function()
-    local ok, err = fireR("HarvestCrop")
-    local h = ok and "OK HarvestCrop fired!" or "GAGAL: "..err
-    addLog(h); notif("HarvestCrop", h, 3)
-end})
-TabTest:CreateSection("Jual")
-TabTest:CreateButton({Name="Test SellCrop", Callback=function()
-    local ok, err = fireR("SellCrop")
-    local h = ok and "OK SellCrop fired!" or "GAGAL: "..err
-    addLog(h); notif("SellCrop", h, 3)
-end})
-TabTest:CreateButton({Name="Test Request Sell", Callback=function()
-    local ok, err = fireR("Request Sell")
-    local h = ok and "OK Request Sell fired!" or "GAGAL: "..err
-    addLog(h); notif("Request Sell", h, 3)
-end})
-TabTest:CreateSection("Beli")
-TabTest:CreateButton({Name="Test GetBibit", Callback=function()
-    local ok, err = fireR("GetBibit")
-    local h = ok and "OK GetBibit fired!" or "GAGAL: "..err
-    addLog(h); notif("GetBibit", h, 3)
-end})
-TabTest:CreateButton({Name="Test RequestShop", Callback=function()
-    local ok, err = fireR("RequestShop")
-    local h = ok and "OK RequestShop fired!" or "GAGAL: "..err
-    addLog(h); notif("RequestShop", h, 3)
-end})
-TabTest:CreateSection("Lahan")
-TabTest:CreateButton({Name="Test RequestLahan", Callback=function()
-    local ok, err = fireR("RequestLahan")
-    local h = ok and "OK RequestLahan fired!" or "GAGAL: "..err
-    addLog(h); notif("RequestLahan", h, 3)
-end})
-TabTest:CreateButton({Name="Test ConfirmAction", Callback=function()
-    local ok, err = fireR("ConfirmAction")
-    local h = ok and "OK ConfirmAction fired!" or "GAGAL: "..err
-    addLog(h); notif("ConfirmAction", h, 3)
-end})
-TabLog:CreateButton({Name="Clear Log", Callback=function()
-    logCount = 0
-    notif("Clear", "Re-execute untuk reset tampilan log", 2)
-end})
-
 
 print("SAWAH INDO v5.2 | "..myName)
 notif("SAWAH INDO v5.2", "Halo "..myName.."! Ke tab Lahan > Simpan Posisi dulu!", 6)
