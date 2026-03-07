@@ -1,8 +1,8 @@
--- Vape Script untuk xkid_hub
+-- MacLib Script untuk xkid_hub
 -- Anti AFK + Fly Script
 -- Copy-paste ke Roblox Executor
 
-local Vape = loadstring(game:HttpGet("https://raw.githubusercontent.com/7GrandDadPGN/VapeV4/main/main.lua"))()
+local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -22,32 +22,48 @@ local flyConnection = nil
 local antiAFKConnection = nil
 
 -- ===== MEMBUAT WINDOW =====
-local Window = Vape:AddWindow({
+local Window = MacLib:CreateWindow({
     Title = "xkid_hub Script",
+    Subtitle = "v1.0 - MacLib UI",
+    Size = UDim2.new(0, 520, 0, 400),
+    HasExitButton = true,
     Icon = "rbxasset://textures/Cursor.png",
-    Author = "xkid_hub",
-    HideKeyPress = false,
-    KeyPress = Enum.KeyCode.RightControl
+    ShowDragBar = true
 })
 
 -- ===== TAB 1: HOME =====
-local HomeTab = Window:AddTab({
+local HomeTab = Window:CreateTab({
     Name = "Home",
-    Icon = "rbxasset://textures/Cursor.png"
+    Icon = "🏠"
 })
 
-HomeTab:AddLabel({
-    Title = "Welcome!",
-    Text = "Selamat datang di xkid_hub Script"
+HomeTab:CreateLabel({
+    Text = "Welcome to xkid_hub Script!",
+    TextSize = 16
 })
 
-HomeTab:AddLabel({
-    Title = "Features",
-    Text = "✓ Anti AFK\n✓ Fly dengan speed control\n✓ Auto config save"
+HomeTab:CreateLabel({
+    Text = "Features:",
+    TextSize = 14
 })
 
-HomeTab:AddButton({
-    Title = "Destroy UI",
+HomeTab:CreateLabel({
+    Text = "✓ Anti AFK",
+    TextSize = 12
+})
+
+HomeTab:CreateLabel({
+    Text = "✓ Fly dengan speed control",
+    TextSize = 12
+})
+
+HomeTab:CreateLabel({
+    Text = "✓ MacOS Style UI",
+    TextSize = 12
+})
+
+HomeTab:CreateButton({
+    Name = "Destroy UI",
     Callback = function()
         Window:Destroy()
         print("UI destroyed!")
@@ -55,19 +71,18 @@ HomeTab:AddButton({
 })
 
 -- ===== TAB 2: ANTI AFK =====
-local AntiAFKTab = Window:AddTab({
+local AntiAFKTab = Window:CreateTab({
     Name = "Anti AFK",
-    Icon = "rbxasset://textures/Cursor.png"
+    Icon = "⏱️"
 })
 
-AntiAFKTab:AddLabel({
-    Title = "Anti AFK Settings",
-    Text = "Aktifkan untuk mencegah AFK kick"
+AntiAFKTab:CreateLabel({
+    Text = "Anti AFK Settings"
 })
 
-AntiAFKTab:AddToggle({
-    Title = "Enable Anti AFK",
-    Default = false,
+AntiAFKTab:CreateToggle({
+    Name = "Enable Anti AFK",
+    State = false,
     Callback = function(state)
         antiAFKEnabled = state
         
@@ -106,25 +121,27 @@ AntiAFKTab:AddToggle({
     end
 })
 
-AntiAFKTab:AddLabel({
-    Title = "Info",
-    Text = "Karakter akan bergerak otomatis setiap 3 detik"
+AntiAFKTab:CreateLabel({
+    Text = "Karakter akan bergerak otomatis"
+})
+
+AntiAFKTab:CreateLabel({
+    Text = "Cegah AFK kick dari server"
 })
 
 -- ===== TAB 3: FLY =====
-local FlyTab = Window:AddTab({
+local FlyTab = Window:CreateTab({
     Name = "Fly",
-    Icon = "rbxasset://textures/Cursor.png"
+    Icon = "🚀"
 })
 
-FlyTab:AddLabel({
-    Title = "Fly Settings",
-    Text = "Aktifkan untuk terbang"
+FlyTab:CreateLabel({
+    Text = "Fly Settings"
 })
 
-FlyTab:AddToggle({
-    Title = "Enable Fly",
-    Default = false,
+FlyTab:CreateToggle({
+    Name = "Enable Fly",
+    State = false,
     Callback = function(state)
         flyEnabled = state
         
@@ -204,46 +221,83 @@ FlyTab:AddToggle({
     end
 })
 
-FlyTab:AddSlider({
-    Title = "Fly Speed",
+FlyTab:CreateSlider({
+    Name = "Fly Speed",
     Min = 10,
     Max = 200,
     Default = 50,
-    Rounding = 0,
-    Callback = function(value)
+    Increment = 5,
+    ValueChanged = function(value)
         flySpeed = value
-        print("Fly Speed set to:", flySpeed)
+        print("Fly Speed:", flySpeed)
     end
 })
 
-FlyTab:AddLabel({
-    Title = "Kontrol Terbang",
-    Text = "W/A/S/D = Bergerak\nSPACE = Naik\nLSHIFT = Turun"
+FlyTab:CreateLabel({
+    Text = "Kontrol Terbang:"
+})
+
+FlyTab:CreateLabel({
+    Text = "W/A/S/D = Bergerak"
+})
+
+FlyTab:CreateLabel({
+    Text = "SPACE = Naik"
+})
+
+FlyTab:CreateLabel({
+    Text = "LSHIFT = Turun"
 })
 
 -- ===== TAB 4: INFO =====
-local InfoTab = Window:AddTab({
+local InfoTab = Window:CreateTab({
     Name = "Info",
-    Icon = "rbxasset://textures/Cursor.png"
+    Icon = "ℹ️"
 })
 
-InfoTab:AddLabel({
-    Title = "xkid_hub Script",
-    Text = "Version: 1.0\nUI Library: Vape"
+InfoTab:CreateLabel({
+    Text = "xkid_hub Script"
 })
 
-InfoTab:AddLabel({
-    Title = "Features",
-    Text = "✓ Anti AFK - Cegah AFK kick\n✓ Fly - Terbang dengan kontrol penuh\n✓ Speed Control - Atur kecepatan terbang"
+InfoTab:CreateLabel({
+    Text = "Version: 1.0"
 })
 
-InfoTab:AddButton({
-    Title = "GitHub Repository",
+InfoTab:CreateLabel({
+    Text = "UI Library: MacLib"
+})
+
+InfoTab:CreateLabel({
+    Text = ""
+})
+
+InfoTab:CreateLabel({
+    Text = "Features:"
+})
+
+InfoTab:CreateLabel({
+    Text = "• Anti AFK"
+})
+
+InfoTab:CreateLabel({
+    Text = "• Fly dengan kontrol penuh"
+})
+
+InfoTab:CreateLabel({
+    Text = "• Speed control slider"
+})
+
+InfoTab:CreateLabel({
+    Text = "• MacOS style interface"
+})
+
+InfoTab:CreateButton({
+    Name = "Copy GitHub Link",
     Callback = function()
         setclipboard("https://github.com/dikineal/Xkid-hub")
         print("GitHub link copied!")
     end
 })
 
-print("xkid_hub Script (Vape) loaded successfully!")
-print("Press RIGHT CONTROL to toggle UI")
+print("xkid_hub Script (MacLib) loaded successfully!")
+print("Enjoy your script!")
