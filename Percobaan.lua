@@ -1,40 +1,52 @@
--- MINIMAL TEST: Load Library Dulu
-local success, lib = pcall(function()
-    -- URL 1 (Paling Stabil 2026)
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/sol"))()
-end)
+local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Orion/main/source'))()
 
-if not success then
-    -- URL 2 Backup
-    success, lib = pcall(function()
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/z4gs/scripts/master/solarisUI.lua"))()
-    end)
-end
-
-if not success then
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Error"; Text = "Solaris Lib Gagal Load! Coba Update Executor."; Duration = 5
-    })
-    return -- Stop script
-end
-
-print("Solaris Loaded! 🔥") -- Kalau ini muncul di console = SUCCESS
-
--- Buat Window (Sama kayak template sebelumnya)
-local win = lib:New({
-    Name = "My Hub v2 - FIXED", 
-    FolderToSave = "MyHubSave"
+local Window = OrionLib:MakeWindow({
+    Name = "Orion Hub v2026",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "OrionTest"
 })
 
-local tab = win:Tab("Test Tab")
-local sec = tab:Section("Test Section")
+local Tab = Window:MakeTab({
+    Name = "Main",
+    PremiumOnly = false
+})
 
-sec:Button("Test Button", function()
-    lib:Notification("WOW!", "Berhasil Execute! 🎉")
-end)
+local Section = Tab:AddSection({
+    Name = "Test Features"
+})
 
-sec:Toggle("Test Toggle", false, function(state)
-    print("Toggle:", state)
-end)
+Tab:AddButton({
+    Name = "Test Button",
+    Callback = function()
+        OrionLib:MakeNotification({
+            Name = "Success!",
+            Content = "Orion Jalan Bro! 🔥",
+            Image = "rbxassetid://4483345998",
+            Time = 5
+        })
+    end
+})
 
--- Auto save config pas close (built-in)
+Tab:AddToggle({
+    Name = "Auto Farm",
+    Default = false,
+    Callback = function(Value)
+        print("Auto Farm:", Value)
+        -- Logic kamu di sini
+    end
+})
+
+Tab:AddSlider({
+    Name = "Speed",
+    Min = 0,
+    Max = 100,
+    Default = 50,
+    Color = Color3.fromRGB(255,0,0),
+    Increment = 1,
+    Callback = function(Value)
+        print("Speed:", Value)
+    end
+})
+
+OrionLib:Init()  -- Auto save & ready
