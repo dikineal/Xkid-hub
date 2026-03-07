@@ -4,86 +4,83 @@ local Fluent = loadstring(game:HttpGet("https://github.com/ActualMasterOogway/Fl
 local Window = Fluent:CreateWindow({
     Title = "DIKI PROJECT",
     SubTitle = "by Diki",
-    TabWidth = 130,
-    Size = UDim2.fromOffset(480, 360),
+    TabWidth = 120,
+    Size = UDim2.fromOffset(420, 320),
     Acrylic = true,
     Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
 -- PINK THEME
 Fluent:SetTheme({
     Accent = Color3.fromRGB(255,105,180),
     Background = Color3.fromRGB(25,25,25),
-    Text = Color3.fromRGB(255,255,255),
+    Text = Color3.fromRGB(255,255,255)
 })
 
 -- TAB
 local Tabs = {
-    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
-    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+    Main = Window:AddTab({ Title = "Main", Icon = "home" })
 }
 
--- AUTO JUMP
-local Toggle = Tabs.Main:AddToggle("AutoJump", {
-    Title = "Auto Jump",
-    Default = false
-})
-
-Toggle:OnChanged(function()
-    _G.AutoJump = Fluent.Options.AutoJump.Value
-
-    task.spawn(function()
-        while _G.AutoJump do
-            local char = game.Players.LocalPlayer.Character
-            if char and char:FindFirstChildOfClass("Humanoid") then
-                char.Humanoid.Jump = true
-            end
-            task.wait(0.1)
-        end
-    end)
-end)
-
--- SPEED
-Tabs.Main:AddSlider("WalkSpeed", {
-    Title = "Speed Hack",
-    Default = 16,
-    Min = 16,
-    Max = 200,
-    Callback = function(Value)
-        local char = game.Players.LocalPlayer.Character
-        if char then
-            char.Humanoid.WalkSpeed = Value
-        end
-    end
-})
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
 -- ANTI AFK
 Tabs.Main:AddButton({
     Title = "Anti AFK",
+    Description = "Mencegah kick idle",
+
     Callback = function()
         local vu = game:GetService("VirtualUser")
-        game.Players.LocalPlayer.Idled:Connect(function()
+
+        LocalPlayer.Idled:Connect(function()
             vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
             task.wait(1)
             vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
         end)
+
+        Fluent:Notify({
+            Title = "Anti AFK",
+            Content = "Anti AFK berhasil aktif",
+            Duration = 4
+        })
     end
 })
 
--- MINIMIZE BUTTON DI BAGIAN BAWAH
-Tabs.Settings:AddButton({
-    Title = "Minimize UI",
-    Description = "Sembunyikan UI",
-
-    Callback = function()
-        Fluent:Minimize()
-    end
+-- AUTO FLY
+local Fly = Tabs.Main:AddToggle("Fly", {
+    Title = "Auto Fly",
+    Default = false
 })
+
+Fly:OnChanged(function()
+    local flying = Fluent.Options.Fly.Value
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+
+    if flying then
+        
+        local BV = Instance.new("BodyVelocity")
+        BV.MaxForce = Vector3.new(100000,100000,100000)
+        BV.Velocity = Vector3.new(0,50,0)
+        BV.Parent = hrp
+
+        _G.FlyBV = BV
+
+    else
+        
+        if _G.FlyBV then
+            _G.FlyBV:Destroy()
+        end
+        
+    end
+end)
 
 -- NOTIFY
 Fluent:Notify({
-    Title = "Success",
-    Content = "DIKI PROJECT Loaded",
+    Title = "DIKI PROJECT",
+    Content = "Script Loaded",
     Duration = 5
 })
 
