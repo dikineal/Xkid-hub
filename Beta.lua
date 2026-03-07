@@ -1,11 +1,11 @@
--- 🌾 SAWAH INDO v5.1 — XKID HUB
--- github.com/dikineal/Xkid-hub
+-- 🌾 SAWAH INDO v5.2 — XKID HUB
 -- Support: Android + Delta Executor
+-- Fix: Simpan posisi lahan manual by koordinat
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "🌾 SAWAH INDO v5.1 💸",
+    Name = "🌾 SAWAH INDO v5.2 💸",
     LoadingTitle = "XKID HUB",
     LoadingSubtitle = "auto cuan, no cap 🔥",
     ConfigurationSaving = {Enabled = false},
@@ -21,8 +21,8 @@ _G.AutoBeli = false
 _G.AutoTanam = false
 _G.AutoJual = false
 
-local lahanOwnerAttr = nil
-local lahanNamaObj = nil
+local savedLahanPos = nil
+local lahanRadius = 50
 
 local function notif(judul, isi, dur)
     pcall(function()
@@ -54,6 +54,14 @@ local function tp(obj)
     return true
 end
 
+local function tpCoord(x, y, z)
+    local root = getRoot()
+    if not root then return false end
+    root.CFrame = CFrame.new(x, y + 4, z)
+    task.wait(0.5)
+    return true
+end
+
 local function cari(nama)
     for _, v in pairs(workspace:GetDescendants()) do
         if v.Name:lower() == nama:lower() then return v end
@@ -61,45 +69,16 @@ local function cari(nama)
     return nil
 end
 
-local function scanLahan()
-    local keywords = {"tanah","lahan","plot","farm","sawah"}
-    local attrList = {"Owner","owner","PlayerName","Username","username","Player","OwnedBy"}
-    for _, v in pairs(workspace:GetDescendants()) do
-        local namaLower = v.Name:lower()
-        local isLahan = false
-        for i = 1, #keywords do
-            if namaLower:find(keywords[i]) then isLahan = true; break end
-        end
-        if isLahan and (v:IsA("BasePart") or v:IsA("Model")) then
-            for i = 1, #attrList do
-                local val = v:GetAttribute(attrList[i])
-                if val and tostring(val):lower() == myName:lower() then
-                    lahanOwnerAttr = attrList[i]
-                    lahanNamaObj = v.Name
-                    return true
-                end
-            end
-            if v.Name:lower():find(myName:lower()) then
-                lahanNamaObj = v.Name
-                return true
-            end
-        end
-    end
-    return false
-end
-
 local function getAllLahan()
     local lahans = {}
-    if lahanNamaObj then
+    if savedLahanPos then
         for _, v in pairs(workspace:GetDescendants()) do
-            if v.Name == lahanNamaObj and (v:IsA("BasePart") or v:IsA("Model")) then
-                if lahanOwnerAttr then
-                    local val = v:GetAttribute(lahanOwnerAttr)
-                    if val and tostring(val):lower() == myName:lower() then
+            if v:IsA("BasePart") then
+                local n = v.Name:lower()
+                if n:find("tanah") or n:find("lahan") or n:find("plot") or n:find("sawah") then
+                    if (v.Position - savedLahanPos).Magnitude <= lahanRadius then
                         lahans[#lahans+1] = v
                     end
-                else
-                    lahans[#lahans+1] = v
                 end
             end
         end
@@ -255,15 +234,11 @@ local BIBIT = {
     {name="Durian",     emoji="🟢", minLv=120, harga=2000},
 }
 
--- TABS
 local TabBibit = Window:CreateTab("🛒 Beli Bibit", nil)
 local TabFarm  = Window:CreateTab("🤖 Auto Farm",  nil)
 local TabTP    = Window:CreateTab("📍 Teleport",   nil)
-local TabScan  = Window:CreateTab("🔍 Scan",       nil)
+local TabLahan = Window:CreateTab("🌾 Lahan",      nil)
 local TabTools = Window:CreateTab("🛠 Tools",      nil)
-
--- ==================== BAGIAN 2 ====================
--- Sambung di bawah Bagian 1
 
 -- TAB BELI BIBIT
 TabBibit:CreateSection("🌱 Pilih Bibit")
@@ -309,13 +284,12 @@ for _, b in ipairs(BIBIT) do
         Callback = function()
             task.spawn(function()
                 selectedBibit = b.name
-                notif("Beli", "Gas "..jumlahBeli.."x "..b.name.."!", 2)
                 autoBeliBibit()
             end)
         end
     })
 end
-TabBibit:CreateSection("🔁 Auto Beli Loop")
+TabBibit:CreateSection("🔁 Auto Beli")
 local autoBibitDelay = 3
 TabBibit:CreateSlider({
     Name = "⏱ Delay Auto Beli (detik)",
@@ -330,10 +304,7 @@ TabBibit:CreateToggle({
         if v then
             notif("Auto Beli ON", "Loop beli "..selectedBibit.."~", 3)
             task.spawn(function()
-                while _G.AutoBeli do
-                    autoBeliBibit()
-                    task.wait(autoBibitDelay)
-                end
+                while _G.AutoBeli do autoBeliBibit(); task.wait(autoBibitDelay) end
             end)
         else notif("Auto Beli", "Off", 2) end
     end
@@ -348,7 +319,7 @@ local dPanen = 10
 TabFarm:CreateSlider({Name="⏱ Delay Beli",   Range={1,6},  Increment=0.5, CurrentValue=1.2, Callback=function(v) dBeli=v  end})
 TabFarm:CreateSlider({Name="⏱ Delay Tanam",  Range={1,5},  Increment=0.5, CurrentValue=1.5, Callback=function(v) dTanam=v end})
 TabFarm:CreateSlider({Name="⏱ Delay Jual",   Range={1,6},  Increment=0.5, CurrentValue=2,   Callback=function(v) dJual=v  end})
-TabFarm:CreateSlider({Name="⏳ Tunggu Panen", Range={3,60}, Increment=1,   CurrentValue=10,  Callback=function(v) dPanen=v end})
+TabFarm:CreateSlider({Name="⏳ Tunggu Panen", Range={3,120},Increment=1,   CurrentValue=10,  Callback=function(v) dPanen=v end})
 TabFarm:CreateSection("🤖 Auto Farm Full")
 TabFarm:CreateToggle({
     Name = "🌾 AUTO FARM — Beli > Tanam > Panen > Jual",
@@ -356,6 +327,11 @@ TabFarm:CreateToggle({
     Callback = function(v)
         _G.AutoFarm = v
         if v then
+            if not savedLahanPos then
+                notif("Simpan Lahan Dulu!", "Ke tab Lahan > Simpan Posisi Lahan!", 5)
+                _G.AutoFarm = false
+                return
+            end
             notif("AUTO FARM ON", "Gas brooo! Cuan incoming 💸", 4)
             task.spawn(function()
                 local siklus = 0
@@ -367,7 +343,7 @@ TabFarm:CreateToggle({
                     task.wait(0.5)
                     local lahans = getAllLahan()
                     local ok2 = 0
-                    for i, lahan in ipairs(lahans) do
+                    for _, lahan in ipairs(lahans) do
                         if not _G.AutoFarm then break end
                         if interakLahan(lahan, dTanam) then ok2 = ok2 + 1 end
                         task.wait(0.2)
@@ -396,8 +372,7 @@ TabFarm:CreateToggle({
         if v then
             task.spawn(function()
                 while _G.AutoTanam do
-                    local lahans = getAllLahan()
-                    for _, lahan in ipairs(lahans) do
+                    for _, lahan in ipairs(getAllLahan()) do
                         if not _G.AutoTanam then break end
                         interakLahan(lahan, dTanam)
                     end
@@ -433,11 +408,11 @@ TabFarm:CreateButton({
 -- TAB TELEPORT
 TabTP:CreateSection("NPC")
 local npcList = {
-    {icon="🛒", name="npcbibit",         label="Beli Bibit"},
-    {icon="💰", name="npcpenjual",        label="Jual Hasil"},
-    {icon="🔧", name="npcalat",           label="Beli Alat"},
-    {icon="🥚", name="NPCPedagangTelur",  label="Jual Telur"},
-    {icon="🌴", name="NPCPedagangSawit",  label="Jual Sawit"},
+    {icon="🛒", name="npcbibit",        label="Beli Bibit"},
+    {icon="💰", name="npcpenjual",       label="Jual Hasil"},
+    {icon="🔧", name="npcalat",          label="Beli Alat"},
+    {icon="🥚", name="NPCPedagangTelur", label="Jual Telur"},
+    {icon="🌴", name="NPCPedagangSawit", label="Jual Sawit"},
 }
 for _, npc in ipairs(npcList) do
     TabTP:CreateButton({
@@ -453,52 +428,99 @@ TabTP:CreateSection("Lahan")
 TabTP:CreateButton({
     Name = "🌾 Teleport ke Lahan Kamu",
     Callback = function()
-        local lahans = getAllLahan()
-        if #lahans > 0 then tp(lahans[1]); notif("Teleport", "Di lahan kamu!", 2)
-        else notif("Error", "Scan lahan dulu!", 3) end
+        if savedLahanPos then
+            tpCoord(savedLahanPos.X, savedLahanPos.Y, savedLahanPos.Z)
+            notif("Teleport", "Di lahan kamu!", 2)
+        else
+            notif("Error", "Simpan posisi lahan dulu!", 3)
+        end
     end
 })
 
--- TAB SCAN
-TabScan:CreateSection("Scan Lahan Milik Kamu")
-TabScan:CreateLabel("Berdiri di LAHAN KAMU dulu sebelum scan!")
-TabScan:CreateButton({
-    Name = "🔍 SCAN LAHAN SEKARANG",
+-- TAB LAHAN
+TabLahan:CreateSection("💾 Simpan Posisi Lahan Kamu")
+TabLahan:CreateLabel("Berdiri di tengah LAHAN KAMU lalu tekan Simpan!")
+TabLahan:CreateButton({
+    Name = "💾 SIMPAN POSISI LAHAN SEKARANG",
     Callback = function()
-        notif("Scanning...", "Nyari lahan milik "..myName.."...", 3)
-        task.spawn(function()
-            local found = scanLahan()
-            if found then
-                notif("Ketemu!", "Lahan: "..(lahanNamaObj or "?").." siap! Auto Farm hanya ke lahan kamu 🎉", 6)
-            else
-                notif("Belum Ketemu", "Jalan ke lahan kamu dulu lalu scan lagi!", 6)
+        local root = getRoot()
+        if root then
+            savedLahanPos = root.Position
+            local p = savedLahanPos
+            notif("Tersimpan!", ("X=%.1f Y=%.1f Z=%.1f"):format(p.X, p.Y, p.Z), 5)
+            task.wait(0.5)
+            local n = #getAllLahan()
+            notif("Lahan Ketemu", n.." lahan di radius "..lahanRadius.." stud", 4)
+        else
+            notif("Error", "Karakter belum ready!", 3)
+        end
+    end
+})
+TabLahan:CreateButton({
+    Name = "📋 Lihat Posisi & Jumlah Lahan",
+    Callback = function()
+        if savedLahanPos then
+            local p = savedLahanPos
+            local n = #getAllLahan()
+            notif("Posisi Lahan", ("X=%.1f Y=%.1f Z=%.1f | %d lahan"):format(p.X, p.Y, p.Z, n), 5)
+        else
+            notif("Belum Simpan", "Berdiri di lahan lalu tekan Simpan!", 4)
+        end
+    end
+})
+TabLahan:CreateSlider({
+    Name = "📏 Radius Pencarian Lahan (stud)",
+    Range = {10, 200}, Increment = 10, CurrentValue = 50,
+    Callback = function(v) lahanRadius = v end
+})
+TabLahan:CreateButton({
+    Name = "🔄 Reset Posisi Lahan",
+    Callback = function()
+        savedLahanPos = nil
+        notif("Reset", "Posisi lahan dihapus", 2)
+    end
+})
+TabLahan:CreateSection("🔍 Debug")
+TabLahan:CreateButton({
+    Name = "🔍 Scan Object Sekitar (radius 30)",
+    Callback = function()
+        local root = getRoot()
+        if not root then return end
+        local found = {}
+        for _, v in pairs(workspace:GetDescendants()) do
+            local pos
+            if v:IsA("BasePart") then pos = v.Position
+            elseif v:IsA("Model") and v.PrimaryPart then pos = v.PrimaryPart.Position end
+            if pos and (pos - root.Position).Magnitude < 30 and not found[v.Name] then
+                found[v.Name] = true
+                print("OBJ: "..v.Name.." | "..v.ClassName)
+                for a, b in pairs(v:GetAttributes()) do
+                    print("  ATTR: "..a.."="..tostring(b))
+                end
             end
-        end)
+        end
+        notif("Scan", "Selesai! Cek console Delta", 4)
     end
 })
-TabScan:CreateButton({
-    Name = "📋 Lihat Hasil Scan",
+TabLahan:CreateButton({
+    Name = "🔍 Scan PP Sekitar (radius 20)",
     Callback = function()
-        notif("Hasil Scan", "Lahan: "..(lahanNamaObj or "belum scan").." | Attr: "..(lahanOwnerAttr or "-"), 6)
-    end
-})
-TabScan:CreateButton({
-    Name = "🌾 Hitung Lahan Kamu",
-    Callback = function()
-        notif("Lahan", #getAllLahan().." lahan ditemukan", 4)
-    end
-})
-TabScan:CreateButton({
-    Name = "🔍 Scan ProximityPrompt",
-    Callback = function()
+        local root = getRoot()
+        if not root then return end
         local n = 0
         for _, v in pairs(workspace:GetDescendants()) do
             if v:IsA("ProximityPrompt") then
-                n = n + 1
-                print("PP: ["..v.ActionText.."] "..v:GetFullName())
+                local par = v.Parent
+                if par and par:IsA("BasePart") then
+                    local d = (par.Position - root.Position).Magnitude
+                    if d < 20 then
+                        n = n + 1
+                        print("PP: ["..v.ActionText.."] dist="..math.floor(d).." path="..v:GetFullName())
+                    end
+                end
             end
         end
-        notif("Scan PP", n.." ProximityPrompt ketemu!", 4)
+        notif("Scan PP", n.." PP ketemu dalam 20 stud", 4)
     end
 })
 
@@ -526,7 +548,7 @@ TabTools:CreateButton({
     Callback = function()
         task.spawn(function()
             local r = bukaToko("npcbibit", 1.5)
-            notif(r and "Toko Terbuka!" or "Gagal", r and "Berhasil buka toko!" or "PP kagak ketemu", 4)
+            notif(r and "Toko Terbuka!" or "Gagal", r and "Berhasil!" or "PP kagak ketemu", 4)
         end)
     end
 })
@@ -540,5 +562,5 @@ TabTools:CreateButton({
     end
 })
 
-print("SAWAH INDO v5.1 | User: "..myName)
-notif("SAWAH INDO v5.1", "Halo "..myName.."! Scan lahan dulu di tab Scan ya!", 5)
+print("SAWAH INDO v5.2 | "..myName)
+notif("SAWAH INDO v5.2", "Halo "..myName.."! Ke tab Lahan > Simpan Posisi dulu!", 6)
