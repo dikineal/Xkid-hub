@@ -1,55 +1,112 @@
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+-- Load Library
+local WindUI = loadstring(game:HttpGet("https://tree-hub.vercel.app/api/library/windui"))()
 
--- Membuat Jendela Utama (Window)
-local Window = OrionLib:MakeWindow({
-    Name = "My Roblox Script", 
-    HidePremium = false, 
-    SaveConfig = true, 
-    ConfigFolder = "OrionTest"
+-- Services
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+
+-- Window
+local Window = WindUI:CreateWindow({
+    Title = "Diki Project",
+    Author = "by Diki",
+    Folder = "DikiConfig",
+    Size = UDim2.fromOffset(580,460),
+    Transparent = true,
+    Theme = "Dark",
+    AccentColor = Color3.fromRGB(0,102,255)
 })
 
--- Membuat Tab Baru
-local MainTab = Window:MakeTab({
-    Name = "Main Features",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
+-- Tab
+local MainTab = Window:Tab({
+    Name = "Main",
+    Icon = "house"
 })
 
--- Menambahkan Section
-local Section = MainTab:AddSection({
-    Name = "Karakter"
+-- Section
+MainTab:Section({
+    Name = "Karakter Control",
+    TextSize = 18
 })
 
--- Membuat Button (Tombol)
-MainTab:AddButton({
-    Name = "Print Hello!",
+-- Button
+MainTab:Button({
+    Title = "Print Status",
+    Desc = "Klik untuk cek status",
     Callback = function()
-        print("Halo dari Orion UI!")
-    end    
+        print("WindUI Berhasil di Execute!")
+        WindUI:Notify({
+            Title = "Success",
+            Content = "Script berjalan dengan lancar!",
+            Duration = 3
+        })
+    end
 })
 
--- Membuat Slider (Misal untuk WalkSpeed)
-MainTab:AddSlider({
-    Name = "Speed",
+-- Infinite Jump
+local InfJump = false
+
+MainTab:Toggle({
+    Title = "Infinite Jump",
+    Desc = "Lompat tanpa batas",
+    Value = false,
+    Callback = function(state)
+        InfJump = state
+    end
+})
+
+UIS.JumpRequest:Connect(function()
+    if InfJump then
+        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- WalkSpeed
+MainTab:Slider({
+    Title = "WalkSpeed",
+    Desc = "Atur kecepatan lari",
     Min = 16,
-    Max = 500,
-    Default = 16,
-    Color = Color3.fromRGB(255,255,255),
-    Increment = 1,
-    ValueName = "Speed",
-    Callback = function(Value)
-        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
-    end    
+    Max = 200,
+    Step = 1,
+    Value = 16,
+    Callback = function(v)
+        Humanoid.WalkSpeed = v
+    end
 })
 
--- Membuat Toggle (Tombol On/Off)
-MainTab:AddToggle({
-    Name = "Auto Jump",
-    Default = false,
-    Callback = function(Value)
-        print("Auto Jump status:", Value)
-    end    
+-- Jump Power
+MainTab:Input({
+    Title = "Jump Power",
+    Placeholder = "Masukkan angka...",
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then
+            Humanoid.JumpPower = num
+        end
+    end
 })
 
--- Menjalankan Library
-OrionLib:Init()
+-- Teleport Dropdown
+MainTab:Dropdown({
+    Title = "Pilih Lokasi TP",
+    Multi = false,
+    Options = {"Lobby","Farm Zone","Shop"},
+    Callback = function(v)
+
+        local root = Character:WaitForChild("HumanoidRootPart")
+
+        if v == "Lobby" then
+            root.CFrame = CFrame.new(0,5,0)
+
+        elseif v == "Farm Zone" then
+            root.CFrame = CFrame.new(100,5,100)
+
+        elseif v == "Shop" then
+            root.CFrame = CFrame.new(-50,5,200)
+        end
+
+    end
+})
