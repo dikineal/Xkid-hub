@@ -1,5 +1,5 @@
 --====================================================
--- XKID HUB | SAWAH INDO
+-- XKID HUB | SAWAH INDO PRO+
 --====================================================
 
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -7,206 +7,229 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 local Window = Rayfield:CreateWindow({
     Name = "🌾 SAWAH INDO 💸",
     LoadingTitle = "XKID HUB",
-    LoadingSubtitle = "GABUT EDITION 🔥",
-    ConfigurationSaving = { Enabled = false },
+    LoadingSubtitle = "PRO+ EDITION",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "XKIDHub",
+        FileName = "SawahConfig"
+    },
     KeySystem = false
 })
 
-local MainTab = Window:CreateTab("🌾 Farming", 4483362458)
-
 --====================================================
--- SERVICES
+-- TABS
 --====================================================
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualUser = game:GetService("VirtualUser")
-
-local Player = Players.LocalPlayer
-
---====================================================
--- REMOTES
---====================================================
-
-local Remotes = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("TutorialRemotes")
-
-local PlantCrop = Remotes:WaitForChild("PlantCrop")
-local RequestShop = Remotes:WaitForChild("RequestShop")
-local RequestSell = Remotes:WaitForChild("RequestSell")
-local LightningStrike = Remotes:WaitForChild("LightningStrike")
+local FarmingTab    = Window:CreateTab("🌾 Farming", 4483362458)
+local ProtectTab    = Window:CreateTab("🛡 Protection", 4483362458)
+local TeleportTab   = Window:CreateTab("📍 Teleport", 4483362458)
+local UtilityTab    = Window:CreateTab("⚙ Utility", 4483362458)
+local ConfigTab     = Window:CreateTab("💾 Config", 4483362458)
 
 --====================================================
--- SETTINGS
+-- SETTINGS STATE
 --====================================================
 
 local Settings = {
     AutoFarm = false,
-    AutoSell = true,
-    AutoBuy = true,
+    AutoSell = false,
+    AutoBuy  = false,
     LightningProtection = true,
-    AntiAFK = true
+    AntiAFK  = true,
+    AutoShower = false,
 }
 
 local SeedName = "Bibit Padi"
-local BuyAmount = 10
-
-local FarmMin = Vector3.new(-125,39,-275)
-local FarmMax = Vector3.new(-95,39,-250)
-
-local GridStep = 2
-local PlantDelay = 0.18
-
-local NPCPosition = Vector3.new(-110,39,-260)
-
-local SafePositions = {
-    Vector3.new(-80,50,-200),
-    Vector3.new(-75,50,-205),
-    Vector3.new(-85,50,-195)
-}
-
-local DangerRadius = 40
+local FarmSpeed = 0.18
 
 --====================================================
--- UTIL
---====================================================
-
-local function GetCharacter()
-    return Player.Character or Player.CharacterAdded:Wait()
-end
-
-local function GetRoot()
-    return GetCharacter():WaitForChild("HumanoidRootPart")
-end
-
-local function Teleport(pos)
-    GetRoot().CFrame = CFrame.new(pos)
-end
-
-local function GetSafePosition()
-    return SafePositions[math.random(1,#SafePositions)]
-end
-
---====================================================
--- ANTI AFK
---====================================================
-
-if Settings.AntiAFK then
-    Player.Idled:Connect(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end)
-end
-
---====================================================
--- LIGHTNING PROTECTION
---====================================================
-
-LightningStrike.OnClientEvent:Connect(function(data)
-
-    if not Settings.LightningProtection then return end
-    if not data then return end
-    if not data.Position then return end
-
-    local playerPos = GetRoot().Position
-    local distance = (playerPos - data.Position).Magnitude
-
-    if distance <= DangerRadius then
-
-        Teleport(GetSafePosition())
-
-        task.wait(3)
-
-        Teleport(NPCPosition)
-
-    end
-
-end)
-
---====================================================
--- FUNCTIONS
+-- PLACEHOLDER FUNCTIONS (ISI SESUAI GAME-MU)
 --====================================================
 
 local function BuySeeds()
-
-    if not Settings.AutoBuy then return end
-
-    RequestShop:InvokeServer(
-        "BUY",
-        SeedName,
-        BuyAmount
-    )
-
+    -- TODO: isi logika beli bibit
 end
 
 local function SellCrops()
-
-    if not Settings.AutoSell then return end
-
-    local result = RequestSell:InvokeServer("GET_LIST")
-
-    if result and result.Items then
-
-        for _,item in ipairs(result.Items) do
-
-            if item.Owned and item.Owned > 0 then
-
-                RequestSell:InvokeServer(
-                    "SELL",
-                    item.Name,
-                    item.Owned
-                )
-
-            end
-
-        end
-
-    end
-
+    -- TODO: isi logika jual hasil
 end
 
 local function ScanFarm()
+    -- TODO: scan area sawah
+end
 
-    for x = FarmMin.X, FarmMax.X, GridStep do
-        for z = FarmMin.Z, FarmMax.Z, GridStep do
+local function TeleportNPC()
+    -- TODO: teleport ke NPC
+end
 
-            if not Settings.AutoFarm then return end
+local function TeleportSafe()
+    -- TODO: teleport safe zone
+end
 
-            local pos = Vector3.new(x, FarmMin.Y, z)
-
-            PlantCrop:FireServer(pos)
-
-            task.wait(PlantDelay)
-
-        end
-    end
-
+local function TeleportFarm()
+    -- TODO: teleport ke tengah sawah
 end
 
 --====================================================
--- UI CONTROLS
+-- 🌾 FARMING TAB
 --====================================================
 
-MainTab:CreateToggle({
+FarmingTab:CreateToggle({
     Name = "Auto Farm",
     CurrentValue = false,
-    Callback = function(Value)
-        Settings.AutoFarm = Value
+    Callback = function(v)
+        Settings.AutoFarm = v
     end
 })
 
-MainTab:CreateToggle({
+FarmingTab:CreateToggle({
     Name = "Auto Sell",
-    CurrentValue = true,
-    Callback = function(Value)
-        Settings.AutoSell = Value
+    CurrentValue = false,
+    Callback = function(v)
+        Settings.AutoSell = v
     end
 })
 
-MainTab:CreateToggle({
+FarmingTab:CreateToggle({
+    Name = "Auto Buy",
+    CurrentValue = false,
+    Callback = function(v)
+        Settings.AutoBuy = v
+    end
+})
+
+FarmingTab:CreateDropdown({
+    Name = "Seed Selector",
+    Options = {"Bibit Padi","Bibit Jagung","Bibit Tomat","Bibit Terong"},
+    CurrentOption = "Bibit Padi",
+    Callback = function(v)
+        SeedName = v
+    end
+})
+
+FarmingTab:CreateSlider({
+    Name = "Farm Speed",
+    Range = {0.05,0.5},
+    Increment = 0.01,
+    CurrentValue = 0.18,
+    Callback = function(v)
+        FarmSpeed = v
+    end
+})
+
+FarmingTab:CreateButton({
+    Name = "Scan Farm Area",
+    Callback = function()
+        ScanFarm()
+    end
+})
+
+--====================================================
+-- 🛡 PROTECTION TAB
+--====================================================
+
+ProtectTab:CreateToggle({
     Name = "Lightning Protection",
     CurrentValue = true,
-    Callback = function(Value)
-        Settings.LightningProtection = Value
+    Callback = function(v)
+        Settings.LightningProtection = v
+    end
+})
+
+ProtectTab:CreateToggle({
+    Name = "Anti AFK",
+    CurrentValue = true,
+    Callback = function(v)
+        Settings.AntiAFK = v
+    end
+})
+
+ProtectTab:CreateToggle({
+    Name = "Auto Mandi",
+    CurrentValue = false,
+    Callback = function(v)
+        Settings.AutoShower = v
+    end
+})
+
+--====================================================
+-- 📍 TELEPORT TAB
+--====================================================
+
+TeleportTab:CreateButton({
+    Name = "NPC",
+    Callback = function()
+        TeleportNPC()
+    end
+})
+
+TeleportTab:CreateButton({
+    Name = "Safe Zone",
+    Callback = function()
+        TeleportSafe()
+    end
+})
+
+TeleportTab:CreateButton({
+    Name = "Farm Center",
+    Callback = function()
+        TeleportFarm()
+    end
+})
+
+--====================================================
+-- ⚙ UTILITY TAB
+--====================================================
+
+UtilityTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId)
+    end
+})
+
+UtilityTab:CreateButton({
+    Name = "FPS Boost",
+    Callback = function()
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Material = Enum.Material.SmoothPlastic
+            end
+        end
+        game:GetService("Lighting").GlobalShadows = false
+    end
+})
+
+UtilityTab:CreateButton({
+    Name = "Lightning Detector",
+    Callback = function()
+        print("Lightning detector active (implement logic)")
+    end
+})
+
+--====================================================
+-- 💾 CONFIG TAB
+--====================================================
+
+ConfigTab:CreateButton({
+    Name = "Save Config",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Config",
+            Content = "Config disimpan otomatis oleh Rayfield",
+            Duration = 4
+        })
+    end
+})
+
+ConfigTab:CreateButton({
+    Name = "Load Config",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Config",
+            Content = "Config akan dimuat saat script dijalankan ulang",
+            Duration = 4
+        })
     end
 })
 
@@ -215,29 +238,17 @@ MainTab:CreateToggle({
 --====================================================
 
 task.spawn(function()
-
-    while true do
-
-        task.wait(1)
-
+    while task.wait(1) do
         if Settings.AutoFarm then
-
-            Teleport(NPCPosition)
-
-            task.wait(1)
-
-            BuySeeds()
-
-            task.wait(1)
+            if Settings.AutoBuy then
+                BuySeeds()
+            end
 
             ScanFarm()
 
-            task.wait(2)
-
-            SellCrops()
-
+            if Settings.AutoSell then
+                SellCrops()
+            end
         end
-
     end
-
 end)
