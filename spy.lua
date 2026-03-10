@@ -1021,3 +1021,4 @@ print("  🌾 SAWAH INDO v10.0 — XKID HUB")
 print("  Cobalt Spy Edition — All Remotes Confirmed")
 print("  Player: "..LocalPlayer.Name)
 print(string.rep("═",50))
+
