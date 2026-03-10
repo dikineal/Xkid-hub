@@ -1,13 +1,13 @@
 -- ╔══════════════════════════════════════════╗
--- ║   🌾 SAWAH INDO v8.0 ULTIMATE — XKID HUB ║
--- ║   Gabungan v6.0 + v7.0 Pro               ║
--- ║   Support: Android + Delta/Arceus/Fluxus  ║
+-- ║  🌾 SAWAH INDO v8.1 ULTIMATE — XKID HUB  ║
+-- ║  Fix: Auto Beli + Lahan Per-Jenis         ║
+-- ║  Support: Android + Delta/Arceus/Fluxus   ║
 -- ╚══════════════════════════════════════════╝
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "🌾 SAWAH INDO v8.0 ULTIMATE 💸",
+    Name = "🌾 SAWAH INDO v8.1 ULTIMATE 💸",
     LoadingTitle = "XKID HUB",
     LoadingSubtitle = "Ultimate Auto Farm 🔥",
     ConfigurationSaving = {Enabled = false},
@@ -17,11 +17,10 @@ local Window = Rayfield:CreateWindow({
 -- ============================================
 -- SERVICES
 -- ============================================
-local Players        = game:GetService("Players")
-local LocalPlayer    = Players.LocalPlayer
-local Workspace      = game:GetService("Workspace")
-local RS             = game:GetService("ReplicatedStorage")
-local RunService     = game:GetService("RunService")
+local Players     = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Workspace   = game:GetService("Workspace")
+local RS          = game:GetService("ReplicatedStorage")
 
 local myName = LocalPlayer.Name
 
@@ -34,36 +33,62 @@ _G.AutoBeli        = false
 _G.AutoTanam       = false
 _G.AutoJual        = false
 _G.AutoPanen       = false
-_G.AutoSell        = false  -- alias AutoJual (v7 compat)
-_G.AutoBuy         = false  -- alias AutoBeli (v7 compat)
 _G.ESP             = false
 _G.TeleportPanen   = false
 _G.DetectorSawit   = false
 
 -- ============================================
--- DATA
+-- DATA & CONFIG
 -- ============================================
 
--- Lahan (v6 system)
-local savedLahanPos  = nil
-local lahanRadius    = 50
-local cachedLahans   = {}
-local lastCacheTime  = 0
+-- ┌─────────────────────────────────────────┐
+-- │  SISTEM LAHAN PER-JENIS                  │
+-- │  Setiap jenis punya posisi & cache sendiri│
+-- └─────────────────────────────────────────┘
+local LahanData = {
+    Sawah = {
+        label    = "🌾 Sawah",
+        pos      = nil,
+        radius   = 50,
+        cache    = {},
+        cacheTime = 0,
+        keywords = {"sawah", "tanah", "lahan", "plot", "farm", "padi"},
+    },
+    Sawit = {
+        label    = "🌴 Sawit",
+        pos      = nil,
+        radius   = 50,
+        cache    = {},
+        cacheTime = 0,
+        keywords = {"sawit", "kelapa", "plot_sawit", "lahan_sawit"},
+    },
+    Ternak = {
+        label    = "🐄 Ternak",
+        pos      = nil,
+        radius   = 50,
+        cache    = {},
+        cacheTime = 0,
+        keywords = {"ternak", "kandang", "peternakan", "hewan"},
+    },
+}
 
--- Copy Positions — 3 titik (v7 system)
+-- Jenis lahan aktif untuk Auto Farm
+local ActiveFarmJenis = "Sawah"
+
+-- Copy Positions — 3 titik teleport
 local CopyPositions = {
     Sawah  = nil,
     Sawit  = nil,
-    Ternak = nil
+    Ternak = nil,
 }
 
--- Tanam positions (v7)
+-- Tanam manual positions
 local TanamPositions = {
     Sawit  = nil,
-    Durian = nil
+    Durian = nil,
 }
 
--- Bibit data (v6)
+-- Bibit data
 local BIBIT = {
     {name = "Padi",       emoji = "🌾", minLv = 1,   harga = 5},
     {name = "Jagung",     emoji = "🌽", minLv = 20,  harga = 15},
@@ -75,44 +100,42 @@ local BIBIT = {
 }
 
 -- Settings
-local selectedBibit  = "Padi"
-local jumlahBeli     = 1
-local autoBeliDelay  = 3
-local Cooldown       = 1
-local Jarak          = 3
-local ModeDepan      = true
+local selectedBibit = "Padi"
+local jumlahBeli    = 1
+local Cooldown      = 1
+local Jarak         = 3
+local ModeDepan     = true
 
--- Auto Farm delays (v6)
+-- Auto Farm delays
 local dBeli     = 2
 local dTanam    = 2
 local dPanen    = 3
 local dJual     = 2
 local waitPanen = 30
 
--- Counters
+-- Counter & Loop handles
 local SiklusCount = 0
+local BeliLoop    = nil
+local ESPObjects  = {}
 
--- ESP storage
-local ESPObjects = {}
-
--- Remote test inputs
+-- Remote test
 local testRemoteName = ""
 local testArg1       = ""
 
 -- ============================================
--- UTILITY FUNCTIONS
+-- UTILITY
 -- ============================================
 
 local function notif(judul, isi, dur)
     pcall(function()
         Rayfield:Notify({
-            Title   = judul,
-            Content = isi,
+            Title    = judul,
+            Content  = isi,
             Duration = dur or 3,
-            Image   = 4483362458
+            Image    = 4483362458
         })
     end)
-    print("[XKID] " .. judul .. " - " .. isi)
+    print("[XKID] " .. judul .. " — " .. isi)
 end
 
 local function getRoot()
@@ -121,13 +144,17 @@ local function getRoot()
     return char:FindFirstChild("HumanoidRootPart")
 end
 
-local function getHumanoid()
-    local char = LocalPlayer.Character
-    if not char then return nil end
-    return char:FindFirstChildOfClass("Humanoid")
+local function getPos()
+    local r = getRoot()
+    return r and r.Position or nil
 end
 
--- Unified tp — supports Vector3, CFrame, BasePart, Model (v7 upgraded)
+local function getCF()
+    local r = getRoot()
+    return r and r.CFrame or nil
+end
+
+-- Unified teleport: Vector3 / CFrame / BasePart / Model
 local function tp(obj)
     if not obj then return false end
     local root = getRoot()
@@ -166,19 +193,6 @@ local function tpCoord(x, y, z)
     return true
 end
 
-local function getPos()
-    local root = getRoot()
-    if root then return root.Position end
-    return nil
-end
-
-local function getCF()
-    local root = getRoot()
-    if root then return root.CFrame end
-    return nil
-end
-
--- Find object by exact name (v6)
 local function cari(nama)
     nama = nama:lower()
     for _, v in pairs(Workspace:GetDescendants()) do
@@ -187,77 +201,51 @@ local function cari(nama)
     return nil
 end
 
--- Find nearest object by keyword (v7)
-local function findNearestCrop(radius, nameFilter)
-    radius = radius or 50
+local function findNearest(radius, keyword)
     local root = getRoot()
     if not root then return nil end
-
-    local nearest, minDist = nil, radius
-
+    local nearest, minDist = nil, radius or 100
     for _, v in pairs(Workspace:GetDescendants()) do
         if v:IsA("Model") or v:IsA("BasePart") then
-            local n = v.Name:lower()
-            if not nameFilter or n:find(nameFilter:lower()) then
-                local pos = nil
-                if v:IsA("BasePart") then
-                    pos = v.Position
-                elseif v.PrimaryPart then
-                    pos = v.PrimaryPart.Position
-                elseif v:FindFirstChild("HumanoidRootPart") then
-                    pos = v.HumanoidRootPart.Position
-                end
-
+            if not keyword or v.Name:lower():find(keyword:lower()) then
+                local pos = v:IsA("BasePart") and v.Position
+                    or (v.PrimaryPart and v.PrimaryPart.Position)
+                    or nil
                 if pos then
-                    local dist = (pos - root.Position).Magnitude
-                    if dist < minDist then
-                        minDist = dist
-                        nearest = v
-                    end
+                    local d = (pos - root.Position).Magnitude
+                    if d < minDist then minDist = d; nearest = v end
                 end
             end
         end
     end
-
     return nearest
 end
 
 -- ============================================
--- PROXIMITY PROMPT SYSTEM (v6)
+-- PROXIMITY PROMPT
 -- ============================================
 
 local function getPPDekat(radius)
     radius = radius or 15
     local root = getRoot()
     if not root then return nil end
-
     local best, bestD = nil, radius
-
     for _, v in pairs(Workspace:GetDescendants()) do
         if v:IsA("ProximityPrompt") then
             local par = v.Parent
             if par and par:IsA("BasePart") then
                 local d = (par.Position - root.Position).Magnitude
-                if d < bestD then
-                    best = v
-                    bestD = d
-                end
+                if d < bestD then best = v; bestD = d end
             end
         end
     end
-
     return best
 end
 
 local function firePrompt(prompt)
     if not prompt then return end
-
-    pcall(function()
-        fireproximityprompt(prompt)
-    end)
-
+    pcall(function() fireproximityprompt(prompt) end)
     task.wait(0.1)
-
     pcall(function()
         local VIM = game:GetService("VirtualInputManager")
         VIM:SendKeyEvent(true,  Enum.KeyCode.E, false, game)
@@ -267,19 +255,15 @@ local function firePrompt(prompt)
 end
 
 -- ============================================
--- UI CLICK SYSTEM (v6)
+-- UI CLICK
 -- ============================================
 
 local function klikBeli(tombol)
     if not tombol then return false end
-
     pcall(function()
-        if tombol:IsA("GuiButton") then
-            tombol.MouseButton1Click:Fire()
-        end
+        if tombol:IsA("GuiButton") then tombol.MouseButton1Click:Fire() end
     end)
     task.wait(0.05)
-
     pcall(function()
         local VIM = game:GetService("VirtualInputManager")
         local pos = tombol.AbsolutePosition + (tombol.AbsoluteSize / 2)
@@ -287,53 +271,40 @@ local function klikBeli(tombol)
         task.wait(0.05)
         VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
     end)
-
     task.wait(0.1)
     return true
 end
 
 -- ============================================
--- NPC / TOKO SYSTEM (v6)
+-- NPC / TOKO
 -- ============================================
 
 local function bukaToko(npcName, delayTime)
     delayTime = delayTime or 1.5
-
     local npc = cari(npcName)
     if not npc then
         notif("NPC Error", npcName .. " tidak ditemukan!", 3)
         return false
     end
-
     tp(npc)
     task.wait(0.8)
-
     local prompt  = nil
     local searchIn = npc:IsA("Model") and npc or npc.Parent
-
     for _, v in pairs(searchIn:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then
-            prompt = v
-            break
-        end
+        if v:IsA("ProximityPrompt") then prompt = v; break end
     end
-
-    if not prompt then
-        prompt = getPPDekat(15)
-    end
-
+    if not prompt then prompt = getPPDekat(15) end
     if not prompt then
         notif("Prompt Error", "Tidak ada ProximityPrompt!", 3)
         return false
     end
-
     firePrompt(prompt)
     task.wait(delayTime)
     return true
 end
 
 -- ============================================
--- REMOTE SYSTEM (merged v6+v7)
+-- REMOTE SYSTEM
 -- ============================================
 
 local function getRemote(name)
@@ -348,38 +319,39 @@ end
 local function fireR(name, ...)
     local r = getRemote(name)
     if not r then return false, "Remote not found: " .. name end
-
     local ok, result = pcall(function(...)
-        if r:IsA("RemoteEvent") then
-            r:FireServer(...)
-            return "Fired"
-        else
-            return r:InvokeServer(...)
-        end
+        if r:IsA("RemoteEvent") then r:FireServer(...); return "Fired"
+        else return r:InvokeServer(...) end
     end, ...)
-
     return ok, result
 end
 
 -- ============================================
--- LAHAN CACHE SYSTEM (v6)
+-- LAHAN CACHE — PER JENIS
 -- ============================================
 
-local function cacheLahans()
+local function cacheLahan(jenis)
+    local data = LahanData[jenis]
+    if not data then return {} end
+
     local now = tick()
-    if now - lastCacheTime < 5 and #cachedLahans > 0 then
-        return cachedLahans
+    if now - data.cacheTime < 5 and #data.cache > 0 then
+        return data.cache
     end
 
-    cachedLahans = {}
+    data.cache = {}
 
-    if savedLahanPos then
+    if data.pos then
         for _, v in pairs(Workspace:GetDescendants()) do
             if v:IsA("BasePart") then
                 local n = v.Name:lower()
-                if n:find("tanah") or n:find("lahan") or n:find("plot") or n:find("sawah") or n:find("farm") then
-                    if (v.Position - savedLahanPos).Magnitude <= lahanRadius then
-                        table.insert(cachedLahans, v)
+                local match = false
+                for _, kw in ipairs(data.keywords) do
+                    if n:find(kw) then match = true; break end
+                end
+                if match then
+                    if (v.Position - data.pos).Magnitude <= data.radius then
+                        table.insert(data.cache, v)
                     end
                 end
             end
@@ -387,69 +359,108 @@ local function cacheLahans()
     end
 
     -- Fallback
-    if #cachedLahans == 0 then
+    if #data.cache == 0 and data.pos then
         for _, v in pairs(Workspace:GetDescendants()) do
-            if v.Name == "Tanah" and v:IsA("BasePart") then
-                table.insert(cachedLahans, v)
+            if v:IsA("BasePart") then
+                local n = v.Name:lower()
+                for _, kw in ipairs(data.keywords) do
+                    if n:find(kw) then
+                        table.insert(data.cache, v)
+                        break
+                    end
+                end
             end
         end
     end
 
-    lastCacheTime = now
-    return cachedLahans
+    data.cacheTime = now
+    return data.cache
 end
 
-local function getAllLahan()
-    return cacheLahans()
+local function getLahan(jenis)
+    return cacheLahan(jenis or ActiveFarmJenis)
+end
+
+local function simpanPosLahan(jenis)
+    local root = getRoot()
+    if not root then notif("Error", "Karakter belum ready!", 3); return false end
+
+    local data    = LahanData[jenis]
+    data.pos      = root.Position
+    data.cache    = {}
+    data.cacheTime = 0
+    cacheLahan(jenis)
+
+    local p = data.pos
+    notif(data.label .. " Tersimpan ✅",
+        string.format("X=%.1f Z=%.1f\n%d lahan ditemukan", p.X, p.Z, #data.cache), 4)
+    return true
 end
 
 -- ============================================
--- CORE FARM FUNCTIONS (v6 — proximity prompt)
+-- AUTO BELI BIBIT — SKEMA BARU (FIX)
 -- ============================================
 
-local function autoBeliBibit()
-    if not bukaToko("npcbibit", 1.5) then return false end
+local function autoBeliBibit(bibit, jumlah)
+    bibit  = bibit  or selectedBibit
+    jumlah = jumlah or jumlahBeli
 
-    if jumlahBeli > 1 then
-        local gui = LocalPlayer:WaitForChild("PlayerGui", 5)
-        if gui then
-            for _, v in pairs(gui:GetDescendants()) do
-                if v:IsA("TextButton") and v.Text == "+" and v.Visible then
-                    for i = 1, jumlahBeli - 1 do
-                        klikBeli(v)
-                        task.wait(0.05)
-                    end
-                    break
+    -- 1. Teleport ke NPC bibit
+    local npc = cari("npcbibit")
+    if npc then
+        tp(npc)
+        task.wait(0.8)
+    else
+        notif("NPC Error ❌", "npcbibit tidak ditemukan!", 3)
+        return false
+    end
+
+    -- 2. Buka toko (fire prompt)
+    local prompt   = nil
+    local searchIn = npc:IsA("Model") and npc or npc.Parent
+    for _, v in pairs(searchIn:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then prompt = v; break end
+    end
+    if not prompt then prompt = getPPDekat(15) end
+    if prompt then firePrompt(prompt); task.wait(1.5) end
+
+    -- 3. Atur jumlah (tombol +)
+    local gui = LocalPlayer:WaitForChild("PlayerGui", 5)
+    if gui and jumlah > 1 then
+        for _, v in pairs(gui:GetDescendants()) do
+            if v:IsA("TextButton") and v.Text == "+" and v.Visible then
+                for i = 1, jumlah - 1 do
+                    klikBeli(v); task.wait(0.05)
                 end
+                break
             end
         end
         task.wait(0.2)
     end
 
-    local gui      = LocalPlayer:WaitForChild("PlayerGui", 5)
+    -- 4. Klik Beli
     local berhasil = false
-
+    gui = LocalPlayer:WaitForChild("PlayerGui", 5)
     if gui then
         for _, v in pairs(gui:GetDescendants()) do
             if v:IsA("TextButton") and v.Visible then
                 local t = v.Text:lower()
                 if t:find("beli") or t:find("buy") then
-                    klikBeli(v)
-                    berhasil = true
-                    break
+                    klikBeli(v); berhasil = true; break
                 end
             end
         end
     end
 
+    -- 5. Tutup toko
     task.wait(0.3)
+    gui = LocalPlayer:WaitForChild("PlayerGui", 5)
     if gui then
         for _, v in pairs(gui:GetDescendants()) do
             if v:IsA("TextButton") and v.Visible then
                 local t = v.Text:lower()
                 if t:find("tutup") or t:find("close") then
-                    klikBeli(v)
-                    break
+                    klikBeli(v); break
                 end
             end
         end
@@ -458,63 +469,63 @@ local function autoBeliBibit()
     return berhasil
 end
 
+-- ============================================
+-- AUTO JUAL
+-- ============================================
+
 local function autoJual()
     if not bukaToko("npcpenjual", 1.5) then return false end
 
     local gui = LocalPlayer:WaitForChild("PlayerGui", 5)
     task.wait(0.3)
-
     if gui then
         for _, v in pairs(gui:GetDescendants()) do
             if v:IsA("TextButton") and v.Visible then
                 local t = v.Text:lower()
                 if (t:find("jual") or t:find("sell")) and not t:find("tutup") then
-                    klikBeli(v)
-                    task.wait(0.2)
+                    klikBeli(v); task.wait(0.2)
                 end
             end
         end
     end
 
     task.wait(0.3)
+    gui = LocalPlayer:WaitForChild("PlayerGui", 5)
     if gui then
         for _, v in pairs(gui:GetDescendants()) do
             if v:IsA("TextButton") and v.Visible then
                 local t = v.Text:lower()
-                if t:find("tutup") or t:find("close") then
-                    klikBeli(v)
-                    break
-                end
+                if t:find("tutup") or t:find("close") then klikBeli(v); break end
             end
         end
     end
-
     return true
 end
 
-local function autoPanen()
-    local lahans   = getAllLahan()
+-- ============================================
+-- AUTO PANEN — pakai lahan per-jenis
+-- ============================================
+
+local function autoPanen(jenis)
+    local lahans    = getLahan(jenis)
     local harvested = 0
 
     for _, lahan in ipairs(lahans) do
         if not _G.AutoPanen and not _G.AutoFarm then break end
-
         pcall(function()
             tp(lahan)
             task.wait(0.5)
-
             local prompt = getPPDekat(10)
-            if prompt then
-                firePrompt(prompt)
-                harvested = harvested + 1
-            end
+            if prompt then firePrompt(prompt); harvested = harvested + 1 end
         end)
-
         task.wait(0.3)
     end
-
     return harvested
 end
+
+-- ============================================
+-- INTERAK LAHAN (tanam via UI)
+-- ============================================
 
 local function interakLahan(lahanObj, delayTime)
     delayTime = delayTime or 1.5
@@ -523,12 +534,8 @@ local function interakLahan(lahanObj, delayTime)
     local success = pcall(function()
         tp(lahanObj)
         task.wait(delayTime)
-
         local prompt = getPPDekat(10)
-        if prompt then
-            firePrompt(prompt)
-        end
-
+        if prompt then firePrompt(prompt) end
         task.wait(0.3)
 
         local gui = LocalPlayer:WaitForChild("PlayerGui", 3)
@@ -537,47 +544,86 @@ local function interakLahan(lahanObj, delayTime)
                 if v:IsA("TextButton") and v.Visible then
                     local t = v.Text:lower()
                     if t:find("tanam") or t:find("plant") then
-                        klikBeli(v)
-                        break
+                        klikBeli(v); break
                     end
                 end
             end
         end
     end)
-
     return success
 end
 
 -- ============================================
--- ESP SYSTEM (v7)
+-- TELEPORT PANEN 3 TITIK
+-- ============================================
+
+local function teleportPanenLoop()
+    local points = {CopyPositions.Sawah, CopyPositions.Sawit, CopyPositions.Ternak}
+    local index  = 1
+
+    while _G.TeleportPanen do
+        local point = points[index]
+        if point then
+            tp(point); task.wait(0.5)
+            local prompt = getPPDekat(10)
+            if prompt then firePrompt(prompt) end
+            fireR("HarvestCrop")
+            task.wait(Cooldown)
+        end
+        index = index + 1
+        if index > 3 then index = 1 end
+        if not _G.TeleportPanen then break end
+        task.wait(Jarak)
+    end
+end
+
+-- ============================================
+-- DETECTOR SAWIT
+-- ============================================
+
+local function detectorSawitLoop()
+    while _G.DetectorSawit do
+        local sawit = findNearest(100, "sawit") or findNearest(100, "kelapa")
+        if sawit then
+            notif("Sawit Ditemukan!", "Auto teleport...", 2)
+            tp(sawit)
+            local prompt = getPPDekat(10)
+            if prompt then firePrompt(prompt) end
+            fireR("HarvestCrop")
+            task.wait(Cooldown)
+        else
+            task.wait(2)
+        end
+        if not _G.DetectorSawit then break end
+    end
+end
+
+-- ============================================
+-- ESP SYSTEM
 -- ============================================
 
 local function createESP(obj, color)
     if not obj then return end
-
-    local highlight = Instance.new("Highlight")
-    highlight.Name             = "XKIDESP"
-    highlight.FillColor        = color or Color3.fromRGB(0, 255, 0)
-    highlight.OutlineColor     = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
-    highlight.DepthMode        = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent           = obj
-
-    table.insert(ESPObjects, highlight)
-    return highlight
+    local hl = Instance.new("Highlight")
+    hl.Name                = "XKIDESP"
+    hl.FillColor           = color or Color3.fromRGB(0, 255, 0)
+    hl.OutlineColor        = Color3.fromRGB(255, 255, 255)
+    hl.FillTransparency    = 0.5
+    hl.OutlineTransparency = 0
+    hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent              = obj
+    table.insert(ESPObjects, hl)
 end
 
 local function clearESP()
     for _, esp in pairs(ESPObjects) do
-        if esp then pcall(function() esp:Destroy() end) end
+        pcall(function() esp:Destroy() end)
     end
     ESPObjects = {}
 end
 
 local function updateESP()
     clearESP()
-
     for _, v in pairs(Workspace:GetDescendants()) do
         if v:IsA("Model") or v:IsA("BasePart") then
             local n = v.Name:lower()
@@ -587,51 +633,30 @@ local function updateESP()
                 createESP(v, Color3.fromRGB(255, 255, 0))
             elseif n:find("tanah") or n:find("lahan") or n:find("plot") then
                 createESP(v, Color3.fromRGB(0, 170, 255))
+            elseif n:find("ternak") or n:find("kandang") then
+                createESP(v, Color3.fromRGB(255, 128, 0))
             end
         end
     end
 end
 
 -- ============================================
--- V7 AUTO LOOPS (remote-based — alternative)
+-- STOP ALL
 -- ============================================
 
-local function teleportPanenLoop()
-    local points = {CopyPositions.Sawah, CopyPositions.Sawit, CopyPositions.Ternak}
-    local index = 1
-
-    while _G.TeleportPanen do
-        local point = points[index]
-        if point then
-            tp(point)
-            task.wait(0.5)
-            fireR("HarvestCrop")
-            task.wait(Cooldown)
-        end
-
-        index = index + 1
-        if index > 3 then index = 1 end
-
-        if not _G.TeleportPanen then break end
-        task.wait(Jarak)
+local function stopSemua()
+    _G.AutoFarm      = false
+    _G.AutoBeli      = false
+    _G.AutoTanam     = false
+    _G.AutoPanen     = false
+    _G.AutoJual      = false
+    _G.TeleportPanen = false
+    _G.DetectorSawit = false
+    if BeliLoop then
+        pcall(function() task.cancel(BeliLoop) end)
+        BeliLoop = nil
     end
-end
-
-local function detectorSawitLoop()
-    while _G.DetectorSawit do
-        local sawit = findNearestCrop(100, "sawit") or findNearestCrop(100, "kelapa")
-
-        if sawit then
-            notif("Sawit Ditemukan!", "Auto teleport...", 2)
-            tp(sawit)
-            fireR("HarvestCrop")
-            task.wait(Cooldown)
-        else
-            task.wait(2)
-        end
-
-        if not _G.DetectorSawit then break end
-    end
+    notif("⛔ STOP SEMUA!", "Semua auto dimatikan", 3)
 end
 
 -- ============================================
@@ -640,71 +665,65 @@ end
 local TabStatus = Window:CreateTab("📊 Status",       nil)
 local TabBibit  = Window:CreateTab("🛒 Beli Bibit",   nil)
 local TabFarm   = Window:CreateTab("🤖 Auto Farm",    nil)
-local TabCopy   = Window:CreateTab("📋 Copy Pos",     nil)
+local TabLahan  = Window:CreateTab("🌾 Posisi Lahan", nil)
+local TabCopy   = Window:CreateTab("📋 Copy TP",      nil)
 local TabTanam  = Window:CreateTab("🌴 Tanam",        nil)
 local TabTP     = Window:CreateTab("🚀 Teleport",     nil)
-local TabLahan  = Window:CreateTab("🌾 Lahan",        nil)
 local TabESP    = Window:CreateTab("👁 ESP",          nil)
 local TabTools  = Window:CreateTab("🛠 Tools",        nil)
 local TabSet    = Window:CreateTab("⚙ Setting",      nil)
 local TabTest   = Window:CreateTab("🧪 Test Remote",  nil)
 
 -- ============================================
--- TAB STATUS — Live Monitor (v6)
+-- TAB STATUS — Live Monitor
 -- ============================================
 TabStatus:CreateSection("📊 Live Status")
 
-local StatusFarm   = TabStatus:CreateParagraph({Title = "Auto Farm",         Content = "Status: OFF"})
-local StatusBeli   = TabStatus:CreateParagraph({Title = "Auto Beli",         Content = "Status: OFF"})
-local StatusLahan  = TabStatus:CreateParagraph({Title = "Lahan Tersimpan",   Content = "Belum disimpan"})
-local StatusCopy   = TabStatus:CreateParagraph({Title = "Copy Positions (3)",Content = "Sawah ❌ | Sawit ❌ | Ternak ❌"})
-local StatusSiklus = TabStatus:CreateParagraph({Title = "Siklus Auto Farm",  Content = "0 siklus selesai"})
-local StatusESP    = TabStatus:CreateParagraph({Title = "ESP",               Content = "OFF"})
+local StFarm   = TabStatus:CreateParagraph({Title = "Auto Farm",          Content = "🔴 OFF"})
+local StBeli   = TabStatus:CreateParagraph({Title = "Auto Beli",          Content = "🔴 OFF"})
+local StLahan  = TabStatus:CreateParagraph({Title = "Posisi Lahan",       Content = "Belum disimpan"})
+local StCopy   = TabStatus:CreateParagraph({Title = "Copy Positions (TP)",Content = "Sawah ❌ | Sawit ❌ | Ternak ❌"})
+local StSiklus = TabStatus:CreateParagraph({Title = "Siklus Farm",        Content = "0 siklus"})
+local StESP    = TabStatus:CreateParagraph({Title = "ESP",                Content = "🔴 OFF"})
 
 task.spawn(function()
     while _G.ScriptRunning do
         pcall(function()
-            StatusFarm:Set({
-                Title   = "Auto Farm",
-                Content = _G.AutoFarm and ("🟢 RUNNING (Siklus " .. SiklusCount .. ")") or "🔴 OFF"
-            })
-            StatusBeli:Set({
-                Title   = "Auto Beli",
-                Content = (_G.AutoBeli or _G.AutoBuy) and "🟢 RUNNING" or "🔴 OFF"
-            })
-            if savedLahanPos then
-                StatusLahan:Set({
-                    Title   = "Lahan Tersimpan",
-                    Content = string.format("✅ X=%.1f, Z=%.1f\n📍 %d lahan ditemukan",
-                        savedLahanPos.X, savedLahanPos.Z, #getAllLahan())
-                })
-            else
-                StatusLahan:Set({
-                    Title   = "Lahan Tersimpan",
-                    Content = "❌ Belum disimpan!\nKe tab Lahan > Simpan Posisi"
-                })
+            StFarm:Set({Title = "Auto Farm",
+                Content = _G.AutoFarm
+                    and ("🟢 RUNNING — Siklus " .. SiklusCount .. " — Jenis: " .. ActiveFarmJenis)
+                    or  "🔴 OFF"})
+
+            StBeli:Set({Title = "Auto Beli",
+                Content = _G.AutoBeli and ("🟢 RUNNING — " .. selectedBibit .. " x" .. jumlahBeli) or "🔴 OFF"})
+
+            local lahanInfo = ""
+            for jenis, data in pairs(LahanData) do
+                if data.pos then
+                    lahanInfo = lahanInfo .. data.label .. " ✅ " .. #data.cache .. " lahan\n"
+                else
+                    lahanInfo = lahanInfo .. data.label .. " ❌ belum simpan\n"
+                end
             end
-            StatusCopy:Set({
-                Title   = "Copy Positions (3)",
-                Content = "Sawah " .. (CopyPositions.Sawah and "✅" or "❌") ..
-                          " | Sawit " .. (CopyPositions.Sawit and "✅" or "❌") ..
-                          " | Ternak " .. (CopyPositions.Ternak and "✅" or "❌")
-            })
-            StatusSiklus:Set({
-                Title   = "Siklus Auto Farm",
-                Content = SiklusCount .. " siklus selesai"
-            })
-            StatusESP:Set({
-                Title   = "ESP",
-                Content = _G.ESP and ("🟢 ON — " .. #ESPObjects .. " object") or "🔴 OFF"
-            })
+            StLahan:Set({Title = "Posisi Lahan (per jenis)", Content = lahanInfo})
+
+            StCopy:Set({Title = "Copy Positions (TP)",
+                Content = "Sawah "  .. (CopyPositions.Sawah  and "✅" or "❌") ..
+                          " | Sawit "  .. (CopyPositions.Sawit  and "✅" or "❌") ..
+                          " | Ternak " .. (CopyPositions.Ternak and "✅" or "❌")})
+
+            StSiklus:Set({Title = "Siklus Farm",
+                Content = SiklusCount .. " siklus — Aktif: " .. ActiveFarmJenis})
+
+            StESP:Set({Title = "ESP",
+                Content = _G.ESP and ("🟢 ON — " .. #ESPObjects .. " obj") or "🔴 OFF"})
         end)
         task.wait(1)
     end
 end)
 
 -- ============================================
--- TAB BELI BIBIT (v6)
+-- TAB BELI BIBIT
 -- ============================================
 TabBibit:CreateSection("🌱 Pilih Bibit")
 
@@ -729,22 +748,19 @@ TabBibit:CreateDropdown({
 })
 
 TabBibit:CreateSlider({
-    Name         = "Jumlah Beli",
-    Range        = {1, 99},
-    Increment    = 1,
-    CurrentValue = 1,
-    Callback     = function(v) jumlahBeli = v end
+    Name = "Jumlah Beli", Range = {1, 99}, Increment = 1, CurrentValue = 1,
+    Callback = function(v) jumlahBeli = v end
 })
 
-TabBibit:CreateSection("🛒 Aksi")
+TabBibit:CreateSection("🛒 Beli Sekarang")
 
 TabBibit:CreateButton({
-    Name     = "💰 BELI SEKARANG",
+    Name = "💰 BELI SEKARANG",
     Callback = function()
         task.spawn(function()
             notif("Membeli", jumlahBeli .. "x " .. selectedBibit, 2)
-            local ok = autoBeliBibit()
-            notif(ok and "Sukses!" or "Gagal", ok and "Pembelian berhasil" or "Coba lagi", 3)
+            local ok = autoBeliBibit(selectedBibit, jumlahBeli)
+            notif(ok and "Sukses! ✅" or "Gagal ❌", ok and "Pembelian berhasil" or "Coba lagi", 3)
         end)
     end
 })
@@ -753,11 +769,11 @@ TabBibit:CreateSection("⚡ Beli Cepat")
 
 for _, b in ipairs(BIBIT) do
     TabBibit:CreateButton({
-        Name     = b.emoji .. " " .. b.name .. " | " .. b.harga .. "💰",
+        Name = b.emoji .. " " .. b.name .. " | " .. b.harga .. "💰",
         Callback = function()
             task.spawn(function()
                 selectedBibit = b.name
-                autoBeliBibit()
+                autoBeliBibit(b.name, jumlahBeli)
             end)
         end
     })
@@ -765,62 +781,80 @@ end
 
 TabBibit:CreateSection("🔄 Auto Beli Loop")
 
-TabBibit:CreateSlider({
-    Name         = "Delay Auto Beli (detik)",
-    Range        = {2, 30},
-    Increment    = 1,
-    CurrentValue = 3,
-    Callback     = function(v) autoBeliDelay = v end
+TabBibit:CreateParagraph({
+    Title   = "Info Auto Beli",
+    Content = "Auto teleport ke NPC → beli → tunggu 10 detik → ulangi"
 })
 
+-- ┌─────────────────────────────────────────┐
+-- │  AUTO BELI — SKEMA BARU (FIX)            │
+-- └─────────────────────────────────────────┘
 TabBibit:CreateToggle({
-    Name         = "Auto Beli Loop",
+    Name         = "🛒 Auto Beli Bibit",
     CurrentValue = false,
     Callback     = function(v)
         _G.AutoBeli = v
-        _G.AutoBuy  = v
-
         if v then
-            notif("Auto Beli", "Loop dimulai", 2)
-            task.spawn(function()
+            notif("Auto Beli ON ✅", selectedBibit .. " x" .. jumlahBeli, 3)
+
+            BeliLoop = task.spawn(function()
                 while _G.AutoBeli do
-                    pcall(autoBeliBibit)
-                    task.wait(autoBeliDelay)
+                    -- Teleport ke NPC dulu
+                    local npc = cari("npcbibit")
+                    if npc then tp(npc) end
+                    task.wait(1)
+
+                    -- Panggil fungsi beli
+                    local ok = autoBeliBibit(selectedBibit, jumlahBeli)
+                    if ok then
+                        notif("Auto Beli ✅", selectedBibit .. " x" .. jumlahBeli, 2)
+                    end
+
+                    -- Tunggu sebelum beli lagi
+                    task.wait(10)
                 end
             end)
         else
-            notif("Auto Beli", "Stopped", 2)
+            if BeliLoop then
+                pcall(function() task.cancel(BeliLoop) end)
+                BeliLoop = nil
+            end
+            notif("Auto Beli OFF", "Dihentikan", 2)
         end
     end
 })
 
 -- ============================================
--- TAB AUTO FARM (v6 full cycle + satuan)
+-- TAB AUTO FARM
 -- ============================================
+TabFarm:CreateSection("🎯 Pilih Jenis Lahan Farm")
+
+TabFarm:CreateDropdown({
+    Name          = "Lahan yang dipakai Auto Farm",
+    Options       = {"🌾 Sawah", "🌴 Sawit", "🐄 Ternak"},
+    CurrentOption = {"🌾 Sawah"},
+    Callback      = function(v)
+        if v[1]:find("Sawah")  then ActiveFarmJenis = "Sawah"  end
+        if v[1]:find("Sawit")  then ActiveFarmJenis = "Sawit"  end
+        if v[1]:find("Ternak") then ActiveFarmJenis = "Ternak" end
+        notif("Lahan Farm Aktif", ActiveFarmJenis, 2)
+    end
+})
+
+TabFarm:CreateParagraph({
+    Title   = "⚠️ PENTING — Baca Dulu!",
+    Content = "Sebelum Auto Farm:\n1. Pergi ke lahan yang BENAR\n2. Tab 🌾 Posisi Lahan → Simpan posisi\n3. Pilih jenis lahan di dropdown atas\n4. Baru aktifkan Auto Farm\n\n❌ Jangan campur posisi Sawah & Sawit!"
+})
+
 TabFarm:CreateSection("⏱ Delay Setting")
 
-TabFarm:CreateSlider({
-    Name = "Delay Beli (s)", Range = {1, 10}, Increment = 0.5, CurrentValue = 2,
-    Callback = function(v) dBeli = v end
-})
-TabFarm:CreateSlider({
-    Name = "Delay Tanam (s)", Range = {1, 10}, Increment = 0.5, CurrentValue = 2,
-    Callback = function(v) dTanam = v end
-})
-TabFarm:CreateSlider({
-    Name = "Delay Panen (s)", Range = {1, 10}, Increment = 0.5, CurrentValue = 3,
-    Callback = function(v) dPanen = v end
-})
-TabFarm:CreateSlider({
-    Name = "Delay Jual (s)", Range = {1, 10}, Increment = 0.5, CurrentValue = 2,
-    Callback = function(v) dJual = v end
-})
-TabFarm:CreateSlider({
-    Name = "Waktu Tunggu Panen (s)", Range = {10, 300}, Increment = 5, CurrentValue = 30,
-    Callback = function(v) waitPanen = v end
-})
+TabFarm:CreateSlider({Name="Delay Beli (s)",   Range={1,10}, Increment=0.5, CurrentValue=2, Callback=function(v) dBeli=v end})
+TabFarm:CreateSlider({Name="Delay Tanam (s)",  Range={1,10}, Increment=0.5, CurrentValue=2, Callback=function(v) dTanam=v end})
+TabFarm:CreateSlider({Name="Delay Panen (s)",  Range={1,10}, Increment=0.5, CurrentValue=3, Callback=function(v) dPanen=v end})
+TabFarm:CreateSlider({Name="Delay Jual (s)",   Range={1,10}, Increment=0.5, CurrentValue=2, Callback=function(v) dJual=v end})
+TabFarm:CreateSlider({Name="Waktu Tunggu Panen (s)", Range={10,300}, Increment=5, CurrentValue=30, Callback=function(v) waitPanen=v end})
 
-TabFarm:CreateSection("🤖 FULL AUTO FARM")
+TabFarm:CreateSection("🔥 FULL AUTO FARM")
 
 TabFarm:CreateToggle({
     Name         = "🔥 FULL AUTO: Beli → Tanam → Panen → Jual",
@@ -829,26 +863,34 @@ TabFarm:CreateToggle({
         _G.AutoFarm = v
 
         if v then
-            if not savedLahanPos then
-                notif("ERROR!", "Simpan posisi lahan dulu!", 5)
+            -- Cek posisi lahan sudah tersimpan
+            if not LahanData[ActiveFarmJenis].pos then
+                notif("⚠️ ERROR!", "Simpan posisi lahan " .. ActiveFarmJenis
+                    .. " dulu!\nTab 🌾 Posisi Lahan → SIMPAN", 7)
                 _G.AutoFarm = false
                 return
             end
 
             SiklusCount = 0
-            notif("AUTO FARM", "Started! Good luck 🍀", 3)
+            notif("AUTO FARM ON ✅", "Jenis: " .. ActiveFarmJenis .. " 🔥", 3)
 
             task.spawn(function()
                 while _G.AutoFarm do
                     SiklusCount = SiklusCount + 1
 
-                    -- Step 1: Beli
-                    pcall(autoBeliBibit)
+                    -- Step 1: Beli bibit
+                    notif("Siklus #"..SiklusCount, "Step 1: Beli bibit...", 2)
+                    pcall(function() autoBeliBibit(selectedBibit, jumlahBeli) end)
                     if not _G.AutoFarm then break end
                     task.wait(dBeli)
 
-                    -- Step 2: Tanam
-                    local lahans = getAllLahan()
+                    -- Step 2: Tanam di lahan YANG BENAR sesuai jenis
+                    notif("Siklus #"..SiklusCount, "Step 2: Tanam di "..ActiveFarmJenis.."...", 2)
+                    local lahans = getLahan(ActiveFarmJenis)
+                    if #lahans == 0 then
+                        notif("⚠️ Lahan Kosong!", "Tidak ada lahan "..ActiveFarmJenis
+                            .."\nRefresh di tab Posisi Lahan", 5)
+                    end
                     for _, lahan in ipairs(lahans) do
                         if not _G.AutoFarm then break end
                         pcall(function() interakLahan(lahan, dTanam) end)
@@ -857,32 +899,33 @@ TabFarm:CreateToggle({
                     if not _G.AutoFarm then break end
 
                     -- Step 3: Tunggu panen
-                    notif("Menunggu", "Panen dalam " .. waitPanen .. "s", 3)
+                    notif("Siklus #"..SiklusCount, "Step 3: Tunggu "..waitPanen.."s...", 3)
                     local waited = 0
                     while waited < waitPanen and _G.AutoFarm do
-                        task.wait(1)
-                        waited = waited + 1
+                        task.wait(1); waited = waited + 1
                     end
                     if not _G.AutoFarm then break end
 
-                    -- Step 4: Panen
-                    pcall(autoPanen)
+                    -- Step 4: Panen di lahan YANG SAMA
+                    notif("Siklus #"..SiklusCount, "Step 4: Panen "..ActiveFarmJenis.."...", 2)
+                    pcall(function() autoPanen(ActiveFarmJenis) end)
                     if not _G.AutoFarm then break end
                     task.wait(dPanen)
 
                     -- Step 5: Jual
+                    notif("Siklus #"..SiklusCount, "Step 5: Jual hasil...", 2)
                     pcall(autoJual)
                     if not _G.AutoFarm then break end
                     task.wait(dJual)
 
-                    notif("Siklus #" .. SiklusCount, "Selesai! Next...", 3)
+                    notif("✅ Siklus #"..SiklusCount, "Selesai! Lanjut...", 3)
                     task.wait(2)
                 end
 
-                notif("AUTO FARM", "Stopped di siklus " .. SiklusCount, 3)
+                notif("AUTO FARM", "Stopped di siklus "..SiklusCount, 3)
             end)
         else
-            notif("AUTO FARM", "Stopped", 2)
+            notif("AUTO FARM OFF", "Dihentikan", 2)
         end
     end
 })
@@ -896,7 +939,7 @@ TabFarm:CreateToggle({
         if v then
             task.spawn(function()
                 while _G.AutoTanam do
-                    for _, lahan in ipairs(getAllLahan()) do
+                    for _, lahan in ipairs(getLahan(ActiveFarmJenis)) do
                         if not _G.AutoTanam then break end
                         pcall(function() interakLahan(lahan, dTanam) end)
                         task.wait(0.5)
@@ -915,7 +958,7 @@ TabFarm:CreateToggle({
         if v then
             task.spawn(function()
                 while _G.AutoPanen do
-                    pcall(autoPanen)
+                    pcall(function() autoPanen(ActiveFarmJenis) end)
                     task.wait(5)
                 end
             end)
@@ -927,7 +970,6 @@ TabFarm:CreateToggle({
     Name = "Auto Jual Saja", CurrentValue = false,
     Callback = function(v)
         _G.AutoJual = v
-        _G.AutoSell = v
         if v then
             task.spawn(function()
                 while _G.AutoJual do
@@ -939,36 +981,125 @@ TabFarm:CreateToggle({
     end
 })
 
-TabFarm:CreateSection("🛑 Emergency Stop")
+TabFarm:CreateSection("🛑 Emergency")
 
 TabFarm:CreateButton({
-    Name     = "🛑 STOP SEMUA AUTO",
+    Name = "🛑 STOP SEMUA AUTO",
+    Callback = function() stopSemua() end
+})
+
+-- ============================================
+-- TAB POSISI LAHAN — PER JENIS (BARU!)
+-- ============================================
+TabLahan:CreateSection("💾 Simpan Posisi Per Jenis Lahan")
+
+TabLahan:CreateParagraph({
+    Title   = "📌 Cara Pakai",
+    Content = "1. Berdiri di TENGAH lahan yang tepat\n2. Tekan SIMPAN sesuai jenisnya\n3. Scan hanya mencari di area itu\n4. Sawit TIDAK akan nyasar ke Ternak!"
+})
+
+-- Sawah
+TabLahan:CreateButton({
+    Name = "💾 SIMPAN POSISI LAHAN SAWAH 🌾",
+    Callback = function() simpanPosLahan("Sawah") end
+})
+
+TabLahan:CreateSlider({
+    Name = "Radius Scan Sawah (stud)", Range = {10, 200}, Increment = 10, CurrentValue = 50,
+    Callback = function(v)
+        LahanData.Sawah.radius    = v
+        LahanData.Sawah.cacheTime = 0
+        cacheLahan("Sawah")
+    end
+})
+
+-- Sawit
+TabLahan:CreateButton({
+    Name = "💾 SIMPAN POSISI LAHAN SAWIT 🌴",
+    Callback = function() simpanPosLahan("Sawit") end
+})
+
+TabLahan:CreateSlider({
+    Name = "Radius Scan Sawit (stud)", Range = {10, 200}, Increment = 10, CurrentValue = 50,
+    Callback = function(v)
+        LahanData.Sawit.radius    = v
+        LahanData.Sawit.cacheTime = 0
+        cacheLahan("Sawit")
+    end
+})
+
+-- Ternak
+TabLahan:CreateButton({
+    Name = "💾 SIMPAN POSISI LAHAN TERNAK 🐄",
+    Callback = function() simpanPosLahan("Ternak") end
+})
+
+TabLahan:CreateSlider({
+    Name = "Radius Scan Ternak (stud)", Range = {10, 200}, Increment = 10, CurrentValue = 50,
+    Callback = function(v)
+        LahanData.Ternak.radius    = v
+        LahanData.Ternak.cacheTime = 0
+        cacheLahan("Ternak")
+    end
+})
+
+TabLahan:CreateSection("📊 Info & Tools")
+
+TabLahan:CreateButton({
+    Name = "📊 Info Semua Lahan",
     Callback = function()
-        _G.AutoFarm      = false
-        _G.AutoBeli      = false
-        _G.AutoBuy       = false
-        _G.AutoTanam     = false
-        _G.AutoPanen     = false
-        _G.AutoJual      = false
-        _G.AutoSell      = false
-        _G.TeleportPanen = false
-        _G.DetectorSawit = false
-        notif("STOP!", "Semua auto dimatikan", 3)
+        local msg = ""
+        for jenis, data in pairs(LahanData) do
+            if data.pos then
+                msg = msg .. data.label .. " ✅\n"
+                msg = msg .. string.format("  X=%.1f Z=%.1f — %d lahan\n", data.pos.X, data.pos.Z, #data.cache)
+            else
+                msg = msg .. data.label .. " ❌ belum disimpan\n"
+            end
+        end
+        notif("Info Lahan", msg, 8)
+    end
+})
+
+TabLahan:CreateButton({
+    Name = "🔄 Refresh Semua Cache Lahan",
+    Callback = function()
+        for jenis, data in pairs(LahanData) do
+            data.cacheTime = 0
+            cacheLahan(jenis)
+        end
+        local msg = ""
+        for jenis, data in pairs(LahanData) do
+            msg = msg .. jenis .. ": " .. #data.cache .. " lahan\n"
+        end
+        notif("Refresh ✅", msg, 4)
+    end
+})
+
+TabLahan:CreateButton({
+    Name = "🗑 Hapus SEMUA Posisi Lahan",
+    Callback = function()
+        for jenis, data in pairs(LahanData) do
+            data.pos       = nil
+            data.cache     = {}
+            data.cacheTime = 0
+        end
+        notif("Reset", "Semua posisi lahan dihapus", 3)
     end
 })
 
 -- ============================================
--- TAB COPY POSITION — 3 Titik (v7)
+-- TAB COPY POSITION — 3 Titik TP
 -- ============================================
-TabCopy:CreateSection("📍 Simpan 3 Titik")
+TabCopy:CreateSection("📍 Simpan 3 Titik Teleport Panen")
 
 TabCopy:CreateParagraph({
     Title   = "CARA PAKAI",
-    Content = "1. Pergi ke lokasi\n2. Tekan COPY\n3. Posisi tersimpan otomatis\n4. Aktifkan Teleport Panen di Tab Auto Farm"
+    Content = "1. Pergi ke lokasi\n2. Tekan COPY\n3. Aktifkan Teleport Panen di bawah\n\n(Berbeda dengan Posisi Lahan!)\nCopy Pos = titik TP untuk panen keliling\nPosisi Lahan = area scan Auto Farm"
 })
 
 TabCopy:CreateButton({
-    Name     = "📍 COPY SAWAH (Posisi 1)",
+    Name = "📍 COPY SAWAH (Titik 1)",
     Callback = function()
         local pos = getPos()
         if pos then
@@ -979,7 +1110,7 @@ TabCopy:CreateButton({
 })
 
 TabCopy:CreateButton({
-    Name     = "🌴 COPY SAWIT (Posisi 2)",
+    Name = "🌴 COPY SAWIT (Titik 2)",
     Callback = function()
         local pos = getPos()
         if pos then
@@ -990,7 +1121,7 @@ TabCopy:CreateButton({
 })
 
 TabCopy:CreateButton({
-    Name     = "🐄 COPY TERNAK (Posisi 3)",
+    Name = "🐄 COPY TERNAK (Titik 3)",
     Callback = function()
         local pos = getPos()
         if pos then
@@ -1001,10 +1132,9 @@ TabCopy:CreateButton({
 })
 
 TabCopy:CreateButton({
-    Name     = "📊 Lihat Posisi Tersimpan",
+    Name = "📊 Lihat Status Copy",
     Callback = function()
-        local msg = ""
-        msg = msg .. "Sawah:  " .. (CopyPositions.Sawah  and "✅" or "❌") .. "\n"
+        local msg  = "Sawah:  " .. (CopyPositions.Sawah  and "✅" or "❌") .. "\n"
         msg = msg .. "Sawit:  " .. (CopyPositions.Sawit  and "✅" or "❌") .. "\n"
         msg = msg .. "Ternak: " .. (CopyPositions.Ternak and "✅" or "❌")
         notif("Status Copy", msg, 5)
@@ -1012,7 +1142,7 @@ TabCopy:CreateButton({
 })
 
 TabCopy:CreateButton({
-    Name     = "🗑 Reset Semua Copy",
+    Name = "🗑 Reset Semua Copy",
     Callback = function()
         CopyPositions.Sawah  = nil
         CopyPositions.Sawit  = nil
@@ -1024,18 +1154,17 @@ TabCopy:CreateButton({
 TabCopy:CreateSection("🚀 Teleport Panen 3 Titik")
 
 TabCopy:CreateToggle({
-    Name         = "🚀 Teleport Panen (Sawah → Sawit → Ternak)",
-    CurrentValue = false,
-    Callback     = function(v)
+    Name = "🚀 Teleport Panen Loop", CurrentValue = false,
+    Callback = function(v)
         _G.TeleportPanen = v
         if v then
             if not CopyPositions.Sawah and not CopyPositions.Sawit and not CopyPositions.Ternak then
-                notif("ERROR!", "Copy minimal 1 posisi dulu!", 4)
+                notif("ERROR! ❌", "Copy minimal 1 titik dulu!", 4)
                 _G.TeleportPanen = false
                 return
             end
             task.spawn(teleportPanenLoop)
-            notif("Teleport Panen", "ON", 2)
+            notif("Teleport Panen ON ✅", "Loop berjalan", 2)
         else
             notif("Teleport Panen", "OFF", 2)
         end
@@ -1043,58 +1172,50 @@ TabCopy:CreateToggle({
 })
 
 -- ============================================
--- TAB TANAM SAWIT / DURIAN (v7)
+-- TAB TANAM MANUAL
 -- ============================================
-TabTanam:CreateSection("🌴 Tanam Sawit")
+TabTanam:CreateSection("🌴 Tanam Sawit Manual")
 
 TabTanam:CreateButton({
-    Name     = "📍 COPY POSISI TANAM SAWIT",
+    Name = "📍 COPY POSISI TANAM SAWIT",
     Callback = function()
         local cf = getCF()
-        if cf then
-            TanamPositions.Sawit = cf
-            notif("Copy Tanam Sawit ✅", "Posisi tersimpan", 3)
-        end
+        if cf then TanamPositions.Sawit = cf; notif("Copy Sawit ✅", "Tersimpan", 3) end
     end
 })
 
 TabTanam:CreateButton({
-    Name     = "🌴 TANAM SAWIT DI SINI",
+    Name = "🌴 TANAM SAWIT",
     Callback = function()
         if TanamPositions.Sawit then
-            tp(TanamPositions.Sawit)
-            task.wait(0.5)
+            tp(TanamPositions.Sawit); task.wait(0.5)
             fireR("PlantCrop", "Sawit")
-            notif("Tanam Sawit", "Berhasil!", 2)
+            notif("Tanam Sawit ✅", "Berhasil!", 2)
         else
-            notif("Error", "Copy posisi dulu!", 3)
+            notif("Error ❌", "Copy posisi dulu!", 3)
         end
     end
 })
 
-TabTanam:CreateSection("🥥 Tanam Durian")
+TabTanam:CreateSection("🥥 Tanam Durian Manual")
 
 TabTanam:CreateButton({
-    Name     = "📍 COPY POSISI TANAM DURIAN",
+    Name = "📍 COPY POSISI TANAM DURIAN",
     Callback = function()
         local cf = getCF()
-        if cf then
-            TanamPositions.Durian = cf
-            notif("Copy Tanam Durian ✅", "Posisi tersimpan", 3)
-        end
+        if cf then TanamPositions.Durian = cf; notif("Copy Durian ✅", "Tersimpan", 3) end
     end
 })
 
 TabTanam:CreateButton({
-    Name     = "🥥 TANAM DURIAN DI SINI",
+    Name = "🥥 TANAM DURIAN",
     Callback = function()
         if TanamPositions.Durian then
-            tp(TanamPositions.Durian)
-            task.wait(0.5)
+            tp(TanamPositions.Durian); task.wait(0.5)
             fireR("PlantCrop", "Durian")
-            notif("Tanam Durian", "Berhasil!", 2)
+            notif("Tanam Durian ✅", "Berhasil!", 2)
         else
-            notif("Error", "Copy posisi dulu!", 3)
+            notif("Error ❌", "Copy posisi dulu!", 3)
         end
     end
 })
@@ -1102,21 +1223,20 @@ TabTanam:CreateButton({
 TabTanam:CreateSection("🔍 Detector Sawit")
 
 TabTanam:CreateToggle({
-    Name         = "🔍 Detector Sawit (Auto Scan & Panen)",
-    CurrentValue = false,
-    Callback     = function(v)
+    Name = "🔍 Detector Sawit (Auto Scan & Panen)", CurrentValue = false,
+    Callback = function(v)
         _G.DetectorSawit = v
         if v then
             task.spawn(detectorSawitLoop)
-            notif("Detector Sawit", "ON — Auto cari sawit", 3)
+            notif("Detector ON ✅", "Auto cari & panen sawit...", 3)
         else
-            notif("Detector Sawit", "OFF", 2)
+            notif("Detector OFF", "", 2)
         end
     end
 })
 
 -- ============================================
--- TAB TELEPORT (v6 NPC list + kembali lahan)
+-- TAB TELEPORT NPC
 -- ============================================
 TabTP:CreateSection("🏪 NPC Toko")
 
@@ -1130,160 +1250,70 @@ local npcList = {
 
 for _, npc in ipairs(npcList) do
     TabTP:CreateButton({
-        Name     = npc.label,
+        Name = npc.label,
         Callback = function()
             local o = cari(npc.name)
-            if o then
-                tp(o)
-                notif("Teleport", npc.label .. " ✓", 2)
+            if o then tp(o); notif("Teleport ✅", npc.label, 2)
+            else notif("Error ❌", npc.name .. " tidak ada", 3) end
+        end
+    })
+end
+
+TabTP:CreateSection("🌾 Ke Lahan Tersimpan")
+
+for jenis, data in pairs(LahanData) do
+    TabTP:CreateButton({
+        Name = "🏠 Ke Lahan " .. jenis,
+        Callback = function()
+            if data.pos then
+                tpCoord(data.pos.X, data.pos.Y, data.pos.Z)
+                notif("Teleport ✅", "Di lahan " .. jenis, 2)
             else
-                notif("Error", npc.name .. " tidak ada", 3)
+                notif("Error ❌", "Simpan posisi " .. jenis .. " dulu!", 3)
             end
         end
     })
 end
 
-TabTP:CreateSection("🌾 Ke Lahan Kamu")
-
-TabTP:CreateButton({
-    Name     = "🏠 Teleport ke Lahan Tersimpan",
-    Callback = function()
-        if savedLahanPos then
-            tpCoord(savedLahanPos.X, savedLahanPos.Y, savedLahanPos.Z)
-            notif("Teleport", "Di lahan kamu!", 2)
-        else
-            notif("Error", "Simpan posisi lahan dulu!", 3)
-        end
-    end
-})
-
 -- ============================================
--- TAB LAHAN — Scan & Cache (v6)
--- ============================================
-TabLahan:CreateSection("📍 Simpan Posisi Lahan")
-
-TabLahan:CreateParagraph({
-    Title   = "Cara Simpan",
-    Content = "1. Berdiri di TENGAH lahan kamu\n2. Tekan tombol SIMPAN\n3. Auto scan akan mencari lahan di radius tertentu"
-})
-
-TabLahan:CreateButton({
-    Name     = "💾 SIMPAN POSISI SEKARANG",
-    Callback = function()
-        local root = getRoot()
-        if not root then
-            notif("Error", "Karakter belum ready!", 3)
-            return
-        end
-
-        savedLahanPos = root.Position
-        cacheLahans()
-
-        local p = savedLahanPos
-        local n = #cachedLahans
-
-        notif("Tersimpan!", string.format("X=%.1f, Z=%.1f\n%d lahan ditemukan", p.X, p.Z, n), 5)
-    end
-})
-
-TabLahan:CreateButton({
-    Name     = "📊 Info Lahan",
-    Callback = function()
-        if not savedLahanPos then
-            notif("Belum Simpan", "Simpan posisi dulu!", 3)
-            return
-        end
-
-        local p = savedLahanPos
-        local n = #getAllLahan()
-
-        notif("Info Lahan", string.format("Posisi: X=%.1f, Z=%.1f\nJumlah lahan: %d\nRadius: %d stud",
-            p.X, p.Z, n, lahanRadius), 5)
-    end
-})
-
-TabLahan:CreateSlider({
-    Name         = "Radius Scan (stud)",
-    Range        = {10, 200},
-    Increment    = 10,
-    CurrentValue = 50,
-    Callback     = function(v)
-        lahanRadius = v
-        cacheLahans()
-    end
-})
-
-TabLahan:CreateButton({
-    Name     = "🔄 Refresh Scan",
-    Callback = function()
-        lastCacheTime = 0
-        cacheLahans()
-        notif("Refresh", #cachedLahans .. " lahan ditemukan", 3)
-    end
-})
-
-TabLahan:CreateButton({
-    Name     = "🗑 Hapus Posisi Lahan",
-    Callback = function()
-        savedLahanPos = nil
-        cachedLahans  = {}
-        notif("Reset", "Posisi lahan dihapus", 2)
-    end
-})
-
--- ============================================
--- TAB ESP (v7 — expanded)
+-- TAB ESP
 -- ============================================
 TabESP:CreateSection("👁 ESP System")
 
 TabESP:CreateParagraph({
-    Title   = "Info ESP",
-    Content = "🟢 Hijau = Tanaman/Crop\n🟡 Kuning = NPC/Toko\n🔵 Biru = Tanah/Lahan"
+    Title   = "Warna ESP",
+    Content = "🟢 Hijau = Tanaman/Crop\n🟡 Kuning = NPC/Toko\n🔵 Biru = Tanah/Lahan\n🟠 Oranye = Ternak/Kandang"
 })
 
 TabESP:CreateToggle({
-    Name         = "👁 ESP Aktif",
-    CurrentValue = false,
-    Callback     = function(v)
+    Name = "👁 ESP Aktif", CurrentValue = false,
+    Callback = function(v)
         _G.ESP = v
-        if v then
-            updateESP()
-            notif("ESP", "ON — " .. #ESPObjects .. " object", 2)
-        else
-            clearESP()
-            notif("ESP", "OFF", 2)
-        end
+        if v then updateESP(); notif("ESP ON ✅", #ESPObjects .. " obj highlight", 2)
+        else clearESP(); notif("ESP OFF", "", 2) end
     end
 })
 
 TabESP:CreateButton({
-    Name     = "🔄 Refresh ESP",
+    Name = "🔄 Refresh ESP",
     Callback = function()
-        if _G.ESP then
-            updateESP()
-            notif("ESP Refresh", #ESPObjects .. " object ditemukan", 3)
-        else
-            notif("ESP", "Aktifkan ESP dulu!", 3)
-        end
+        if _G.ESP then updateESP(); notif("Refresh ✅", #ESPObjects .. " obj", 3)
+        else notif("ESP", "Aktifkan ESP dulu!", 3) end
     end
 })
 
 TabESP:CreateButton({
-    Name     = "🗑 Clear ESP",
-    Callback = function()
-        clearESP()
-        _G.ESP = false
-        notif("ESP", "Cleared", 2)
-    end
+    Name = "🗑 Clear ESP",
+    Callback = function() clearESP(); _G.ESP = false; notif("ESP Cleared ✅", "", 2) end
 })
 
 -- ============================================
--- TAB TOOLS (v6)
+-- TAB TOOLS
 -- ============================================
-TabTools:CreateSection("📍 Info Posisi")
+TabTools:CreateSection("📍 Info")
 
 TabTools:CreateButton({
-    Name     = "📍 Koordinat Saya",
+    Name = "📍 Koordinat Saya",
     Callback = function()
         local r = getRoot()
         if r then
@@ -1294,15 +1324,12 @@ TabTools:CreateButton({
 })
 
 TabTools:CreateButton({
-    Name     = "🔄 Respawn Karakter",
+    Name = "🔄 Respawn",
     Callback = function()
         local char = LocalPlayer.Character
         if char then
             local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.Health = 0
-                notif("Respawn", "Tunggu sebentar...", 2)
-            end
+            if hum then hum.Health = 0; notif("Respawn", "Tunggu...", 2) end
         end
     end
 })
@@ -1310,126 +1337,90 @@ TabTools:CreateButton({
 TabTools:CreateSection("🧪 Quick Test")
 
 TabTools:CreateButton({
-    Name     = "Test Buka Toko Bibit",
+    Name = "Test Buka Toko Bibit",
     Callback = function()
         task.spawn(function()
             local ok = bukaToko("npcbibit", 2)
-            notif(ok and "Sukses" or "Gagal", ok and "Toko terbuka" or "Coba lagi", 3)
+            notif(ok and "Sukses ✅" or "Gagal ❌", ok and "Toko terbuka" or "Coba lagi", 3)
         end)
     end
 })
 
 TabTools:CreateButton({
-    Name     = "Test Jual",
+    Name = "Test Auto Jual",
     Callback = function()
         task.spawn(function()
             local ok = autoJual()
-            notif(ok and "Sukses" or "Gagal", ok and "Terjual" or "Gagal jual", 3)
+            notif(ok and "Sukses ✅" or "Gagal ❌", ok and "Terjual" or "Gagal", 3)
         end)
     end
 })
 
 -- ============================================
--- TAB SETTING (merged v6 + v7)
+-- TAB SETTING
 -- ============================================
-TabSet:CreateSection("⏱ Cooldown (v7 mode)")
+TabSet:CreateSection("⏱ Cooldown Remote")
 
 TabSet:CreateSlider({
-    Name         = "Cooldown Remote (detik)",
-    Range        = {0.5, 5},
-    Increment    = 0.5,
-    CurrentValue = 1,
-    Callback     = function(v)
-        Cooldown = v
-        notif("Cooldown", "Set ke " .. v .. "s", 2)
-    end
+    Name = "Cooldown Remote (s)", Range = {0.5, 5}, Increment = 0.5, CurrentValue = 1,
+    Callback = function(v) Cooldown = v end
 })
 
 TabSet:CreateSection("📏 Jarak Teleport Panen")
 
 TabSet:CreateSlider({
-    Name         = "Jarak antar TP (detik)",
-    Range        = {1, 10},
-    Increment    = 1,
-    CurrentValue = 3,
-    Callback     = function(v)
-        Jarak = v
-        notif("Jarak", "Set ke " .. v .. "s", 2)
-    end
+    Name = "Jarak antar TP (s)", Range = {1, 10}, Increment = 1, CurrentValue = 3,
+    Callback = function(v) Jarak = v end
 })
 
-TabSet:CreateSection("🧭 Mode Arah Tanam")
+TabSet:CreateSection("🧭 Mode Arah")
 
 TabSet:CreateToggle({
-    Name         = "Mode Depan (ON) / Belakang (OFF)",
-    CurrentValue = true,
-    Callback     = function(v)
+    Name = "Mode Depan (ON) / Belakang (OFF)", CurrentValue = true,
+    Callback = function(v)
         ModeDepan = v
         notif("Mode", v and "Depan aktif" or "Belakang aktif", 2)
     end
 })
 
-TabSet:CreateSection("🛑 Emergency Stop")
+TabSet:CreateSection("🛑 Emergency")
 
 TabSet:CreateButton({
-    Name     = "🛑 STOP SEMUA AUTO",
-    Callback = function()
-        _G.AutoFarm      = false
-        _G.AutoBeli      = false
-        _G.AutoBuy       = false
-        _G.AutoTanam     = false
-        _G.AutoPanen     = false
-        _G.AutoJual      = false
-        _G.AutoSell      = false
-        _G.TeleportPanen = false
-        _G.DetectorSawit = false
-        notif("STOP!", "Semua auto dimatikan", 3)
-    end
+    Name = "🛑 STOP SEMUA AUTO",
+    Callback = function() stopSemua() end
 })
 
 -- ============================================
--- TAB TEST REMOTE (v6 — full tester)
+-- TAB TEST REMOTE
 -- ============================================
 TabTest:CreateSection("🔥 Fire Remote Manual")
 
 TabTest:CreateInput({
-    Name                   = "Nama Remote",
-    PlaceholderText        = "contoh: PlantCrop",
+    Name = "Nama Remote", PlaceholderText = "contoh: PlantCrop",
     RemoveTextAfterFocusLost = false,
-    Callback               = function(v) testRemoteName = v end
+    Callback = function(v) testRemoteName = v end
 })
 
 TabTest:CreateInput({
-    Name                   = "Argumen 1 (opsional)",
-    PlaceholderText        = "string / number / bool",
+    Name = "Argumen 1 (opsional)", PlaceholderText = "string / number / bool",
     RemoveTextAfterFocusLost = false,
-    Callback               = function(v) testArg1 = v end
+    Callback = function(v) testArg1 = v end
 })
 
 TabTest:CreateButton({
-    Name     = "🔥 FIRE REMOTE",
+    Name = "🔥 FIRE REMOTE",
     Callback = function()
-        if testRemoteName == "" then
-            notif("Error", "Masukkan nama remote!", 3)
-            return
-        end
-
+        if testRemoteName == "" then notif("Error", "Masukkan nama remote!", 3); return end
         local args = {}
         if testArg1 ~= "" then
             local num = tonumber(testArg1)
-            if num then
-                table.insert(args, num)
-            elseif testArg1 == "true" then
-                table.insert(args, true)
-            elseif testArg1 == "false" then
-                table.insert(args, false)
-            else
-                table.insert(args, testArg1)
-            end
+            if num then table.insert(args, num)
+            elseif testArg1 == "true"  then table.insert(args, true)
+            elseif testArg1 == "false" then table.insert(args, false)
+            else table.insert(args, testArg1) end
         end
-
         local ok, result = fireR(testRemoteName, table.unpack(args))
-        notif(ok and "Sukses" or "Gagal", tostring(result), 4)
+        notif(ok and "Sukses ✅" or "Gagal ❌", tostring(result), 4)
     end
 })
 
@@ -1445,27 +1436,27 @@ local quickTests = {
 
 for _, test in ipairs(quickTests) do
     TabTest:CreateButton({
-        Name     = test[2],
+        Name = test[2],
         Callback = function()
             local ok, result = fireR(test[1])
-            notif(test[1], ok and ("OK: " .. tostring(result)) or ("ERROR: " .. tostring(result)), 3)
+            notif(test[1], ok and ("OK: "..tostring(result)) or ("ERROR: "..tostring(result)), 3)
         end
     })
 end
 
 -- ============================================
--- INIT NOTIFICATIONS
+-- INIT
 -- ============================================
-notif("SAWAH INDO v8.0 ULTIMATE", "Welcome " .. myName .. "! 🌾", 5)
+notif("🌾 SAWAH INDO v8.1", "Welcome " .. myName .. "!", 5)
 task.wait(1)
-notif("Langkah 1", "Tab Lahan → Simpan posisi lahan kamu", 5)
-task.wait(1.2)
-notif("Langkah 2", "Tab Copy Pos → Copy 3 titik (Sawah/Sawit/Ternak)", 5)
-task.wait(1.2)
-notif("Langkah 3", "Tab Auto Farm → Aktifkan FULL AUTO 🔥", 5)
+notif("Langkah 1", "Tab 🌾 Posisi Lahan → Simpan posisi SAWAH", 5)
+task.wait(1.3)
+notif("Langkah 2", "Tab 🤖 Auto Farm → Pilih jenis lahan → ON", 5)
+task.wait(1.3)
+notif("Langkah 3", "Tab 🛒 Beli Bibit → Pilih bibit → Auto Beli ON", 5)
 
-print(string.rep("=", 40))
-print("  SAWAH INDO v8.0 ULTIMATE — XKID HUB")
-print("  Gabungan v6.0 + v7.0 Pro")
+print(string.rep("=", 44))
+print("  SAWAH INDO v8.1 ULTIMATE — XKID HUB")
+print("  Fix: Auto Beli Skema Baru + Lahan Per-Jenis")
 print("  Player: " .. myName)
-print(string.rep("=", 40))
+print(string.rep("=", 44))
