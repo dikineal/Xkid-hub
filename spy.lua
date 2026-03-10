@@ -1,16 +1,16 @@
--- ╔═════════════════════════════════════════════╗
--- ║  🌾 SAWAH INDO v9.0 ULTIMATE — XKID HUB    ║
--- ║  Decompile Edition: SyncData + Auto Confirm ║
--- ║  + Intercept Client Events + Shop Modes     ║
--- ║  Support: Android + Delta/Arceus/Fluxus     ║
--- ╚═════════════════════════════════════════════╝
+-- ╔══════════════════════════════════════════════╗
+-- ║  🌾 SAWAH INDO v9.1 ULTIMATE — XKID HUB     ║
+-- ║  Fix: Beli Bibit via GetBibit(0, false)      ║
+-- ║  Tidak perlu TP ke NPC lagi!                 ║
+-- ║  Support: Android + Delta/Arceus/Fluxus      ║
+-- ╚══════════════════════════════════════════════╝
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "🌾 SAWAH INDO v9.0 💸",
+    Name = "🌾 SAWAH INDO v9.1 ULTIMATE 💸",
     LoadingTitle = "XKID HUB",
-    LoadingSubtitle = "Decompile Edition 🔥",
+    LoadingSubtitle = "Fix: GetBibit Remote 🔥",
     ConfigurationSaving = {Enabled = false},
     KeySystem = false
 })
@@ -411,44 +411,63 @@ end
 
 -- ============================================
 -- ┌──────────────────────────────────────────┐
--- │  AUTO BELI BIBIT                          │
+-- │  AUTO BELI BIBIT — METODE BARU (FIX)      │
+-- │  Dari Remote Spy:                         │
+-- │  GetBibit [1]=0, [2]=false                │
+-- │  → Server langsung buka GUI bibit         │
+-- │  → TIDAK perlu TP ke NPC / ProxPrompt!    │
 -- └──────────────────────────────────────────┘
 -- ============================================
 
 local function autoBeliBibit(bibit, jumlah)
-    bibit=bibit or selectedBibit; jumlah=jumlah or jumlahBeli
-    local npc=cari("npcbibit")
-    if not npc then notif("NPC ❌","npcbibit tidak ditemukan!",3); return false end
-    tp(npc); task.wait(0.8)
-    local prompt=nil
-    local si=npc:IsA("Model") and npc or npc.Parent
-    for _,v in pairs(si:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then prompt=v; break end
-    end
-    if not prompt then prompt=getPPDekat(15) end
-    if prompt then firePrompt(prompt); task.wait(1.5) end
+    bibit  = bibit  or selectedBibit
+    jumlah = jumlah or jumlahBeli
 
-    local gui=LocalPlayer:WaitForChild("PlayerGui",5)
-    if gui and jumlah>1 then
-        for _,v in pairs(gui:GetDescendants()) do
-            if v:IsA("TextButton") and v.Text=="+" and v.Visible then
-                for i=1,jumlah-1 do klikUI(v); task.wait(0.05) end; break
+    -- Step 1: Fire GetBibit ke server dengan (0, false)
+    -- Server akan balas kirim GetBibit ke client → buka ShopUI("bibit")
+    local ok, res = fireR("GetBibit", 0, false)
+    if not ok then
+        notif("GetBibit ❌", "Remote gagal: "..tostring(res), 3)
+        return false
+    end
+
+    -- Step 2: Tunggu GUI bibit terbuka
+    task.wait(1.5)
+
+    local gui = LocalPlayer:WaitForChild("PlayerGui", 5)
+    if not gui then return false end
+
+    -- Step 3: Atur jumlah (tombol +)
+    if jumlah > 1 then
+        local fg = gui:FindFirstChild("FarmGui") or gui
+        for _, v in pairs(fg:GetDescendants()) do
+            if v:IsA("TextButton") and v.Text == "+" and v.Visible then
+                for i = 1, jumlah - 1 do
+                    klikUI(v); task.wait(0.05)
+                end
+                break
             end
         end
         task.wait(0.2)
     end
 
-    local berhasil=false
-    gui=LocalPlayer:WaitForChild("PlayerGui",5)
-    if gui then
-        for _,v in pairs(gui:GetDescendants()) do
-            if v:IsA("TextButton") and v.Visible then
-                local t=v.Text:lower()
-                if t:find("beli") or t:find("buy") then klikUI(v); berhasil=true; break end
+    -- Step 4: Klik tombol Beli / Buy
+    local berhasil = false
+    local fg = gui:FindFirstChild("FarmGui") or gui
+    for _, v in pairs(fg:GetDescendants()) do
+        if v:IsA("TextButton") and v.Visible then
+            local t = v.Text:lower()
+            if t:find("beli") or t:find("buy") then
+                klikUI(v); berhasil = true; break
             end
         end
     end
-    task.wait(0.3); tutupGUI(); return berhasil
+
+    -- Step 5: Tutup GUI
+    task.wait(0.3)
+    tutupGUI()
+
+    return berhasil
 end
 
 -- ============================================
@@ -998,6 +1017,9 @@ for _,b in ipairs(BIBIT) do
 end
 
 TabBibit:CreateSection("🔄 Auto Beli Loop")
+TabBibit:CreateParagraph({
+    Title="✅ Metode Baru (Remote Spy)",
+    Content="Fire GetBibit(0, false) → server buka GUI bibit\n→ Script auto klik beli\n\nTidak perlu TP ke NPC lagi! 🎉"})
 TabBibit:CreateToggle({Name="🛒 Auto Beli Bibit", CurrentValue=false,
     Callback=function(v)
         _G.AutoBeli=v
@@ -1005,7 +1027,7 @@ TabBibit:CreateToggle({Name="🛒 Auto Beli Bibit", CurrentValue=false,
             notif("Auto Beli ON ✅",selectedBibit.." x"..jumlahBeli,3)
             BeliLoop=task.spawn(function()
                 while _G.AutoBeli do
-                    local npc=cari("npcbibit"); if npc then tp(npc) end; task.wait(1)
+                    -- Langsung fire GetBibit(0, false) — tidak perlu TP ke NPC!
                     local ok=autoBeliBibit(selectedBibit,jumlahBeli)
                     if ok then notif("Auto Beli ✅",selectedBibit.." x"..jumlahBeli,2) end
                     task.wait(10)
@@ -1467,9 +1489,9 @@ task.spawn(function()
     end
 end)
 
-notif("🌾 SAWAH INDO v9.0","Welcome "..myName.."! Decompile Edition 🔥",5)
+notif("🌾 SAWAH INDO v9.1","Welcome "..myName.."! 🔥",5)
 task.wait(1)
-notif("✨ Fitur Baru v9.0","SyncData + Auto Confirm\n+ Intercept Events + Shop Modes",6)
+notif("✅ Fix v9.1","Beli Bibit: GetBibit(0,false)\nTidak perlu TP ke NPC lagi!",6)
 task.wait(1.5)
 notif("Langkah 1","Tab 🌾 Posisi Lahan → Simpan posisi",5)
 task.wait(1.3)
@@ -1477,8 +1499,8 @@ notif("Langkah 2","Tab 👤 Player Info → Aktifkan Intercepts",5)
 task.wait(1.3)
 notif("Langkah 3","Tab 🤖 Auto Farm → Pilih jenis → ON 🔥",5)
 
-print(string.rep("=",48))
-print("  SAWAH INDO v9.0 ULTIMATE — XKID HUB")
-print("  Decompile Edition — Intercept + SyncData")
+print(string.rep("=",50))
+print("  SAWAH INDO v9.1 ULTIMATE — XKID HUB")
+print("  Fix: GetBibit(0,false) — No NPC TP needed!")
 print("  Player: "..myName)
-print(string.rep("=",48))
+print(string.rep("=",50))
