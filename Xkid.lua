@@ -1,63 +1,31 @@
-repeat task.wait() until game:IsLoaded()
+-- Load UI Library
+local Library = loadstring(game:HttpGet('https://gist.githubusercontent.com/MjContiga1/6e2c779299e9bf3d3f9edb5bff97b2fb/raw/29b9f1cc215ad4e583271d1ad229f34c921553a8/Lib%2520ui%2520test.lua'))()
 
-getgenv().Image = "rbxassetid://95816097006870"
+-- Create Window
+local window = Library:Window('XKID.HUB')
 
--- Load Fluent
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+-- Tabs
+local mainTab = window:Tab('Main')
+local playerTab = window:Tab('Player')
+local settingsTab = window:Tab('Settings')
 
-local Window = Fluent:CreateWindow({
-    Title = "XKID.HUB",
-    SubTitle = "by XKID",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580,460),
-    Acrylic = true,
-    Theme = "Dark"
-})
-
-local Main = Window:AddTab({ Title = "Main", Icon = "" })
-
-Main:AddParagraph({
-    Title = "XKID HUB",
-    Content = "Script Loaded Successfully"
-})
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
 ------------------------------------------------
--- MOBILE OPEN BUTTON
+-- INFO
 ------------------------------------------------
 
-local OpenUI = Instance.new("ScreenGui")
-local ImageButton = Instance.new("ImageButton")
-local UICorner = Instance.new("UICorner")
-
-OpenUI.Name = "XKID_UI"
-OpenUI.Parent = game.CoreGui
-
-ImageButton.Parent = OpenUI
-ImageButton.BackgroundColor3 = Color3.fromRGB(105,105,105)
-ImageButton.BackgroundTransparency = 0.2
-ImageButton.Position = UDim2.new(0.9,0,0.2,0)
-ImageButton.Size = UDim2.new(0,50,0,50)
-ImageButton.Image = getgenv().Image
-ImageButton.Draggable = true
-
-UICorner.CornerRadius = UDim.new(0,200)
-UICorner.Parent = ImageButton
-
--- TOGGLE UI (WORKS ON MOBILE)
-ImageButton.MouseButton1Click:Connect(function()
-    Fluent:Toggle()
-end)
+mainTab:Label("Welcome to XKID.HUB")
+mainTab:Label("Mobile Supported")
 
 ------------------------------------------------
 -- ANTI AFK
 ------------------------------------------------
 
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+mainTab:Toggle('Anti AFK', false, function(state)
 
-Main:AddButton({
-    Title = "Anti AFK",
-    Callback = function()
+    if state then
         local vu = game:GetService("VirtualUser")
 
         LocalPlayer.Idled:Connect(function()
@@ -65,43 +33,76 @@ Main:AddButton({
             task.wait(1)
             vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
         end)
+
     end
-})
+
+end)
 
 ------------------------------------------------
 -- SPEED
 ------------------------------------------------
 
-Main:AddSlider("Speed",{
-    Title = "WalkSpeed",
-    Default = 16,
-    Min = 16,
-    Max = 200,
-    Callback = function(Value)
-        if LocalPlayer.Character then
-            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = Value
-        end
+playerTab:Slider("Walk Speed", 16, 200, 16, function(value)
+
+    if LocalPlayer.Character then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = value
     end
-})
+
+end)
 
 ------------------------------------------------
 -- JUMP
 ------------------------------------------------
 
-Main:AddSlider("Jump",{
-    Title = "JumpPower",
-    Default = 50,
-    Min = 50,
-    Max = 200,
-    Callback = function(Value)
-        if LocalPlayer.Character then
-            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = Value
-        end
-    end
-})
+playerTab:Slider("Jump Power", 50, 200, 50, function(value)
 
-Fluent:Notify({
-    Title = "XKID.HUB",
-    Content = "Loaded Successfully",
-    Duration = 5
-})
+    if LocalPlayer.Character then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = value
+    end
+
+end)
+
+------------------------------------------------
+-- FLY
+------------------------------------------------
+
+local flying = false
+
+playerTab:Toggle('Fly', false, function(state)
+
+    flying = state
+
+    if flying then
+
+        local char = LocalPlayer.Character
+        local hrp = char:WaitForChild("HumanoidRootPart")
+
+        local bv = Instance.new("BodyVelocity")
+        bv.MaxForce = Vector3.new(100000,100000,100000)
+        bv.Velocity = Vector3.new(0,0,0)
+        bv.Parent = hrp
+
+        while flying do
+            bv.Velocity = workspace.CurrentCamera.CFrame.LookVector * 60
+            task.wait()
+        end
+
+        bv:Destroy()
+
+    end
+
+end)
+
+------------------------------------------------
+-- SETTINGS
+------------------------------------------------
+
+settingsTab:Label("UI Settings")
+
+settingsTab:Toggle('Dark Mode', true, function(state)
+    print("Dark Mode:", state)
+end)
+
+settingsTab:Button('Destroy UI', function()
+    game.CoreGui:FindFirstChild("XKID.HUB"):Destroy()
+end)
