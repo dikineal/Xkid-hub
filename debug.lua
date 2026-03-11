@@ -1,5 +1,5 @@
 --====================================================
--- XKID HUB | SAWAH INDO ULTIMATE v5.1
+-- XKID HUB | SAWAH INDO XKID.HUB v5.1
 -- Remote Spy Update + Auto Farm Fix
 --====================================================
 
