@@ -3,10 +3,9 @@
 -- 3itx UI LIB
 --====================================================
 
--- Load UI
-local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Just3itx/3itx-UI-LIB/main/source.lua"))()
+local lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Just3itx/3itx-UI-LIB/refs/heads/main/Lib"))()
+local FlagsManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Just3itx/3itx-UI-LIB/refs/heads/main/ConfigManager"))()
 
--- Services
 local Players = game:GetService("Players")
 local VirtualUser = game:GetService("VirtualUser")
 local RunService = game:GetService("RunService")
@@ -14,15 +13,29 @@ local RunService = game:GetService("RunService")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Window
-local Window = UI:CreateWindow({
+--====================================================
+-- WINDOW
+--====================================================
+
+local main = lib:Load({
     Title = "XKID_HUB",
-    Size = UDim2.fromOffset(520,420)
+    ToggleButton = "rbxassetid://7733658504",
+    BindGui = Enum.KeyCode.RightControl
 })
 
--- Tabs
-local Main = Window:CreateTab("Main")
-local Utility = Window:CreateTab("Utility")
+local Main = main:AddTab("Main")
+main:SelectTab()
+
+--====================================================
+-- SECTION
+--====================================================
+
+local MainSection = Main:AddSection({
+    Title = "Player Controls",
+    Description = "Movement & Utility",
+    Defualt = false,
+    Locked = false
+})
 
 --====================================================
 -- ANTI AFK
@@ -30,42 +43,39 @@ local Utility = Window:CreateTab("Utility")
 
 local AntiAFK = false
 
-Main:CreateToggle({
-    Name = "Anti AFK",
+MainSection:AddToggle("AntiAFK",{
+    Title = "Anti AFK",
     Default = false,
-    Callback = function(v)
-        AntiAFK = v
+    Callback = function(state)
+        AntiAFK = state
     end
 })
 
 task.spawn(function()
-
     while task.wait(60) do
-
         if AntiAFK then
             pcall(function()
                 VirtualUser:CaptureController()
                 VirtualUser:ClickButton2(Vector2.new())
             end)
         end
-
     end
-
 end)
 
 --====================================================
 -- WALK SPEED
 --====================================================
 
-Main:CreateSlider({
-    Name = "WalkSpeed",
+MainSection:AddSlider("WalkSpeed",{
+    Title = "WalkSpeed",
+    Default = 16,
     Min = 10,
     Max = 200,
-    Default = 16,
-    Callback = function(v)
+    Increment = 1,
+    Callback = function(value)
 
         if Player.Character and Player.Character:FindFirstChild("Humanoid") then
-            Player.Character.Humanoid.WalkSpeed = v
+            Player.Character.Humanoid.WalkSpeed = value
         end
 
     end
@@ -101,44 +111,44 @@ local function StartFly()
 
 end
 
-Main:CreateToggle({
-    Name = "Fly",
+MainSection:AddToggle("Fly",{
+    Title = "Fly",
     Default = false,
-    Callback = function(v)
+    Callback = function(state)
 
-        Flying = v
+        Flying = state
 
-        if v then
+        if state then
             StartFly()
         end
 
     end
 })
 
-Main:CreateSlider({
-    Name = "Fly Speed",
+MainSection:AddSlider("FlySpeed",{
+    Title = "Fly Speed",
+    Default = 60,
     Min = 20,
     Max = 150,
-    Default = 60,
-    Callback = function(v)
-        FlySpeed = v
+    Increment = 1,
+    Callback = function(value)
+        FlySpeed = value
     end
 })
 
 --====================================================
--- UTILITY
+-- CONFIG TAB
 --====================================================
 
-Utility:CreateButton({
-    Name = "Print Position",
-    Callback = function()
-        print(Player.Character.HumanoidRootPart.Position)
-    end
-})
+local Config = main:AddTab("Config")
 
-Utility:CreateButton({
-    Name = "Rejoin Server",
-    Callback = function()
-        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
-    end
-})
+FlagsManager:SetLibrary(lib)
+FlagsManager:SetIgnoreIndexes({})
+FlagsManager:SetFolder("XKID_HUB")
+FlagsManager:InitSaveSystem(Config)
+
+--====================================================
+-- NOTIFICATION
+--====================================================
+
+lib:Notification("XKID_HUB","Loaded Successfully!",3)
