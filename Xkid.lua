@@ -1,10 +1,10 @@
 --====================================================
 -- XKID_HUB
--- Ash-Libs Template + Anti AFK + Mobile Fly
+-- WindUI Template + Anti AFK + Fly
 --====================================================
 
--- UI Library
-local GUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/BloodLetters/Ash-Libs/refs/heads/main/source.lua"))()
+-- Load WindUI
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/library.lua"))()
 
 -- Services
 local Players = game:GetService("Players")
@@ -15,35 +15,18 @@ local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 --====================================================
--- MAIN WINDOW
+-- WINDOW
 --====================================================
 
-GUI:CreateMain({
-    Name = "XKID_HUB",
-    title = "XKID_HUB",
-    ToggleUI = "K",
-    WindowIcon = "home",
-    Theme = {
-        Background = Color3.fromRGB(20,20,30),
-        Secondary = Color3.fromRGB(30,30,40),
-        Accent = Color3.fromRGB(130,80,255),
-        Text = Color3.fromRGB(255,255,255),
-        TextSecondary = Color3.fromRGB(180,180,180),
-        Border = Color3.fromRGB(45,45,60),
-        NavBackground = Color3.fromRGB(15,15,25)
-    }
+local Window = WindUI:CreateWindow({
+    Title = "XKID_HUB",
+    Icon = "home",
+    Size = UDim2.fromOffset(580, 460),
 })
 
---====================================================
--- MAIN TAB
---====================================================
-
-local main = GUI:CreateTab("Main","home")
-
-GUI:CreateSection({
-    parent = main,
-    text = "XKID_HUB Controls"
-})
+-- Tabs
+local MainTab = Window:CreateTab("Main")
+local UtilityTab = Window:CreateTab("Utility")
 
 --====================================================
 -- ANTI AFK
@@ -51,12 +34,11 @@ GUI:CreateSection({
 
 local AntiAFK = true
 
-GUI:CreateToggle({
-    parent = main,
-    text = "Anti AFK",
-    default = true,
-    callback = function(state)
-        AntiAFK = state
+MainTab:CreateToggle({
+    Title = "Anti AFK",
+    Default = true,
+    Callback = function(v)
+        AntiAFK = v
     end
 })
 
@@ -72,88 +54,73 @@ task.spawn(function()
 end)
 
 --====================================================
--- MOBILE + PC FLY
+-- FLY (ANDROID + PC)
 --====================================================
 
 local Flying = false
 local FlySpeed = 60
-local FlyVelocity
+local BV
 
 local function StartFly()
 
-    local character = Player.Character or Player.CharacterAdded:Wait()
-    local root = character:WaitForChild("HumanoidRootPart")
+    local char = Player.Character or Player.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
 
-    FlyVelocity = Instance.new("BodyVelocity")
-    FlyVelocity.MaxForce = Vector3.new(9e9,9e9,9e9)
-    FlyVelocity.Velocity = Vector3.zero
-    FlyVelocity.Parent = root
+    BV = Instance.new("BodyVelocity")
+    BV.MaxForce = Vector3.new(9e9,9e9,9e9)
+    BV.Velocity = Vector3.zero
+    BV.Parent = root
 
     RunService.RenderStepped:Connect(function()
 
         if not Flying then
-            if FlyVelocity then
-                FlyVelocity:Destroy()
-            end
+            if BV then BV:Destroy() end
             return
         end
 
         local direction = Camera.CFrame.LookVector
-        FlyVelocity.Velocity = direction * FlySpeed
+        BV.Velocity = direction * FlySpeed
 
     end)
 
 end
 
-GUI:CreateToggle({
-    parent = main,
-    text = "Fly (Mobile + PC)",
-    default = false,
-    callback = function(state)
-
-        Flying = state
-
-        if state then
+MainTab:CreateToggle({
+    Title = "Fly",
+    Default = false,
+    Callback = function(v)
+        Flying = v
+        if v then
             StartFly()
         end
-
     end
 })
 
-GUI:CreateSlider({
-    parent = main,
-    text = "Fly Speed",
-    min = 20,
-    max = 150,
-    default = 60,
-    function(value)
-        FlySpeed = value
+MainTab:CreateSlider({
+    Title = "Fly Speed",
+    Min = 20,
+    Max = 150,
+    Default = 60,
+    Callback = function(v)
+        FlySpeed = v
     end
 })
 
 --====================================================
--- UTILITY TAB
+-- UTILITY
 --====================================================
 
-local util = GUI:CreateTab("Utility","settings")
-
-GUI:CreateButton({
-    parent = util,
-    text = "Print Position",
-    callback = function()
-
+UtilityTab:CreateButton({
+    Title = "Print Position",
+    Callback = function()
         local pos = Player.Character.HumanoidRootPart.Position
-        print("Position:",pos)
-
+        print("Position:", pos)
     end
 })
 
-GUI:CreateButton({
-    parent = util,
-    text = "Rejoin Server",
-    callback = function()
-
-        game:GetService("TeleportService"):Teleport(game.PlaceId,Player)
-
+UtilityTab:CreateButton({
+    Title = "Rejoin Server",
+    Callback = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
     end
 })
