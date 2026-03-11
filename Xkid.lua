@@ -12,27 +12,30 @@ local settingsTab = window:Tab('Settings')
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
-------------------------------------------------
--- MINIMIZE SYSTEM
-------------------------------------------------
+-------------------------------------------------
+-- CREATE OPEN BUTTON
+-------------------------------------------------
 
-local MinimizeGui = Instance.new("ScreenGui")
-MinimizeGui.Name = "XKID_MINIMIZE"
-MinimizeGui.Parent = game.CoreGui
+local OpenGui = Instance.new("ScreenGui")
+OpenGui.Parent = game.CoreGui
 
 local OpenButton = Instance.new("ImageButton")
-OpenButton.Parent = MinimizeGui
+OpenButton.Parent = OpenGui
 OpenButton.Size = UDim2.new(0,50,0,50)
-OpenButton.Position = UDim2.new(0.9,0,0.25,0)
+OpenButton.Position = UDim2.new(0.9,0,0.2,0)
 OpenButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
 OpenButton.Image = "rbxassetid://95816097006870"
 OpenButton.Draggable = true
 OpenButton.Visible = false
 
+-------------------------------------------------
+-- HIDE SYSTEM
+-------------------------------------------------
+
 local function HideUI()
 
     for _,v in pairs(game.CoreGui:GetChildren()) do
-        if v.Name == "XKID.HUB" or v.Name == "Example UI" then
+        if v:IsA("ScreenGui") and v ~= OpenGui then
             v.Enabled = false
         end
     end
@@ -44,7 +47,7 @@ end
 OpenButton.MouseButton1Click:Connect(function()
 
     for _,v in pairs(game.CoreGui:GetChildren()) do
-        if v.Name == "XKID.HUB" or v.Name == "Example UI" then
+        if v:IsA("ScreenGui") then
             v.Enabled = true
         end
     end
@@ -53,24 +56,23 @@ OpenButton.MouseButton1Click:Connect(function()
 
 end)
 
-------------------------------------------------
+-------------------------------------------------
 -- MAIN
-------------------------------------------------
+-------------------------------------------------
 
 mainTab:Label("Welcome to XKID.HUB")
 
-mainTab:Button("Minimize UI", function()
+mainTab:Button("Hide UI", function()
     HideUI()
 end)
 
-------------------------------------------------
+-------------------------------------------------
 -- ANTI AFK
-------------------------------------------------
+-------------------------------------------------
 
-mainTab:Toggle('Anti AFK', false, function(state)
+mainTab:Toggle("Anti AFK", false, function(state)
 
     if state then
-
         local vu = game:GetService("VirtualUser")
 
         LocalPlayer.Idled:Connect(function()
@@ -80,16 +82,15 @@ mainTab:Toggle('Anti AFK', false, function(state)
             vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
 
         end)
-
     end
 
 end)
 
-------------------------------------------------
+-------------------------------------------------
 -- SPEED
-------------------------------------------------
+-------------------------------------------------
 
-playerTab:Slider("Walk Speed", 16, 200, 16, function(value)
+playerTab:Slider("Walk Speed",16,200,16,function(value)
 
     if LocalPlayer.Character then
         LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = value
@@ -97,11 +98,11 @@ playerTab:Slider("Walk Speed", 16, 200, 16, function(value)
 
 end)
 
-------------------------------------------------
+-------------------------------------------------
 -- JUMP
-------------------------------------------------
+-------------------------------------------------
 
-playerTab:Slider("Jump Power", 50, 200, 50, function(value)
+playerTab:Slider("Jump Power",50,200,50,function(value)
 
     if LocalPlayer.Character then
         LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = value
@@ -109,13 +110,13 @@ playerTab:Slider("Jump Power", 50, 200, 50, function(value)
 
 end)
 
-------------------------------------------------
+-------------------------------------------------
 -- FLY
-------------------------------------------------
+-------------------------------------------------
 
 local flying = false
 
-playerTab:Toggle('Fly', false, function(state)
+playerTab:Toggle("Fly",false,function(state)
 
     flying = state
 
@@ -126,7 +127,6 @@ playerTab:Toggle('Fly', false, function(state)
 
         local bv = Instance.new("BodyVelocity")
         bv.MaxForce = Vector3.new(100000,100000,100000)
-        bv.Velocity = Vector3.new(0,0,0)
         bv.Parent = hrp
 
         while flying do
@@ -140,8 +140,8 @@ playerTab:Toggle('Fly', false, function(state)
 
 end)
 
-------------------------------------------------
+-------------------------------------------------
 -- SETTINGS
-------------------------------------------------
+-------------------------------------------------
 
-settingsTab:Label("XKID HUB Settings")
+settingsTab:Label("XKID HUB SETTINGS")
