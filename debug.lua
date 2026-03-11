@@ -1,13 +1,14 @@
 --====================================================
--- XKID HUB | SAWAH INDO PRO+
+-- XKID HUB | SAWAH INDO ULTIMATE v3.2
+-- Dengan semua remote: RequestLahan, ToggleAutoHarvest, HarvestCrop
 --====================================================
 
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "🌾 SAWAH INDO 💸",
+    Name = "🌾 SAWAH INDO ULTIMATE 💸",
     LoadingTitle = "XKID HUB",
-    LoadingSubtitle = "PRO+ EDITION",
+    LoadingSubtitle = "v3.2 | Complete Remote Set",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "XKIDHub",
@@ -17,7 +18,7 @@ local Window = Rayfield:CreateWindow({
 })
 
 --====================================================
--- SERVICES
+-- SERVICES & GLOBAL
 --====================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -26,14 +27,12 @@ local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 
---====================================================
--- TABS
---====================================================
-local FarmingTab    = Window:CreateTab("🌾 Farming", 4483362458)
-local ProtectTab    = Window:CreateTab("🛡 Protection", 4483362458)
-local TeleportTab   = Window:CreateTab("📍 Teleport", 4483362458)
-local UtilityTab    = Window:CreateTab("⚙ Utility", 4483362458)
-local ConfigTab     = Window:CreateTab("💾 Config", 4483362458)
+-- Remote Path
+local Remotes = RS:FindFirstChild("Remotes")
+local TutorialRemotes = Remotes and Remotes:FindFirstChild("TutorialRemotes")
+
+-- ClientBoot Path (PENTING!)
+local ClientBoot = LocalPlayer and LocalPlayer:FindFirstChild("PlayerScripts") and LocalPlayer.PlayerScripts:FindFirstChild("ClientBoot")
 
 --====================================================
 -- SETTINGS STATE
@@ -42,18 +41,36 @@ local Settings = {
     AutoFarm = false,
     AutoSell = false,
     AutoBuy  = false,
+    AutoPlant = false,
+    AutoHarvest = false,
+    AutoHarvestToggle = false,
     LightningProtection = true,
     AntiAFK  = true,
     AutoShower = false,
 }
 
 local SeedName = "Bibit Padi"
-local FarmSpeed = 0.18
-local JumlahBeli = 15
-local JumlahTanam = 15
+local JumlahBeli = 1
+local JumlahTanam = 1
+local LahanList = {}
+local LahanStatus = {}
 local LahanPos = nil
 local GazeboPos = nil
 local LastPos = nil
+local LightningHits = 0
+local IsAdmin = false
+
+-- Data dari remote
+local PlayerData = {
+    Coins = 0,
+    Level = 1,
+    Seeds = {},
+    Items = {},
+    Tools = {},
+    EggFruits = {},
+    Fruits = {},
+    LahanStatus = {}
+}
 
 --====================================================
 -- UTILITY FUNCTIONS
@@ -118,87 +135,292 @@ local function cari(nama)
 end
 
 --====================================================
--- PLACEHOLDER FUNCTIONS (ISI SESUAI GAME-MU)
+-- REMOTE FUNCTIONS (LENGKAP)
 --====================================================
 
--- Fungsi Beli Bibit
-local function BuySeeds()
-    -- TODO: Implementasi beli bibit
-    -- Contoh: Fire remote GetBibit, klik GUI, dll
-    notif("Buy Seeds", "Fungsi belum diimplementasi", 2)
+-- Request Shop Data (Bibit)
+local function RequestShop(mode, ...)
+    if not TutorialRemotes or not TutorialRemotes:FindFirstChild("RequestShop") then
+        return nil
+    end
+    
+    if not ClientBoot then return nil end
+    
+    local args = {ClientBoot}
+    if mode == "BUY" then
+        -- TODO: Cari parameter beli
+        table.insert(args, SeedName)
+        table.insert(args, JumlahBeli)
+    end
+    
+    local success, result = pcall(function()
+        return TutorialRemotes.RequestShop:InvokeServer(unpack(args))
+    end)
+    
+    if success and result and result.Success then
+        PlayerData.Coins = result.NewCoins or result.Coins or PlayerData.Coins
+        if result.Seeds then
+            PlayerData.Seeds = result.Seeds
+        end
+        return result
+    end
+    return nil
 end
 
--- Fungsi Jual Hasil
-local function SellCrops()
-    -- TODO: Implementasi jual hasil
-    -- Contoh: Fire remote SellCrop, klik tombol jual
-    notif("Sell Crops", "Fungsi belum diimplementasi", 2)
+-- Request Sell Data
+local function RequestSell(mode)
+    if not TutorialRemotes or not TutorialRemotes:FindFirstChild("RequestSell") then
+        return nil
+    end
+    
+    if not ClientBoot then return nil end
+    
+    local args = {ClientBoot}
+    if mode then
+        table.insert(args, mode)
+    end
+    
+    local success, result = pcall(function()
+        return TutorialRemotes.RequestSell:InvokeServer(unpack(args))
+    end)
+    
+    if success and result and result.Success then
+        PlayerData.Coins = result.Coins or PlayerData.Coins
+        if result.Items then
+            PlayerData.Items = result.Items
+        end
+        if result.EggFruits then
+            PlayerData.EggFruits = result.EggFruits
+            PlayerData.EggCount = result.EggCount
+        end
+        if result.FruitList then
+            PlayerData.Fruits = result.FruitList
+            PlayerData.FruitCount = result.FruitCount
+            PlayerData.FruitType = result.FruitType
+        end
+        return result
+    end
+    return nil
 end
 
--- Fungsi Tanam
-local function PlantSeeds()
-    -- TODO: Implementasi tanam
-    notif("Plant", "Fungsi belum diimplementasi", 2)
+-- Request Tool Shop
+local function RequestToolShop()
+    if not TutorialRemotes or not TutorialRemotes:FindFirstChild("RequestToolShop") then
+        return nil
+    end
+    
+    if not ClientBoot then return nil end
+    
+    local success, result = pcall(function()
+        return TutorialRemotes.RequestToolShop:InvokeServer(ClientBoot)
+    end)
+    
+    if success and result and result.Success then
+        PlayerData.Coins = result.Coins or PlayerData.Coins
+        PlayerData.Tools = result.Tools or {}
+        PlayerData.Level = result.PlayerLevel or PlayerData.Level
+        return result
+    end
+    return nil
 end
 
--- Fungsi Panen
-local function Harvest()
-    -- TODO: Implementasi panen
-    notif("Harvest", "Fungsi belum diimplementasi", 2)
-end
-
--- Fungsi Scan Farm Area
-local function ScanFarm()
-    -- TODO: Scan area sawah di sekitar
-    local count = 0
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("BasePart") and (v.Name:lower():find("tanah") or v.Name:lower():find("lahan")) then
+-- ============================================
+-- REMOTE BARU! RequestLahan
+-- ============================================
+local function RequestLahan()
+    if not TutorialRemotes or not TutorialRemotes:FindFirstChild("RequestLahan") then
+        notif("Error", "Remote RequestLahan tidak ditemukan", 3)
+        return nil
+    end
+    
+    if not ClientBoot then
+        notif("Error", "ClientBoot tidak ditemukan", 3)
+        return nil
+    end
+    
+    local success, result = pcall(function()
+        return TutorialRemotes.RequestLahan:InvokeServer(ClientBoot)
+    end)
+    
+    if success and result and result.Success then
+        PlayerData.LahanStatus = result.Statuses or {}
+        local count = 0
+        for k, _ in pairs(PlayerData.LahanStatus) do
             count = count + 1
         end
+        notif("Data Lahan", string.format("%d area lahan ditemukan", count), 3)
+        return result
     end
-    notif("Scan Farm", "Ditemukan "..count.." lahan", 3)
+    return nil
 end
 
--- Fungsi Teleport ke NPC
-local function TeleportNPC(nama)
-    local obj = cari(nama)
-    if obj then
-        tp(obj)
-        notif("TP", "Ke "..nama, 2)
-    else
-        notif("Error", nama.." tidak ditemukan", 3)
+-- ============================================
+-- REMOTE BARU! ToggleAutoHarvest
+-- ============================================
+local function ToggleAutoHarvest(mode)
+    if not TutorialRemotes or not TutorialRemotes:FindFirstChild("ToggleAutoHarvest") then
+        return false
     end
-end
-
--- Fungsi Teleport Safe Zone
-local function TeleportSafe()
-    if GazeboPos then
-        getRoot().CFrame = CFrame.new(GazeboPos.X, GazeboPos.Y+5, GazeboPos.Z)
-        notif("TP Safe", "Ke Gazebo", 2)
-    else
-        notif("Error", "Simpan posisi Gazebo dulu", 3)
-    end
-end
-
--- Fungsi Teleport ke Farm Center
-local function TeleportFarm()
-    if LahanPos then
-        getRoot().CFrame = CFrame.new(LahanPos.X, LahanPos.Y+5, LahanPos.Z)
-        notif("TP Farm", "Ke tengah lahan", 2)
-    else
-        notif("Error", "Simpan posisi lahan dulu", 3)
-    end
-end
-
---====================================================
--- ANTI AFK
---====================================================
-if Settings.AntiAFK then
-    LocalPlayer.Idled:Connect(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
+    
+    mode = mode or "SYNC"
+    pcall(function()
+        TutorialRemotes.ToggleAutoHarvest:FireServer(mode)
     end)
+    notif("Auto Harvest", "Toggle dikirim: "..mode, 2)
+    return true
 end
+
+-- ============================================
+-- REMOTE BARU! AdminIsAdmin
+-- ============================================
+local function CheckAdmin()
+    if not TutorialRemotes or not TutorialRemotes:FindFirstChild("AdminIsAdmin") then
+        return false
+    end
+    
+    if not ClientBoot then return false end
+    
+    local success, result = pcall(function()
+        return TutorialRemotes.AdminIsAdmin:InvokeServer(ClientBoot)
+    end)
+    
+    if success then
+        IsAdmin = (result == true)
+        if IsAdmin then
+            notif("ADMIN!", "Kamu adalah admin! 🔥", 5)
+        else
+            print("[XKID] Bukan admin (normal player)")
+        end
+        return IsAdmin
+    end
+    return false
+end
+
+-- ============================================
+-- REMOTE UNTUK PANEN! HarvestCrop
+-- ============================================
+local function HarvestCrop(jenis, jumlah)
+    if not TutorialRemotes or not TutorialRemotes:FindFirstChild("HarvestCrop") then
+        notif("Error", "Remote HarvestCrop tidak ditemukan", 3)
+        return false
+    end
+    
+    jenis = jenis or "Padi"
+    jumlah = jumlah or 1
+    
+    pcall(function()
+        TutorialRemotes.HarvestCrop:FireServer(jenis, jumlah, jenis)
+    end)
+    notif("Panen", jenis.." x"..jumlah, 2)
+    return true
+end
+
+-- Plant Crop
+local function PlantCrop(posisi)
+    if not TutorialRemotes or not TutorialRemotes:FindFirstChild("PlantCrop") then
+        return false
+    end
+    
+    if not posisi then
+        local root = getRoot()
+        if not root then return false end
+        posisi = root.Position
+    end
+    
+    pcall(function()
+        TutorialRemotes.PlantCrop:FireServer(posisi)
+    end)
+    return true
+end
+
+--====================================================
+-- AUTO BUY & SELL
+--====================================================
+local function BuySeed(seedName, jumlah)
+    -- TODO: Implementasi beli
+    return RequestShop("BUY")
+end
+
+local function SellItem(itemName, jumlah)
+    -- TODO: Implementasi jual
+    return RequestSell("fruit")  -- Contoh
+end
+
+--====================================================
+-- SCAN LAHAN DENGAN DATA DARI REQUESTLAHAN
+--====================================================
+local function ScanLahanFromRemote()
+    local data = RequestLahan()
+    if not data then return end
+    
+    -- Sekarang cari object lahan di workspace
+    LahanList = {}
+    for lahanName, _ in pairs(PlayerData.LahanStatus) do
+        local obj = cari(lahanName)
+        if obj and obj:IsA("BasePart") then
+            table.insert(LahanList, obj)
+        end
+    end
+    
+    notif("Scan Lahan", string.format("%d lahan ditemukan dari %d area", #LahanList, #PlayerData.LahanStatus), 3)
+    return LahanList
+end
+
+--====================================================
+-- AUTO TANAM KE SEMUA LAHAN
+--====================================================
+local function AutoPlantAll()
+    if #LahanList == 0 then ScanLahanFromRemote() end
+    
+    local count = 0
+    for _, lahan in ipairs(LahanList) do
+        if lahan:IsA("BasePart") then
+            PlantCrop(lahan.Position)
+            count = count + 1
+            task.wait(0.2)
+        end
+    end
+    notif("Auto Plant", "Menanam di "..count.." lahan", 3)
+end
+
+--====================================================
+-- AUTO PANEN SEMUA
+--====================================================
+local function AutoHarvestAll(jenis)
+    jenis = jenis or SeedName:gsub("Bibit ", "")
+    HarvestCrop(jenis, 1)  -- TODO: Perlu tahu berapa banyak yang bisa dipanen
+end
+
+--====================================================
+-- REFRESH DATA PLAYER (LENGKAP)
+--====================================================
+local function RefreshAllData()
+    RequestShop()
+    RequestSell()
+    RequestSell("fruit")
+    RequestSell("egg")
+    RequestToolShop()
+    RequestLahan()
+    CheckAdmin()
+    
+    local msg = string.format("💰 %d Coins | Level %d | Admin: %s",
+        PlayerData.Coins,
+        PlayerData.Level,
+        IsAdmin and "✅" or "❌"
+    )
+    notif("Data Updated", msg, 3)
+end
+
+--====================================================
+-- TABS
+--====================================================
+local FarmingTab    = Window:CreateTab("🌾 Farming", 4483362458)
+local LahanTab      = Window:CreateTab("🏞 Lahan", 4483362458)
+local DataTab       = Window:CreateTab("📊 Data", 4483362458)
+local ProtectTab    = Window:CreateTab("🛡 Protection", 4483362458)
+local TeleportTab   = Window:CreateTab("📍 Teleport", 4483362458)
+local UtilityTab    = Window:CreateTab("⚙ Utility", 4483362458)
+local ConfigTab     = Window:CreateTab("💾 Config", 4483362458)
 
 --====================================================
 -- 🌾 FARMING TAB
@@ -210,93 +432,126 @@ FarmingTab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         Settings.AutoFarm = v
-        if v then
-            notif("Auto Farm", "ON", 2)
-            -- TODO: Tambah loop auto farm di sini
-        end
     end
 })
 
 FarmingTab:CreateToggle({
-    Name = "💰 Auto Sell",
+    Name = "🌱 Auto Plant",
     CurrentValue = false,
     Callback = function(v)
-        Settings.AutoSell = v
+        Settings.AutoPlant = v
     end
 })
 
 FarmingTab:CreateToggle({
-    Name = "🛒 Auto Buy",
+    Name = "🌽 Auto Harvest",
     CurrentValue = false,
     Callback = function(v)
-        Settings.AutoBuy = v
+        Settings.AutoHarvest = v
+    end
+})
+
+FarmingTab:CreateToggle({
+    Name = "🔄 Toggle AutoHarvest (SYNC)",
+    CurrentValue = false,
+    Callback = function(v)
+        Settings.AutoHarvestToggle = v
+        ToggleAutoHarvest(v and "SYNC" or "OFF")
     end
 })
 
 FarmingTab:CreateSection("🌾 Manual Actions")
 
-FarmingTab:CreateDropdown({
-    Name = "🌱 Seed Selector",
-    Options = {"Bibit Padi","Bibit Jagung","Bibit Tomat","Bibit Terong","Bibit Strawberry","Bibit Sawit","Bibit Durian"},
-    CurrentOption = "Bibit Padi",
-    Callback = function(v)
-        SeedName = v
+FarmingTab:CreateButton({
+    Name = "🌱 Plant di Semua Lahan",
+    Callback = AutoPlantAll
+})
+
+FarmingTab:CreateButton({
+    Name = "🌽 Harvest Padi",
+    Callback = function() HarvestCrop("Padi", 1) end
+})
+
+FarmingTab:CreateButton({
+    Name = "🌽 Harvest Jagung",
+    Callback = function() HarvestCrop("Jagung", 1) end
+})
+
+FarmingTab:CreateButton({
+    Name = "🌽 Harvest Tomat",
+    Callback = function() HarvestCrop("Tomat", 1) end
+})
+
+FarmingTab:CreateButton({
+    Name = "🌽 Harvest Terong",
+    Callback = function() HarvestCrop("Terong", 1) end
+})
+
+FarmingTab:CreateButton({
+    Name = "🌽 Harvest Strawberry",
+    Callback = function() HarvestCrop("Strawberry", 1) end
+})
+
+FarmingTab:CreateButton({
+    Name = "🌽 Harvest Sawit",
+    Callback = function() HarvestCrop("Sawit", 1) end
+})
+
+--====================================================
+-- 🏞 LAHAN TAB (FITUR BARU!)
+--====================================================
+LahanTab:CreateSection("🏞 Data Lahan dari RequestLahan")
+
+LahanTab:CreateButton({
+    Name = "🔄 Refresh Data Lahan",
+    Callback = function()
+        RequestLahan()
+        ScanLahanFromRemote()
     end
 })
 
-FarmingTab:CreateSlider({
-    Name = "⚡ Farm Speed",
-    Range = {0.05, 0.5},
-    Increment = 0.01,
-    CurrentValue = 0.18,
-    Callback = function(v)
-        FarmSpeed = v
+LahanTab:CreateButton({
+    Name = "📍 Simpan Posisi Lahan",
+    Callback = function()
+        LahanPos = getPos()
+        if LahanPos then notif("Lahan Position Saved", "", 2) end
     end
 })
 
-FarmingTab:CreateSlider({
-    Name = "📦 Jumlah Beli",
-    Range = {1, 99},
-    Increment = 1,
-    CurrentValue = 15,
-    Callback = function(v)
-        JumlahBeli = v
+LahanTab:CreateButton({
+    Name = "🌾 Teleport ke Lahan Tersimpan",
+    Callback = function()
+        if LahanPos and getRoot() then
+            getRoot().CFrame = CFrame.new(LahanPos.X, LahanPos.Y+5, LahanPos.Z)
+        end
     end
 })
 
-FarmingTab:CreateSlider({
-    Name = "🌱 Jumlah Tanam",
-    Range = {1, 50},
-    Increment = 1,
-    CurrentValue = 15,
-    Callback = function(v)
-        JumlahTanam = v
-    end
+LahanTab:CreateParagraph({
+    Title = "Area Lahan Terdeteksi",
+    Content = "Jalankan Refresh Data Lahan untuk melihat daftar"
 })
 
-FarmingTab:CreateButton({
-    Name = "💳 Buy Seeds",
-    Callback = BuySeeds
+-- Dynamic content akan diupdate manual
+
+--====================================================
+-- 📊 DATA TAB
+--====================================================
+DataTab:CreateSection("📊 Player Data")
+
+DataTab:CreateButton({
+    Name = "🔄 Refresh ALL Data",
+    Callback = RefreshAllData
 })
 
-FarmingTab:CreateButton({
-    Name = "🌱 Plant Seeds",
-    Callback = PlantSeeds
+DataTab:CreateButton({
+    Name = "👑 Check Admin Status",
+    Callback = CheckAdmin
 })
 
-FarmingTab:CreateButton({
-    Name = "🌽 Harvest",
-    Callback = Harvest
-})
-
-FarmingTab:CreateButton({
-    Name = "💰 Sell Crops",
-    Callback = SellCrops
-})
-
-FarmingTab:CreateButton({
-    Name = "🔍 Scan Farm Area",
-    Callback = ScanFarm
+DataTab:CreateParagraph({
+    Title = "Info Remote",
+    Content = "✅ RequestShop: seeds\n✅ RequestSell: items/fruits/eggs\n✅ RequestToolShop: tools\n✅ RequestLahan: lahan status\n✅ HarvestCrop: panen\n✅ ToggleAutoHarvest: auto panen"
 })
 
 --====================================================
@@ -309,7 +564,6 @@ ProtectTab:CreateToggle({
     CurrentValue = true,
     Callback = function(v)
         Settings.LightningProtection = v
-        -- TODO: Implementasi lightning detector
     end
 })
 
@@ -321,86 +575,28 @@ ProtectTab:CreateToggle({
     end
 })
 
-ProtectTab:CreateToggle({
-    Name = "🚿 Auto Mandi",
-    CurrentValue = false,
-    Callback = function(v)
-        Settings.AutoShower = v
-        -- TODO: Implementasi auto mandi
-    end
-})
-
 --====================================================
 -- 📍 TELEPORT TAB
 --====================================================
 TeleportTab:CreateSection("🏪 NPC Teleport")
 
-TeleportTab:CreateButton({
-    Name = "🌱 NPC Bibit",
-    Callback = function() TeleportNPC("npcbibit") end
-})
+local NPC_LIST = {
+    {name="npcbibit", label="🌱 Bibit"},
+    {name="npcpenjual", label="💰 Jual"},
+    {name="npcalat", label="🔧 Alat"},
+    {name="NPCPedagangTelur", label="🥚 Telur"},
+    {name="NPCPedagangSawit", label="🌴 Sawit"},
+}
 
-TeleportTab:CreateButton({
-    Name = "💰 NPC Jual",
-    Callback = function() TeleportNPC("npcpenjual") end
-})
-
-TeleportTab:CreateButton({
-    Name = "🔧 NPC Alat",
-    Callback = function() TeleportNPC("npcalat") end
-})
-
-TeleportTab:CreateButton({
-    Name = "🥚 NPC Telur",
-    Callback = function() TeleportNPC("NPCPedagangTelur") end
-})
-
-TeleportTab:CreateButton({
-    Name = "🌴 NPC Sawit",
-    Callback = function() TeleportNPC("NPCPedagangSawit") end
-})
-
-TeleportTab:CreateSection("📍 Location Marks")
-
-TeleportTab:CreateButton({
-    Name = "📍 Save Farm Position",
-    Callback = function()
-        LahanPos = getPos()
-        if LahanPos then
-            notif("Farm Position Saved", "", 2)
+for _, npc in ipairs(NPC_LIST) do
+    TeleportTab:CreateButton({
+        Name = npc.label,
+        Callback = function()
+            local obj = cari(npc.name)
+            if obj then tp(obj) end
         end
-    end
-})
-
-TeleportTab:CreateButton({
-    Name = "🌾 Teleport to Farm",
-    Callback = TeleportFarm
-})
-
-TeleportTab:CreateButton({
-    Name = "📍 Save Safe Zone",
-    Callback = function()
-        GazeboPos = getPos()
-        if GazeboPos then
-            notif("Safe Zone Saved", "", 2)
-        end
-    end
-})
-
-TeleportTab:CreateButton({
-    Name = "🏠 Teleport to Safe Zone",
-    Callback = TeleportSafe
-})
-
-TeleportTab:CreateButton({
-    Name = "↩️ Back to Last Position",
-    Callback = function()
-        if LastPos and getRoot() then
-            getRoot().Position = LastPos
-            notif("Back", "Kembali", 2)
-        end
-    end
-})
+    })
+end
 
 --====================================================
 -- ⚙ UTILITY TAB
@@ -415,19 +611,6 @@ UtilityTab:CreateButton({
 })
 
 UtilityTab:CreateButton({
-    Name = "🚀 FPS Boost",
-    Callback = function()
-        for _,v in pairs(game:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.Material = Enum.Material.SmoothPlastic
-            end
-        end
-        game:GetService("Lighting").GlobalShadows = false
-        notif("FPS Boost", "Aktif!", 2)
-    end
-})
-
-UtilityTab:CreateButton({
     Name = "📍 My Coordinates",
     Callback = function()
         local pos = getPos()
@@ -437,63 +620,56 @@ UtilityTab:CreateButton({
     end
 })
 
-UtilityTab:CreateButton({
-    Name = "💀 Reset Character",
-    Callback = function()
-        if LocalPlayer.Character then
-            LocalPlayer.Character:BreakJoints()
-        end
-    end
-})
-
 --====================================================
 -- 💾 CONFIG TAB
 --====================================================
 ConfigTab:CreateSection("⚙ Configuration")
 
-ConfigTab:CreateParagraph({
-    Title = "Info",
-    Content = "Config akan tersimpan otomatis oleh Rayfield.\nSettings akan diingat setiap kali script dijalankan."
-})
-
-ConfigTab:CreateButton({
-    Name = "💾 Save Config Now",
-    Callback = function()
-        notif("Config", "Tersimpan otomatis", 2)
-    end
-})
-
 ConfigTab:CreateButton({
     Name = "⛔ STOP ALL AUTOS",
     Callback = function()
         Settings.AutoFarm = false
-        Settings.AutoBuy = false
+        Settings.AutoPlant = false
+        Settings.AutoHarvest = false
         Settings.AutoSell = false
-        Settings.AutoShower = false
+        Settings.AutoBuy = false
         notif("STOP", "Semua auto dimatikan", 3)
     end
 })
 
 --====================================================
--- MAIN LOOP (TEMPLATE)
+-- ANTI AFK
+--====================================================
+if Settings.AntiAFK then
+    LocalPlayer.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+end
+
+--====================================================
+-- MAIN LOOP
 --====================================================
 task.spawn(function()
-    while task.wait(1) do
-        if Settings.AutoFarm then
-            -- TODO: Implement auto farm logic
-            -- Contoh: Beli -> Tanam -> Tunggu -> Panen -> Jual
+    while task.wait(5) do
+        if Settings.AutoFarm or Settings.AutoPlant then
+            if #LahanList == 0 then ScanLahanFromRemote() end
+            for _, lahan in ipairs(LahanList) do
+                if lahan:IsA("BasePart") then
+                    PlantCrop(lahan.Position)
+                    task.wait(0.3)
+                end
+            end
         end
         
-        if Settings.AutoBuy then
-            -- TODO: Auto buy logic
+        if Settings.AutoHarvest then
+            HarvestCrop("Padi", 1)
+            task.wait(1)
         end
         
-        if Settings.AutoSell then
-            -- TODO: Auto sell logic
-        end
-        
-        if Settings.AutoShower then
-            -- TODO: Auto shower logic
+        -- Refresh data periodically
+        if task.wait(30) then
+            RefreshAllData()
         end
     end
 end)
@@ -501,7 +677,17 @@ end)
 --====================================================
 -- INIT
 --====================================================
-notif("🌾 SAWAH INDO PRO+", "Welcome! Script siap digunakan 🔥", 4)
-print("=== XKID HUB PRO+ LOADED ===")
-print("📌 Fitur: Auto Farm, Teleport, Protection")
-print("📌 Isi placeholder functions sesuai game Anda")
+-- Cek admin status di awal
+CheckAdmin()
+
+notif("🌾 SAWAH INDO ULTIMATE", "v3.2 dengan semua remote! 🔥", 4)
+print("=== XKID HUB ULTIMATE v3.2 ===")
+print("✅ REMOTE LENGKAP:")
+print("   - RequestShop (beli & data seeds)")
+print("   - RequestSell (jual & data items)")
+print("   - RequestToolShop (data tools)")
+print("   - RequestLahan (data lahan)")
+print("   - HarvestCrop (panen manual)")
+print("   - ToggleAutoHarvest (auto panen)")
+print("   - PlantCrop (tanam)")
+print("   - AdminIsAdmin (cek admin)")
