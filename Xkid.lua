@@ -1,67 +1,133 @@
 --====================================================
--- XKID_HUB MODAL TEMPLATE
--- Clean UI • Anti AFK
+-- XKID_HUB
+-- Ash-Libs Template + Anti AFK + Mobile Fly
 --====================================================
+
+-- UI Library
+local GUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/BloodLetters/Ash-Libs/refs/heads/main/source.lua"))()
 
 -- Services
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
+local RunService = game:GetService("RunService")
 
 local Player = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
--- UI Library
-local Modal = loadstring(game:HttpGet("https://github.com/BloxCrypto/Modal/releases/download/v1.0-beta/main.lua"))()
+--====================================================
+-- MAIN WINDOW
+--====================================================
 
-local Window = Modal:CreateWindow({
-    Title = "XKID_HUB",
-    SubTitle = "Script Hub",
-    Size = UDim2.fromOffset(420, 420),
-    MinimumSize = Vector2.new(300, 250),
-    Transparency = 0,
-    Icon = "rbxassetid://68073547",
+GUI:CreateMain({
+    Name = "XKID_HUB",
+    title = "XKID_HUB",
+    ToggleUI = "K",
+    WindowIcon = "home",
+    Theme = {
+        Background = Color3.fromRGB(20,20,30),
+        Secondary = Color3.fromRGB(30,30,40),
+        Accent = Color3.fromRGB(130,80,255),
+        Text = Color3.fromRGB(255,255,255),
+        TextSecondary = Color3.fromRGB(180,180,180),
+        Border = Color3.fromRGB(45,45,60),
+        NavBackground = Color3.fromRGB(15,15,25)
+    }
 })
 
 --====================================================
--- HOME TAB
+-- MAIN TAB
 --====================================================
 
-local Home = Window:AddTab("Home")
+local main = GUI:CreateTab("Main","home")
 
-Home:New("Title")({
-    Title = "Welcome to XKID_HUB"
+GUI:CreateSection({
+    parent = main,
+    text = "XKID_HUB Controls"
 })
 
-Home:New("Button")({
-    Title = "Show Notification",
-    Description = "Test notification system",
-    Callback = function()
+--====================================================
+-- ANTI AFK
+--====================================================
 
-        Window:Notify({
-            Title = "XKID_HUB",
-            Description = "Hub working successfully",
-            Duration = 5,
-            Type = "Success"
-        })
+local AntiAFK = true
+
+GUI:CreateToggle({
+    parent = main,
+    text = "Anti AFK",
+    default = true,
+    callback = function(state)
+        AntiAFK = state
+    end
+})
+
+task.spawn(function()
+    while task.wait(60) do
+        if AntiAFK then
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+        end
+    end
+end)
+
+--====================================================
+-- MOBILE + PC FLY
+--====================================================
+
+local Flying = false
+local FlySpeed = 60
+local FlyVelocity
+
+local function StartFly()
+
+    local character = Player.Character or Player.CharacterAdded:Wait()
+    local root = character:WaitForChild("HumanoidRootPart")
+
+    FlyVelocity = Instance.new("BodyVelocity")
+    FlyVelocity.MaxForce = Vector3.new(9e9,9e9,9e9)
+    FlyVelocity.Velocity = Vector3.zero
+    FlyVelocity.Parent = root
+
+    RunService.RenderStepped:Connect(function()
+
+        if not Flying then
+            if FlyVelocity then
+                FlyVelocity:Destroy()
+            end
+            return
+        end
+
+        local direction = Camera.CFrame.LookVector
+        FlyVelocity.Velocity = direction * FlySpeed
+
+    end)
+
+end
+
+GUI:CreateToggle({
+    parent = main,
+    text = "Fly (Mobile + PC)",
+    default = false,
+    callback = function(state)
+
+        Flying = state
+
+        if state then
+            StartFly()
+        end
 
     end
 })
 
---====================================================
--- SCRIPTS TAB
---====================================================
-
-local Scripts = Window:AddTab("Scripts")
-
-Scripts:New("Title")({
-    Title = "Script Loader"
-})
-
-Scripts:New("Button")({
-    Title = "Example Script",
-    Description = "Run test script",
-    Callback = function()
-        print("Example script executed")
+GUI:CreateSlider({
+    parent = main,
+    text = "Fly Speed",
+    min = 20,
+    max = 150,
+    default = 60,
+    function(value)
+        FlySpeed = value
     end
 })
 
@@ -69,73 +135,25 @@ Scripts:New("Button")({
 -- UTILITY TAB
 --====================================================
 
-local Utility = Window:AddTab("Utility")
+local util = GUI:CreateTab("Utility","settings")
 
-Utility:New("Title")({
-    Title = "Utility Tools"
-})
-
-Utility:New("Button")({
-    Title = "Print Position",
-    Description = "Print player position",
-    Callback = function()
+GUI:CreateButton({
+    parent = util,
+    text = "Print Position",
+    callback = function()
 
         local pos = Player.Character.HumanoidRootPart.Position
-        print("Position:", pos)
+        print("Position:",pos)
 
     end
 })
 
-Utility:New("Button")({
-    Title = "Rejoin Server",
-    Description = "Reconnect to server",
-    Callback = function()
+GUI:CreateButton({
+    parent = util,
+    text = "Rejoin Server",
+    callback = function()
 
-        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+        game:GetService("TeleportService"):Teleport(game.PlaceId,Player)
 
     end
 })
-
---====================================================
--- ANTI AFK
---====================================================
-
-task.spawn(function()
-
-    while task.wait(60) do
-
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end)
-
-    end
-
-end)
-
---====================================================
--- SETTINGS TAB
---====================================================
-
-local Settings = Window:AddTab("Settings")
-
-Settings:New("Dropdown")({
-    Title = "Theme",
-    Description = "Select UI theme",
-    Options = { "Light", "Dark", "Midnight", "Rose", "Emerald" },
-    Callback = function(Theme)
-        Window:SetTheme(Theme)
-    end,
-})
-
-Settings:New("Button")({
-    Title = "Destroy GUI",
-    Description = "Remove UI",
-    Callback = function()
-        Window:Destroy()
-    end
-})
-
--- Default UI settings
-Window:SetTab("Home")
-Window:SetTheme("Midnight")
