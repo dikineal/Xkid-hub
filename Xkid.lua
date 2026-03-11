@@ -1,147 +1,131 @@
--- Load UI library
-local Library = loadstring(game:HttpGet('https://gist.githubusercontent.com/MjContiga1/6e2c779299e9bf3d3f9edb5bff97b2fb/raw/29b9f1cc215ad4e583271d1ad229f34c921553a8/Lib%2520ui%2520test.lua'))()
+-- XKID.HUB
 
--- Create window
-local window = Library:Window('XKID.HUB')
+Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"))()
 
--- Tabs
-local mainTab = window:Tab('Main')
-local playerTab = window:Tab('Player')
-local settingsTab = window:Tab('Settings')
+local Win = Library:Window("XKID.HUB", "crown", "Version 1.0 | by XKID", false)
+
+Win:TabSection("XKID HUB")
+
+local Main = Win:Tab("Main", "home")
+local Player = Win:Tab("Player", "user")
+
+local MainPage = Main:Page("Main", "menu")
+local PlayerPage = Player:Page("Player Mods", "zap")
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--------------------------------------------------
--- CREATE OPEN BUTTON
--------------------------------------------------
+------------------------------------------------
+-- INFO
+------------------------------------------------
 
-local OpenGui = Instance.new("ScreenGui")
-OpenGui.Parent = game.CoreGui
+MainPage:Paragraph("Welcome","Welcome to XKID.HUB Script")
 
-local OpenButton = Instance.new("ImageButton")
-OpenButton.Parent = OpenGui
-OpenButton.Size = UDim2.new(0,50,0,50)
-OpenButton.Position = UDim2.new(0.9,0,0.2,0)
-OpenButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
-OpenButton.Image = "rbxassetid://95816097006870"
-OpenButton.Draggable = true
-OpenButton.Visible = false
+------------------------------------------------
+-- ANTI AFK
+------------------------------------------------
 
--------------------------------------------------
--- HIDE SYSTEM
--------------------------------------------------
+MainPage:Toggle("Anti AFK","antiafk",false,"Prevent AFK kick","Left",function(state)
 
-local function HideUI()
+if state then
 
-    for _,v in pairs(game.CoreGui:GetChildren()) do
-        if v:IsA("ScreenGui") and v ~= OpenGui then
-            v.Enabled = false
-        end
-    end
+local vu = game:GetService("VirtualUser")
 
-    OpenButton.Visible = true
+LocalPlayer.Idled:Connect(function()
+
+vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+task.wait(1)
+vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+
+end)
 
 end
 
-OpenButton.MouseButton1Click:Connect(function()
-
-    for _,v in pairs(game.CoreGui:GetChildren()) do
-        if v:IsA("ScreenGui") then
-            v.Enabled = true
-        end
-    end
-
-    OpenButton.Visible = false
-
 end)
 
--------------------------------------------------
--- MAIN
--------------------------------------------------
-
-mainTab:Label("Welcome to XKID.HUB")
-
-mainTab:Button("Hide UI", function()
-    HideUI()
-end)
-
--------------------------------------------------
--- ANTI AFK
--------------------------------------------------
-
-mainTab:Toggle("Anti AFK", false, function(state)
-
-    if state then
-        local vu = game:GetService("VirtualUser")
-
-        LocalPlayer.Idled:Connect(function()
-
-            vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
-            task.wait(1)
-            vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
-
-        end)
-    end
-
-end)
-
--------------------------------------------------
+------------------------------------------------
 -- SPEED
--------------------------------------------------
+------------------------------------------------
 
-playerTab:Slider("Walk Speed",16,200,16,function(value)
+PlayerPage:Slider("WalkSpeed","speed",16,200,16,function(val)
 
-    if LocalPlayer.Character then
-        LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = value
-    end
+if LocalPlayer.Character then
+LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = val
+end
 
-end)
+end,"Change player speed")
 
--------------------------------------------------
+------------------------------------------------
 -- JUMP
--------------------------------------------------
+------------------------------------------------
 
-playerTab:Slider("Jump Power",50,200,50,function(value)
+PlayerPage:Slider("JumpPower","jump",50,200,50,function(val)
 
-    if LocalPlayer.Character then
-        LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = value
-    end
+if LocalPlayer.Character then
+LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = val
+end
+
+end,"Change jump power")
+
+------------------------------------------------
+-- INFINITE JUMP
+------------------------------------------------
+
+local infjump = false
+
+PlayerPage:Toggle("Infinite Jump","infjump",false,"Jump unlimited times","Right",function(state)
+
+infjump = state
 
 end)
 
--------------------------------------------------
+game:GetService("UserInputService").JumpRequest:Connect(function()
+
+if infjump then
+
+local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+humanoid:ChangeState("Jumping")
+
+end
+
+end)
+
+------------------------------------------------
 -- FLY
--------------------------------------------------
+------------------------------------------------
 
 local flying = false
 
-playerTab:Toggle("Fly",false,function(state)
+PlayerPage:Toggle("Fly","fly",false,"Fly around the map","Right",function(state)
 
-    flying = state
+flying = state
 
-    if flying then
+if flying then
 
-        local char = LocalPlayer.Character
-        local hrp = char:WaitForChild("HumanoidRootPart")
+local char = LocalPlayer.Character
+local hrp = char:WaitForChild("HumanoidRootPart")
 
-        local bv = Instance.new("BodyVelocity")
-        bv.MaxForce = Vector3.new(100000,100000,100000)
-        bv.Parent = hrp
+local bv = Instance.new("BodyVelocity")
+bv.MaxForce = Vector3.new(100000,100000,100000)
+bv.Parent = hrp
 
-        while flying do
-            bv.Velocity = workspace.CurrentCamera.CFrame.LookVector * 60
-            task.wait()
-        end
+while flying do
 
-        bv:Destroy()
+bv.Velocity = workspace.CurrentCamera.CFrame.LookVector * 60
+task.wait()
 
-    end
+end
+
+bv:Destroy()
+
+end
 
 end)
 
--------------------------------------------------
--- SETTINGS
--------------------------------------------------
+------------------------------------------------
+-- NOTIFICATION
+------------------------------------------------
 
-settingsTab:Label("XKID HUB SETTINGS")
+Library:Notification("XKID.HUB","Loaded Successfully!",5)
+
+Library:ConfigSystem(Win)
