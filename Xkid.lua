@@ -1,26 +1,50 @@
+repeat task.wait() until game:IsLoaded()
+
 --====================================================
--- XKID_HUB
--- Fluent UI | Resizable | Stable
+-- MOBILE TOGGLE BUTTON
 --====================================================
 
--- Destroy old UI
-pcall(function()
-    game.CoreGui:FindFirstChild("Fluent"):Destroy()
-end)
+getgenv().Image = "rbxassetid://95816097006870"
+getgenv().ToggleUI = Enum.KeyCode.E
 
--- Load Fluent
+if not getgenv().LoadedMobileUI then
+    getgenv().LoadedMobileUI = true
+
+    local OpenUI = Instance.new("ScreenGui")
+    local Button = Instance.new("ImageButton")
+    local Corner = Instance.new("UICorner")
+
+    OpenUI.Name = "XKID_MobileToggle"
+    OpenUI.Parent = game.CoreGui
+
+    Button.Parent = OpenUI
+    Button.Size = UDim2.new(0,50,0,50)
+    Button.Position = UDim2.new(0.9,0,0.2,0)
+    Button.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    Button.BackgroundTransparency = 0.3
+    Button.Image = getgenv().Image
+    Button.Draggable = true
+
+    Corner.Parent = Button
+    Corner.CornerRadius = UDim.new(0,100)
+
+    Button.MouseButton1Click:Connect(function()
+        game:GetService("VirtualInputManager"):SendKeyEvent(
+            true,
+            getgenv().ToggleUI,
+            false,
+            game
+        )
+    end)
+end
+
+--====================================================
+-- LOAD FLUENT
+--====================================================
+
 local Fluent = loadstring(game:HttpGet(
 "https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
 ))()
-
--- Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local VirtualUser = game:GetService("VirtualUser")
-local UIS = game:GetService("UserInputService")
-
-local Player = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
 --====================================================
 -- WINDOW
@@ -30,56 +54,46 @@ local Window = Fluent:CreateWindow({
     Title = "XKID_HUB",
     SubTitle = "Fluent Interface",
     TabWidth = 160,
-    Size = UDim2.fromOffset(620,450), -- resizable
+    Size = UDim2.fromOffset(580,460),
     Acrylic = true,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+    MinimizeKey = Enum.KeyCode.E
 })
 
--- Tabs
+--====================================================
+-- TABS
+--====================================================
+
 local Tabs = {
-    Main = Window:AddTab({ Title = "Player", Icon = "user" }),
-    Utility = Window:AddTab({ Title = "Utility", Icon = "settings" }),
-    Settings = Window:AddTab({ Title = "Settings", Icon = "sliders" })
+    Main = Window:AddTab({Title="Main",Icon="home"}),
+    Player = Window:AddTab({Title="Player",Icon="user"}),
+    Utility = Window:AddTab({Title="Utility",Icon="settings"})
 }
 
 --====================================================
--- ANTI AFK
+-- MAIN TAB
 --====================================================
 
-local AntiAFK = true
-
-Tabs.Main:AddToggle("AntiAFK", {
-    Title = "Anti AFK",
-    Default = true
+Tabs.Main:AddParagraph({
+    Title = "XKID HUB",
+    Content = "Welcome to XKID Hub.\nUI supports mobile toggle and resize."
 })
 
-Tabs.Main.AntiAFK:OnChanged(function(v)
-    AntiAFK = v
-end)
-
-task.spawn(function()
-    while task.wait(60) do
-        if AntiAFK then
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end
-    end
-end)
-
 --====================================================
--- WALK SPEED
+-- PLAYER FEATURES
 --====================================================
 
-Tabs.Main:AddSlider("Speed", {
-    Title = "WalkSpeed",
-    Default = 16,
-    Min = 10,
-    Max = 200,
-    Rounding = 0
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+
+Tabs.Player:AddSlider("WalkSpeed",{
+    Title="WalkSpeed",
+    Min=16,
+    Max=200,
+    Default=16
 })
 
-Tabs.Main.Speed:OnChanged(function(v)
+Tabs.Player.WalkSpeed:OnChanged(function(v)
 
     local char = Player.Character
     if char and char:FindFirstChild("Humanoid") then
@@ -88,18 +102,14 @@ Tabs.Main.Speed:OnChanged(function(v)
 
 end)
 
---====================================================
--- JUMP POWER
---====================================================
-
-Tabs.Main:AddSlider("Jump", {
-    Title = "JumpPower",
-    Default = 50,
-    Min = 20,
-    Max = 200
+Tabs.Player:AddSlider("JumpPower",{
+    Title="JumpPower",
+    Min=50,
+    Max=200,
+    Default=50
 })
 
-Tabs.Main.Jump:OnChanged(function(v)
+Tabs.Player.JumpPower:OnChanged(function(v)
 
     local char = Player.Character
     if char and char:FindFirstChild("Humanoid") then
@@ -109,127 +119,30 @@ Tabs.Main.Jump:OnChanged(function(v)
 end)
 
 --====================================================
--- INFINITE JUMP
---====================================================
-
-local InfJump = false
-
-Tabs.Main:AddToggle("InfJump", {
-    Title = "Infinite Jump",
-    Default = false
-})
-
-Tabs.Main.InfJump:OnChanged(function(v)
-    InfJump = v
-end)
-
-UIS.JumpRequest:Connect(function()
-
-    if InfJump then
-        local char = Player.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid:ChangeState("Jumping")
-        end
-    end
-
-end)
-
---====================================================
--- FLY
---====================================================
-
-local Flying = false
-local FlySpeed = 60
-local BV
-
-local function StartFly()
-
-    local char = Player.Character
-    if not char then return end
-
-    local root = char:FindFirstChild("HumanoidRootPart")
-
-    BV = Instance.new("BodyVelocity")
-    BV.MaxForce = Vector3.new(9e9,9e9,9e9)
-    BV.Parent = root
-
-    RunService.RenderStepped:Connect(function()
-
-        if not Flying then
-            if BV then BV:Destroy() end
-            return
-        end
-
-        BV.Velocity = Camera.CFrame.LookVector * FlySpeed
-
-    end)
-
-end
-
-Tabs.Main:AddToggle("Fly", {
-    Title = "Fly",
-    Default = false
-})
-
-Tabs.Main.Fly:OnChanged(function(v)
-
-    Flying = v
-
-    if v then
-        StartFly()
-    end
-
-end)
-
-Tabs.Main:AddSlider("FlySpeed", {
-    Title = "Fly Speed",
-    Default = 60,
-    Min = 20,
-    Max = 150
-})
-
-Tabs.Main.FlySpeed:OnChanged(function(v)
-    FlySpeed = v
-end)
-
---====================================================
 -- UTILITY
 --====================================================
 
 Tabs.Utility:AddButton({
-    Title = "Print Position",
-    Callback = function()
-        print(Player.Character.HumanoidRootPart.Position)
-    end
-})
-
-Tabs.Utility:AddButton({
-    Title = "Rejoin Server",
-    Callback = function()
+    Title="Rejoin Server",
+    Callback=function()
         game:GetService("TeleportService"):Teleport(game.PlaceId,Player)
     end
 })
 
---====================================================
--- SETTINGS
---====================================================
-
-Tabs.Settings:AddDropdown("Theme", {
-    Title = "UI Theme",
-    Values = {"Dark","Light","Aqua","Amethyst"},
-    Default = "Dark"
+Tabs.Utility:AddButton({
+    Title="Copy Position",
+    Callback=function()
+        local pos = Player.Character.HumanoidRootPart.Position
+        setclipboard(tostring(pos))
+    end
 })
 
-Tabs.Settings.Theme:OnChanged(function(v)
-    Fluent:SetTheme(v)
-end)
-
 --====================================================
--- LOADED
+-- NOTIFY
 --====================================================
 
 Fluent:Notify({
-    Title = "XKID_HUB",
-    Content = "Hub Loaded Successfully",
-    Duration = 5
+    Title="XKID_HUB",
+    Content="Script Loaded Successfully",
+    Duration=5
 })
