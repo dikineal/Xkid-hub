@@ -1,40 +1,37 @@
 --====================================================
 -- XKID_HUB
--- 3itx UI LIB
+-- Modal UI + Resize + Anti AFK + Fly
 --====================================================
 
-local lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Just3itx/3itx-UI-LIB/refs/heads/main/Lib"))()
-local FlagsManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Just3itx/3itx-UI-LIB/refs/heads/main/ConfigManager"))()
-
+-- Services
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
 local RunService = game:GetService("RunService")
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
---====================================================
--- WINDOW
---====================================================
+-- UI
+local Modal = loadstring(game:HttpGet("https://github.com/BloxCrypto/Modal/releases/download/v1.0-beta/main.lua"))()
 
-local main = lib:Load({
+local Window = Modal:CreateWindow({
     Title = "XKID_HUB",
-    ToggleButton = "rbxassetid://7733658504",
-    BindGui = Enum.KeyCode.RightControl
+    SubTitle = "Modal Interface",
+    Size = UDim2.fromOffset(500, 420),
+    MinimumSize = Vector2.new(300, 250), -- resize limit
+    Transparency = 0,
+    Icon = "rbxassetid://68073547",
 })
 
-local Main = main:AddTab("Main")
-main:SelectTab()
-
 --====================================================
--- SECTION
+-- MAIN TAB
 --====================================================
 
-local MainSection = Main:AddSection({
-    Title = "Player Controls",
-    Description = "Movement & Utility",
-    Defualt = false,
-    Locked = false
+local Main = Window:AddTab("Main")
+
+Main:New("Title")({
+    Title = "Player Controls"
 })
 
 --====================================================
@@ -43,11 +40,11 @@ local MainSection = Main:AddSection({
 
 local AntiAFK = false
 
-MainSection:AddToggle("AntiAFK",{
+Main:New("Toggle")({
     Title = "Anti AFK",
-    Default = false,
-    Callback = function(state)
-        AntiAFK = state
+    DefaultValue = false,
+    Callback = function(v)
+        AntiAFK = v
     end
 })
 
@@ -66,18 +63,15 @@ end)
 -- WALK SPEED
 --====================================================
 
-MainSection:AddSlider("WalkSpeed",{
+Main:New("Slider")({
     Title = "WalkSpeed",
     Default = 16,
-    Min = 10,
-    Max = 200,
-    Increment = 1,
-    Callback = function(value)
-
+    Minimum = 10,
+    Maximum = 200,
+    Callback = function(v)
         if Player.Character and Player.Character:FindFirstChild("Humanoid") then
-            Player.Character.Humanoid.WalkSpeed = value
+            Player.Character.Humanoid.WalkSpeed = v
         end
-
     end
 })
 
@@ -111,44 +105,71 @@ local function StartFly()
 
 end
 
-MainSection:AddToggle("Fly",{
+Main:New("Toggle")({
     Title = "Fly",
-    Default = false,
-    Callback = function(state)
+    DefaultValue = false,
+    Callback = function(v)
 
-        Flying = state
+        Flying = v
 
-        if state then
+        if v then
             StartFly()
         end
 
     end
 })
 
-MainSection:AddSlider("FlySpeed",{
+Main:New("Slider")({
     Title = "Fly Speed",
     Default = 60,
-    Min = 20,
-    Max = 150,
-    Increment = 1,
-    Callback = function(value)
-        FlySpeed = value
+    Minimum = 20,
+    Maximum = 150,
+    Callback = function(v)
+        FlySpeed = v
     end
 })
 
 --====================================================
--- CONFIG TAB
+-- UTILITY TAB
 --====================================================
 
-local Config = main:AddTab("Config")
+local Utility = Window:AddTab("Utility")
 
-FlagsManager:SetLibrary(lib)
-FlagsManager:SetIgnoreIndexes({})
-FlagsManager:SetFolder("XKID_HUB")
-FlagsManager:InitSaveSystem(Config)
+Utility:New("Button")({
+    Title = "Print Position",
+    Callback = function()
+        print(Player.Character.HumanoidRootPart.Position)
+    end
+})
+
+Utility:New("Button")({
+    Title = "Rejoin Server",
+    Callback = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+    end
+})
 
 --====================================================
--- NOTIFICATION
+-- SETTINGS TAB
 --====================================================
 
-lib:Notification("XKID_HUB","Loaded Successfully!",3)
+local Settings = Window:AddTab("Settings")
+
+Settings:New("Dropdown")({
+    Title = "Theme",
+    Options = { "Light", "Dark", "Midnight", "Rose", "Emerald" },
+    Default = "Rose",
+    Callback = function(theme)
+        Window:SetTheme(theme)
+    end
+})
+
+Settings:New("Button")({
+    Title = "Destroy GUI",
+    Callback = function()
+        Window:Destroy()
+    end
+})
+
+Window:SetTheme("Rose")
+Window:SetTab("Main")
