@@ -1,7 +1,7 @@
--- Load UI Library
+-- Load UI library
 local Library = loadstring(game:HttpGet('https://gist.githubusercontent.com/MjContiga1/6e2c779299e9bf3d3f9edb5bff97b2fb/raw/29b9f1cc215ad4e583271d1ad229f34c921553a8/Lib%2520ui%2520test.lua'))()
 
--- Create Window
+-- Create window
 local window = Library:Window('XKID.HUB')
 
 -- Tabs
@@ -13,11 +13,55 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 ------------------------------------------------
--- INFO
+-- MINIMIZE SYSTEM
+------------------------------------------------
+
+local MinimizeGui = Instance.new("ScreenGui")
+MinimizeGui.Name = "XKID_MINIMIZE"
+MinimizeGui.Parent = game.CoreGui
+
+local OpenButton = Instance.new("ImageButton")
+OpenButton.Parent = MinimizeGui
+OpenButton.Size = UDim2.new(0,50,0,50)
+OpenButton.Position = UDim2.new(0.9,0,0.25,0)
+OpenButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
+OpenButton.Image = "rbxassetid://95816097006870"
+OpenButton.Draggable = true
+OpenButton.Visible = false
+
+local function HideUI()
+
+    for _,v in pairs(game.CoreGui:GetChildren()) do
+        if v.Name == "XKID.HUB" or v.Name == "Example UI" then
+            v.Enabled = false
+        end
+    end
+
+    OpenButton.Visible = true
+
+end
+
+OpenButton.MouseButton1Click:Connect(function()
+
+    for _,v in pairs(game.CoreGui:GetChildren()) do
+        if v.Name == "XKID.HUB" or v.Name == "Example UI" then
+            v.Enabled = true
+        end
+    end
+
+    OpenButton.Visible = false
+
+end)
+
+------------------------------------------------
+-- MAIN
 ------------------------------------------------
 
 mainTab:Label("Welcome to XKID.HUB")
-mainTab:Label("Mobile Supported")
+
+mainTab:Button("Minimize UI", function()
+    HideUI()
+end)
 
 ------------------------------------------------
 -- ANTI AFK
@@ -26,12 +70,15 @@ mainTab:Label("Mobile Supported")
 mainTab:Toggle('Anti AFK', false, function(state)
 
     if state then
+
         local vu = game:GetService("VirtualUser")
 
         LocalPlayer.Idled:Connect(function()
+
             vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
             task.wait(1)
             vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+
         end)
 
     end
@@ -97,12 +144,4 @@ end)
 -- SETTINGS
 ------------------------------------------------
 
-settingsTab:Label("UI Settings")
-
-settingsTab:Toggle('Dark Mode', true, function(state)
-    print("Dark Mode:", state)
-end)
-
-settingsTab:Button('Destroy UI', function()
-    game.CoreGui:FindFirstChild("XKID.HUB"):Destroy()
-end)
+settingsTab:Label("XKID HUB Settings")
