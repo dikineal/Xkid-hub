@@ -1,10 +1,12 @@
 --====================================================
 -- XKID_HUB
--- WindUI Template + Anti AFK + Fly
+-- Luna Interface Suite
 --====================================================
 
--- Load WindUI
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/library.lua"))()
+-- Load Library
+local Luna = loadstring(game:HttpGet(
+"https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/main/source.lua"
+))()
 
 -- Services
 local Players = game:GetService("Players")
@@ -14,19 +16,23 @@ local RunService = game:GetService("RunService")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
---====================================================
--- WINDOW
---====================================================
-
-local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB",
-    Icon = "home",
-    Size = UDim2.fromOffset(580, 460),
+-- Window
+local Window = Luna:CreateWindow({
+    Name = "XKID_HUB",
+    Subtitle = "Luna Interface",
+    LoadingEnabled = true
 })
 
 -- Tabs
-local MainTab = Window:CreateTab("Main")
-local UtilityTab = Window:CreateTab("Utility")
+local Main = Window:CreateTab({
+    Name = "Main",
+    Icon = "home"
+})
+
+local Utility = Window:CreateTab({
+    Name = "Utility",
+    Icon = "settings"
+})
 
 --====================================================
 -- ANTI AFK
@@ -34,9 +40,9 @@ local UtilityTab = Window:CreateTab("Utility")
 
 local AntiAFK = true
 
-MainTab:CreateToggle({
-    Title = "Anti AFK",
-    Default = true,
+Main:CreateToggle({
+    Name = "Anti AFK",
+    CurrentValue = true,
     Callback = function(v)
         AntiAFK = v
     end
@@ -68,7 +74,6 @@ local function StartFly()
 
     BV = Instance.new("BodyVelocity")
     BV.MaxForce = Vector3.new(9e9,9e9,9e9)
-    BV.Velocity = Vector3.zero
     BV.Parent = root
 
     RunService.RenderStepped:Connect(function()
@@ -78,16 +83,15 @@ local function StartFly()
             return
         end
 
-        local direction = Camera.CFrame.LookVector
-        BV.Velocity = direction * FlySpeed
+        BV.Velocity = Camera.CFrame.LookVector * FlySpeed
 
     end)
 
 end
 
-MainTab:CreateToggle({
-    Title = "Fly",
-    Default = false,
+Main:CreateToggle({
+    Name = "Fly",
+    CurrentValue = false,
     Callback = function(v)
         Flying = v
         if v then
@@ -96,11 +100,11 @@ MainTab:CreateToggle({
     end
 })
 
-MainTab:CreateSlider({
-    Title = "Fly Speed",
-    Min = 20,
-    Max = 150,
-    Default = 60,
+Main:CreateSlider({
+    Name = "Fly Speed",
+    Range = {20,150},
+    Increment = 5,
+    CurrentValue = 60,
     Callback = function(v)
         FlySpeed = v
     end
@@ -110,17 +114,9 @@ MainTab:CreateSlider({
 -- UTILITY
 --====================================================
 
-UtilityTab:CreateButton({
-    Title = "Print Position",
+Utility:CreateButton({
+    Name = "Rejoin Server",
     Callback = function()
-        local pos = Player.Character.HumanoidRootPart.Position
-        print("Position:", pos)
-    end
-})
-
-UtilityTab:CreateButton({
-    Title = "Rejoin Server",
-    Callback = function()
-        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+        game:GetService("TeleportService"):Teleport(game.PlaceId,Player)
     end
 })
