@@ -1,12 +1,10 @@
 --====================================================
 -- XKID_HUB
--- Fluent UI Template
+-- BSMTUI Template
 --====================================================
 
--- Load Fluent
-local Fluent = loadstring(game:HttpGet(
-"https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
-))()
+-- Load Library
+local library = loadstring(game:HttpGet("https://thebasement.ink/BSMTUI"))()
 
 -- Services
 local Players = game:GetService("Players")
@@ -16,39 +14,24 @@ local RunService = game:GetService("RunService")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
+-- Window
+local window = library:Create("XKID_HUB", UDim2.new(0, 500, 0, 400))
+
 --====================================================
--- WINDOW
+-- MAIN TAB
 --====================================================
 
-local Window = Fluent:CreateWindow({
-    Title = "XKID_HUB",
-    SubTitle = "Fluent Interface",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(600, 420), -- resize base
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
-})
-
--- Tabs
-local Tabs = {
-    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
-    Utility = Window:AddTab({ Title = "Utility", Icon = "settings" })
-}
+local Main = window:Tab("Main", "rbxassetid://10734950309")
+local Controls = Main:Section("Player Controls")
 
 --====================================================
 -- ANTI AFK
 --====================================================
 
-local AntiAFK = true
+local AntiAFK = false
 
-Tabs.Main:AddToggle("AntiAFK", {
-    Title = "Anti AFK",
-    Default = true
-})
-
-Tabs.Main.AntiAFK:OnChanged(function(v)
-    AntiAFK = v
+Controls:Toggle("Anti AFK", false, function(state)
+    AntiAFK = state
 end)
 
 task.spawn(function()
@@ -63,7 +46,17 @@ task.spawn(function()
 end)
 
 --====================================================
--- FLY (ANDROID + PC)
+-- WALK SPEED
+--====================================================
+
+Controls:Slider("WalkSpeed", 10, 200, 16, function(val)
+    if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+        Player.Character.Humanoid.WalkSpeed = val
+    end
+end)
+
+--====================================================
+-- FLY SYSTEM
 --====================================================
 
 local Flying = false
@@ -92,48 +85,44 @@ local function StartFly()
 
 end
 
-Tabs.Main:AddToggle("FlyToggle", {
-    Title = "Fly",
-    Default = false
-})
+Controls:Toggle("Fly", false, function(state)
 
-Tabs.Main.FlyToggle:OnChanged(function(v)
+    Flying = state
 
-    Flying = v
-
-    if v then
+    if state then
         StartFly()
     end
 
 end)
 
-Tabs.Main:AddSlider("FlySpeed", {
-    Title = "Fly Speed",
-    Default = 60,
-    Min = 20,
-    Max = 150,
-    Rounding = 0
-})
-
-Tabs.Main.FlySpeed:OnChanged(function(v)
-    FlySpeed = v
+Controls:Slider("Fly Speed", 20, 150, 60, function(val)
+    FlySpeed = val
 end)
 
 --====================================================
--- UTILITY
+-- UTILITY TAB
 --====================================================
 
-Tabs.Utility:AddButton({
-    Title = "Print Position",
-    Callback = function()
-        print(Player.Character.HumanoidRootPart.Position)
-    end
-})
+local Utility = window:Tab("Utility", "rbxassetid://10734950309")
+local Tools = Utility:Section("Tools")
 
-Tabs.Utility:AddButton({
-    Title = "Rejoin Server",
-    Callback = function()
-        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
-    end
-})
+Tools:Button("Print Position", function()
+    local pos = Player.Character.HumanoidRootPart.Position
+    print("Position:", pos)
+end)
 
+Tools:Button("Rejoin Server", function()
+    game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+end)
+
+--====================================================
+-- NOTIFY TEST
+--====================================================
+
+Controls:Button("Test Notification", function()
+    library:Notify({
+        Title = "XKID_HUB",
+        Text = "Hub Loaded Successfully!",
+        Type = "Info"
+    })
+end)
