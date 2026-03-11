@@ -1,346 +1,145 @@
 repeat task.wait() until game:IsLoaded()
 
---====================================================
--- SETTINGS
---====================================================
-
-getgenv().ToggleUI = Enum.KeyCode.LeftControl
 getgenv().Image = "rbxassetid://95816097006870"
+getgenv().ToggleUI = "E"
 
-local Players = game:GetService("Players")
-local Player = Players.LocalPlayer
-local UIS = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local VirtualUser = game:GetService("VirtualUser")
+-- Mobile Open Button
+task.spawn(function()
+    if not getgenv().LoadedMobileUI then
+        getgenv().LoadedMobileUI = true
 
---====================================================
--- MOBILE FLOAT BUTTON
---====================================================
+        local OpenUI = Instance.new("ScreenGui")
+        local ImageButton = Instance.new("ImageButton")
+        local UICorner = Instance.new("UICorner")
 
-if UIS.TouchEnabled then
+        OpenUI.Name = "OpenUI"
+        OpenUI.Parent = game.CoreGui
 
-    if not getgenv().MobileButtonLoaded then
-        getgenv().MobileButtonLoaded = true
+        ImageButton.Parent = OpenUI
+        ImageButton.BackgroundColor3 = Color3.fromRGB(105,105,105)
+        ImageButton.BackgroundTransparency = 0.2
+        ImageButton.Position = UDim2.new(0.9,0,0.1,0)
+        ImageButton.Size = UDim2.new(0,50,0,50)
+        ImageButton.Image = getgenv().Image
+        ImageButton.Draggable = true
 
-        local gui = Instance.new("ScreenGui",game.CoreGui)
-        gui.Name = "XKID_Toggle"
+        UICorner.CornerRadius = UDim.new(0,200)
+        UICorner.Parent = ImageButton
 
-        local button = Instance.new("ImageButton",gui)
-        button.Size = UDim2.new(0,55,0,55)
-        button.Position = UDim2.new(0.88,0,0.15,0)
-        button.Image = getgenv().Image
-        button.BackgroundTransparency = 0.2
-        button.Draggable = true
-
-        local corner = Instance.new("UICorner",button)
-        corner.CornerRadius = UDim.new(0,100)
-
-        button.MouseButton1Click:Connect(function()
-
-            game:GetService("VirtualInputManager"):SendKeyEvent(
-                true,
-                getgenv().ToggleUI,
-                false,
-                game
-            )
-
+        ImageButton.MouseButton1Click:Connect(function()
+            game:GetService("VirtualInputManager"):SendKeyEvent(true,getgenv().ToggleUI,false,game)
         end)
-
     end
+end)
 
-end
-
---====================================================
--- LOAD FLUENT
---====================================================
-
-local Fluent = loadstring(game:HttpGet(
-"https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
-))()
+-- Fluent UI
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 
 local Window = Fluent:CreateWindow({
-    Title = "XKID_HUB",
-    SubTitle = "Full Version",
-    Size = UDim2.fromOffset(600,450),
+    Title = "XKID.HUB",
+    SubTitle = "by XKID",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580,460),
+    Acrylic = true,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+    MinimizeKey = Enum.KeyCode.E
 })
 
---====================================================
--- TABS
---====================================================
+local Main = Window:AddTab({ Title = "Main", Icon = "" })
 
-local Tabs = {
-Main = Window:AddTab({Title="Main"}),
-Player = Window:AddTab({Title="Player"}),
-Visual = Window:AddTab({Title="Visual"}),
-Utility = Window:AddTab({Title="Utility"}),
-Settings = Window:AddTab({Title="Settings"})
-}
+Main:AddParagraph({
+    Title = "XKID HUB",
+    Content = "Script Loaded Successfully"
+})
 
---====================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+------------------------------------------------
 -- ANTI AFK
---====================================================
+------------------------------------------------
 
-local AntiAFK = true
+Main:AddButton({
+    Title = "Anti AFK",
+    Callback = function()
+        local vu = game:GetService("VirtualUser")
 
-Tabs.Main:AddToggle("AFK",{Title="Anti AFK",Default=true})
-
-Tabs.Main.AFK:OnChanged(function(v)
-AntiAFK = v
-end)
-
-task.spawn(function()
-
-while task.wait(60) do
-
-if AntiAFK then
-VirtualUser:CaptureController()
-VirtualUser:ClickButton2(Vector2.new())
-end
-
-end
-
-end)
-
---====================================================
--- WALK SPEED
---====================================================
-
-Tabs.Player:AddSlider("Speed",{
-Title="WalkSpeed",
-Min=16,
-Max=200,
-Default=16
+        LocalPlayer.Idled:Connect(function()
+            vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+        end)
+    end
 })
 
-Tabs.Player.Speed:OnChanged(function(v)
+------------------------------------------------
+-- SPEED
+------------------------------------------------
 
-local char = Player.Character
-if char and char:FindFirstChild("Humanoid") then
-char.Humanoid.WalkSpeed = v
-end
-
-end)
-
---====================================================
--- JUMP POWER
---====================================================
-
-Tabs.Player:AddSlider("Jump",{
-Title="JumpPower",
-Min=50,
-Max=200,
-Default=50
+Main:AddSlider("Speed",{
+    Title = "WalkSpeed",
+    Default = 16,
+    Min = 16,
+    Max = 200,
+    Rounding = 1,
+    Callback = function(Value)
+        if LocalPlayer.Character then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = Value
+        end
+    end
 })
 
-Tabs.Player.Jump:OnChanged(function(v)
+------------------------------------------------
+-- JUMP
+------------------------------------------------
 
-local char = Player.Character
-if char and char:FindFirstChild("Humanoid") then
-char.Humanoid.JumpPower = v
-end
+Main:AddSlider("Jump",{
+    Title = "JumpPower",
+    Default = 50,
+    Min = 50,
+    Max = 200,
+    Rounding = 1,
+    Callback = function(Value)
+        if LocalPlayer.Character then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = Value
+        end
+    end
+})
 
-end)
-
---====================================================
--- INFINITE JUMP
---====================================================
-
-local InfJump=false
-
-Tabs.Player:AddToggle("InfJump",{Title="Infinite Jump",Default=false})
-
-Tabs.Player.InfJump:OnChanged(function(v)
-InfJump=v
-end)
-
-UIS.JumpRequest:Connect(function()
-
-if InfJump then
-local char=Player.Character
-if char then
-char:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
-end
-end
-
-end)
-
---====================================================
+------------------------------------------------
 -- FLY
---====================================================
+------------------------------------------------
 
-local Flying=false
-local FlySpeed=60
-local BV
+local flying = false
 
-local function StartFly()
+Main:AddToggle("Fly",{
+    Title = "Fly",
+    Default = false,
 
-local char=Player.Character
-if not char then return end
+    Callback = function(Value)
+        flying = Value
 
-local root=char:FindFirstChild("HumanoidRootPart")
+        if flying then
+            local char = LocalPlayer.Character
+            local hrp = char:WaitForChild("HumanoidRootPart")
 
-BV=Instance.new("BodyVelocity")
-BV.MaxForce=Vector3.new(9e9,9e9,9e9)
-BV.Parent=root
+            local bv = Instance.new("BodyVelocity")
+            bv.MaxForce = Vector3.new(100000,100000,100000)
+            bv.Velocity = Vector3.new(0,0,0)
+            bv.Parent = hrp
 
-RunService.RenderStepped:Connect(function()
+            while flying do
+                bv.Velocity = workspace.CurrentCamera.CFrame.LookVector * 60
+                task.wait()
+            end
 
-if not Flying then
-if BV then BV:Destroy() end
-return
-end
-
-BV.Velocity=workspace.CurrentCamera.CFrame.LookVector*FlySpeed
-
-end)
-
-end
-
-Tabs.Player:AddToggle("Fly",{Title="Fly",Default=false})
-
-Tabs.Player.Fly:OnChanged(function(v)
-
-Flying=v
-
-if v then
-StartFly()
-end
-
-end)
-
-Tabs.Player:AddSlider("FlySpeed",{
-Title="Fly Speed",
-Min=20,
-Max=150,
-Default=60
+            bv:Destroy()
+        end
+    end
 })
-
-Tabs.Player.FlySpeed:OnChanged(function(v)
-FlySpeed=v
-end)
-
---====================================================
--- NOCLIP
---====================================================
-
-local Noclip=false
-
-Tabs.Player:AddToggle("Noclip",{Title="Noclip",Default=false})
-
-Tabs.Player.Noclip:OnChanged(function(v)
-Noclip=v
-end)
-
-RunService.Stepped:Connect(function()
-
-if Noclip and Player.Character then
-
-for _,v in pairs(Player.Character:GetDescendants()) do
-if v:IsA("BasePart") then
-v.CanCollide=false
-end
-end
-
-end
-
-end)
-
---====================================================
--- ESP PLAYER
---====================================================
-
-local ESP=false
-
-Tabs.Visual:AddToggle("ESP",{Title="Player ESP",Default=false})
-
-Tabs.Visual.ESP:OnChanged(function(v)
-
-ESP=v
-
-for _,plr in pairs(Players:GetPlayers()) do
-
-if plr~=Player and plr.Character then
-
-if v then
-
-local highlight=Instance.new("Highlight")
-highlight.Parent=plr.Character
-highlight.Name="XKID_ESP"
-
-else
-
-if plr.Character:FindFirstChild("XKID_ESP") then
-plr.Character.XKID_ESP:Destroy()
-end
-
-end
-
-end
-
-end
-
-end)
-
---====================================================
--- ADMIN DETECTOR
---====================================================
-
-local AdminWords={"admin","mod","dev","owner"}
-
-Players.PlayerAdded:Connect(function(p)
-
-for _,word in pairs(AdminWords) do
-
-if string.find(string.lower(p.Name),word) then
 
 Fluent:Notify({
-Title="ADMIN DETECTED",
-Content=p.Name,
-Duration=6
-})
-
-end
-
-end
-
-end)
-
---====================================================
--- UTILITY
---====================================================
-
-Tabs.Utility:AddButton({
-Title="Rejoin Server",
-Callback=function()
-game:GetService("TeleportService"):Teleport(game.PlaceId,Player)
-end
-})
-
-Tabs.Utility:AddButton({
-Title="Copy Position",
-Callback=function()
-setclipboard(tostring(Player.Character.HumanoidRootPart.Position))
-end
-})
-
---====================================================
--- THEME
---====================================================
-
-Tabs.Settings:AddDropdown("Theme",{
-Title="Theme",
-Values={"Dark","Light","Aqua","Amethyst"},
-Default="Dark"
-})
-
-Tabs.Settings.Theme:OnChanged(function(v)
-Fluent:SetTheme(v)
-end)
-
-Fluent:Notify({
-Title="XKID_HUB",
-Content="Full Hub Loaded",
-Duration=5
+    Title = "XKID HUB",
+    Content = "Script Loaded!",
+    Duration = 5
 })
