@@ -1,9 +1,10 @@
 --====================================================
 -- XKID_HUB
--- Nexus UI Template
+-- BSMTUI Template
 --====================================================
 
-local Nexus = loadstring(game:HttpGet("https://raw.githubusercontent.com/Carterjam28YT/Nexus-Revamped/main/Nexus.lua"))()
+-- Load Library
+local library = loadstring(game:HttpGet("https://thebasement.ink/BSMTUI"))()
 
 -- Services
 local Players = game:GetService("Players")
@@ -13,26 +14,15 @@ local RunService = game:GetService("RunService")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
---====================================================
--- WINDOW
---====================================================
-
-local Win = Nexus:Window("XKID_HUB", "crown", "Version 1 | XKID", false)
-
--- Tabs
-Win:TabSection("Player")
-
-local PlayerTab = Win:Tab("Player", "user")
-local UtilityTab = Win:Tab("Utility", "settings")
+-- Window
+local window = library:Create("XKID_HUB", UDim2.new(0, 500, 0, 400))
 
 --====================================================
--- PLAYER PAGE
+-- MAIN TAB
 --====================================================
 
-local MainPage = PlayerTab:Page("Main", "user")
-
-local Movement = MainPage:Section("Movement", "Left")
-local Utility = MainPage:Section("Utility", "Right")
+local Main = window:Tab("Main", "rbxassetid://10734950309")
+local Controls = Main:Section("Player Controls")
 
 --====================================================
 -- ANTI AFK
@@ -40,36 +30,30 @@ local Utility = MainPage:Section("Utility", "Right")
 
 local AntiAFK = false
 
-Movement:Toggle("Anti AFK", "AntiAFK", false, "Prevent idle kick", function(state)
-AntiAFK = state
+Controls:Toggle("Anti AFK", false, function(state)
+    AntiAFK = state
 end)
 
 task.spawn(function()
-
-while task.wait(60) do
-
-if AntiAFK then
-pcall(function()
-VirtualUser:CaptureController()
-VirtualUser:ClickButton2(Vector2.new())
-end)
-end
-
-end
-
+    while task.wait(60) do
+        if AntiAFK then
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+        end
+    end
 end)
 
 --====================================================
 -- WALK SPEED
 --====================================================
 
-Movement:Slider("WalkSpeed","WalkSpeed",16,200,16,function(v)
-
-if Player.Character and Player.Character:FindFirstChild("Humanoid") then
-Player.Character.Humanoid.WalkSpeed = v
-end
-
-end,"Change player speed")
+Controls:Slider("WalkSpeed", 10, 200, 16, function(val)
+    if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+        Player.Character.Humanoid.WalkSpeed = val
+    end
+end)
 
 --====================================================
 -- FLY SYSTEM
@@ -81,66 +65,64 @@ local BV
 
 local function StartFly()
 
-local char = Player.Character or Player.CharacterAdded:Wait()
-local root = char:WaitForChild("HumanoidRootPart")
+    local char = Player.Character or Player.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
 
-BV = Instance.new("BodyVelocity")
-BV.MaxForce = Vector3.new(9e9,9e9,9e9)
-BV.Parent = root
+    BV = Instance.new("BodyVelocity")
+    BV.MaxForce = Vector3.new(9e9,9e9,9e9)
+    BV.Parent = root
 
-RunService.RenderStepped:Connect(function()
+    RunService.RenderStepped:Connect(function()
 
-if not Flying then
-if BV then BV:Destroy() end
-return
+        if not Flying then
+            if BV then BV:Destroy() end
+            return
+        end
+
+        BV.Velocity = Camera.CFrame.LookVector * FlySpeed
+
+    end)
+
 end
 
-BV.Velocity = Camera.CFrame.LookVector * FlySpeed
+Controls:Toggle("Fly", false, function(state)
+
+    Flying = state
+
+    if state then
+        StartFly()
+    end
 
 end)
 
-end
-
-Movement:Toggle("Fly","FlyToggle",false,"Enable flying",function(state)
-
-Flying = state
-
-if state then
-StartFly()
-end
-
+Controls:Slider("Fly Speed", 20, 150, 60, function(val)
+    FlySpeed = val
 end)
-
-Movement:Slider("Fly Speed","FlySpeed",20,150,60,function(v)
-
-FlySpeed = v
-
-end,"Change fly speed")
 
 --====================================================
 -- UTILITY TAB
 --====================================================
 
-local ToolPage = UtilityTab:Page("Tools","settings")
+local Utility = window:Tab("Utility", "rbxassetid://10734950309")
+local Tools = Utility:Section("Tools")
 
-local Tools = ToolPage:Section("Tools","Left")
-
-Tools:Button("Print Position","Shows character position",function()
-
-print(Player.Character.HumanoidRootPart.Position)
-
+Tools:Button("Print Position", function()
+    local pos = Player.Character.HumanoidRootPart.Position
+    print("Position:", pos)
 end)
 
-Tools:Button("Rejoin Server","Reconnect to server",function()
-
-game:GetService("TeleportService"):Teleport(game.PlaceId,Player)
-
+Tools:Button("Rejoin Server", function()
+    game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
 end)
 
 --====================================================
--- LOADED
+-- NOTIFY TEST
 --====================================================
 
-Nexus:Notification("XKID_HUB","Script loaded successfully!",5)
-
-Nexus:ConfigSystem(Win)
+Controls:Button("Test Notification", function()
+    library:Notify({
+        Title = "XKID_HUB",
+        Text = "Hub Loaded Successfully!",
+        Type = "Info"
+    })
+end)
