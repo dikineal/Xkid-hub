@@ -1,10 +1,10 @@
 --====================================================
 -- XKID_HUB
--- BSMTUI Template
+-- 3itx UI LIB
 --====================================================
 
--- Load Library
-local library = loadstring(game:HttpGet("https://thebasement.ink/BSMTUI"))()
+-- Load UI
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Just3itx/3itx-UI-LIB/main/source.lua"))()
 
 -- Services
 local Players = game:GetService("Players")
@@ -15,14 +15,14 @@ local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 -- Window
-local window = library:Create("XKID_HUB", UDim2.new(0, 500, 0, 400))
+local Window = UI:CreateWindow({
+    Title = "XKID_HUB",
+    Size = UDim2.fromOffset(520,420)
+})
 
---====================================================
--- MAIN TAB
---====================================================
-
-local Main = window:Tab("Main", "rbxassetid://10734950309")
-local Controls = Main:Section("Player Controls")
+-- Tabs
+local Main = Window:CreateTab("Main")
+local Utility = Window:CreateTab("Utility")
 
 --====================================================
 -- ANTI AFK
@@ -30,33 +30,49 @@ local Controls = Main:Section("Player Controls")
 
 local AntiAFK = false
 
-Controls:Toggle("Anti AFK", false, function(state)
-    AntiAFK = state
-end)
+Main:CreateToggle({
+    Name = "Anti AFK",
+    Default = false,
+    Callback = function(v)
+        AntiAFK = v
+    end
+})
 
 task.spawn(function()
+
     while task.wait(60) do
+
         if AntiAFK then
             pcall(function()
                 VirtualUser:CaptureController()
                 VirtualUser:ClickButton2(Vector2.new())
             end)
         end
+
     end
+
 end)
 
 --====================================================
 -- WALK SPEED
 --====================================================
 
-Controls:Slider("WalkSpeed", 10, 200, 16, function(val)
-    if Player.Character and Player.Character:FindFirstChild("Humanoid") then
-        Player.Character.Humanoid.WalkSpeed = val
+Main:CreateSlider({
+    Name = "WalkSpeed",
+    Min = 10,
+    Max = 200,
+    Default = 16,
+    Callback = function(v)
+
+        if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+            Player.Character.Humanoid.WalkSpeed = v
+        end
+
     end
-end)
+})
 
 --====================================================
--- FLY SYSTEM
+-- FLY
 --====================================================
 
 local Flying = false
@@ -85,44 +101,44 @@ local function StartFly()
 
 end
 
-Controls:Toggle("Fly", false, function(state)
+Main:CreateToggle({
+    Name = "Fly",
+    Default = false,
+    Callback = function(v)
 
-    Flying = state
+        Flying = v
 
-    if state then
-        StartFly()
+        if v then
+            StartFly()
+        end
+
     end
+})
 
-end)
-
-Controls:Slider("Fly Speed", 20, 150, 60, function(val)
-    FlySpeed = val
-end)
-
---====================================================
--- UTILITY TAB
---====================================================
-
-local Utility = window:Tab("Utility", "rbxassetid://10734950309")
-local Tools = Utility:Section("Tools")
-
-Tools:Button("Print Position", function()
-    local pos = Player.Character.HumanoidRootPart.Position
-    print("Position:", pos)
-end)
-
-Tools:Button("Rejoin Server", function()
-    game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
-end)
+Main:CreateSlider({
+    Name = "Fly Speed",
+    Min = 20,
+    Max = 150,
+    Default = 60,
+    Callback = function(v)
+        FlySpeed = v
+    end
+})
 
 --====================================================
--- NOTIFY TEST
+-- UTILITY
 --====================================================
 
-Controls:Button("Test Notification", function()
-    library:Notify({
-        Title = "XKID_HUB",
-        Text = "Hub Loaded Successfully!",
-        Type = "Info"
-    })
-end)
+Utility:CreateButton({
+    Name = "Print Position",
+    Callback = function()
+        print(Player.Character.HumanoidRootPart.Position)
+    end
+})
+
+Utility:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+    end
+})
