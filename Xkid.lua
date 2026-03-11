@@ -1,11 +1,11 @@
 --====================================================
 -- XKID_HUB
--- Luna Interface Suite
+-- Fluent UI Template
 --====================================================
 
--- Load Library
-local Luna = loadstring(game:HttpGet(
-"https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/main/source.lua"
+-- Load Fluent
+local Fluent = loadstring(game:HttpGet(
+"https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
 ))()
 
 -- Services
@@ -16,23 +16,25 @@ local RunService = game:GetService("RunService")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Window
-local Window = Luna:CreateWindow({
-    Name = "XKID_HUB",
-    Subtitle = "Luna Interface",
-    LoadingEnabled = true
+--====================================================
+-- WINDOW
+--====================================================
+
+local Window = Fluent:CreateWindow({
+    Title = "XKID_HUB",
+    SubTitle = "Fluent Interface",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(600, 420), -- resize base
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
 -- Tabs
-local Main = Window:CreateTab({
-    Name = "Main",
-    Icon = "home"
-})
-
-local Utility = Window:CreateTab({
-    Name = "Utility",
-    Icon = "settings"
-})
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Utility = Window:AddTab({ Title = "Utility", Icon = "settings" })
+}
 
 --====================================================
 -- ANTI AFK
@@ -40,13 +42,14 @@ local Utility = Window:CreateTab({
 
 local AntiAFK = true
 
-Main:CreateToggle({
-    Name = "Anti AFK",
-    CurrentValue = true,
-    Callback = function(v)
-        AntiAFK = v
-    end
+Tabs.Main:AddToggle("AntiAFK", {
+    Title = "Anti AFK",
+    Default = true
 })
+
+Tabs.Main.AntiAFK:OnChanged(function(v)
+    AntiAFK = v
+end)
 
 task.spawn(function()
     while task.wait(60) do
@@ -89,34 +92,47 @@ local function StartFly()
 
 end
 
-Main:CreateToggle({
-    Name = "Fly",
-    CurrentValue = false,
-    Callback = function(v)
-        Flying = v
-        if v then
-            StartFly()
-        end
-    end
+Tabs.Main:AddToggle("FlyToggle", {
+    Title = "Fly",
+    Default = false
 })
 
-Main:CreateSlider({
-    Name = "Fly Speed",
-    Range = {20,150},
-    Increment = 5,
-    CurrentValue = 60,
-    Callback = function(v)
-        FlySpeed = v
+Tabs.Main.FlyToggle:OnChanged(function(v)
+
+    Flying = v
+
+    if v then
+        StartFly()
     end
+
+end)
+
+Tabs.Main:AddSlider("FlySpeed", {
+    Title = "Fly Speed",
+    Default = 60,
+    Min = 20,
+    Max = 150,
+    Rounding = 0
 })
+
+Tabs.Main.FlySpeed:OnChanged(function(v)
+    FlySpeed = v
+end)
 
 --====================================================
 -- UTILITY
 --====================================================
 
-Utility:CreateButton({
-    Name = "Rejoin Server",
+Tabs.Utility:AddButton({
+    Title = "Print Position",
     Callback = function()
-        game:GetService("TeleportService"):Teleport(game.PlaceId,Player)
+        print(Player.Character.HumanoidRootPart.Position)
+    end
+})
+
+Tabs.Utility:AddButton({
+    Title = "Rejoin Server",
+    Callback = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
     end
 })
