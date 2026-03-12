@@ -1,123 +1,318 @@
 --[[
-WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+  ╔══════════════════════════════════════════════════════╗
+  ║   🚀  X K I D   R O C K E T   F L Y  v5.1  🚀     ║
+  ║   XKID HUB  ✦  Aurora UI                           ║
+  ║   Fix: Struktur kode benar · Semua fitur berfungsi  ║
+  ╚══════════════════════════════════════════════════════╝
+
+  FITUR:
+  [1] Rocket Fly   — H=Toggle · G=Anchor · L=Fast · K=Slow
+  [2] Teleport     — ke Player (Simple & Advanced) + ke Game
+  [3] ESP          — BillboardGui nama player
+  [4] Freecam      — `,` toggle · WASD/E/Q gerak
+  [5] Remote Spy   — pantau RemoteEvent di console F9
+  [6] Backdoor     — scan remote mencurigakan
+  [7] Pathfinding  — waypoint + shuttle mode
+  [8] Utility      — Anti AFK · Reset Char · Rejoin · TP Mouse
+
+  CHANGELOG v5.1:
+  [FIX] Semua fungsi didefinisikan SEBELUM dipanggil di UI
+  [FIX] init_fly() dan setup_fly_events() urutan benar
+  [FIX] Freecam tidak crash saat toggle
+  [FIX] ESP cleanup proper saat toggle off
 ]]
 
--- XKID AESTHETIC v5.0 - ROCKET FLY EDITION + EXTRA FEATURES
--- Fitur: Fly RocketPropulsion (H-G-L-K) + Backdoor Auto + Teleport + ESP + Anti AFK + Rejoin + Reset + Freecam + Remote Spy + Pathfinding
+-- ════════════════════════════════════════════════
+--  LOAD AURORA UI
+-- ════════════════════════════════════════════════
+Library = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
+))()
 
-Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"))()
+-- ════════════════════════════════════════════════
+--  SERVICES
+-- ════════════════════════════════════════════════
+local Players        = game:GetService("Players")
+local Workspace      = game:GetService("Workspace")
+local RS             = game:GetService("ReplicatedStorage")
+local UIS            = game:GetService("UserInputService")
+local RunService     = game:GetService("RunService")
+local VirtualUser    = game:GetService("VirtualUser")
+local TeleportService= game:GetService("TeleportService")
+local AssetService   = game:GetService("AssetService")
+local LocalPlayer    = Players.LocalPlayer
 
--- ============================================
--- SERVICES
--- ============================================
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local Workspace = game:GetService("Workspace")
-local RS = game:GetService("ReplicatedStorage")
-local UIS = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
-local VirtualUser = game:GetService("VirtualUser")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-local AssetService = game:GetService("AssetService")
-
--- ============================================
--- WINDOW AESTHETIC
--- ============================================
+-- ════════════════════════════════════════════════
+--  WINDOW
+-- ════════════════════════════════════════════════
 local Win = Library:Window(
-    "✨ XKID ROCKET FLY", 
-    "rocket", 
-    "v5.0 | H=Toggle | G=Anchor | L=Fast | K=Slow", 
+    "🚀 XKID ROCKET FLY",
+    "rocket",
+    "v5.1 | H=Fly · G=Anchor · L=Fast · K=Slow",
     false
 )
 
--- ============================================
--- TAB MENU
--- ============================================
+-- ════════════════════════════════════════════════
+--  TABS
+-- ════════════════════════════════════════════════
 Win:TabSection("🚀 ROCKET FLY")
-local FlyTab = Win:Tab("Rocket Fly", "rocket")
+local FlyTab      = Win:Tab("Rocket Fly",  "rocket")
 
-Win:TabSection("💀 BACKDOOR")
-local BackdoorTab = Win:Tab("Backdoor", "skull")
+Win:TabSection("🎯 TOOLS")
+local TeleportTab = Win:Tab("Teleport",    "map-pin")
+local ESPTab      = Win:Tab("ESP",         "eye")
+local FreecamTab  = Win:Tab("Freecam",     "video")
 
-Win:TabSection("🎯 TELEPORT")
-local TeleportTab = Win:Tab("Teleport", "map-pin")
+Win:TabSection("🔍 ADVANCED")
+local SpyTab      = Win:Tab("Remote Spy",  "radio")
+local BackdoorTab = Win:Tab("Backdoor",    "skull")
+local UtilTab     = Win:Tab("Utility",     "heart")
 
-Win:TabSection("👁️ ESP")
-local ESPTab = Win:Tab("ESP", "eye")
-
-Win:TabSection("🎥 FREECAM")
-local FreecamTab = Win:Tab("Freecam", "video")
-
-Win:TabSection("🔍 REMOTE SPY")
-local SpyTab = Win:Tab("Remote Spy", "radio")
-
-Win:TabSection("🎨 UTILITY")
-local UtilTab = Win:Tab("Utility", "heart")
-
--- ============================================
--- VARIABEL UNTUK RESET DI POSISI SAMA
--- ============================================
-local lastPosition = nil
-local lastCFrame = nil
-
--- Fungsi untuk menyimpan posisi sebelum reset
-local function savePosition()
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        lastCFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
-        lastPosition = LocalPlayer.Character.HumanoidRootPart.Position
-        return true
-    end
-    return false
+-- ════════════════════════════════════════════════
+--  HELPER
+-- ════════════════════════════════════════════════
+local function getChar()  return LocalPlayer.Character end
+local function getRoot()
+    local c = getChar()
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
+local function getHum()
+    local c = getChar()
+    return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- Fungsi reset character dan kembali ke posisi semula
-local function resetCharacter()
-    if not LocalPlayer.Character then return end
-    
-    -- Simpan posisi sebelum reset
-    local savedCF = nil
-    if LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        savedCF = LocalPlayer.Character.HumanoidRootPart.CFrame
+-- ════════════════════════════════════════════════
+--  ① ROCKET FLY SYSTEM
+-- ════════════════════════════════════════════════
+local SPEED         = 127
+local REL_TO_CHAR   = false
+local MAX_TORQUE_RP = 1e4
+local THRUST_P      = 1e5
+local MAX_THRUST    = 5e5
+local MAX_TORQUE_BG = 3e4
+local THRUST_D      = math.huge
+local TURN_D        = 2e2
+
+local keys_dn  = {}
+local flying   = false
+local enabled  = false
+local move_dir = Vector3.new()
+local humanoidFly, parentFly
+local ms = LocalPlayer:GetMouse()
+
+_G.fly_evts = _G.fly_evts or {}
+_G.fly_rp   = nil
+_G.fly_bg   = nil
+_G.fly_pt   = nil
+
+local FLYK = Enum.KeyCode.H
+local ANCK = Enum.KeyCode.G
+local FSTK = Enum.KeyCode.L
+local SLWK = Enum.KeyCode.K
+
+local MVKS = {
+    [Enum.KeyCode.D]        = Vector3.new( 1, 0,  0),
+    [Enum.KeyCode.A]        = Vector3.new(-1, 0,  0),
+    [Enum.KeyCode.S]        = Vector3.new( 0, 0,  1),
+    [Enum.KeyCode.W]        = Vector3.new( 0, 0, -1),
+    [Enum.KeyCode.E]        = Vector3.new( 0, 1,  0),
+    [Enum.KeyCode.Q]        = Vector3.new( 0,-1,  0),
+    [Enum.KeyCode.Right]    = Vector3.new( 1, 0,  0),
+    [Enum.KeyCode.Left]     = Vector3.new(-1, 0,  0),
+    [Enum.KeyCode.Down]     = Vector3.new( 0, 0,  1),
+    [Enum.KeyCode.Up]       = Vector3.new( 0, 0, -1),
+    [Enum.KeyCode.PageUp]   = Vector3.new( 0, 1,  0),
+    [Enum.KeyCode.PageDown] = Vector3.new( 0,-1,  0),
+}
+
+local function fly_dir()
+    if REL_TO_CHAR and parentFly then
+        return CFrame.new(Vector3.new(), parentFly.CFrame.LookVector) * move_dir
+    else
+        local front = Workspace.CurrentCamera:ScreenPointToRay(ms.X, ms.Y).Direction
+        return CFrame.new(Vector3.new(), front) * move_dir
     end
-    
-    -- Reset character
-    LocalPlayer.Character:BreakJoints()
-    
-    -- Tunggu character baru spawn
-    local charAdded
-    charAdded = LocalPlayer.CharacterAdded:Connect(function(newChar)
-        charAdded:Disconnect()
-        
-        -- Tunggu sampai HumanoidRootPart muncul
-        task.wait(1)
-        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-        if hrp and savedCF then
-            -- Kembalikan ke posisi semula
-            hrp.CFrame = savedCF
-            Library:Notification("Reset", "Kembali ke posisi semula", 2)
+end
+
+local function init_fly()
+    local ch = getChar(); if not ch then return end
+    humanoidFly = ch:FindFirstChildOfClass("Humanoid"); if not humanoidFly then return end
+    parentFly   = humanoidFly.RootPart;                 if not parentFly   then return end
+
+    if _G.fly_rp then pcall(function() _G.fly_rp:Destroy() end) end
+    if _G.fly_bg then pcall(function() _G.fly_bg:Destroy() end) end
+    if _G.fly_pt and _G.fly_pt.Parent then
+        pcall(function() _G.fly_pt.Parent:Destroy() end)
+    end
+
+    _G.fly_bg = Instance.new("BodyGyro",       parentFly)
+    _G.fly_rp = Instance.new("RocketPropulsion",parentFly)
+
+    local md  = Instance.new("Model")
+    _G.fly_pt = Instance.new("Part", md)
+    md.Parent = _G.fly_pt
+
+    _G.fly_rp.MaxTorque  = Vector3.new(MAX_TORQUE_RP, MAX_TORQUE_RP, MAX_TORQUE_RP)
+    _G.fly_bg.MaxTorque  = Vector3.new()
+    md.PrimaryPart       = _G.fly_pt
+    _G.fly_pt.Anchored   = true
+    _G.fly_pt.CanCollide = false
+    _G.fly_pt.Transparency = 1
+    _G.fly_rp.CartoonFactor = 1
+    _G.fly_rp.Target    = _G.fly_pt
+    _G.fly_rp.MaxSpeed  = SPEED
+    _G.fly_rp.MaxThrust = MAX_THRUST
+    _G.fly_rp.ThrustP   = THRUST_P
+    _G.fly_rp.ThrustD   = THRUST_D
+    _G.fly_rp.TurnP     = THRUST_P
+    _G.fly_rp.TurnD     = TURN_D
+    _G.fly_bg.P         = 3e4
+    enabled = false
+    print("[FLY v5.1] Initialized ✅")
+end
+
+local function setup_fly_events()
+    for _, e in ipairs(_G.fly_evts) do pcall(function() e:Disconnect() end) end
+    _G.fly_evts = {}
+
+    -- Re-init on respawn
+    table.insert(_G.fly_evts, LocalPlayer.CharacterAdded:Connect(function()
+        task.wait(1); init_fly()
+    end))
+
+    -- KeyDown
+    table.insert(_G.fly_evts, UIS.InputBegan:Connect(function(i, p)
+        if p then return end
+
+        if i.KeyCode == FLYK then
+            enabled = not enabled
+            if enabled then
+                if _G.fly_bg then _G.fly_bg.MaxTorque = Vector3.new(MAX_TORQUE_BG, 0, MAX_TORQUE_BG) end
+                if _G.fly_rp then _G.fly_rp.MaxTorque = Vector3.new(MAX_TORQUE_RP, MAX_TORQUE_RP, MAX_TORQUE_RP) end
+                Library:Notification("🚀 Fly", "ON  (H = toggle)", 2)
+            else
+                if _G.fly_bg then _G.fly_bg.MaxTorque = Vector3.new() end
+                if _G.fly_rp then _G.fly_rp.MaxTorque = Vector3.new() end
+                Library:Notification("🚀 Fly", "OFF", 2)
+            end
+
+        elseif i.KeyCode == ANCK and parentFly then
+            parentFly.Anchored = not parentFly.Anchored
+            Library:Notification("Anchor", parentFly.Anchored and "ON" or "OFF", 1)
+
+        elseif i.KeyCode == FSTK and _G.fly_rp then
+            SPEED = SPEED * 1.5
+            _G.fly_rp.MaxSpeed = SPEED
+            Library:Notification("Speed ⬆", string.format("%.0f", SPEED), 1)
+
+        elseif i.KeyCode == SLWK and _G.fly_rp then
+            SPEED = math.max(10, SPEED / 1.5)
+            _G.fly_rp.MaxSpeed = SPEED
+            Library:Notification("Speed ⬇", string.format("%.0f", SPEED), 1)
+
+        elseif MVKS[i.KeyCode] and not keys_dn[i.KeyCode] then
+            move_dir = move_dir + MVKS[i.KeyCode]
+            keys_dn[i.KeyCode] = true
         end
-    end)
+    end))
+
+    -- KeyUp
+    table.insert(_G.fly_evts, UIS.InputEnded:Connect(function(i, p)
+        if p then return end
+        if MVKS[i.KeyCode] and keys_dn[i.KeyCode] then
+            move_dir = move_dir - MVKS[i.KeyCode]
+            keys_dn[i.KeyCode] = nil
+        end
+    end))
+
+    -- RenderStepped
+    table.insert(_G.fly_evts, RunService.RenderStepped:Connect(function()
+        if not _G.fly_rp or not parentFly then return end
+        local do_fly = enabled and move_dir.Magnitude > 0
+        if flying ~= do_fly then
+            flying = do_fly
+            if humanoidFly then humanoidFly.AutoRotate = not do_fly end
+            if not do_fly then
+                parentFly.Velocity = Vector3.new()
+                _G.fly_rp:Abort()
+                return
+            end
+            _G.fly_rp:Fire()
+        end
+        if _G.fly_pt then
+            _G.fly_pt.Position = parentFly.Position + 10000 * fly_dir()
+        end
+    end))
 end
 
--- ============================================
--- TELEPORT KE PLAYER
--- ============================================
-local function teleportToPlayer(targetName)
-    if not targetName or targetName == "" then
-        Library:Notification("Error", "Masukkan nama player", 2)
-        return
+-- ════════════════════════════════════════════════
+--  ② ESP
+-- ════════════════════════════════════════════════
+local espEnabled = false
+local espObjects  = {}
+local espConns    = {}
+
+local function clearESP()
+    for _, obj in ipairs(espObjects) do pcall(function() obj:Destroy() end) end
+    espObjects = {}
+    for _, c in ipairs(espConns)   do pcall(function() c:Disconnect()  end) end
+    espConns = {}
+end
+
+local function makeESPFor(player)
+    if player == LocalPlayer then return end
+    local function onChar(char)
+        if not espEnabled then return end
+        task.wait(0.5)
+        local head = char:FindFirstChild("Head")
+        if not head then return end
+        local bill = Instance.new("BillboardGui")
+        bill.Name           = "XKID_ESP"
+        bill.Size           = UDim2.new(0, 160, 0, 40)
+        bill.StudsOffset    = Vector3.new(0, 2.5, 0)
+        bill.AlwaysOnTop    = true
+        bill.Adornee        = head
+        bill.Parent         = char
+        local lbl = Instance.new("TextLabel", bill)
+        lbl.Size                  = UDim2.new(1,0,1,0)
+        lbl.BackgroundTransparency= 1
+        lbl.Text                  = player.Name .. "\n" .. player.DisplayName
+        lbl.TextColor3            = Color3.new(1,1,1)
+        lbl.TextStrokeTransparency= 0.4
+        lbl.TextScaled            = true
+        lbl.Font                  = Enum.Font.GothamBold
+        table.insert(espObjects, bill)
     end
-    
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Name:lower():find(targetName:lower()) or player.DisplayName:lower():find(targetName:lower()) then
-            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local targetPos = player.Character.HumanoidRootPart.Position
-                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos.X, targetPos.Y + 3, targetPos.Z)
-                    Library:Notification("Teleport", "Ke " .. player.Name, 2)
-                    return
+    if player.Character then onChar(player.Character) end
+    table.insert(espConns, player.CharacterAdded:Connect(onChar))
+end
+
+local function toggleESP(state)
+    espEnabled = state
+    clearESP()
+    if state then
+        for _, p in pairs(Players:GetPlayers()) do makeESPFor(p) end
+        table.insert(espConns, Players.PlayerAdded:Connect(makeESPFor))
+        Library:Notification("ESP", "ON", 2)
+    else
+        Library:Notification("ESP", "OFF", 2)
+    end
+end
+
+-- ════════════════════════════════════════════════
+--  ③ TELEPORT
+-- ════════════════════════════════════════════════
+local function teleportToPlayer(name)
+    if not name or name == "" then
+        Library:Notification("Error", "Masukkan nama player", 2); return
+    end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Name:lower():find(name:lower()) or p.DisplayName:lower():find(name:lower()) then
+            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local root = getRoot()
+                if root then
+                    root.CFrame = p.Character.HumanoidRootPart.CFrame * CFrame.new(0,3,0)
+                    Library:Notification("TP", "→ " .. p.Name, 2); return
                 end
             end
         end
@@ -125,80 +320,46 @@ local function teleportToPlayer(targetName)
     Library:Notification("Error", "Player tidak ditemukan", 2)
 end
 
--- ============================================
--- TELEPORT KE PLAYER (ADVANCED)
--- ============================================
-local function infer_plr(pl_ref)
-    local to_pl
-    local lp = LocalPlayer
-    if typeof(pl_ref) == 'string' then
-        local min = math.huge
-        for _, p in next, Players:GetPlayers() do
-            if p ~= lp then
-                local nv = math.huge
-                local un = p.Name
-                local dn = p.DisplayName
-
-                if un:find('^' .. pl_ref) then
-                    nv = 1.0 * (#un - #pl_ref)
-                elseif dn:find('^' .. pl_ref) then
-                    nv = 1.5 * (#dn - #pl_ref)
-                elseif un:lower():find('^' .. pl_ref:lower()) then
-                    nv = 2.0 * (#un - #pl_ref)
-                elseif dn:lower():find('^' .. pl_ref:lower()) then
-                    nv = 2.5 * (#dn - #pl_ref)
-                end
-                if nv < min then
-                    to_pl = p
-                    min = nv
-                end
+local function infer_plr(ref)
+    if typeof(ref) ~= "string" then return ref end
+    local best, min = nil, math.huge
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local nv = math.huge
+            if p.Name:find("^"..ref)            then nv = 1.0*(#p.Name-#ref)
+            elseif p.DisplayName:find("^"..ref) then nv = 1.5*(#p.DisplayName-#ref)
+            elseif p.Name:lower():find("^"..ref:lower())            then nv = 2.0*(#p.Name-#ref)
+            elseif p.DisplayName:lower():find("^"..ref:lower())     then nv = 2.5*(#p.DisplayName-#ref)
             end
+            if nv < min then best=p; min=nv end
         end
-        return to_pl
-    else
-        return pl_ref
+    end
+    return best
+end
+
+local function teleportToPlayerAdvanced(ref)
+    local p = infer_plr(ref)
+    if not p or not p.Character then
+        Library:Notification("Error", "Player tidak ditemukan", 2); return
+    end
+    local hrp = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Torso")
+    if hrp and getChar() then
+        getChar():PivotTo(hrp.CFrame * CFrame.new(0,3,0))
+        Library:Notification("TP Advanced", "→ " .. p.Name, 2)
     end
 end
 
-local function teleportToPlayerAdvanced(playerRef)
-    local to_pl = infer_plr(playerRef)
-    if not to_pl or not to_pl.Character then 
-        Library:Notification("Error", "Player tidak ditemukan", 2)
-        return 
-    end
-    
-    local hrp = to_pl.Character:FindFirstChild('HumanoidRootPart')
-    local trs = to_pl.Character:FindFirstChild('Torso')
-    local to_part = hrp or trs
-    
-    if to_part and LocalPlayer.Character then
-        LocalPlayer.Character:PivotTo(to_part.CFrame)
-        Library:Notification("Teleport Advanced", "Ke " .. to_pl.Name, 2)
-    end
+local function teleportToGame(id)
+    TeleportService:Teleport(id)
 end
 
--- ============================================
--- TELEPORT KE GAME
--- ============================================
-local function teleportToGame(id, instance)
-    if instance then
-        TeleportService:TeleportToPlaceInstance(id, instance)
-    else
-        TeleportService:Teleport(id)
-    end
-end
-
-local function teleportToPlaceByIndex(index)
+local function teleportToPlaceByIndex(idx)
     local pages = AssetService:GetGamePlacesAsync()
-    local value = index
-    
+    local val = idx
     while true do
         for _, place in next, pages:GetCurrentPage() do
-            value = value - 1
-            if value == 0 then
-                teleportToGame(place.PlaceId)
-                return
-            end
+            val = val - 1
+            if val == 0 then teleportToGame(place.PlaceId); return end
         end
         if pages.IsFinished then break end
         pages:AdvanceToNextPageAsync()
@@ -209,14 +370,10 @@ end
 local function teleportToNextGame()
     local pages = AssetService:GetGamePlacesAsync()
     while true do
-        local passedCurrent = false
+        local passed = false
         for _, place in next, pages:GetCurrentPage() do
-            if game.PlaceId == place.PlaceId then
-                passedCurrent = true
-            elseif passedCurrent then
-                teleportToGame(place.PlaceId)
-                return
-            end
+            if game.PlaceId == place.PlaceId then passed = true
+            elseif passed then teleportToGame(place.PlaceId); return end
         end
         if pages.IsFinished then break end
         pages:AdvanceToNextPageAsync()
@@ -224,965 +381,560 @@ local function teleportToNextGame()
     Library:Notification("Error", "Tidak ada game berikutnya", 2)
 end
 
--- ============================================
--- ESP SEDERHANA
--- ============================================
-local espEnabled = false
-local espObjects = {}
-
-local function toggleESP(state)
-    espEnabled = state
-    
-    if state then
-        -- Hapus ESP lama
-        for _, obj in ipairs(espObjects) do
-            pcall(function() obj:Destroy() end)
-        end
-        espObjects = {}
-        
-        -- Buat ESP baru untuk setiap player
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local function onChar(char)
-                    if not espEnabled then return end
-                    task.wait(0.5)
-                    
-                    local head = char:FindFirstChild("Head")
-                    if head then
-                        -- Billboard GUI sederhana
-                        local bill = Instance.new("BillboardGui")
-                        bill.Name = "XKID_ESP"
-                        bill.Size = UDim2.new(0, 150, 0, 40)
-                        bill.StudsOffset = Vector3.new(0, 2, 0)
-                        bill.AlwaysOnTop = true
-                        bill.Adornee = head
-                        bill.Parent = char
-                        
-                        local label = Instance.new("TextLabel")
-                        label.Size = UDim2.new(1, 0, 1, 0)
-                        label.BackgroundTransparency = 1
-                        label.Text = player.Name .. "\n" .. player.DisplayName
-                        label.TextColor3 = Color3.new(1, 1, 1)
-                        label.TextStrokeTransparency = 0.5
-                        label.TextScaled = true
-                        label.Font = Enum.Font.GothamBold
-                        label.Parent = bill
-                        
-                        table.insert(espObjects, bill)
-                    end
-                end
-                
-                if player.Character then
-                    onChar(player.Character)
-                end
-                
-                player.CharacterAdded:Connect(onChar)
-            end
-        end
-        
-        Library:Notification("ESP", "Aktif", 2)
-    else
-        -- Hapus semua ESP
-        for _, obj in ipairs(espObjects) do
-            pcall(function() obj:Destroy() end)
-        end
-        espObjects = {}
-        Library:Notification("ESP", "Mati", 2)
-    end
-end
-
--- ============================================
--- ROCKET FLY SYSTEM
--- ============================================
-
--- Keybind sesuai script
-local FLYK = Enum.KeyCode.H  -- Toggle fly
-local ANCK = Enum.KeyCode.G  -- Toggle anchor
-local FSTK = Enum.KeyCode.L  -- Speed up (x1.5)
-local SLWK = Enum.KeyCode.K  -- Speed down (/1.5)
-
--- Movement key vectors
-local MVKS = {
-    [Enum.KeyCode.D] = Vector3.new(1, 0, 0),
-    [Enum.KeyCode.A] = Vector3.new(-1, 0, 0),
-    [Enum.KeyCode.S] = Vector3.new(0, 0, 1),
-    [Enum.KeyCode.W] = Vector3.new(0, 0, -1),
-    [Enum.KeyCode.E] = Vector3.new(0, 1, 0),
-    [Enum.KeyCode.Q] = Vector3.new(0, -1, 0),
-    
-    [Enum.KeyCode.Right] = Vector3.new(1, 0, 0),
-    [Enum.KeyCode.Left] = Vector3.new(-1, 0, 0),
-    [Enum.KeyCode.Down] = Vector3.new(0, 0, 1),
-    [Enum.KeyCode.Up] = Vector3.new(0, 0, -1),
-    [Enum.KeyCode.PageUp] = Vector3.new(0, 1, 0),
-    [Enum.KeyCode.PageDown] = Vector3.new(0, -1, 0),
-}
-
--- Variabel fly
-local SPEED = 127
-local REL_TO_CHAR = false
-local MAX_TORQUE_RP = 1e4
-local THRUST_P = 1e5
-local MAX_THRUST = 5e5
-local MAX_TORQUE_BG = 3e4
-local THRUST_D = math.huge
-local TURN_D = 2e2
-local ROOT_PART = nil
-
-local keys_dn = {}
-local flying = false
-local enabled = false
-local move_dir = Vector3.new()
-local humanoid
-local parent
-local ms = LocalPlayer:GetMouse()
-
--- Cleanup global
-_G.fly_evts = _G.fly_evts or {}
-_G.fly_rp = nil
-_G.fly_bg = nil
-_G.fly_pt = nil
-
--- Fungsi inisialisasi fly
-local function init_fly()
-    if ROOT_PART then
-        parent = ROOT_PART
-        local model = parent:FindFirstAncestorWhichIsA('Model')
-        if model then humanoid = model:FindFirstChildOfClass('Humanoid') end
-    else
-        local ch = LocalPlayer.Character
-        if not ch then return end
-        humanoid = ch:FindFirstChildOfClass('Humanoid')
-        if not humanoid then return end
-        parent = humanoid.RootPart
-        if not parent then return end
-    end
-    
-    -- Cleanup existing
-    if _G.fly_rp then pcall(function() _G.fly_rp:Destroy() end) end
-    if _G.fly_bg then pcall(function() _G.fly_bg:Destroy() end) end
-    if _G.fly_pt and _G.fly_pt.Parent then pcall(function() _G.fly_pt.Parent:Destroy() end) end
-    
-    -- Create new instances
-    local rp_h = MAX_TORQUE_RP
-    _G.fly_bg = Instance.new('BodyGyro', parent)
-    _G.fly_rp = Instance.new('RocketPropulsion', parent)
-    
-    local md = Instance.new('Model')
-    _G.fly_pt = Instance.new('Part', md)
-    md.Parent = _G.fly_pt
-    
-    _G.fly_rp.MaxTorque = Vector3.new(rp_h, rp_h, rp_h)
-    _G.fly_bg.MaxTorque = Vector3.new()
-    md.PrimaryPart = _G.fly_pt
-    _G.fly_pt.Anchored = true
-    _G.fly_pt.CanCollide = false
-    _G.fly_pt.Transparency = 1
-    _G.fly_rp.CartoonFactor = 1
-    _G.fly_rp.Target = _G.fly_pt
-    _G.fly_rp.MaxSpeed = SPEED
-    _G.fly_rp.MaxThrust = MAX_THRUST
-    _G.fly_rp.ThrustP = THRUST_P
-    _G.fly_rp.ThrustD = THRUST_D
-    _G.fly_rp.TurnP = THRUST_P
-    _G.fly_rp.TurnD = TURN_D
-    _G.fly_bg.P = 3e4
-    enabled = false
-    
-    print("[FLY] RocketPropulsion initialized")
-end
-
--- Fungsi arah fly
-local function fly_dir()
-    if REL_TO_CHAR then
-        return CFrame.new(Vector3.new(), parent.CFrame.LookVector) * move_dir
-    else
-        local front = Workspace.CurrentCamera:ScreenPointToRay(ms.X, ms.Y).Direction
-        return CFrame.new(Vector3.new(), front) * move_dir
-    end
-end
-
--- Setup events
-local function setup_fly_events()
-    -- Cleanup old events
-    for _, e in ipairs(_G.fly_evts) do
-        pcall(function() e:Disconnect() end)
-    end
-    _G.fly_evts = {}
-    
-    -- Character added event
-    table.insert(_G.fly_evts, LocalPlayer.CharacterAdded:Connect(function()
-        task.wait(1)
-        init_fly()
-    end))
-    
-    -- Input began
-    table.insert(_G.fly_evts, UIS.InputBegan:Connect(function(i, p)
-        if p then return end
-        
-        if i.KeyCode == FLYK then
-            enabled = not enabled
-            if enabled then
-                if _G.fly_bg then
-                    local bg_h = MAX_TORQUE_BG
-                    _G.fly_bg.MaxTorque = Vector3.new(bg_h, 0, bg_h)
-                end
-                if _G.fly_rp then
-                    local rp_h = MAX_TORQUE_RP
-                    _G.fly_rp.MaxTorque = Vector3.new(rp_h, rp_h, rp_h)
-                end
-                Library:Notification("Fly", "ON - H to toggle", 2)
-            else
-                if _G.fly_bg then
-                    _G.fly_bg.MaxTorque = Vector3.new()
-                end
-                if _G.fly_rp then
-                    _G.fly_rp.MaxTorque = Vector3.new()
-                end
-                Library:Notification("Fly", "OFF", 2)
-            end
-            
-        elseif i.KeyCode == ANCK and parent then
-            parent.Anchored = not parent.Anchored
-            Library:Notification("Anchor", parent.Anchored and "ON" or "OFF", 1)
-            
-        elseif i.KeyCode == FSTK and _G.fly_rp then
-            SPEED = SPEED * 1.5
-            _G.fly_rp.MaxSpeed = SPEED
-            Library:Notification("Speed+", string.format("%.1f", SPEED), 1)
-            
-        elseif i.KeyCode == SLWK and _G.fly_rp then
-            SPEED = SPEED / 1.5
-            _G.fly_rp.MaxSpeed = SPEED
-            Library:Notification("Speed-", string.format("%.1f", SPEED), 1)
-            
-        elseif MVKS[i.KeyCode] and not keys_dn[i.KeyCode] then
-            move_dir = move_dir + MVKS[i.KeyCode]
-            keys_dn[i.KeyCode] = true
-        end
-    end))
-    
-    -- Input ended
-    table.insert(_G.fly_evts, UIS.InputEnded:Connect(function(i, p)
-        if p then return end
-        if MVKS[i.KeyCode] and keys_dn[i.KeyCode] then
-            move_dir = move_dir - MVKS[i.KeyCode]
-            keys_dn[i.KeyCode] = nil
-        end
-    end))
-    
-    -- Render stepped
-    table.insert(_G.fly_evts, RunService.RenderStepped:Connect(function()
-        if not _G.fly_rp or not parent then return end
-        
-        local do_fly = enabled and move_dir.Magnitude > 0
-        
-        if flying ~= do_fly then
-            flying = do_fly
-            if humanoid then humanoid.AutoRotate = not do_fly end
-            if not do_fly then
-                parent.Velocity = Vector3.new()
-                _G.fly_rp:Abort()
-                return
-            end
-            _G.fly_rp:Fire()
-        end
-        
-        if _G.fly_pt then
-            _G.fly_pt.Position = parent.Position + 10000 * fly_dir()
-        end
-    end))
-end
-
--- Initialize fly
-task.spawn(function()
-    task.wait(1)
-    init_fly()
-    setup_fly_events()
-end)
-
--- ============================================
--- PATHFINDING / WAYPOINT (RocketPropulsion)
--- ============================================
-local waypoints = {}
-local waypointSpeed = 139
-local waypointTimes = 1
-local waypointDist = 13
-local waypointSkip = 0
-local waypointShuttle = false
-
-local function cleanup_path()
-    if _G.fp_rp then
-        _G.fp_rp:Abort()
-        _G.fp_rp:Destroy()
-        _G.fp_rp = nil
-    end
-    if _G.fp_bg then
-        _G.fp_bg:Destroy()
-        _G.fp_bg = nil
-    end
-    if _G.fp_tr then
-        _G.fp_tr:Destroy()
-        _G.fp_tr = nil
-    end
-end
-
-local function move_part(v, p)
-    if typeof(v) == 'Vector3' then
-        p.CFrame = CFrame.new(v)
-    elseif typeof(v) == 'Instance' then
-        if v:IsA('BasePart') then
-            p.CFrame = v.CFrame
-        elseif v:IsA('Model') then
-            p.CFrame = v:GetPivot()
-        end
-    elseif typeof(v) == 'CFrame' then
-        p.CFrame = v
-    end
-end
-
-local function task_step(rp, p, dist)
-    task.delay(0.25, function() rp.TargetRadius = tick() % 0.5 + dist end)
-    rp.ReachedTarget:Wait()
-end
-
-local function step_waypoint(rp, p, v)
-    if typeof(v) == 'table' then
-        move_part(v[1], p)
-        task_step(rp, p, waypointDist)
-        rp:Abort()
-        task.wait(v[2])
-        rp:Fire()
-    elseif typeof(v) == 'CFrame' then
-        move_part(v, p)
-        task_step(rp, p, waypointDist)
-    end
-end
-
-local function loop_waypoints(rp, p)
-    rp:Fire()
-    local times = waypointTimes
-    while rp.Parent do
-        if times == 0 then break end
-        for i = 1 + waypointSkip, #waypoints do
-            step_waypoint(rp, p, waypoints[i])
-        end
-        times = times - 1
-        if waypointShuttle then
-            for i = #waypoints - waypointSkip, 1, -1 do
-                step_waypoint(rp, p, waypoints[i])
-            end
-        end
-    end
-    rp:Abort()
-end
-
-local function startWaypoints()
-    cleanup_path()
-    if #waypoints == 0 then
-        Library:Notification("Error", "Tidak ada waypoint", 3)
-        return
-    end
-    
-    local ch = LocalPlayer.Character
-    if not ch then return end
-    
-    local hum = ch:FindFirstChildWhichIsA('Humanoid')
-    if not hum then return end
-    
-    local root = hum.RootPart
-    if not root then return end
-    
-    _G.fp_rp = Instance.new('RocketPropulsion', root)
-    _G.fp_bg = Instance.new('BodyGyro', root)
-    _G.fp_rp.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-    _G.fp_tr = Instance.new('Part', _G.fp_rp)
-    _G.fp_tr.Transparency = 1
-    _G.fp_tr.Anchored = true
-    _G.fp_tr.CanCollide = false
-    _G.fp_rp.CartoonFactor = 1
-    _G.fp_rp.MaxSpeed = waypointSpeed
-    _G.fp_rp.MaxThrust = 1e5
-    _G.fp_rp.ThrustP = 1e7
-    _G.fp_rp.TurnP = 5e3
-    _G.fp_rp.TurnD = 2e3
-    _G.fp_rp.Target = _G.fp_tr
-    task.wait()
-    loop_waypoints(_G.fp_rp, _G.fp_tr)
-    cleanup_path()
-    Library:Notification("Waypoint", "Selesai", 2)
-end
-
--- ============================================
--- FREECAM SYSTEM
--- ============================================
-local freecamEnabled = false
-local freecamNormalSpeed = 31
-local freecamSprintSpeed = 211
-local freecamSensitivity = Vector2.new(1/128, 1/128)
-local WASD_MULT = 2
-local ARROW_MULT = 1
-
-local freecamMoveKeys = {
-    [Enum.KeyCode.D] = Vector3.new(WASD_MULT, 0, 0),
-    [Enum.KeyCode.A] = Vector3.new(-WASD_MULT, 0, 0),
-    [Enum.KeyCode.S] = Vector3.new(0, 0, WASD_MULT),
-    [Enum.KeyCode.W] = Vector3.new(0, 0, -WASD_MULT),
-    [Enum.KeyCode.E] = Vector3.new(0, WASD_MULT, 0),
-    [Enum.KeyCode.Q] = Vector3.new(0, -WASD_MULT, 0),
-
-    [Enum.KeyCode.Right] = Vector3.new(ARROW_MULT, 0, 0),
-    [Enum.KeyCode.Left] = Vector3.new(-ARROW_MULT, 0, 0),
-    [Enum.KeyCode.Down] = Vector3.new(0, 0, ARROW_MULT),
-    [Enum.KeyCode.Up] = Vector3.new(0, 0, -ARROW_MULT),
-    [Enum.KeyCode.PageUp] = Vector3.new(0, ARROW_MULT, 0),
-    [Enum.KeyCode.PageDown] = Vector3.new(0, -ARROW_MULT, 0),
-}
-
-local freecamCam = Workspace.CurrentCamera
-local freecamMouse = LocalPlayer:GetMouse()
-local freecamCurrRot = Vector2.new(0, 0)
-local freecamPrevRot = freecamCurrRot
-local freecamButton2Ref = Vector2.new(0, 0)
-local freecamButton2Dn = false
+-- ════════════════════════════════════════════════
+--  ④ FREECAM
+-- ════════════════════════════════════════════════
+local freecamEnabled      = false
+local freecamNormalSpeed  = 31
+local freecamSprintSpeed  = 211
 local freecamCurrentSpeed = freecamNormalSpeed
-local freecamFov = freecamCam.FieldOfView
-local freecamKeysDn = {}
+local freecamSensitivity  = Vector2.new(1/128, 1/128)
+local freecamFov          = 70
+local freecamCam          = Workspace.CurrentCamera
+local freecamMouse        = LocalPlayer:GetMouse()
+local freecamCurrRot      = Vector2.new()
+local freecamPrevRot      = Vector2.new()
+local freecamButton2Ref   = Vector2.new()
+local freecamButton2Dn    = false
+local freecamKeysDn       = {}
+
+local WASD_MULT  = 2
+local ARROW_MULT = 1
+local freecamMoveKeys = {
+    [Enum.KeyCode.D]        = Vector3.new( WASD_MULT,  0,          0),
+    [Enum.KeyCode.A]        = Vector3.new(-WASD_MULT,  0,          0),
+    [Enum.KeyCode.S]        = Vector3.new( 0,          0,  WASD_MULT),
+    [Enum.KeyCode.W]        = Vector3.new( 0,          0, -WASD_MULT),
+    [Enum.KeyCode.E]        = Vector3.new( 0,  WASD_MULT,          0),
+    [Enum.KeyCode.Q]        = Vector3.new( 0, -WASD_MULT,          0),
+    [Enum.KeyCode.Right]    = Vector3.new( ARROW_MULT, 0,          0),
+    [Enum.KeyCode.Left]     = Vector3.new(-ARROW_MULT, 0,          0),
+    [Enum.KeyCode.Down]     = Vector3.new( 0,          0, ARROW_MULT),
+    [Enum.KeyCode.Up]       = Vector3.new( 0,          0,-ARROW_MULT),
+    [Enum.KeyCode.PageUp]   = Vector3.new( 0, ARROW_MULT,          0),
+    [Enum.KeyCode.PageDown] = Vector3.new( 0,-ARROW_MULT,          0),
+}
 
 local function setFreecamEnabled(state)
     if freecamEnabled == state then return end
     freecamEnabled = state
-    
-    if freecamEnabled then
-        if LocalPlayer.Character then
-            local hum = LocalPlayer.Character:FindFirstChildWhichIsA('Humanoid')
-            if hum then hum.WalkSpeed = 0 end
-        end
+    local hum = getHum()
+    if state then
+        if hum then hum.WalkSpeed = 0 end
         freecamCam.CameraType = Enum.CameraType.Scriptable
-        Library:Notification("Freecam", "ON - ',' to toggle", 2)
+        Library:Notification("Freecam", "ON  (',' = toggle)", 2)
     else
-        if LocalPlayer.Character then
-            local hum = LocalPlayer.Character:FindFirstChildWhichIsA('Humanoid')
-            if hum then
-                hum.WalkSpeed = 16
-                freecamCam.CameraSubject = hum
-            end
+        if hum then
+            hum.WalkSpeed = 16
+            freecamCam.CameraSubject = hum
         end
         freecamCam.CameraType = Enum.CameraType.Custom
         Library:Notification("Freecam", "OFF", 2)
     end
 end
 
--- Freecam events
-UIS.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        local d = Vector2.new(input.Delta.X, input.Delta.Y)
-        freecamCurrRot = freecamCurrRot + d
+-- Freecam input events
+UIS.InputChanged:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseMovement then
+        freecamCurrRot = freecamCurrRot + Vector2.new(i.Delta.X, i.Delta.Y)
     end
 end)
 
-UIS.InputBegan:Connect(function(i, processed)
-    if processed then return end
-    
+UIS.InputBegan:Connect(function(i, p)
+    if p then return end
     if i.KeyCode == Enum.KeyCode.Comma then
         setFreecamEnabled(not freecamEnabled)
-    elseif freecamEnabled and freecamMoveKeys[i.KeyCode] then
-        freecamKeysDn[i.KeyCode] = true
-    elseif freecamEnabled and i.UserInputType == Enum.UserInputType.MouseButton2 then
-        freecamButton2Dn = true
-        freecamButton2Ref = Vector2.new(freecamMouse.X, freecamMouse.Y)
-        UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
-    elseif freecamEnabled and i.KeyCode == Enum.KeyCode.LeftBracket then
-        freecamCurrentSpeed = freecamSprintSpeed
-    elseif freecamEnabled and i.KeyCode == Enum.KeyCode.RightBracket then
-        freecamFov = 20
+    elseif freecamEnabled then
+        if freecamMoveKeys[i.KeyCode] then
+            freecamKeysDn[i.KeyCode] = true
+        elseif i.UserInputType == Enum.UserInputType.MouseButton2 then
+            freecamButton2Dn  = true
+            freecamButton2Ref = Vector2.new(freecamMouse.X, freecamMouse.Y)
+            UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+        elseif i.KeyCode == Enum.KeyCode.LeftBracket  then
+            freecamCurrentSpeed = freecamSprintSpeed
+        elseif i.KeyCode == Enum.KeyCode.RightBracket then
+            freecamFov = 20
+        end
     end
 end)
 
-UIS.InputEnded:Connect(function(i, processed)
-    if processed then return end
-    
-    if freecamEnabled and freecamMoveKeys[i.KeyCode] then
-        freecamKeysDn[i.KeyCode] = nil
-    elseif freecamEnabled and i.UserInputType == Enum.UserInputType.MouseButton2 then
-        freecamButton2Dn = false
-        UIS.MouseBehavior = Enum.MouseBehavior.Default
-    elseif freecamEnabled and i.KeyCode == Enum.KeyCode.LeftBracket then
-        freecamCurrentSpeed = freecamNormalSpeed
-    elseif freecamEnabled and i.KeyCode == Enum.KeyCode.RightBracket then
-        freecamFov = 70
+UIS.InputEnded:Connect(function(i, p)
+    if p then return end
+    if freecamEnabled then
+        if freecamMoveKeys[i.KeyCode] then
+            freecamKeysDn[i.KeyCode] = nil
+        elseif i.UserInputType == Enum.UserInputType.MouseButton2 then
+            freecamButton2Dn  = false
+            UIS.MouseBehavior = Enum.MouseBehavior.Default
+        elseif i.KeyCode == Enum.KeyCode.LeftBracket  then
+            freecamCurrentSpeed = freecamNormalSpeed
+        elseif i.KeyCode == Enum.KeyCode.RightBracket then
+            freecamFov = 70
+        end
     end
 end)
 
--- Mouse wheel
 UIS.WheelForward:Connect(function()
-    if freecamEnabled then
-        freecamCam.CFrame = freecamCam.CFrame * CFrame.new(0, 0, -5)
-    end
+    if freecamEnabled then freecamCam.CFrame = freecamCam.CFrame * CFrame.new(0,0,-5) end
 end)
-
 UIS.WheelBackward:Connect(function()
-    if freecamEnabled then
-        freecamCam.CFrame = freecamCam.CFrame * CFrame.new(0, 0, 5)
-    end
+    if freecamEnabled then freecamCam.CFrame = freecamCam.CFrame * CFrame.new(0,0, 5) end
 end)
 
 local function freecamCalcMove(keys, mult)
     local v = Vector3.new()
-    for k, _ in pairs(keys) do
-        v = v + (freecamMoveKeys[k] or Vector3.new())
-    end
+    for k in pairs(keys) do v = v + (freecamMoveKeys[k] or Vector3.new()) end
     return CFrame.new(v * mult)
 end
 
--- Freecam render step
-RunService:BindToRenderStep("FreecamStep", Enum.RenderPriority.Camera.Value, function(dt)
+RunService:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value, function(dt)
     if not freecamEnabled then return end
-    
     freecamPrevRot = freecamCurrRot
-    local ty = -freecamPrevRot.Y * freecamSensitivity.Y
-    local tx = -freecamPrevRot.X * freecamSensitivity.X
-    local eu = CFrame.fromEulerAnglesYXZ(ty, tx, 0)
+    local eu = CFrame.fromEulerAnglesYXZ(
+        -freecamPrevRot.Y * freecamSensitivity.Y,
+        -freecamPrevRot.X * freecamSensitivity.X, 0)
     local mv = freecamCalcMove(freecamKeysDn, freecamCurrentSpeed * dt)
-    
-    freecamCam.CFrame = CFrame.new(freecamCam.CFrame.Position) * eu * mv
-    freecamCam.FieldOfView = freecamFov
-    
+    freecamCam.CFrame       = CFrame.new(freecamCam.CFrame.Position) * eu * mv
+    freecamCam.FieldOfView  = freecamFov
     if freecamButton2Dn then
         UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
         local rv = Vector2.new(freecamMouse.X, freecamMouse.Y)
-        freecamCurrRot = freecamCurrRot - (freecamButton2Ref - rv)
+        freecamCurrRot   = freecamCurrRot - (freecamButton2Ref - rv)
         freecamButton2Ref = rv
     end
 end)
 
--- ============================================
--- REMOTE SPY
--- ============================================
-local spyActive = false
+-- ════════════════════════════════════════════════
+--  ⑤ REMOTE SPY
+-- ════════════════════════════════════════════════
+local spyActive      = false
 local spyConnections = {}
-local rspySettings = {
-    ToServerEnabled = true,
-    ToClientEnabled = true,
-    Blacklist = {},
-    ShowReturns = true,
-}
 
 local function startRemoteSpy()
-    if spyActive then
-        Library:Notification("Remote Spy", "Sudah aktif", 2)
-        return
-    end
-    
+    if spyActive then Library:Notification("Remote Spy","Sudah aktif",2); return end
     spyActive = true
     local count = 0
-    
     for _, v in pairs(RS:GetDescendants()) do
         if v:IsA("RemoteEvent") then
             count = count + 1
-            local conn = v.OnClientEvent:Connect(function(...)
+            local c = v.OnClientEvent:Connect(function(...)
                 print("\n📡 [REMOTE] " .. v.Name)
-                print("   Path: " .. v:GetFullName())
-                print("   Args: ", ...)
+                print("   Path : " .. v:GetFullName())
+                local args = {...}
+                for i, a in ipairs(args) do
+                    print(string.format("   Arg%d : %s", i, tostring(a)))
+                end
             end)
-            table.insert(spyConnections, conn)
+            table.insert(spyConnections, c)
         end
     end
-    
-    Library:Notification("Remote Spy", string.format("%d remote di-spy", count), 3)
+    Library:Notification("Remote Spy", count.." remote di-spy | Lihat F9", 4)
 end
 
 local function stopRemoteSpy()
     spyActive = false
-    for _, conn in ipairs(spyConnections) do
-        conn:Disconnect()
-    end
+    for _, c in ipairs(spyConnections) do pcall(function() c:Disconnect() end) end
     spyConnections = {}
     Library:Notification("Remote Spy", "Dimatikan", 2)
 end
 
--- ============================================
--- BACKDOOR AUTO
--- ============================================
-local backdoorList = {}
+-- ════════════════════════════════════════════════
+--  ⑥ BACKDOOR SCANNER
+-- ════════════════════════════════════════════════
+local backdoorList     = {}
 local selectedBackdoor = nil
+local BD_PATTERNS      = {"Admin","Backdoor","Server","Execute","Run","Command","Control","Exploit","Load","Eval"}
 
 local function scanBackdoor()
     backdoorList = {}
-    local patterns = {"Admin", "Backdoor", "Server", "Execute", "Run", "Command", "Control", "Exploit", "Load", "Eval"}
-    
-    print("\n" .. string.rep("=", 50))
+    print("\n" .. string.rep("=",50))
     print("🔍 BACKDOOR SCAN RESULTS")
-    print(string.rep("=", 50))
-    
+    print(string.rep("=",50))
     for _, v in pairs(RS:GetDescendants()) do
         if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            for _, pattern in ipairs(patterns) do
-                if v.Name:find(pattern, 1, true) then
-                    table.insert(backdoorList, {
-                        Name = v.Name,
-                        Path = "ReplicatedStorage." .. v.Name,
-                        Type = v.ClassName,
-                        Object = v,
-                        Confidence = "Tinggi"
-                    })
-                    print(string.format("[✅] %s - %s", v.ClassName, v.Name))
+            for _, pat in ipairs(BD_PATTERNS) do
+                if v.Name:find(pat, 1, true) then
+                    table.insert(backdoorList, { Name=v.Name, Type=v.ClassName, Object=v })
+                    print(string.format("[✅] %-20s  %s", v.ClassName, v.Name))
                     break
                 end
             end
         end
     end
-    
-    Library:Notification("Backdoor", string.format("Ditemukan %d backdoor", #backdoorList), 5)
+    Library:Notification("Backdoor Scan", #backdoorList.." ditemukan | F9 untuk detail", 4)
     return backdoorList
 end
 
--- Template backdoor
 local backdoorTemplates = {
-    {
-        Name = "💰 Kasih Uang",
-        Code = [[
-local player = game.Players.LocalPlayer
-local remote = game:ReplicatedStorage:FindFirstChild("GiveMoney") or game:ReplicatedStorage:FindFirstChild("AddCoins")
-if remote then remote:FireServer(player, 999999) end
-]]
-    },
-    {
-        Name = "👑 Jadi Admin",
-        Code = [[
-local player = game.Players.LocalPlayer
-local remote = game:ReplicatedStorage:FindFirstChild("MakeAdmin") or game:ReplicatedStorage:FindFirstChild("SetAdmin")
-if remote then remote:FireServer(player) end
-]]
-    },
-    {
-        Name = "💎 Kasih Semua Item",
-        Code = [[
-local remote = game:ReplicatedStorage:FindFirstChild("GiveItem") or game:ReplicatedStorage:FindFirstChild("AddItem")
-if remote then
-    for _, player in pairs(game.Players:GetPlayers()) do
-        remote:FireServer(player, "Diamond", 100)
-    end
-end
-]]
-    }
+    { Name="💰 Kasih Uang",    Args={"GiveMoney","AddCoins"},    Extra={999999} },
+    { Name="👑 Jadi Admin",     Args={"MakeAdmin","SetAdmin"},    Extra={} },
+    { Name="💎 Kasih Item",     Args={"GiveItem","AddItem"},      Extra={"Diamond",100} },
 }
 
--- ============================================
--- FLY TAB
--- ============================================
-local FlyPage = FlyTab:Page("Rocket Controls", "rocket")
-local FlyLeft = FlyPage:Section("🚀 Fly Settings", "Left")
-local FlyRight = FlyPage:Section("🎮 Keybinds", "Right")
+-- ════════════════════════════════════════════════
+--  ⑦ PATHFINDING / WAYPOINT
+-- ════════════════════════════════════════════════
+local waypoints     = {}
+local waypointSpeed = 139
+local waypointTimes = 1
+local waypointDist  = 13
+local waypointSkip  = 0
+local waypointShuttle = false
 
-FlyLeft:Paragraph("Rocket Fly v5.0", 
-    "Menggunakan RocketPropulsion + BodyGyro\n" ..
-    "Lebih stabil dan smooth dari BodyVelocity\n\n" ..
-    "⚡ Speed: " .. SPEED)
+local function cleanup_path()
+    if _G.fp_rp then _G.fp_rp:Abort(); _G.fp_rp:Destroy(); _G.fp_rp=nil end
+    if _G.fp_bg then _G.fp_bg:Destroy(); _G.fp_bg=nil end
+    if _G.fp_tr then _G.fp_tr:Destroy(); _G.fp_tr=nil end
+end
 
-FlyLeft:Slider("Initial Speed", "FlySpeedSlider", 50, 500, 127, function(val)
-    SPEED = val
-    if _G.fly_rp then
-        _G.fly_rp.MaxSpeed = SPEED
+local function move_part(v, p)
+    if typeof(v)=="Vector3"  then p.CFrame = CFrame.new(v)
+    elseif typeof(v)=="CFrame" then p.CFrame = v
+    elseif typeof(v)=="Instance" then
+        p.CFrame = v:IsA("BasePart") and v.CFrame or v:IsA("Model") and v:GetPivot() or p.CFrame
     end
-end, "Kecepatan awal terbang")
+end
 
-FlyLeft:Toggle("Relative to Character", "RelToCharToggle", false, "Jika ON, gerak relatif ke karakter, bukan kamera", function(state)
-    REL_TO_CHAR = state
-end)
+local function task_step(rp, p, dist)
+    task.delay(0.25, function() rp.TargetRadius = tick()%0.5 + dist end)
+    rp.ReachedTarget:Wait()
+end
 
-FlyLeft:Button("🔄 Reset Fly", "Reset fly system (jika error)", function()
-    init_fly()
-    Library:Notification("Fly Reset", "System diinisialisasi ulang", 2)
-end)
-
-FlyRight:Paragraph("Keybind Controls",
-    "🟢 H - Toggle Fly ON/OFF\n" ..
-    "🟢 G - Toggle Anchor (root part)\n" ..
-    "🟢 L - Speed Up (x1.5)\n" ..
-    "🟢 K - Speed Down (/1.5)\n\n" ..
-    "🟢 WASD/E/Q - Gerak\n" ..
-    "🟢 Arrow Keys + PageUp/Down - Alternatif")
-
--- ============================================
--- BACKDOOR TAB
--- ============================================
-local BackdoorPage = BackdoorTab:Page("Backdoor Tools", "skull")
-local BackdoorLeft = BackdoorPage:Section("🔍 Scanner", "Left")
-local BackdoorRight = BackdoorPage:Section("💀 Execute", "Right")
-
-BackdoorLeft:Button("🔍 Scan Backdoor", "Cari remote mencurigakan", function()
-    scanBackdoor()
-end)
-
-BackdoorLeft:Dropdown("Pilih Backdoor", "BackdoorDropdown", {"Scan dulu!"}, function(val)
-    for _, bd in ipairs(backdoorList) do
-        if bd.Name == val then
-            selectedBackdoor = bd
-            Library:Notification("Dipilih", bd.Name, 2)
-            break
-        end
+local function step_waypoint(rp, p, v)
+    if typeof(v)=="table" then
+        move_part(v[1], p); task_step(rp,p,waypointDist)
+        rp:Abort(); task.wait(v[2]); rp:Fire()
+    elseif typeof(v)=="CFrame" then
+        move_part(v,p); task_step(rp,p,waypointDist)
     end
-end)
+end
 
-for _, template in ipairs(backdoorTemplates) do
-    BackdoorRight:Button(template.Name, "Execute template ini", function()
-        if not selectedBackdoor and #backdoorList > 0 then
-            selectedBackdoor = backdoorList[1]
-        end
-        if not selectedBackdoor then
-            Library:Notification("Error", "Scan backdoor dulu!", 3)
-            return
-        end
-        pcall(function()
-            if selectedBackdoor.Object:IsA("RemoteEvent") then
-                selectedBackdoor.Object:FireServer(template.Code)
-            else
-                selectedBackdoor.Object:InvokeServer(template.Code)
+local function startWaypoints()
+    cleanup_path()
+    if #waypoints==0 then Library:Notification("Error","Tidak ada waypoint",3); return end
+    local ch=getChar(); if not ch then return end
+    local hum=ch:FindFirstChildWhichIsA("Humanoid"); if not hum then return end
+    local root=hum.RootPart; if not root then return end
+
+    _G.fp_rp = Instance.new("RocketPropulsion", root)
+    _G.fp_bg = Instance.new("BodyGyro",          root)
+    _G.fp_tr = Instance.new("Part", _G.fp_rp)
+    _G.fp_rp.MaxTorque   = Vector3.new(1e9,1e9,1e9)
+    _G.fp_tr.Transparency= 1; _G.fp_tr.Anchored=true; _G.fp_tr.CanCollide=false
+    _G.fp_rp.CartoonFactor=1
+    _G.fp_rp.MaxSpeed    = waypointSpeed
+    _G.fp_rp.MaxThrust   = 1e5
+    _G.fp_rp.ThrustP     = 1e7
+    _G.fp_rp.TurnP       = 5e3
+    _G.fp_rp.TurnD       = 2e3
+    _G.fp_rp.Target      = _G.fp_tr
+
+    task.spawn(function()
+        _G.fp_rp:Fire()
+        local times = waypointTimes
+        while _G.fp_rp and _G.fp_rp.Parent do
+            if times==0 then break end
+            for i=1+waypointSkip, #waypoints do
+                if not _G.fp_rp or not _G.fp_rp.Parent then break end
+                step_waypoint(_G.fp_rp, _G.fp_tr, waypoints[i])
             end
-            Library:Notification("Sukses", "Template dieksekusi", 3)
-        end)
+            times = times - 1
+            if waypointShuttle then
+                for i=#waypoints-waypointSkip, 1, -1 do
+                    if not _G.fp_rp or not _G.fp_rp.Parent then break end
+                    step_waypoint(_G.fp_rp, _G.fp_tr, waypoints[i])
+                end
+            end
+        end
+        cleanup_path()
+        Library:Notification("Waypoint","Selesai",2)
     end)
 end
 
--- ============================================
--- TELEPORT TAB
--- ============================================
-local TeleportPage = TeleportTab:Page("Teleport Tools", "map-pin")
-local TeleportLeft = TeleportPage:Section("🚀 Teleport ke Player", "Left")
-local TeleportMiddle = TeleportPage:Section("🌍 Teleport ke Game", "Middle")
-local TeleportRight = TeleportPage:Section("📌 Info", "Right")
+-- ════════════════════════════════════════════════
+--  ⑧ UTILITY
+-- ════════════════════════════════════════════════
+local lastCF = nil
 
--- Input nama player (sederhana)
-local playerNameInput = ""
-TeleportLeft:TextBox("Nama Player", "PlayerNameInput", "", function(val)
-    playerNameInput = val
-end, "Masukkan nama atau display name player")
+local function savePosition()
+    local root = getRoot()
+    if root then lastCF = root.CFrame; return true end
+    return false
+end
 
-TeleportLeft:Button("📍 Teleport (Sederhana)", "Pindah ke player", function()
-    teleportToPlayer(playerNameInput)
+local function resetCharacter()
+    local ch = getChar(); if not ch then return end
+    local savedCF = getRoot() and getRoot().CFrame or nil
+    ch:BreakJoints()
+    local conn
+    conn = LocalPlayer.CharacterAdded:Connect(function(newChar)
+        conn:Disconnect()
+        task.wait(1)
+        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+        if hrp and savedCF then
+            hrp.CFrame = savedCF
+            Library:Notification("Reset","Kembali ke posisi semula",2)
+        end
+    end)
+end
+
+-- ════════════════════════════════════════════════
+--  INIT FLY (setelah semua fungsi didefinisikan)
+-- ════════════════════════════════════════════════
+task.spawn(function()
+    task.wait(1)
+    init_fly()
+    setup_fly_events()
 end)
 
--- Input nama player (advanced)
-local playerRefInput = ""
-TeleportLeft:TextBox("Nama Player (Advanced)", "PlayerRefInput", "", function(val)
-    playerRefInput = val
-end, "Masukkan prefix nama player")
+-- ════════════════════════════════════════════════
+--  BUILD UI
+-- ════════════════════════════════════════════════
 
-TeleportLeft:Button("📍 Teleport (Advanced)", "Pindah ke player dengan algoritma pencocokan", function()
-    teleportToPlayerAdvanced(playerRefInput)
-end)
+-- ── TAB: FLY ──────────────────────────────────
+local FlyPage  = FlyTab:Page("Rocket Controls", "rocket")
+local FlyLeft  = FlyPage:Section("⚙ Settings", "Left")
+local FlyRight = FlyPage:Section("🎮 Keybinds", "Right")
 
--- Teleport ke game berdasarkan index
-local placeIndexInput = 1
-TeleportMiddle:Slider("Index Place", "PlaceIndexSlider", 1, 100, 1, function(val)
-    placeIndexInput = val
-end, "Nomor urut game dalam universe")
+FlyLeft:Slider("Kecepatan", "FlySpeedSlider", 10, 500, 127,
+    function(v)
+        SPEED = v
+        if _G.fly_rp then _G.fly_rp.MaxSpeed = SPEED end
+    end, "Kecepatan terbang awal")
 
-TeleportMiddle:Button("🌍 Teleport ke Index", "Pindah ke game berdasarkan nomor urut", function()
-    teleportToPlaceByIndex(placeIndexInput)
-end)
+FlyLeft:Toggle("Relatif ke Karakter", "RelCharToggle", false,
+    "Gerak relatif karakter, bukan kamera",
+    function(v) REL_TO_CHAR = v end)
 
-TeleportMiddle:Button("⏭️ Teleport ke Game Berikutnya", "Pindah ke game selanjutnya dalam universe", function()
-    teleportToNextGame()
-end)
+FlyLeft:Button("🔄 Reset Fly System", "Inisialisasi ulang jika error",
+    function()
+        init_fly()
+        Library:Notification("Fly Reset","System diinit ulang",2)
+    end)
 
-TeleportMiddle:TextBox("Place ID", "PlaceIDInput", "", function(val)
-    _G.placeID = tonumber(val)
-end, "Masukkan Place ID")
+FlyRight:Paragraph("Keybinds",
+    "H  — Toggle Fly ON/OFF\n"..
+    "G  — Toggle Anchor\n"..
+    "L  — Speed ×1.5\n"..
+    "K  — Speed ÷1.5\n\n"..
+    "WASD / E / Q — Gerak\n"..
+    "Arrow + PageUp/Down — Alternatif")
 
-TeleportMiddle:Button("🌍 Teleport ke Place ID", "Pindah ke game berdasarkan Place ID", function()
-    if _G.placeID then
-        teleportToGame(_G.placeID)
-    end
-end)
+-- ── TAB: TELEPORT ─────────────────────────────
+local TpPage   = TeleportTab:Page("Teleport Tools", "map-pin")
+local TpLeft   = TpPage:Section("👤 Ke Player", "Left")
+local TpMiddle = TpPage:Section("🌍 Ke Game", "Middle")
+local TpRight  = TpPage:Section("📌 Info", "Right")
 
-TeleportRight:Paragraph("Info Teleport",
-    "• Cari berdasarkan nama atau display name\n" ..
-    "• Case insensitive (huruf besar/kecil tidak masalah)\n" ..
-    "• Akan teleport 3 stud di atas target\n\n" ..
-    "• Index Place: Nomor urut game\n" ..
-    "• Place ID: ID unik game\n\n" ..
-    "Contoh: 'XPEEM' akan menemukan XPEEMPEEM")
+local plrNameSimple = ""
+TpLeft:TextBox("Nama Player", "TPNameSimple", "", function(v) plrNameSimple=v end,
+    "Nama atau display name")
+TpLeft:Button("📍 Teleport (Sederhana)", "TP ke player",
+    function() teleportToPlayer(plrNameSimple) end)
 
--- ============================================
--- ESP TAB
--- ============================================
-local ESPPage = ESPTab:Page("ESP Tools", "eye")
-local ESPLeft = ESPPage:Section("👁️ ESP Controls", "Left")
-local ESPRight = ESPPage:Section("🎨 Info", "Right")
+local plrNameAdv = ""
+TpLeft:TextBox("Nama Player (Advanced)", "TPNameAdv", "", function(v) plrNameAdv=v end,
+    "Prefix nama player")
+TpLeft:Button("📍 Teleport (Advanced)", "TP dengan algoritma pencocokan",
+    function() teleportToPlayerAdvanced(plrNameAdv) end)
 
-ESPLeft:Toggle("ESP Player", "ESPToggle", false, "Tampilkan nama player", function(state)
-    toggleESP(state)
-end)
+local placeIdx = 1
+TpMiddle:Slider("Index Place", "PlaceIdxSlider", 1, 100, 1,
+    function(v) placeIdx=v end, "Nomor urut game dalam universe")
+TpMiddle:Button("🌍 TP ke Index", "Pindah ke game sesuai nomor urut",
+    function() teleportToPlaceByIndex(placeIdx) end)
+TpMiddle:Button("⏭ TP ke Game Berikutnya", "Pindah ke game selanjutnya",
+    function() teleportToNextGame() end)
 
-ESPRight:Paragraph("ESP Info",
-    "• Menampilkan nama dan display name\n" ..
-    "• Warna putih dengan outline\n" ..
-    "• Update otomatis saat player spawn\n" ..
-    "• Tidak mempengaruhi performa")
+local placeIDInput = nil
+TpMiddle:TextBox("Place ID", "PlaceIDBox", "", function(v) placeIDInput=tonumber(v) end,
+    "Masukkan Place ID")
+TpMiddle:Button("🌍 TP ke Place ID", "Pindah ke game via Place ID",
+    function()
+        if placeIDInput then teleportToGame(placeIDInput)
+        else Library:Notification("Error","Masukkan Place ID dulu",2) end
+    end)
 
--- ============================================
--- FREECAM TAB
--- ============================================
-local FreecamPage = FreecamTab:Page("Freecam Tools", "video")
-local FreecamLeft = FreecamPage:Section("🎥 Freecam Controls", "Left")
-local FreecamRight = FreecamPage:Section("⚙ Settings", "Right")
+TpRight:Paragraph("Info",
+    "Sederhana: cari nama/display\n"..
+    "Advanced: prefix matching\n"..
+    "TP 3 stud di atas target\n\n"..
+    "Index: nomor urut game\n"..
+    "Place ID: ID unik game")
 
-FreecamLeft:Paragraph("Freecam Controls",
-    "',' (koma) - Toggle Freecam\n" ..
-    "Mouse Kiri + Gerak - Lihat\n" ..
-    "WASD/E/Q - Gerak\n" ..
-    "'[' - Sprint (cepat)\n" ..
-    "']' - Zoom In (FOV)\n" ..
-    "Scroll - Zoom Kamera")
+-- ── TAB: ESP ──────────────────────────────────
+local ESPPage  = ESPTab:Page("ESP Tools", "eye")
+local ESPLeft  = ESPPage:Section("👁 Controls", "Left")
+local ESPRight = ESPPage:Section("ℹ Info", "Right")
 
-FreecamLeft:Button("🎥 Toggle Freecam", "Aktifkan/Matikan freecam", function()
-    setFreecamEnabled(not freecamEnabled)
-end)
+ESPLeft:Toggle("ESP Player", "ESPToggle", false,
+    "Tampilkan nama player di atas kepala",
+    function(v) toggleESP(v) end)
 
-FreecamLeft:Slider("Kecepatan Normal", "FreecamSpeedSlider", 10, 200, 31, function(val)
-    freecamNormalSpeed = val
-    freecamCurrentSpeed = val
-end)
+ESPRight:Paragraph("Info",
+    "Nama + display name\n"..
+    "Warna putih, selalu di depan\n"..
+    "Auto update saat respawn")
 
-FreecamLeft:Slider("Kecepatan Sprint", "FreecamSprintSlider", 50, 500, 211, function(val)
-    freecamSprintSpeed = val
-end)
+-- ── TAB: FREECAM ──────────────────────────────
+local FCPage  = FreecamTab:Page("Freecam", "video")
+local FCLeft  = FCPage:Section("🎥 Controls", "Left")
+local FCRight = FCPage:Section("⚙ Settings", "Right")
 
-FreecamRight:Paragraph("Info Freecam",
-    "• Gerak bebas kamera\n" ..
-    "• Tidak mempengaruhi karakter\n" ..
-    "• Sprint untuk gerak cepat\n" ..
-    "• Zoom untuk FOV")
+FCLeft:Paragraph("Kontrol",
+    "','  — Toggle Freecam\n"..
+    "WASD / E / Q  — Gerak\n"..
+    "Mouse Kanan + Gerak  — Lihat\n"..
+    "'['  — Sprint\n"..
+    "']'  — Zoom In\n"..
+    "Scroll  — Maju/Mundur")
 
--- ============================================
--- REMOTE SPY TAB
--- ============================================
-local SpyPage = SpyTab:Page("Remote Spy", "radio")
-local SpyLeft = SpyPage:Section("🔍 Controls", "Left")
+FCLeft:Button("🎥 Toggle Freecam", "Aktifkan/matikan freecam",
+    function() setFreecamEnabled(not freecamEnabled) end)
+
+FCRight:Slider("Kecepatan Normal", "FCSpeedNorm", 5, 200, 31,
+    function(v) freecamNormalSpeed=v; if not freecamEnabled then freecamCurrentSpeed=v end end)
+FCRight:Slider("Kecepatan Sprint", "FCSpeedSprint", 50, 500, 211,
+    function(v) freecamSprintSpeed=v end)
+
+-- ── TAB: REMOTE SPY ───────────────────────────
+local SpyPage  = SpyTab:Page("Remote Spy", "radio")
+local SpyLeft  = SpyPage:Section("🔍 Controls", "Left")
 local SpyRight = SpyPage:Section("📋 Info", "Right")
 
-SpyLeft:Button("▶️ Start Remote Spy", "Mulai memantau remote events", function()
-    startRemoteSpy()
-end)
+SpyLeft:Button("▶ Start Remote Spy", "Mulai pantau remote events",
+    function() startRemoteSpy() end)
+SpyLeft:Button("⏹ Stop Remote Spy", "Hentikan pemantauan",
+    function() stopRemoteSpy() end)
 
-SpyLeft:Button("⏹️ Stop Remote Spy", "Hentikan pemantauan", function()
-    stopRemoteSpy()
-end)
+SpyRight:Paragraph("Info",
+    "Pantau semua RemoteEvent\n"..
+    "Tampil nama, path, argumen\n"..
+    "Lihat hasil di console F9")
 
-SpyRight:Paragraph("Remote Spy Info",
-    "• Memantau semua RemoteEvent\n" ..
-    "• Menampilkan nama remote\n" ..
-    "• Menampilkan path lengkap\n" ..
-    "• Menampilkan argumen\n\n" ..
-    "Hasil di console (F9)")
+-- ── TAB: BACKDOOR ─────────────────────────────
+local BDPage  = BackdoorTab:Page("Backdoor Tools", "skull")
+local BDLeft  = BDPage:Section("🔍 Scanner", "Left")
+local BDRight = BDPage:Section("💀 Execute", "Right")
 
--- ============================================
--- PATHFINDING TAB
--- ============================================
-local PathPage = UtilTab:Page("Pathfinding", "map")
-local PathLeft = PathPage:Section("📍 Waypoint Controls", "Left")
-local PathRight = PathPage:Section("⚙ Settings", "Right")
+BDLeft:Button("🔍 Scan Backdoor", "Cari remote mencurigakan",
+    function() scanBackdoor() end)
 
-PathLeft:Button("➕ Tambah Waypoint (Posisi Saat Ini)", "Simpan posisi sebagai waypoint", function()
-    if LocalPlayer.Character then
-        local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+BDLeft:Dropdown("Pilih Backdoor", "BDDropdown", {"Scan dulu!"},
+    function(val)
+        for _, bd in ipairs(backdoorList) do
+            if bd.Name==val then
+                selectedBackdoor=bd
+                Library:Notification("Dipilih", bd.Name, 2); break
+            end
+        end
+    end)
+
+for _, tmpl in ipairs(backdoorTemplates) do
+    local t = tmpl
+    BDRight:Button(t.Name, "Execute template via backdoor terpilih",
+        function()
+            if not selectedBackdoor and #backdoorList>0 then selectedBackdoor=backdoorList[1] end
+            if not selectedBackdoor then
+                Library:Notification("Error","Scan & pilih backdoor dulu",3); return
+            end
+            pcall(function()
+                local obj = selectedBackdoor.Object
+                local args = {}
+                for _, a in ipairs(t.Extra) do table.insert(args, a) end
+                if obj:IsA("RemoteEvent") then obj:FireServer(table.unpack(args))
+                else obj:InvokeServer(table.unpack(args)) end
+                Library:Notification("Execute","Template dikirim",2)
+            end)
+        end)
+end
+
+-- ── TAB: UTILITY ──────────────────────────────
+local UtilPage  = UtilTab:Page("Pathfinding", "map")
+local PathLeft  = UtilPage:Section("📍 Waypoint", "Left")
+local PathRight = UtilPage:Section("⚙ Settings", "Right")
+
+PathLeft:Button("➕ Tambah Waypoint", "Simpan posisi saat ini sebagai waypoint",
+    function()
+        local root = getRoot()
         if root then
             table.insert(waypoints, root.CFrame)
-            Library:Notification("Waypoint", string.format("Waypoint %d ditambahkan", #waypoints), 2)
+            Library:Notification("Waypoint","#"..#waypoints.." ditambahkan",2)
         end
-    end
-end)
+    end)
+PathLeft:Button("🗑 Hapus Semua Waypoint", "Reset semua waypoint",
+    function() waypoints={}; Library:Notification("Waypoint","Semua dihapus",2) end)
+PathLeft:Button("🚀 Mulai Waypoint", "Jalankan path",
+    function() startWaypoints() end)
+PathLeft:Button("⏹ Stop Waypoint", "Hentikan path",
+    function() cleanup_path(); Library:Notification("Waypoint","Dihentikan",2) end)
 
-PathLeft:Button("🗑️ Hapus Semua Waypoint", "Reset waypoints", function()
-    waypoints = {}
-    Library:Notification("Waypoint", "Semua waypoint dihapus", 2)
-end)
+PathRight:Slider("Kecepatan", "PathSpeed", 20, 500, 139,
+    function(v) waypointSpeed=v end)
+PathRight:Slider("Jumlah Loop", "PathTimes", 1, 20, 1,
+    function(v) waypointTimes=v end)
+PathRight:Slider("Skip Awal", "PathSkip", 0, 10, 0,
+    function(v) waypointSkip=v end)
+PathRight:Toggle("Shuttle Mode", "PathShuttle", false, "Bolak-balik",
+    function(v) waypointShuttle=v end)
 
-PathLeft:Button("🚀 Mulai Waypoint", "Jalankan path", function()
-    startWaypoints()
-end)
+-- ── Utility sub-page ──
+local UtilSub  = UtilTab:Page("Utility", "heart")
+local ULeft    = UtilSub:Section("🛠 Tools", "Left")
+local URight   = UtilSub:Section("ℹ Info", "Right")
 
-PathLeft:Button("⏹️ Stop Waypoint", "Hentikan path", function()
-    cleanup_path()
-    Library:Notification("Waypoint", "Dihentikan", 2)
-end)
+ULeft:Toggle("Anti AFK", "AntiAFKToggle", false, "Cegah disconnect otomatis",
+    function(v)
+        if v then
+            LocalPlayer.Idled:Connect(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+            Library:Notification("Anti AFK","ON",2)
+        else
+            Library:Notification("Anti AFK","OFF (perlu re-toggle untuk aktif lagi)",3)
+        end
+    end)
 
-PathRight:Slider("Kecepatan", "PathSpeedSlider", 50, 500, 139, function(val)
-    waypointSpeed = val
-end)
+ULeft:Button("📍 Teleport ke Mouse", "TP ke posisi kursor",
+    function()
+        local mouse = LocalPlayer:GetMouse()
+        if mouse and mouse.Hit and getChar() then
+            getChar():SetPrimaryPartCFrame(mouse.Hit + Vector3.new(0,3,0))
+            Library:Notification("TP","Ke posisi mouse",2)
+        end
+    end)
 
-PathRight:Slider("Jumlah Loop", "PathTimesSlider", 1, 10, 1, function(val)
-    waypointTimes = val
-end)
+ULeft:Button("💀 Reset Character", "Mati dan kembali ke posisi semula",
+    function() resetCharacter() end)
 
-PathRight:Slider("Skip Awal", "PathSkipSlider", 0, 10, 0, function(val)
-    waypointSkip = val
-end)
+ULeft:Button("📍 Simpan Posisi", "Simpan posisi saat ini",
+    function()
+        if savePosition() then Library:Notification("Posisi","Tersimpan",2) end
+    end)
 
-PathRight:Toggle("Shuttle Mode", "PathShuttleToggle", false, "Bolak-balik", function(val)
-    waypointShuttle = val
-end)
+ULeft:Button("🔄 Rejoin Server", "Koneksi ulang ke server",
+    function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
 
--- ============================================
--- UTILITY TAB
--- ============================================
-local UtilPage = UtilTab:Page("Utility", "heart")
-local UtilLeft = UtilPage:Section("🛠 Tools", "Left")
-local UtilRight = UtilPage:Section("ℹ️ Info", "Right")
+URight:Paragraph("Info",
+    "Anti AFK: Cegah kick\n"..
+    "TP Mouse: Pindah ke kursor\n"..
+    "Reset: Mati & kembali ke posisi\n"..
+    "Rejoin: Koneksi ulang")
 
-UtilLeft:Toggle("Anti AFK", "AntiAFKToggle", false, "Cegah disconnect otomatis", function(state)
-    if state then
-        LocalPlayer.Idled:Connect(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end)
-        Library:Notification("Anti AFK", "Aktif", 2)
-    end
-end)
-
-UtilLeft:Button("📍 Teleport ke Mouse", "Pindah ke posisi kursor", function()
-    local mouse = LocalPlayer:GetMouse()
-    if mouse and mouse.Hit and LocalPlayer.Character then
-        LocalPlayer.Character:SetPrimaryPartCFrame(mouse.Hit + Vector3.new(0, 3, 0))
-        Library:Notification("Teleport", "Ke posisi mouse", 2)
-    end
-end)
-
-UtilLeft:Button("💀 Reset Character", "Mati dan kembali ke posisi semula", function()
-    resetCharacter()
-end)
-
-UtilLeft:Button("📍 Simpan Posisi", "Simpan posisi saat ini", function()
-    if savePosition() then
-        Library:Notification("Posisi Tersimpan", "Siap untuk reset", 2)
-    end
-end)
-
-UtilLeft:Button("🔄 Rejoin Server", "Koneksi ulang ke server", function()
-    TeleportService:Teleport(game.PlaceId, LocalPlayer)
-end)
-
-UtilRight:Paragraph("Utility Info",
-    "• Anti AFK: Cegah disconnect\n" ..
-    "• Teleport Mouse: Pindah ke kursor\n" ..
-    "• Reset: Mati dan kembali ke posisi semula\n" ..
-    "• Simpan Posisi: Untuk reset nanti\n" ..
-    "• Rejoin: Koneksi ulang")
-
--- ============================================
--- INIT
--- ============================================
-Library:Notification("XKID ROCKET FLY", "H=Toggle | G=Anchor | L=Fast | K=Slow", 4)
-Library:Notification("Extra Fitur", "Teleport, ESP, Freecam, Remote Spy, Pathfinding", 4)
+-- ════════════════════════════════════════════════
+--  INIT
+-- ════════════════════════════════════════════════
+Library:Notification("🚀 XKID Rocket Fly v5.1", "H=Fly · G=Anchor · L=Fast · K=Slow", 5)
+Library:Notification("✅ Semua Fitur Aktif", "Teleport · ESP · Freecam · Spy · Path", 5)
 Library:ConfigSystem(Win)
 
 print("╔══════════════════════════════════════════╗")
-print("║   🚀 XKID ROCKET FLY v5.0               ║")
-print("║   H = Toggle Fly                         ║")
-print("║   G = Toggle Anchor                      ║")
-print("║   L = Speed Up                           ║")
-print("║   K = Speed Down                         ║")
-print("║   + Teleport, ESP, Freecam, Spy, Path    ║")
+print("║   🚀  XKID ROCKET FLY v5.1             ║")
+print("║   H = Toggle Fly                        ║")
+print("║   G = Toggle Anchor                     ║")
+print("║   L = Speed Up  |  K = Speed Down       ║")
+print("║   ',' = Toggle Freecam                  ║")
+print("║   Fitur: Fly·TP·ESP·Cam·Spy·BD·Path     ║")
 print("╚══════════════════════════════════════════╝")
