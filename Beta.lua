@@ -1,9 +1,10 @@
 --[[
   ╔══════════════════════════════════════════════════════╗
-  ║          🌟  X K I D . H U B  v1.0  🌟             ║
-  ║          Aurora UI  ✦  Universal Script             ║
+  ║          🌟  X K I D . H U B  v2.0  🌟             ║
+  ║          Aurora UI  ✦  Mobile Optimized             ║
   ╚══════════════════════════════════════════════════════╝
-  Fitur: ESP · Teleport · Fly · NoClip · Speed · Protection
+  Fly: BodyVelocity · Teleport: Daftar Player
+  Respawn Cepat · ESP · Speed · Protection
 ]]
 
 -- ════════════════════════════════════════
@@ -27,24 +28,22 @@ local LP          = Players.LocalPlayer
 -- ════════════════════════════════════════
 --  WINDOW
 -- ════════════════════════════════════════
-local Win = Library:Window("🌟 XKID.HUB", "star", "v1.0", false)
+local Win = Library:Window("🌟 XKID.HUB", "star", "v2.0 Mobile", false)
 
 -- ════════════════════════════════════════
 --  TABS
 -- ════════════════════════════════════════
 Win:TabSection("MAIN")
-local TabESP   = Win:Tab("ESP",        "eye")
 local TabTP    = Win:Tab("Teleport",   "map-pin")
 local TabFly   = Win:Tab("Fly",        "rocket")
+local TabESP   = Win:Tab("ESP",        "eye")
 local TabSpeed = Win:Tab("Speed",      "zap")
 local TabProt  = Win:Tab("Protection", "shield")
 
 -- ════════════════════════════════════════
 --  HELPERS
 -- ════════════════════════════════════════
-local function getChar()
-    return LP.Character
-end
+local function getChar()  return LP.Character end
 local function getRoot()
     local c = getChar()
     return c and c:FindFirstChild("HumanoidRootPart")
@@ -53,39 +52,28 @@ local function getHum()
     local c = getChar()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
-local function dist(a, b)
+local function getDist(a, b)
     return math.floor((a - b).Magnitude + 0.5)
 end
 
 -- ════════════════════════════════════════
---  VARIABLES
+--  STATE
 -- ════════════════════════════════════════
--- Speed & Jump
-local curWS = 16
-local curJP = 50
-
--- Fly
-local flyOn    = false
-local flySpeed = 50
-local flyConns = {}
-local flyBV, flyBG
-
--- NoClip
+local curWS      = 16
+local curJP      = 50
+local flyOn      = false
+local flySpeed   = 60
+local flyBV      = nil
+local flyBG      = nil
+local flyConn    = nil
 local noclipOn   = false
 local noclipConn = nil
-
--- ESP
 local espOn      = false
 local espBills   = {}
 local espConns   = {}
-
--- Protection
 local afkConn    = nil
 local antiKickOn = false
-local antiKickLoop = nil
-
--- Saved positions
-local slots = {}
+local slots      = {}
 
 -- ════════════════════════════════════════
 --  RE-APPLY STATS ON RESPAWN
@@ -97,77 +85,123 @@ LP.CharacterAdded:Connect(function(char)
     hum.WalkSpeed    = curWS
     hum.JumpPower    = curJP
     hum.UseJumpPower = true
+    -- Re-init fly jika masih on
+    if flyOn then
+        task.wait(0.5)
+        -- startFly dipanggil dari bawah (forward ref ok karena CharacterAdded async)
+        local root2 = char:WaitForChild("HumanoidRootPart", 5)
+        if root2 then
+            if flyBV then pcall(function() flyBV:Destroy() end) end
+            if flyBG then pcall(function() flyBG:Destroy() end) end
+            flyBV = Instance.new("BodyVelocity", root2)
+            flyBV.Velocity = Vector3.new()
+            flyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+            flyBG = Instance.new("BodyGyro", root2)
+            flyBG.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+            flyBG.P = 1e4
+            flyBG.D = 100
+            flyBG.CFrame = root2.CFrame
+            hum.PlatformStand = true
+        end
+    end
 end)
 
 -- ════════════════════════════════════════
---  ① FLY SYSTEM
---  WASD = gerak · Space = naik · C/Ctrl = turun
+--  ① FLY — BodyVelocity
+--  Mobile: Analog joystick karakter
+--  gerak horizontal, naik/turun via
+--  tombol UI (Naik / Turun)
 -- ════════════════════════════════════════
-local function cleanFly()
-    for _, c in ipairs(flyConns) do pcall(function() c:Disconnect() end) end
-    flyConns = {}
-    if flyBV then pcall(function() flyBV:Destroy() end); flyBV = nil end
-    if flyBG then pcall(function() flyBG:Destroy() end); flyBG = nil end
-end
+-- Android fly arah
+local flyUp   = false
+local flyDown = false
 
 local function startFly()
-    cleanFly()
     local root = getRoot(); if not root then return end
     local hum  = getHum();  if not hum  then return end
 
+    -- Cleanup dulu
+    if flyBV then pcall(function() flyBV:Destroy() end) end
+    if flyBG then pcall(function() flyBG:Destroy() end) end
+    if flyConn then pcall(function() flyConn:Disconnect() end) end
+
     flyBV = Instance.new("BodyVelocity", root)
-    flyBV.Velocity       = Vector3.new()
-    flyBV.MaxForce       = Vector3.new(1e5, 1e5, 1e5)
+    flyBV.Velocity = Vector3.new()
+    flyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
 
     flyBG = Instance.new("BodyGyro", root)
-    flyBG.MaxTorque      = Vector3.new(1e5, 1e5, 1e5)
-    flyBG.P              = 1e4
-    flyBG.D              = 100
-    flyBG.CFrame         = root.CFrame
+    flyBG.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    flyBG.P         = 1e4
+    flyBG.D         = 100
+    flyBG.CFrame    = root.CFrame
 
-    hum.PlatformStand    = true
+    hum.PlatformStand = true
 
-    table.insert(flyConns, RunService.Heartbeat:Connect(function()
-        local root2 = getRoot(); if not root2 or not flyBV then return end
-        local cam   = Workspace.CurrentCamera
-        local cf    = cam.CFrame
+    flyConn = RunService.Heartbeat:Connect(function()
+        local root2 = getRoot()
+        if not root2 or not flyBV then return end
 
-        local fwd  = UIS:IsKeyDown(Enum.KeyCode.W)
-        local bwd  = UIS:IsKeyDown(Enum.KeyCode.S)
-        local lft  = UIS:IsKeyDown(Enum.KeyCode.A)
-        local rgt  = UIS:IsKeyDown(Enum.KeyCode.D)
-        local up   = UIS:IsKeyDown(Enum.KeyCode.Space)
-        local dn   = UIS:IsKeyDown(Enum.KeyCode.C)
-                  or UIS:IsKeyDown(Enum.KeyCode.LeftControl)
+        local hum2   = getHum(); if not hum2 then return end
+        local cam    = Workspace.CurrentCamera
+        local camCF  = cam.CFrame
 
-        local dir = Vector3.new()
-        if fwd  then dir = dir + cf.LookVector end
-        if bwd  then dir = dir - cf.LookVector end
-        if rgt  then dir = dir + cf.RightVector end
-        if lft  then dir = dir - cf.RightVector end
-        if up   then dir = dir + Vector3.new(0,1,0) end
-        if dn   then dir = dir - Vector3.new(0,1,0) end
+        -- Ambil arah dari MoveDirection karakter
+        -- (ini yang digerakkan analog/joystick mobile)
+        local md = hum2.MoveDirection
 
-        if dir.Magnitude > 0 then
-            flyBV.Velocity = dir.Unit * flySpeed
-            flyBG.CFrame   = CFrame.new(Vector3.new(), dir)
+        -- Komponen horizontal dari kamera
+        local camRight   = Vector3.new(camCF.RightVector.X,   0, camCF.RightVector.Z)
+        local camForward = Vector3.new(camCF.LookVector.X,    0, camCF.LookVector.Z)
+
+        -- Konversi MoveDirection ke arah kamera
+        local horizontal = Vector3.new()
+        if md.Magnitude > 0.1 then
+            -- Proyeksikan md ke sumbu kamera
+            local fwdDot   = md:Dot(Vector3.new(0,0,-1))
+            local rightDot = md:Dot(Vector3.new(1,0,0))
+            horizontal = (camForward * fwdDot + camRight * rightDot)
+            if horizontal.Magnitude > 0 then
+                horizontal = horizontal.Unit
+            end
+        end
+
+        -- Vertical dari tombol UI
+        local vertical = Vector3.new()
+        if flyUp   then vertical = Vector3.new(0,  1, 0) end
+        if flyDown then vertical = Vector3.new(0, -1, 0) end
+
+        -- PC keyboard fallback
+        local pcUp   = UIS:IsKeyDown(Enum.KeyCode.Space)
+        local pcDown = UIS:IsKeyDown(Enum.KeyCode.C)
+                    or UIS:IsKeyDown(Enum.KeyCode.LeftControl)
+        if pcUp   then vertical = Vector3.new(0,  1, 0) end
+        if pcDown then vertical = Vector3.new(0, -1, 0) end
+
+        local finalDir = horizontal + vertical
+        if finalDir.Magnitude > 0 then
+            flyBV.Velocity = finalDir.Unit * flySpeed
+            -- Arahkan karakter ke arah gerak
+            if horizontal.Magnitude > 0 then
+                flyBG.CFrame = CFrame.new(Vector3.new(), horizontal)
+            end
         else
             flyBV.Velocity = Vector3.new()
         end
-    end))
+
+        -- Cegah karakter jatuh/mati saat fly
+        hum2.PlatformStand = true
+    end)
 end
 
 local function stopFly()
-    cleanFly()
+    if flyConn then pcall(function() flyConn:Disconnect() end); flyConn = nil end
+    if flyBV   then pcall(function() flyBV:Destroy() end);      flyBV   = nil end
+    if flyBG   then pcall(function() flyBG:Destroy() end);      flyBG   = nil end
     local hum = getHum()
     if hum then hum.PlatformStand = false end
+    flyUp   = false
+    flyDown = false
 end
-
--- Re-init fly on respawn if still on
-LP.CharacterAdded:Connect(function()
-    task.wait(1)
-    if flyOn then startFly() end
-end)
 
 -- ════════════════════════════════════════
 --  ② NOCLIP
@@ -209,8 +243,8 @@ local function getArea(char)
     for _, v in pairs(Workspace:GetDescendants()) do
         if v:IsA("BasePart") then
             local n = v.Name:lower()
-            if (n:find("room") or n:find("area") or n:find("zone")
-            or  n:find("vip")  or n:find("priv") or n:find("salon")) then
+            if n:find("room") or n:find("area") or n:find("zone")
+            or n:find("vip")  or n:find("priv") or n:find("salon") then
                 if (v.Position - pos).Magnitude < 25 then
                     return v.Name
                 end
@@ -228,40 +262,35 @@ local function makeESP(player)
         local head = char:FindFirstChild("Head")
         if not head then return end
 
-        -- BillboardGui
         local bill = Instance.new("BillboardGui")
-        bill.Size         = UDim2.new(0, 180, 0, 50)
-        bill.StudsOffset  = Vector3.new(0, 3, 0)
-        bill.AlwaysOnTop  = true
-        bill.Adornee      = head
-        bill.Parent       = char
+        bill.Size        = UDim2.new(0, 180, 0, 50)
+        bill.StudsOffset = Vector3.new(0, 3, 0)
+        bill.AlwaysOnTop = true
+        bill.Adornee     = head
+        bill.Parent      = char
 
-        -- Background frame
         local bg = Instance.new("Frame", bill)
-        bg.Size                   = UDim2.new(1,0,1,0)
-        bg.BackgroundColor3       = Color3.fromRGB(0,0,0)
+        bg.Size                   = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
         bg.BackgroundTransparency = 0.45
         bg.BorderSizePixel        = 0
-        local corner = Instance.new("UICorner", bg)
-        corner.CornerRadius       = UDim.new(0, 6)
+        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
 
-        -- Text label
         local lbl = Instance.new("TextLabel", bg)
         lbl.Size                   = UDim2.new(1,-6,1,-4)
         lbl.Position               = UDim2.new(0,3,0,2)
         lbl.BackgroundTransparency = 1
         lbl.TextColor3             = Color3.fromRGB(255, 230, 80)
         lbl.TextStrokeTransparency = 0.3
-        lbl.TextStrokeColor3       = Color3.fromRGB(0,0,0)
+        lbl.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
         lbl.TextScaled             = true
         lbl.Font                   = Enum.Font.GothamBold
         lbl.TextXAlignment         = Enum.TextXAlignment.Center
 
-        -- Update loop
         local upd = RunService.Heartbeat:Connect(function()
             if not bill or not bill.Parent then return end
             local myRoot = getRoot()
-            local d      = myRoot and dist(head.Position, myRoot.Position) or 0
+            local d      = myRoot and getDist(head.Position, myRoot.Position) or 0
             local area   = getArea(char)
             lbl.Text = string.format("👤 %s\n📍 %dm  |  %s", player.Name, d, area)
         end)
@@ -286,15 +315,10 @@ end
 -- ════════════════════════════════════════
 --  ④ TELEPORT
 -- ════════════════════════════════════════
-local function tpToPlayer(name)
-    if not name or name == "" then
-        Library:Notification("❌", "Masukkan nama player", 2); return
-    end
+local function tpToPlayerByName(name)
     for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP then
-            local match = p.Name:lower():find(name:lower(), 1, true)
-                       or p.DisplayName:lower():find(name:lower(), 1, true)
-            if match and p.Character then
+        if p ~= LP and p.Name == name then
+            if p.Character then
                 local hrp = p.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     local root = getRoot()
@@ -305,6 +329,8 @@ local function tpToPlayer(name)
                     end
                 end
             end
+            Library:Notification("❌", p.Name .. " tidak ada karakternya", 2)
+            return
         end
     end
     Library:Notification("❌", "Player tidak ditemukan", 2)
@@ -322,7 +348,41 @@ local function tpToMouse()
 end
 
 -- ════════════════════════════════════════
---  ⑤ PROTECTION
+--  ⑤ RESPAWN CEPAT
+-- ════════════════════════════════════════
+local function quickRespawn()
+    local root = getRoot()
+    if not root then
+        Library:Notification("❌", "Karakter tidak ada", 2); return
+    end
+    -- Simpan semua state
+    local savedCF = root.CFrame
+    local savedWS = curWS
+    local savedJP = curJP
+
+    -- Mati
+    local c = getChar()
+    if c then c:BreakJoints() end
+
+    -- Spawn & kembalikan
+    local conn
+    conn = LP.CharacterAdded:Connect(function(newChar)
+        conn:Disconnect()
+        task.wait(0.8)
+        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+        local hum = newChar:WaitForChild("Humanoid", 5)
+        if hrp then hrp.CFrame = savedCF end
+        if hum then
+            hum.WalkSpeed    = savedWS
+            hum.JumpPower    = savedJP
+            hum.UseJumpPower = true
+        end
+        Library:Notification("✅ Respawn", "Kembali ke posisi semula", 2)
+    end)
+end
+
+-- ════════════════════════════════════════
+--  ⑥ PROTECTION
 -- ════════════════════════════════════════
 local function startAntiAFK()
     if afkConn then return end
@@ -338,10 +398,9 @@ end
 local function startAntiKick()
     if antiKickOn then return end
     antiKickOn = true
-    antiKickLoop = task.spawn(function()
+    task.spawn(function()
         while antiKickOn do
             pcall(function()
-                -- Prevent death from anti-kick systems
                 local hum = getHum()
                 if hum and hum.Health > 0 and hum.Health < hum.MaxHealth * 0.1 then
                     hum.Health = hum.MaxHealth
@@ -356,70 +415,65 @@ local function stopAntiKick()
 end
 
 -- ════════════════════════════════════════
---  BUILD UI — TAB ESP
--- ════════════════════════════════════════
-local EPage = TabESP:Page("ESP Player", "eye")
-local EL    = EPage:Section("👁 Controls", "Left")
-local ER    = EPage:Section("ℹ Info", "Right")
-
-EL:Toggle("ESP Player", "ESPToggle", false,
-    "Lihat semua player tembus dinding",
-    function(v) toggleESP(v) end)
-
-EL:Button("🔄 Refresh ESP", "Perbarui ESP untuk semua player",
-    function()
-        if espOn then
-            toggleESP(false)
-            task.wait(0.3)
-            toggleESP(true)
-            Library:Notification("👁 ESP", "Refreshed", 2)
-        end
-    end)
-
-ER:Paragraph("Info ESP",
-    "Menampilkan:\n"..
-    "• Nama player\n"..
-    "• Jarak (meter)\n"..
-    "• Area / room\n\n"..
-    "AlwaysOnTop = tembus\nsemua dinding & objek")
-
--- ════════════════════════════════════════
 --  BUILD UI — TAB TELEPORT
 -- ════════════════════════════════════════
 local TPage = TabTP:Page("Teleport", "map-pin")
-local TL    = TPage:Section("👤 Ke Player", "Left")
-local TR    = TPage:Section("📍 Slot & Mouse", "Right")
+local TL    = TPage:Section("👥 Daftar Player", "Left")
+local TR    = TPage:Section("📍 Slot & Lainnya", "Right")
 
--- Daftar player
-TL:Button("🔄 Lihat Player Online", "Tampilkan semua player di server",
-    function()
-        local list, n = "", 0
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LP then
-                list = list .. "• " .. p.Name
-                if p.DisplayName ~= p.Name then
-                    list = list .. " (" .. p.DisplayName .. ")"
-                end
-                list = list .. "\n"
-                n = n + 1
-            end
-        end
-        Library:Notification(
-            "👥 " .. n .. " Player Online",
-            n > 0 and list or "Tidak ada player lain",
-            8)
+-- Fungsi build daftar player (dipanggil saat refresh)
+local playerButtons = {}
+
+local function buildPlayerList()
+    -- Hapus tombol lama
+    -- Aurora tidak support remove button,
+    -- jadi kita pakai Dropdown sebagai list player
+end
+
+-- Dropdown player list
+local playerNames = {"[Refresh dulu]"}
+local selectedPlayer = ""
+
+local playerDropdown = TL:Dropdown(
+    "Pilih Player", "PlayerDropdown",
+    playerNames,
+    function(val)
+        selectedPlayer = val
     end)
 
-local tpName = ""
-TL:TextBox("Nama Player", "TPNameBox", "",
-    function(v) tpName = v end,
-    "Ketik nama / display name")
+TL:Button("🔄 Refresh Daftar Player", "Perbarui daftar player online",
+    function()
+        local names = {}
+        local count = 0
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LP then
+                table.insert(names, p.Name)
+                count = count + 1
+            end
+        end
+        if count == 0 then
+            Library:Notification("👥", "Tidak ada player lain", 3)
+            return
+        end
+        -- Update dropdown
+        playerDropdown:Refresh(names)
+        Library:Notification("🔄 Refresh", count .. " player online", 3)
+    end)
 
-TL:Button("📍 Teleport ke Player", "TP ke player yang dicari",
-    function() tpToPlayer(tpName) end)
+TL:Button("📍 Teleport ke Player Dipilih", "TP ke player yang dipilih di dropdown",
+    function()
+        if selectedPlayer == "" or selectedPlayer == "[Refresh dulu]" then
+            Library:Notification("❌", "Pilih player dulu!\nTekan Refresh → pilih nama", 3)
+            return
+        end
+        tpToPlayerByName(selectedPlayer)
+    end)
 
-TL:Button("🖱 Teleport ke Mouse", "TP ke posisi kursor",
+TL:Button("🖱 Teleport ke Mouse", "TP ke posisi kursor / tap layar",
     function() tpToMouse() end)
+
+TL:Button("💀 Respawn Cepat di Posisi Sama", "Mati & langsung spawn di tempat yang sama",
+    function() quickRespawn() end)
 
 -- Save & Load 5 slot
 TR:Label("💾 Save & Load Posisi")
@@ -434,7 +488,7 @@ for i = 1, 5 do
             slots[idx] = root.CFrame
             local p = root.Position
             Library:Notification("💾 Slot " .. idx,
-                string.format("X=%.1f Y=%.1f Z=%.1f", p.X, p.Y, p.Z), 3)
+                string.format("X=%.0f  Y=%.0f  Z=%.0f", p.X, p.Y, p.Z), 3)
         end)
     TR:Button("🚀 Load Slot " .. idx, "TP ke slot " .. idx,
         function()
@@ -446,7 +500,7 @@ for i = 1, 5 do
                 root.CFrame = slots[idx]
                 local p = slots[idx].Position
                 Library:Notification("📍 Slot " .. idx,
-                    string.format("X=%.1f Y=%.1f Z=%.1f", p.X, p.Y, p.Z), 3)
+                    string.format("X=%.0f  Y=%.0f  Z=%.0f", p.X, p.Y, p.Z), 3)
             end
         end)
 end
@@ -455,43 +509,110 @@ end
 --  BUILD UI — TAB FLY
 -- ════════════════════════════════════════
 local FPage = TabFly:Page("Fly & NoClip", "rocket")
-local FL    = FPage:Section("🚀 Fly", "Left")
+local FL    = FPage:Section("🚀 Fly Mobile", "Left")
 local FR    = FPage:Section("🚶 NoClip", "Right")
 
 FL:Toggle("Fly Mode", "FlyToggle", false,
-    "Terbang bebas dengan WASD + Space/C",
+    "Aktifkan terbang — gerak pakai analog",
     function(v)
         flyOn = v
         if v then startFly() else stopFly() end
-        Library:Notification("🚀 Fly", v and "ON" or "OFF", 2)
+        Library:Notification("🚀 Fly", v and "ON — Gerak pakai analog!" or "OFF", 3)
     end)
 
-FL:Slider("Kecepatan Fly", "FlySpeedSlider", 5, 300, 50,
-    function(v)
-        flySpeed = v
-    end, "Kecepatan terbang (default 50)")
+FL:Slider("Kecepatan Fly", "FlySpeedSlider", 5, 300, 60,
+    function(v) flySpeed = v end,
+    "Kecepatan terbang (default 60)")
 
-FL:Paragraph("Kontrol Fly",
-    "W / S  — Maju / Mundur\n"..
-    "A / D  — Kiri / Kanan\n"..
-    "Space  — Naik\n"..
-    "C / Ctrl — Turun\n\n"..
-    "Gerak mengikuti arah kamera")
+-- Tombol Naik & Turun untuk Android
+FL:Button("🔼 NAIK (Tahan)", "Terbang ke atas",
+    function()
+        if not flyOn then
+            Library:Notification("❌", "Aktifkan Fly dulu", 2); return
+        end
+        flyUp = true
+        task.delay(0.5, function() flyUp = false end)
+    end)
+
+FL:Button("🔽 TURUN (Tahan)", "Terbang ke bawah",
+    function()
+        if not flyOn then
+            Library:Notification("❌", "Aktifkan Fly dulu", 2); return
+        end
+        flyDown = true
+        task.delay(0.5, function() flyDown = false end)
+    end)
+
+FL:Button("⬆ NAIK TERUS (2 detik)", "Naik selama 2 detik",
+    function()
+        if not flyOn then
+            Library:Notification("❌", "Aktifkan Fly dulu", 2); return
+        end
+        flyUp = true
+        task.delay(2, function() flyUp = false end)
+        Library:Notification("🔼", "Naik 2 detik", 2)
+    end)
+
+FL:Button("⬇ TURUN TERUS (2 detik)", "Turun selama 2 detik",
+    function()
+        if not flyOn then
+            Library:Notification("❌", "Aktifkan Fly dulu", 2); return
+        end
+        flyDown = true
+        task.delay(2, function() flyDown = false end)
+        Library:Notification("🔽", "Turun 2 detik", 2)
+    end)
+
+FL:Paragraph("Cara Pakai Fly",
+    "1. Toggle Fly → ON\n"..
+    "2. Gerak pakai analog/joystick game\n"..
+    "   seperti biasa jalan\n"..
+    "3. Tekan NAIK / TURUN untuk\n"..
+    "   atur ketinggian\n\n"..
+    "Karakter mengikuti arah kamera!")
 
 FR:Toggle("NoClip", "NoclipToggle", false,
-    "Tembus dinding & masuk private room",
+    "Tembus semua dinding & objek",
     function(v)
         setNoclip(v)
         Library:Notification("🚶 NoClip", v and "ON — Tembus dinding" or "OFF", 2)
     end)
 
-FR:Paragraph("Info NoClip",
-    "Matikan collision karakter\n"..
-    "Bisa masuk:\n"..
-    "• Private room\n"..
-    "• Area VIP\n"..
-    "• Area terlarang\n\n"..
-    "Gunakan bersama Fly\nuntuk akses penuh")
+FR:Paragraph("Tips NoClip + Fly",
+    "Aktifkan keduanya:\n"..
+    "✅ Fly ON\n"..
+    "✅ NoClip ON\n\n"..
+    "→ Bisa masuk private room\n"..
+    "→ Tembus semua tembok\n"..
+    "→ Akses area terlarang")
+
+-- ════════════════════════════════════════
+--  BUILD UI — TAB ESP
+-- ════════════════════════════════════════
+local EPage = TabESP:Page("ESP Player", "eye")
+local EL    = EPage:Section("👁 Controls", "Left")
+local ER    = EPage:Section("ℹ Info", "Right")
+
+EL:Toggle("ESP Player", "ESPToggle", false,
+    "Lihat semua player tembus dinding",
+    function(v) toggleESP(v) end)
+
+EL:Button("🔄 Refresh ESP", "Perbarui ESP",
+    function()
+        if espOn then
+            clearESP()
+            task.wait(0.3)
+            for _, p in pairs(Players:GetPlayers()) do makeESP(p) end
+            Library:Notification("👁 ESP", "Refreshed", 2)
+        end
+    end)
+
+ER:Paragraph("Info ESP",
+    "Tampilkan per player:\n"..
+    "• Nama\n"..
+    "• Jarak dalam meter\n"..
+    "• Area / room mereka\n\n"..
+    "AlwaysOnTop = tembus\nsemua dinding")
 
 -- ════════════════════════════════════════
 --  BUILD UI — TAB SPEED
@@ -507,65 +628,39 @@ SL:Slider("WalkSpeed", "WSSlider", 1, 500, 16,
         if hum then hum.WalkSpeed = v end
     end, "Kecepatan jalan (default 16)")
 
-SL:Button("🔁 Reset Speed (16)", "Kembalikan ke normal",
+SL:Button("🔁 Reset Speed", "Kembalikan ke 16",
     function()
         curWS = 16
         local hum = getHum()
         if hum then hum.WalkSpeed = 16 end
-        Library:Notification("Speed", "Reset ke 16", 2)
-    end)
-
-SL:Button("💀 Respawn di Posisi Sama", "Mati & kembali ke posisi sekarang",
-    function()
-        local root = getRoot()
-        if not root then return end
-        local savedCF = root.CFrame
-        local c = getChar()
-        if c then c:BreakJoints() end
-        local conn
-        conn = LP.CharacterAdded:Connect(function(newChar)
-            conn:Disconnect()
-            task.wait(1)
-            local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-            if hrp then hrp.CFrame = savedCF end
-            Library:Notification("✅ Respawn", "Kembali ke posisi semula", 3)
-        end)
+        Library:Notification("Speed", "Reset → 16", 2)
     end)
 
 SR:Slider("JumpPower", "JPSlider", 1, 500, 50,
     function(v)
         curJP = v
         local hum = getHum()
-        if hum then
-            hum.JumpPower    = v
-            hum.UseJumpPower = true
-        end
+        if hum then hum.JumpPower = v; hum.UseJumpPower = true end
     end, "Kekuatan lompat (default 50)")
 
-SR:Button("🔁 Reset Jump (50)", "Kembalikan ke normal",
+SR:Button("🔁 Reset Jump", "Kembalikan ke 50",
     function()
         curJP = 50
         local hum = getHum()
-        if hum then
-            hum.JumpPower    = 50
-            hum.UseJumpPower = true
-        end
-        Library:Notification("Jump", "Reset ke 50", 2)
+        if hum then hum.JumpPower = 50; hum.UseJumpPower = true end
+        Library:Notification("Jump", "Reset → 50", 2)
     end)
 
 SR:Toggle("Infinite Jump", "InfJumpToggle", false,
-    "Lompat terus di udara tanpa batas",
+    "Lompat terus di udara",
     function(v)
         if v then
-            _G.xkid_ijConn = UIS.JumpRequest:Connect(function()
+            _G.xkid_ij = UIS.JumpRequest:Connect(function()
                 local hum = getHum()
                 if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
             end)
         else
-            if _G.xkid_ijConn then
-                _G.xkid_ijConn:Disconnect()
-                _G.xkid_ijConn = nil
-            end
+            if _G.xkid_ij then _G.xkid_ij:Disconnect(); _G.xkid_ij = nil end
         end
         Library:Notification("Inf Jump", v and "ON" or "OFF", 2)
     end)
@@ -591,37 +686,37 @@ PL:Toggle("Anti Kick", "AntiKickToggle", false,
         Library:Notification("Anti Kick", v and "ON" or "OFF", 2)
     end)
 
-PL:Button("🔄 Rejoin Server", "Koneksi ulang ke server yang sama",
+PL:Button("🔄 Rejoin Server", "Koneksi ulang ke server",
     function()
         Library:Notification("🔄 Rejoin", "Menghubungkan ulang...", 3)
         task.wait(1)
         TpService:Teleport(game.PlaceId, LP)
     end)
 
-PL:Button("📍 Print Posisi Saya", "Cetak koordinat ke notif",
+PL:Button("📍 Posisi Saya", "Lihat koordinat sekarang",
     function()
         local root = getRoot()
         if root then
             local p = root.Position
             Library:Notification("📍 Posisi",
-                string.format("X=%.1f\nY=%.1f\nZ=%.1f", p.X, p.Y, p.Z), 6)
-            print(string.format("[ XKID 📍 ] X=%.3f  Y=%.3f  Z=%.3f", p.X, p.Y, p.Z))
+                string.format("X = %.1f\nY = %.1f\nZ = %.1f", p.X, p.Y, p.Z), 6)
         end
     end)
 
 PR:Paragraph("Info Protection",
     "Anti AFK:\nCegah auto-disconnect\n\n"..
-    "Anti Kick:\nJaga HP agar tidak mati\nkarena sistem game\n\n"..
-    "Rejoin:\nKoneksi ulang ke server\ntanpa tutup game")
+    "Anti Kick:\nJaga HP dari sistem game\n\n"..
+    "Rejoin:\nKoneksi ulang tanpa\ntutup game")
 
 -- ════════════════════════════════════════
 --  INIT
 -- ════════════════════════════════════════
-Library:Notification("🌟 XKID.HUB", "Semua fitur siap! v1.0", 4)
+Library:Notification("🌟 XKID.HUB v2.0", "Mobile Ready! Semua fitur aktif", 4)
 Library:ConfigSystem(Win)
 
 print("╔══════════════════════════════════════╗")
-print("║   🌟  XKID.HUB  v1.0               ║")
-print("║   ESP · TP · Fly · Speed · Prot     ║")
+print("║   🌟  XKID.HUB  v2.0  Mobile       ║")
+print("║   TP: Dropdown · Fly: Analog        ║")
+print("║   ESP · Speed · NoClip · Prot       ║")
 print("║   Player: " .. LP.Name)
 print("╚══════════════════════════════════════╝")
