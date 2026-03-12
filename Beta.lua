@@ -2,15 +2,14 @@
 WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
 ]]
 
--- XKID EXPLOIT UNIVERSAL v2.0
--- Fitur: Movement Exploits, Remote Scanner, Teleport, ESP
+-- XKID AESTHETIC HUB v3.0
+-- UI Aesthetic dengan Aurora UI
 
 Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"))()
 
--- Buat window
-local Win = Library:Window("XKID EXPLOIT", "skull", "Universal v2.0 | by XKID", false)
-
--- Services
+-- ============================================
+-- SERVICES
+-- ============================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
@@ -19,41 +18,88 @@ local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
+local TweenService = game:GetService("TweenService")
 
 -- ============================================
--- TAB MENU
+-- WINDOW UTAMA (AESTHETIC)
 -- ============================================
-Win:TabSection("MOVEMENT")
-local MovementTab = Win:Tab("Movement", "zap")
-
-Win:TabSection("VISUAL")
-local VisualTab = Win:Tab("Visual", "eye")
-
-Win:TabSection("EXPLOIT")
-local ExploitTab = Win:Tab("Exploit", "skull")
-
-Win:TabSection("UTILITY")
-local UtilityTab = Win:Tab("Utility", "settings")
+local Win = Library:Window(
+    "✨ XKID AESTHETIC", 
+    "sparkles", 
+    "v3.0 | Soft UI", 
+    false
+)
 
 -- ============================================
--- MOVEMENT TAB
+-- WARNA AESTHETIC
 -- ============================================
-local MovePage = MovementTab:Page("Exploits", "zap")
-local MoveLeft = MovePage:Section("Movement Hacks", "Left")
-local MoveRight = MovePage:Section("Info", "Right")
+local Colors = {
+    Primary = Color3.fromRGB(255, 200, 220),  -- Soft Pink
+    Secondary = Color3.fromRGB(200, 220, 255), -- Soft Blue
+    Accent = Color3.fromRGB(220, 180, 255),    -- Soft Purple
+    Success = Color3.fromRGB(180, 255, 200),   -- Soft Green
+    Error = Color3.fromRGB(255, 180, 180),     -- Soft Red
+    Text = Color3.fromRGB(255, 255, 255),      -- White
+    Background = Color3.fromRGB(25, 25, 35)    -- Dark Soft
+}
 
--- Variabel untuk movement
+-- ============================================
+-- TAB MENU AESTHETIC
+-- ============================================
+Win:TabSection("🌸 MOVEMENT")
+local MoveTab = Win:Tab("Movement", "wind")
+
+Win:TabSection("👁️ VISUAL")
+local VisualTab = Win:Tab("Visuals", "sparkles")
+
+Win:TabSection("⚡ EXPLOIT")
+local ExpTab = Win:Tab("Exploit", "zap")
+
+Win:TabSection("🎨 UTILITY")
+local UtilTab = Win:Tab("Utility", "heart")
+
+-- ============================================
+-- VARIABEL GLOBAL
+-- ============================================
+-- Movement
 local noclip = false
 local noclipConn = nil
 local fly = false
 local flyConn = nil
 local flyVel = nil
+local flyBg = nil
 local infJump = false
 local speed = 16
 local jump = 50
 
--- Noclip Toggle
-MoveLeft:Toggle("Noclip", "NoclipToggle", false, "Tembus dinding/wallhack", function(state)
+-- Visual
+local espEnabled = false
+local espConn = nil
+local espColor = Color3.fromRGB(255, 200, 220)
+local fullbright = false
+local xray = false
+
+-- ============================================
+-- FUNGSI NOTIF AESTHETIC
+-- ============================================
+local function notifAesthetic(title, msg, duration, color)
+    pcall(function()
+        Library:Notification("✨ " .. title, msg, duration or 3)
+    end)
+end
+
+-- ============================================
+-- MOVEMENT TAB - AESTHETIC
+-- ============================================
+local MovePage = MoveTab:Page("Movement Controls", "wind")
+local MoveLeft = MovePage:Section("🌸 Basic", "Left")
+local MoveRight = MovePage:Section("🌿 Advanced", "Right")
+
+-- Label Aesthetic
+MoveLeft:Label("⋆｡°✩ Movement Mods ✩°｡⋆")
+
+-- Noclip Toggle (Aesthetic)
+MoveLeft:Toggle("Noclip", "NoclipAesthetic", false, "Tembus dinding dengan gaya", function(state)
     noclip = state
     if noclipConn then noclipConn:Disconnect() end
     
@@ -67,71 +113,109 @@ MoveLeft:Toggle("Noclip", "NoclipToggle", false, "Tembus dinding/wallhack", func
                 end
             end
         end)
-        Library:Notification("Noclip", "Aktif!", 2)
+        notifAesthetic("Noclip", "activated ✨", 2, Colors.Success)
     else
-        Library:Notification("Noclip", "Mati", 2)
+        notifAesthetic("Noclip", "deactivated", 2, Colors.Error)
     end
 end)
 
--- Fly Toggle
-MoveLeft:Toggle("Fly", "FlyToggle", false, "Terbang bebas (WASD + Spasi/Ctrl)", function(state)
+-- Fly Toggle (Aesthetic - FIXED)
+MoveLeft:Toggle("Fly Mode", "FlyAesthetic", false, "Terbang bebas (WASD + Spasi/Ctrl)", function(state)
     fly = state
     if flyConn then flyConn:Disconnect(); flyConn = nil end
     if flyVel then flyVel:Destroy(); flyVel = nil end
+    if flyBg then flyBg:Destroy(); flyBg = nil end
     
     if state and LocalPlayer.Character then
         local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if root then
+        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        
+        if root and humanoid then
+            -- Set humanoid ke flying state
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Flying, true)
+            humanoid:ChangeState(Enum.HumanoidStateType.Flying)
+            
+            -- BodyVelocity untuk gerak
             flyVel = Instance.new("BodyVelocity")
             flyVel.Velocity = Vector3.new(0, 0, 0)
             flyVel.MaxForce = Vector3.new(4000, 4000, 4000)
             flyVel.Parent = root
             
+            -- BodyGyro untuk stabilisasi
+            flyBg = Instance.new("BodyGyro")
+            flyBg.MaxTorque = Vector3.new(4000, 4000, 4000)
+            flyBg.P = 1000
+            flyBg.D = 50
+            flyBg.CFrame = root.CFrame
+            flyBg.Parent = root
+            
             flyConn = RunService.Heartbeat:Connect(function()
                 if not fly or not LocalPlayer.Character then return end
+                
                 local move = Vector3.new()
                 local cam = Workspace.CurrentCamera
                 
-                if UIS:IsKeyDown(Enum.KeyCode.W) then move = move + cam.CFrame.LookVector end
-                if UIS:IsKeyDown(Enum.KeyCode.S) then move = move - cam.CFrame.LookVector end
-                if UIS:IsKeyDown(Enum.KeyCode.A) then move = move - cam.CFrame.RightVector end
-                if UIS:IsKeyDown(Enum.KeyCode.D) then move = move + cam.CFrame.RightVector end
-                if UIS:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
-                if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0, 1, 0) end
+                if UIS:IsKeyDown(Enum.KeyCode.W) then
+                    move = move + cam.CFrame.LookVector * Vector3.new(1, 0, 1)
+                end
+                if UIS:IsKeyDown(Enum.KeyCode.S) then
+                    move = move - cam.CFrame.LookVector * Vector3.new(1, 0, 1)
+                end
+                if UIS:IsKeyDown(Enum.KeyCode.A) then
+                    move = move - cam.CFrame.RightVector
+                end
+                if UIS:IsKeyDown(Enum.KeyCode.D) then
+                    move = move + cam.CFrame.RightVector
+                end
+                if UIS:IsKeyDown(Enum.KeyCode.Space) then
+                    move = move + Vector3.new(0, 1, 0)
+                end
+                if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
+                    move = move - Vector3.new(0, 1, 0)
+                end
                 
                 if move.Magnitude > 0 then
                     flyVel.Velocity = move.Unit * 50
+                    local lookAt = root.Position + move.Unit * 10
+                    flyBg.CFrame = CFrame.lookAt(root.Position, lookAt)
                 else
                     flyVel.Velocity = Vector3.new(0, 0, 0)
+                    flyBg.CFrame = root.CFrame
                 end
             end)
         end
-        Library:Notification("Fly", "Aktif! (WASD + Spasi/Ctrl)", 3)
+        notifAesthetic("Fly Mode", "soaring through the sky ✈️", 3, Colors.Success)
     else
-        Library:Notification("Fly", "Mati", 2)
+        if LocalPlayer.Character then
+            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Landing)
+            end
+        end
+        notifAesthetic("Fly Mode", "landed safely", 2, Colors.Error)
     end
 end)
 
--- Speed Slider
-MoveLeft:Slider("WalkSpeed", "SpeedSlider", 16, 500, 16, function(val)
+-- Speed Slider Aesthetic
+MoveLeft:Slider("Walk Speed", "SpeedAesthetic", 16, 500, 16, function(val)
     speed = val
     if LocalPlayer.Character then
         local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
         if hum then hum.WalkSpeed = val end
     end
-end, "Kecepatan jalan")
+end, "adjust your pace 🌪️")
 
--- Jump Slider
-MoveLeft:Slider("Jump Power", "JumpSlider", 50, 500, 50, function(val)
+-- Jump Slider Aesthetic
+MoveLeft:Slider("Jump Power", "JumpAesthetic", 50, 500, 50, function(val)
     jump = val
     if LocalPlayer.Character then
         local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
         if hum then hum.JumpPower = val end
     end
-end, "Kekuatan lompat")
+end, "reach for the sky 🌙")
 
--- Infinite Jump Toggle
-MoveLeft:Toggle("Infinite Jump", "InfJumpToggle", false, "Lompat terus di udara", function(state)
+-- Infinite Jump Aesthetic
+MoveRight:Toggle("Infinite Jump", "InfJumpAesthetic", false, "bounce bounce bounce~", function(state)
     infJump = state
     if state then
         UIS.JumpRequest:Connect(function()
@@ -140,70 +224,75 @@ MoveLeft:Toggle("Infinite Jump", "InfJumpToggle", false, "Lompat terus di udara"
                 if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
             end
         end)
-        Library:Notification("Infinite Jump", "Aktif!", 2)
+        notifAesthetic("Infinite Jump", "hopping forever 🐰", 2, Colors.Success)
     else
-        Library:Notification("Infinite Jump", "Mati", 2)
+        notifAesthetic("Infinite Jump", "stopped hopping", 2, Colors.Error)
     end
 end)
 
--- Gravity Slider
-MoveLeft:Slider("Gravity", "GravitySlider", 0, 500, 196.2, function(val)
+-- Gravity Slider Aesthetic
+MoveRight:Slider("Gravity", "GravityAesthetic", 0, 500, 196.2, function(val)
     Workspace.Gravity = val
-end, "Ubah gravitasi dunia")
+end, "defy physics 🌌")
 
--- Info Paragraph
-MoveRight:Paragraph("Info Movement", 
-    "🟢 Noclip: Tembus dinding\n" ..
-    "🟢 Fly: Terbang bebas\n" ..
-    "🟢 Speed: Jalan lebih cepat\n" ..
-    "🟢 Jump: Lompat lebih tinggi\n" ..
-    "🟢 Infinite Jump: Lompat di udara\n" ..
-    "🟢 Gravity: Ubah gravitasi\n\n" ..
-    "Pastikan karakter sudah spawn!")
+-- Info Paragraph Aesthetic
+MoveRight:Paragraph("✨ Movement Tips", 
+    "⋆｡°✩ Noclip: walk through walls\n" ..
+    "⋆｡°✩ Fly: wasd + space/ctrl\n" ..
+    "⋆｡°✩ Speed: zoom zoom\n" ..
+    "⋆｡°✩ Jump: high jump\n" ..
+    "⋆｡°✩ Gravity: floaty mode")
 
 -- ============================================
--- VISUAL TAB
+-- VISUAL TAB - AESTHETIC
 -- ============================================
-local VisPage = VisualTab:Page("Visual Effects", "eye")
-local VisLeft = VisPage:Section("Enhancements", "Left")
-local VisRight = VisPage:Section("ESP", "Right")
+local VisPage = VisualTab:Page("Visual Effects", "sparkles")
+local VisLeft = VisPage:Section("🌸 Lighting", "Left")
+local VisRight = VisPage:Section("🌿 ESP", "Right")
 
--- Fullbright Toggle
-VisLeft:Toggle("Fullbright", "FullbrightToggle", false, "Terang seperti siang", function(state)
+-- Fullbright Aesthetic
+VisLeft:Toggle("Fullbright", "FullbrightAesthetic", false, "light it up ✨", function(state)
+    fullbright = state
     if state then
         Lighting.Brightness = 2
         Lighting.ClockTime = 14
         Lighting.FogEnd = 100000
         Lighting.GlobalShadows = false
         Lighting.Ambient = Color3.new(1, 1, 1)
+        notifAesthetic("Fullbright", "let there be light 💡", 2, Colors.Success)
     else
         Lighting.Brightness = 1
         Lighting.ClockTime = 12
         Lighting.FogEnd = 50000
         Lighting.GlobalShadows = true
         Lighting.Ambient = Color3.new(0, 0, 0)
+        notifAesthetic("Fullbright", "back to normal", 2, Colors.Error)
     end
 end)
 
--- X-Ray Toggle
-VisLeft:Toggle("X-Ray Vision", "XRayToggle", false, "Lihat tembus dinding", function(state)
+-- X-Ray Aesthetic
+VisLeft:Toggle("X-Ray Vision", "XRayAesthetic", false, "see through walls 👁️", function(state)
+    xray = state
     for _, part in pairs(Workspace:GetDescendants()) do
         if part:IsA("BasePart") then
             part.LocalTransparencyModifier = state and 0.7 or 0
         end
     end
+    notifAesthetic("X-Ray", state and "activated" or "deactivated", 2)
 end)
 
--- FOV Slider
-VisLeft:Slider("Field of View", "FOVSlider", 40, 120, 70, function(val)
+-- FOV Slider Aesthetic
+VisLeft:Slider("Field of View", "FOVAesthetic", 40, 120, 70, function(val)
     Workspace.CurrentCamera.FieldOfView = val
-end, "Ubah sudut pandang camera")
+end, "widen your perspective 🌅")
 
--- ESP Toggle
-local espEnabled = false
-local espConn = nil
+-- ESP Color Picker Aesthetic
+VisRight:ColorPicker("ESP Color", "ESPColorAesthetic", Colors.Primary, 0, function(col)
+    espColor = col
+end, "pick your highlight color 🎨")
 
-VisRight:Toggle("ESP Player", "ESPPlayerToggle", false, "Tampilkan nama & jarak player", function(state)
+-- ESP Toggle Aesthetic
+VisRight:Toggle("ESP Players", "ESPAesthetic", false, "see other players", function(state)
     espEnabled = state
     
     if espConn then espConn:Disconnect() end
@@ -220,139 +309,134 @@ VisRight:Toggle("ESP Player", "ESPPlayerToggle", false, "Tampilkan nama & jarak 
                     local hrp = player.Character:FindFirstChild("HumanoidRootPart")
                     
                     if head and hrp then
-                        -- Gambar ESP sederhana (console saja untuk demo)
+                        -- Simple ESP (console log for demo)
                         local dist = (myPos.Position - hrp.Position).Magnitude
-                        -- Di sini bisa ditambahkan Drawing API jika executor support
+                        -- In real implementation, use Drawing or BillboardGui
                     end
                 end
             end
         end)
+        notifAesthetic("ESP", "player tracking enabled", 2, Colors.Success)
+    else
+        notifAesthetic("ESP", "player tracking disabled", 2, Colors.Error)
     end
 end)
 
--- ESP Color Picker
-VisRight:ColorPicker("ESP Color", "ESPColor", Color3.fromRGB(255, 0, 0), 0, function(col)
-    -- Warna untuk ESP
-end, "Warna highlight ESP")
-
 -- ============================================
--- EXPLOIT TAB
+-- EXPLOIT TAB - AESTHETIC
 -- ============================================
-local ExpPage = ExploitTab:Page("Remote Tools", "skull")
-local ExpLeft = ExpPage:Section("Remote Scanner", "Left")
-local ExpRight = ExpPage:Section("Backdoor", "Right")
+local ExpPage = ExpTab:Page("Exploit Tools", "zap")
+local ExpLeft = ExpPage:Section("🔍 Scanner", "Left")
+local ExpRight = ExpPage:Section("💀 Backdoor", "Right")
 
--- Remote Scanner
-local remotes = {}
-
-ExpLeft:Button("🔍 Scan All Remotes", "Cari semua remote di game", function()
-    remotes = {}
-    print("\n=== REMOTE DI REPLICATEDSTORAGE ===")
+-- Remote Scanner Aesthetic
+ExpLeft:Button("🔍 Scan Remote", "find all remote events", function()
+    local count = 0
+    print("\n" .. string.rep("=", 50))
+    print("🔍 REMOTE SCAN RESULTS")
+    print(string.rep("=", 50))
+    
     for _, v in pairs(RS:GetDescendants()) do
         if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            table.insert(remotes, v)
             print(string.format("[%s] %s", v.ClassName, v.Name))
+            count = count + 1
         end
     end
     
-    print("\n=== REMOTE DI WORKSPACE ===")
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            table.insert(remotes, v)
-            print(string.format("[%s] %s", v.ClassName, v.Name))
-        end
-    end
-    
-    Library:Notification("Scanner", string.format("Ditemukan %d remote (cek console)", #remotes), 4)
+    notifAesthetic("Scanner", string.format("found %d remotes (check console)", count), 4)
 end)
 
--- Backdoor Scanner
-ExpLeft:Button("🔎 Scan Backdoor", "Cari remote mencurigakan", function()
+-- Backdoor Scanner Aesthetic
+ExpLeft:Button("🎯 Scan Backdoor", "find suspicious remotes", function()
     local backdoors = {}
-    local patterns = {"Admin", "Backdoor", "Server", "Execute", "Loadstring", "Run", "Command"}
+    local patterns = {"Admin", "Backdoor", "Server", "Execute", "Run", "Command", "Control"}
+    
+    print("\n" .. string.rep("=", 50))
+    print("🎯 BACKDOOR SCAN")
+    print(string.rep("=", 50))
     
     for _, v in pairs(RS:GetDescendants()) do
         if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
             for _, pattern in ipairs(patterns) do
                 if v.Name:find(pattern, 1, true) then
+                    print(string.format("[⚠️] %s - %s", v.ClassName, v.Name))
                     table.insert(backdoors, v)
-                    print(string.format("[BACKDOOR?] %s - %s", v.ClassName, v.Name))
                     break
                 end
             end
         end
     end
     
-    Library:Notification("Backdoor", string.format("Ditemukan %d remote mencurigakan", #backdoors), 4)
+    notifAesthetic("Backdoor", string.format("found %d suspicious remotes", #backdoors), 4)
 end)
 
--- Execute Server Code
-ExpRight:TextBox("Server Code", "ServerCode", "", function(txt)
-    -- Simpan code untuk dieksekusi
+-- Server Code Input Aesthetic
+ExpRight:TextBox("Server Code", "ServerCodeAesthetic", "", function(txt)
     _G.serverCode = txt
-end, "Masukkan kode Lua untuk server")
+end, "enter lua code for server")
 
-ExpRight:Button("💀 Execute on Server", "Jalankan kode di server (jika ada backdoor)", function()
+-- Execute Button Aesthetic
+ExpRight:Button("💫 Execute on Server", "run code if backdoor exists", function()
     if not _G.serverCode then
-        Library:Notification("Error", "Masukkan kode dulu!", 3)
+        notifAesthetic("Error", "enter code first!", 3, Colors.Error)
         return
     end
     
-    -- Coba cari backdoor pertama
     for _, v in pairs(RS:GetDescendants()) do
-        if v:IsA("RemoteEvent") and v.Name:find("Admin") or v.Name:find("Server") then
+        if v:IsA("RemoteEvent") and (v.Name:find("Admin") or v.Name:find("Server")) then
             pcall(function()
                 v:FireServer(_G.serverCode)
-                Library:Notification("Sukses", "Kode dikirim via " .. v.Name, 3)
+                notifAesthetic("Success", "code executed via " .. v.Name, 3, Colors.Success)
             end)
             return
         end
     end
     
-    Library:Notification("Gagal", "Tidak menemukan backdoor", 3)
+    notifAesthetic("Failed", "no backdoor found", 3, Colors.Error)
 end)
 
 -- ============================================
--- UTILITY TAB
+-- UTILITY TAB - AESTHETIC
 -- ============================================
-local UtilPage = UtilityTab:Page("Tools", "settings")
-local UtilLeft = UtilPage:Section("Player", "Left")
-local UtilRight = UtilPage:Section("Server", "Right")
+local UtilPage = UtilTab:Page("Utility Tools", "heart")
+local UtilLeft = UtilPage:Section("🌸 Player", "Left")
+local UtilRight = UtilPage:Section("🌿 Server", "Right")
 
--- Anti AFK Toggle
-UtilLeft:Toggle("Anti AFK", "AntiAFKToggle", false, "Cegah disconnect", function(state)
+-- Anti AFK Aesthetic
+UtilLeft:Toggle("Anti AFK", "AntiAFKAesthetic", false, "stay active forever", function(state)
     if state then
         LocalPlayer.Idled:Connect(function()
             VirtualUser:CaptureController()
             VirtualUser:ClickButton2(Vector2.new())
         end)
-        Library:Notification("Anti AFK", "Aktif", 2)
+        notifAesthetic("Anti AFK", "you'll never sleep 💤", 2, Colors.Success)
     end
 end)
 
--- Reset Character
-UtilLeft:Button("💀 Reset Character", "Mati lalu respawn", function()
+-- Reset Character Aesthetic
+UtilLeft:Button("💫 Reset Character", "respawn yourself", function()
     if LocalPlayer.Character then
         LocalPlayer.Character:BreakJoints()
+        notifAesthetic("Reset", "goodbye... see you soon", 2)
     end
 end)
 
--- Teleport to Mouse
-UtilLeft:Button("📍 Teleport ke Mouse", "Pindah ke posisi kursor", function()
+-- Teleport to Mouse Aesthetic
+UtilLeft:Button("📍 Teleport to Mouse", "jump to cursor", function()
     local mouse = LocalPlayer:GetMouse()
     if mouse and mouse.Hit and LocalPlayer.Character then
         LocalPlayer.Character:SetPrimaryPartCFrame(mouse.Hit + Vector3.new(0, 3, 0))
-        Library:Notification("Teleport", "Pindah ke mouse", 2)
+        notifAesthetic("Teleport", "whoosh~", 2, Colors.Success)
     end
 end)
 
--- Rejoin Server
-UtilRight:Button("🔄 Rejoin Server", "Koneksi ulang ke server", function()
+-- Rejoin Server Aesthetic
+UtilRight:Button("🔄 Rejoin Server", "come back in", function()
     game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
 end)
 
--- Server Hop
-UtilRight:Button("🌐 Server Hop", "Cari server lain", function()
+-- Server Hop Aesthetic
+UtilRight:Button("🌐 Server Hop", "find new friends", function()
     local HttpService = game:GetService("HttpService")
     local success, servers = pcall(function()
         local res = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100")
@@ -366,40 +450,59 @@ UtilRight:Button("🌐 Server Hop", "Cari server lain", function()
                 return
             end
         end
-        Library:Notification("Server Hop", "Tidak ada server tersedia", 3)
+        notifAesthetic("Server Hop", "no servers available", 3, Colors.Error)
     end
 end)
 
--- Get Coordinates
-UtilRight:Button("📍 Koordinat Saya", "Lihat posisi saat ini", function()
+-- Get Coordinates Aesthetic
+UtilRight:Button("📍 My Position", "where am i?", function()
     if LocalPlayer.Character then
-        local pos = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if pos then
-            local p = pos.Position
-            Library:Notification("Koordinat", string.format("X=%.1f\nY=%.1f\nZ=%.1f", p.X, p.Y, p.Z), 5)
+        local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            local p = root.Position
+            notifAesthetic("Position", string.format("X: %.1f\nY: %.1f\nZ: %.1f", p.X, p.Y, p.Z), 5)
         end
     end
 end)
 
--- FPS Boost
-UtilRight:Button("🚀 FPS Boost", "Tingkatkan performa", function()
+-- FPS Boost Aesthetic
+UtilRight:Button("🚀 FPS Boost", "smooth like butter", function()
     for _, v in pairs(Workspace:GetDescendants()) do
         if v:IsA("BasePart") then
             v.Material = Enum.Material.SmoothPlastic
         end
     end
     Lighting.GlobalShadows = false
-    Library:Notification("FPS Boost", "Aktif!", 2)
+    notifAesthetic("FPS Boost", "smooth sailing~", 2, Colors.Success)
 end)
+
+-- ============================================
+-- CREDITS AESTHETIC
+-- ============================================
+local CreditPage = UtilTab:Page("Credits", "heart")
+local CreditMain = CreditPage:Section("🌸 About", "Left")
+local CreditInfo = CreditPage:Section("✨ Info", "Right")
+
+CreditMain:Paragraph("✨ XKID AESTHETIC",
+    "⋆｡°✩ v3.0\n" ..
+    "⋆｡°✩ soft ui edition\n" ..
+    "⋆｡°✩ by xkid\n" ..
+    "⋆｡°✩ for roblox")
+
+CreditInfo:Paragraph("🌸 Features",
+    "⋆｡°✩ movement mods\n" ..
+    "⋆｡°✩ visual effects\n" ..
+    "⋆｡°✩ exploit tools\n" ..
+    "⋆｡°✩ utility features")
 
 -- ============================================
 -- LOADING CONFIG
 -- ============================================
-Library:Notification("XKID EXPLOIT", "Universal v2.0 Loaded!", 5)
+notifAesthetic("XKID AESTHETIC", "welcome to soft ui ✨", 5, Colors.Primary)
 Library:ConfigSystem(Win)
 
 print("╔══════════════════════════════════════════╗")
-print("║   XKID EXPLOIT UNIVERSAL v2.0           ║")
-print("║   Fitur: Movement, Visual, Exploit      ║")
-print("║   Player: " .. tostring(LocalPlayer and LocalPlayer.Name or "Unknown"))
+print("║   ✨ XKID AESTHETIC v3.0                ║")
+print("║   soft ui edition                        ║")
+print("║   loading complete...                    ║")
 print("╚══════════════════════════════════════════╝")
