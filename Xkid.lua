@@ -5,7 +5,7 @@
   ║      Fix: Scan NPC · Teleport Akurat                 ║
   ╚═══════════════════════════════════════════════════════╝
 
-  CHANGELOG v20:
+  CHANGELOG v20.0:
   [1] Fitur Scan NPC — temukan semua NPC di workspace
   [2] Teleport pakai posisi EXACT dari hasil scan (bukan hardcode Y)
   [3] NPC_OVERRIDE: hasil scan override koordinat default
