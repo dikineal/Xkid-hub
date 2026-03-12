@@ -1,12 +1,11 @@
 --[[
   ╔══════════════════════════════════════════════════════╗
-  ║          🌟  X K I D . H U B  v4.0  🌟             ║
+  ║          🌟  X K I D . H U B  v5.0  🌟             ║
   ║          Aurora UI  ✦  Mobile Optimized             ║
   ╚══════════════════════════════════════════════════════╝
-  Fly    : Joystick = maju/mundur/kiri/kanan
-           Kamera atas = naik · Kamera bawah = turun
-  Teleport: Tabel player langsung ada tombol TP
-  Respawn Cepat · ESP · Speed · Protection
+  Teleport : Ketik 1-2 huruf → otomatis cari player
+  Fly      : Joystick = arah · Kamera = naik/turun
+  ESP · Speed · NoClip · Protection
 ]]
 
 -- ════════════════════════════════════════
@@ -30,7 +29,7 @@ local LP          = Players.LocalPlayer
 -- ════════════════════════════════════════
 --  WINDOW
 -- ════════════════════════════════════════
-local Win = Library:Window("🌟 XKID.HUB", "star", "v4.0 Mobile", false)
+local Win = Library:Window("🌟 XKID.HUB", "star", "v5.0 Mobile", false)
 
 -- ════════════════════════════════════════
 --  TABS
@@ -78,11 +77,8 @@ local espConns   = {}
 local afkConn    = nil
 local antiKickOn = false
 local slots      = {}
-
--- Pitch threshold: seberapa miring kamera untuk naik/turun
--- 0.25 = cukup sedikit lihat atas/bawah sudah naik/turun
-local PITCH_UP   =  0.25
-local PITCH_DOWN = -0.25
+local PITCH_UP   =  0.3
+local PITCH_DOWN = -0.3
 
 -- ════════════════════════════════════════
 --  RE-APPLY ON RESPAWN
@@ -94,7 +90,6 @@ LP.CharacterAdded:Connect(function(char)
     hum.WalkSpeed    = curWS
     hum.JumpPower    = curJP
     hum.UseJumpPower = true
-    -- Re-init fly jika masih aktif
     if flyOn then
         task.wait(0.3)
         local root2 = char:FindFirstChild("HumanoidRootPart")
@@ -114,19 +109,127 @@ LP.CharacterAdded:Connect(function(char)
 end)
 
 -- ════════════════════════════════════════
---  ① FLY — BodyVelocity
---
---  Joystick kiri  → maju/mundur/kiri/kanan
---                   (mengikuti arah kamera horizontal)
---  Slide kamera ke ATAS  → karakter NAIK
---  Slide kamera ke BAWAH → karakter TURUN
---  Lepas semua → melayang diam
+--  ① INFER PLAYER
+--  Ketik prefix nama → cari player paling cocok
+--  Bobot: username exact (1.0) > display (1.5)
+--         > username CI (2.0) > display CI (2.5)
+-- ════════════════════════════════════════
+local function infer_plr(pl_ref)
+    if typeof(pl_ref) ~= "string" then return pl_ref end
+    local to_pl, min = nil, math.huge
+
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP then
+            local nv = math.huge
+            local un = p.Name
+            local dn = p.DisplayName
+
+            if un:find("^" .. pl_ref) then
+                nv = 1.0 * (#un - #pl_ref)
+            elseif dn:find("^" .. pl_ref) then
+                nv = 1.5 * (#dn - #pl_ref)
+            elseif un:lower():find("^" .. pl_ref:lower()) then
+                nv = 2.0 * (#un - #pl_ref)
+            elseif dn:lower():find("^" .. pl_ref:lower()) then
+                nv = 2.5 * (#dn - #pl_ref)
+            end
+
+            if nv < min then
+                to_pl = p
+                min   = nv
+            end
+        end
+    end
+    return to_pl
+end
+
+-- ════════════════════════════════════════
+--  ② TELEPORT ke PLAYER
+-- ════════════════════════════════════════
+local function tpToPlayer(ref)
+    if not ref or ref == "" then
+        Library:Notification("❌", "Ketik nama dulu!", 2)
+        return
+    end
+
+    local to_pl = infer_plr(ref)
+
+    if not to_pl then
+        Library:Notification("❌", "Player tidak ditemukan\nCoba huruf lain", 3)
+        return
+    end
+
+    if not to_pl.Character then
+        Library:Notification("❌", to_pl.Name .. " tidak ada karakter", 2)
+        return
+    end
+
+    local hrp  = to_pl.Character:FindFirstChild("HumanoidRootPart")
+    local trs  = to_pl.Character:FindFirstChild("Torso")
+    local part = hrp or trs
+
+    if not part then
+        Library:Notification("❌", "Karakter " .. to_pl.Name .. " tidak valid", 2)
+        return
+    end
+
+    local myChar = getChar()
+    if myChar then
+        myChar:PivotTo(part.CFrame * CFrame.new(0, 3, 0))
+        Library:Notification("📍 TP", "→ " .. to_pl.Name, 2)
+    end
+end
+
+local function tpToMouse()
+    local mouse = LP:GetMouse()
+    if mouse and mouse.Hit then
+        local root = getRoot()
+        if root then
+            root.CFrame = mouse.Hit * CFrame.new(0, 3, 0)
+            Library:Notification("📍 TP", "Ke posisi mouse", 2)
+        end
+    end
+end
+
+-- ════════════════════════════════════════
+--  ③ RESPAWN CEPAT
+-- ════════════════════════════════════════
+local function quickRespawn()
+    local root = getRoot()
+    if not root then
+        Library:Notification("❌", "Karakter tidak ada", 2); return
+    end
+    local savedCF = root.CFrame
+    local savedWS = curWS
+    local savedJP = curJP
+    local c = getChar()
+    if c then c:BreakJoints() end
+    local conn
+    conn = LP.CharacterAdded:Connect(function(newChar)
+        conn:Disconnect()
+        task.wait(0.8)
+        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+        local hum = newChar:WaitForChild("Humanoid", 5)
+        if hrp then hrp.CFrame = savedCF end
+        if hum then
+            hum.WalkSpeed    = savedWS
+            hum.JumpPower    = savedJP
+            hum.UseJumpPower = true
+        end
+        Library:Notification("✅ Respawn", "Kembali ke posisi semula", 2)
+    end)
+end
+
+-- ════════════════════════════════════════
+--  ④ FLY — BodyVelocity
+--  Joystick  → maju/mundur/kiri/kanan
+--  Kamera ↑  → naik
+--  Kamera ↓  → turun
 -- ════════════════════════════════════════
 local function startFly()
     local root = getRoot(); if not root then return end
     local hum  = getHum();  if not hum  then return end
 
-    -- Cleanup
     if flyBV   then pcall(function() flyBV:Destroy()      end) end
     if flyBG   then pcall(function() flyBG:Destroy()      end) end
     if flyConn then pcall(function() flyConn:Disconnect() end) end
@@ -137,83 +240,55 @@ local function startFly()
 
     flyBG = Instance.new("BodyGyro", root)
     flyBG.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-    flyBG.P = 1e4
-    flyBG.D = 100
+    flyBG.P = 1e4; flyBG.D = 100
     flyBG.CFrame = root.CFrame
 
     hum.PlatformStand = true
 
     flyConn = RunService.Heartbeat:Connect(function()
         local root2 = getRoot(); if not root2 or not flyBV then return end
-        local hum2  = getHum();  if not hum2  then return end
+        local hum2  = getHum();  if not hum2 then return end
 
-        local cam   = Workspace.CurrentCamera
-        local camCF = cam.CFrame
+        local cam    = Workspace.CurrentCamera
+        local camCF  = cam.CFrame
+        local camFwd = Vector3.new(camCF.LookVector.X,  0, camCF.LookVector.Z)
+        local camRgt = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z)
+        if camFwd.Magnitude > 0 then camFwd = camFwd.Unit end
+        if camRgt.Magnitude > 0 then camRgt = camRgt.Unit end
 
-        -- ── HORIZONTAL dari MoveDirection (joystick) ──
-        -- MoveDirection sudah di world space, tapi kita
-        -- proyeksikan ulang ke arah kamera agar maju
-        -- selalu ke arah yang dilihat kamera
+        -- Horizontal dari joystick (MoveDirection)
         local md = hum2.MoveDirection
-
-        local camFwd   = Vector3.new(camCF.LookVector.X,  0, camCF.LookVector.Z)
-        local camRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z)
-
-        -- Normalisasi sumbu kamera
-        if camFwd.Magnitude   > 0 then camFwd   = camFwd.Unit   end
-        if camRight.Magnitude > 0 then camRight = camRight.Unit end
-
         local horizontal = Vector3.new()
         if md.Magnitude > 0.05 then
-            -- Proyeksikan MoveDirection ke sumbu kamera
-            -- md sudah dalam world space dari Roblox
-            -- Kita ambil komponen relatif kamera
             local fwdAmt   = md:Dot(camFwd)
-            local rightAmt = md:Dot(camRight)
-            horizontal = camFwd * fwdAmt + camRight * rightAmt
+            local rightAmt = md:Dot(camRgt)
+            horizontal = camFwd * fwdAmt + camRgt * rightAmt
             if horizontal.Magnitude > 1 then
                 horizontal = horizontal.Unit
             end
         end
 
-        -- ── VERTICAL dari pitch kamera ──
-        -- LookVector.Y:
-        --   positif (+)  = kamera lihat ke atas  → naik
-        --   negatif (-)  = kamera lihat ke bawah → turun
+        -- Vertical dari pitch kamera
         local pitchY   = camCF.LookVector.Y
         local vertical = Vector3.new()
-
         if pitchY > PITCH_UP then
-            -- Makin tinggi lihat ke atas, makin cepat naik
-            local str = math.min(
-                (pitchY - PITCH_UP) / (1 - PITCH_UP), 1)
-            vertical = Vector3.new(0, str, 0)
-
+            local str = math.min((pitchY - PITCH_UP) / (1 - PITCH_UP), 1)
+            vertical  = Vector3.new(0, str, 0)
         elseif pitchY < PITCH_DOWN then
-            -- Makin rendah lihat ke bawah, makin cepat turun
-            local str = math.min(
-                (-pitchY - math.abs(PITCH_DOWN)) / (1 - math.abs(PITCH_DOWN)), 1)
-            vertical = Vector3.new(0, -str, 0)
+            local str = math.min((-pitchY + PITCH_DOWN) / (1 + PITCH_DOWN), 1)
+            vertical  = Vector3.new(0, -str, 0)
         end
 
-        -- ── Gabungkan horizontal + vertical ──
         local finalDir = horizontal + vertical
-
         if finalDir.Magnitude > 0 then
-            local normDir = finalDir.Magnitude > 1
-                and finalDir.Unit or finalDir
-            flyBV.Velocity = normDir * flySpeed
-
-            -- Rotasi karakter ikut arah horizontal
+            local norm = finalDir.Magnitude > 1 and finalDir.Unit or finalDir
+            flyBV.Velocity = norm * flySpeed
             if horizontal.Magnitude > 0.05 then
                 flyBG.CFrame = CFrame.new(Vector3.new(), horizontal)
             end
         else
-            -- Diam melayang — velocity nol, tidak jatuh
             flyBV.Velocity = Vector3.new()
         end
-
-        -- Selalu paksa PlatformStand agar tidak jatuh
         hum2.PlatformStand = true
     end)
 end
@@ -227,7 +302,7 @@ local function stopFly()
 end
 
 -- ════════════════════════════════════════
---  ② NOCLIP
+--  ⑤ NOCLIP
 -- ════════════════════════════════════════
 local function setNoclip(state)
     noclipOn = state
@@ -250,7 +325,7 @@ local function setNoclip(state)
 end
 
 -- ════════════════════════════════════════
---  ③ ESP
+--  ⑥ ESP
 -- ════════════════════════════════════════
 local function clearESP()
     for _, b in ipairs(espBills) do pcall(function() b:Destroy()    end) end
@@ -333,71 +408,7 @@ local function toggleESP(state)
 end
 
 -- ════════════════════════════════════════
---  ④ TELEPORT
--- ════════════════════════════════════════
-local function tpToPlayerByName(name)
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP and p.Name == name then
-            if p.Character then
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    local root = getRoot()
-                    if root then
-                        root.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
-                        Library:Notification("📍 TP", "→ "..name, 2)
-                        return
-                    end
-                end
-            end
-            Library:Notification("❌", name.." tidak ada karakter", 2)
-            return
-        end
-    end
-    Library:Notification("❌", "Player tidak ditemukan", 2)
-end
-
-local function tpToMouse()
-    local mouse = LP:GetMouse()
-    if mouse and mouse.Hit then
-        local root = getRoot()
-        if root then
-            root.CFrame = mouse.Hit * CFrame.new(0, 3, 0)
-            Library:Notification("📍 TP", "Ke posisi mouse", 2)
-        end
-    end
-end
-
--- ════════════════════════════════════════
---  ⑤ RESPAWN CEPAT
--- ════════════════════════════════════════
-local function quickRespawn()
-    local root = getRoot()
-    if not root then
-        Library:Notification("❌", "Karakter tidak ada", 2); return
-    end
-    local savedCF = root.CFrame
-    local savedWS = curWS
-    local savedJP = curJP
-    local c = getChar()
-    if c then c:BreakJoints() end
-    local conn
-    conn = LP.CharacterAdded:Connect(function(newChar)
-        conn:Disconnect()
-        task.wait(0.8)
-        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-        local hum = newChar:WaitForChild("Humanoid", 5)
-        if hrp then hrp.CFrame = savedCF end
-        if hum then
-            hum.WalkSpeed    = savedWS
-            hum.JumpPower    = savedJP
-            hum.UseJumpPower = true
-        end
-        Library:Notification("✅ Respawn", "Kembali ke posisi semula", 2)
-    end)
-end
-
--- ════════════════════════════════════════
---  ⑥ PROTECTION
+--  ⑦ PROTECTION
 -- ════════════════════════════════════════
 local function startAntiAFK()
     if afkConn then return end
@@ -416,7 +427,8 @@ local function startAntiKick()
         while antiKickOn do
             pcall(function()
                 local hum = getHum()
-                if hum and hum.Health > 0 and hum.Health < hum.MaxHealth * 0.1 then
+                if hum and hum.Health > 0
+                and hum.Health < hum.MaxHealth * 0.1 then
                     hum.Health = hum.MaxHealth
                 end
             end)
@@ -428,85 +440,68 @@ local function stopAntiKick() antiKickOn = false end
 
 -- ════════════════════════════════════════
 --  BUILD UI — TAB TELEPORT
---  Tabel player: 1 page per player
---  Di-generate saat tombol Scan ditekan
 -- ════════════════════════════════════════
+local TPage  = TabTP:Page("Teleport", "map-pin")
+local TLeft  = TPage:Section("📍 Teleport ke Player", "Left")
+local TRight = TPage:Section("💾 Slot Posisi", "Right")
 
--- Page utama Teleport (tombol Scan + Slot)
-local TPageMain  = TabTP:Page("Teleport", "map-pin")
-local TMainLeft  = TPageMain:Section("👥 Scan Player", "Left")
-local TMainRight = TPageMain:Section("📍 Slot & Lainnya", "Right")
-
--- Tabel menyimpan nama player hasil scan
-local scannedPlayers = {}
-
-TMainLeft:Button("🔍 SCAN PLAYER", "Cari semua player online sekarang",
+-- Lihat player online
+TLeft:Button("👥 Lihat Player Online", "Tampilkan semua player di server",
     function()
-        scannedPlayers = {}
-        local count = 0
-        local notifText = ""
-
+        local list, n = "", 0
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LP then
-                count = count + 1
                 local root2  = p.Character
                     and p.Character:FindFirstChild("HumanoidRootPart")
                 local myRoot = getRoot()
                 local d = (root2 and myRoot)
-                    and getDist(root2.Position, myRoot.Position)
-                    or  999
-                table.insert(scannedPlayers, {
-                    name = p.Name,
-                    disp = p.DisplayName,
-                    dist = d,
-                })
-                notifText = notifText
-                    ..string.format("[%d] %s — %dm\n", count, p.Name, d)
+                    and getDist(root2.Position, myRoot.Position) or "?"
+                n    = n + 1
+                list = list .. string.format(
+                    "• %s (%s) — %sm\n",
+                    p.Name, p.DisplayName, tostring(d))
             end
         end
-
-        if count == 0 then
-            Library:Notification("👥 Scan", "Tidak ada player lain", 3)
-            return
-        end
-
-        -- Sort berdasarkan jarak terdekat
-        table.sort(scannedPlayers, function(a, b)
-            return a.dist < b.dist
-        end)
-
-        -- Rebuild notif setelah sort
-        notifText = ""
-        for i, pl in ipairs(scannedPlayers) do
-            notifText = notifText
-                ..string.format("[%d] %s — %dm\n", i, pl.name, pl.dist)
-        end
-
         Library:Notification(
-            "✅ " .. count .. " Player Ditemukan",
-            notifText .. "\n📋 Buka tab [1]~["..count.."] di bawah",
+            "👥 " .. n .. " Player Online",
+            n > 0 and list or "Tidak ada player lain",
             10)
     end)
 
-TMainLeft:Paragraph("Cara Pakai",
-    "1. Tekan SCAN PLAYER\n"..
-    "2. Lihat notifikasi —\n"..
-    "   nama + jarak muncul\n"..
-    "3. Buka tab player di\n"..
-    "   bagian bawah tab ini\n"..
-    "4. Tekan TP di tab player")
+TLeft:Paragraph("Cara Pakai",
+    "1. Lihat Player Online\n"..
+    "   → catat nama/prefix\n\n"..
+    "2. Ketik 1-2 huruf\n"..
+    "   pertama nama player\n\n"..
+    "3. Tekan Teleport\n"..
+    "   → langsung TP!\n\n"..
+    "Contoh:\n"..
+    "Ada player 'XKIDTest'\n"..
+    "Ketik 'XK' → langsung\n"..
+    "teleport ke XKIDTest")
 
-TMainLeft:Button("🖱 TP ke Mouse", "Teleport ke posisi tap layar",
+-- TextBox + Tombol TP
+local tpInput = ""
+TLeft:TextBox("Nama / Prefix Player", "TPInput", "",
+    function(v) tpInput = v end,
+    "Ketik 1-2 huruf pertama nama")
+
+TLeft:Button("📍 Teleport ke Player", "Cari & TP ke player",
+    function()
+        tpToPlayer(tpInput)
+    end)
+
+TLeft:Button("🖱 Teleport ke Mouse", "TP ke posisi tap layar",
     function() tpToMouse() end)
 
-TMainLeft:Button("💀 Respawn Cepat", "Mati & spawn di posisi sama",
+TLeft:Button("💀 Respawn Cepat", "Mati & spawn di posisi sama",
     function() quickRespawn() end)
 
--- Save / Load slot posisi
-TMainRight:Label("💾 Save & Load Posisi")
+-- Save / Load slot
+TRight:Label("💾 Save & Load Posisi")
 for i = 1, 5 do
     local idx = i
-    TMainRight:Button("💾 Save Slot " .. idx, "Simpan posisi ke slot " .. idx,
+    TRight:Button("💾 Save Slot " .. idx, "Simpan posisi ke slot " .. idx,
         function()
             local root = getRoot()
             if not root then
@@ -517,7 +512,7 @@ for i = 1, 5 do
             Library:Notification("💾 Slot " .. idx,
                 string.format("X=%.0f  Y=%.0f  Z=%.0f", p.X, p.Y, p.Z), 3)
         end)
-    TMainRight:Button("🚀 Load Slot " .. idx, "TP ke posisi slot " .. idx,
+    TRight:Button("🚀 Load Slot " .. idx, "TP ke posisi slot " .. idx,
         function()
             if not slots[idx] then
                 Library:Notification("❌", "Slot "..idx.." kosong", 2); return
@@ -532,77 +527,9 @@ for i = 1, 5 do
         end)
 end
 
--- ── Buat 10 tab slot player ──
--- Setiap tab punya 1 player info + tombol TP
--- Di-update isinya saat Scan ditekan lagi
--- Aurora tidak bisa hapus tab, jadi kita pre-buat 10 tab
--- dan isi dengan data scan
-
-local playerTabPages = {}  -- simpan referensi section
-
-Win:TabSection("👥 PLAYERS")
-for i = 1, 10 do
-    local idx  = i
-    local pTab = Win:Tab("P" .. idx, "user")
-
-    -- Buat page untuk tab ini
-    local pPage    = pTab:Page("Player " .. idx, "user")
-    local pSection = pPage:Section("👤 Info & Teleport", "Left")
-    local pRight   = pPage:Section("📊 Detail", "Right")
-
-    -- Tombol TP (selalu ada, nama update lewat closure)
-    pSection:Button("📍 TP ke Player " .. idx,
-        "Teleport ke player slot " .. idx,
-        function()
-            if not scannedPlayers[idx] then
-                Library:Notification("❌",
-                    "Scan player dulu!\nSlot "..idx.." kosong", 3)
-                return
-            end
-            tpToPlayerByName(scannedPlayers[idx].name)
-        end)
-
-    pSection:Button("🔄 Lihat Info Player " .. idx,
-        "Tampilkan info terbaru player ini",
-        function()
-            if not scannedPlayers[idx] then
-                Library:Notification("❌",
-                    "Scan player dulu!\nTekan SCAN PLAYER di tab Teleport", 4)
-                return
-            end
-            local pl = scannedPlayers[idx]
-            -- Hitung jarak terbaru
-            local target = nil
-            for _, p in pairs(Players:GetPlayers()) do
-                if p.Name == pl.name then target = p; break end
-            end
-            local freshDist = pl.dist
-            if target and target.Character then
-                local hrp = target.Character:FindFirstChild("HumanoidRootPart")
-                local myRoot = getRoot()
-                if hrp and myRoot then
-                    freshDist = getDist(hrp.Position, myRoot.Position)
-                end
-            end
-            Library:Notification(
-                "👤 Player " .. idx,
-                string.format(
-                    "Nama: %s\nDisplay: %s\nJarak: %dm\n\nTekan TP untuk teleport",
-                    pl.name, pl.disp, freshDist),
-                6)
-        end)
-
-    pRight:Paragraph("Slot " .. idx,
-        "Tekan SCAN PLAYER\ndi tab Teleport\n\nLalu buka tab ini\nuntuk TP ke player\n\n"..
-        "Urutan = jarak terdekat\nke terjauh")
-
-    table.insert(playerTabPages, { section = pSection, right = pRight })
-end
-
 -- ════════════════════════════════════════
 --  BUILD UI — TAB FLY
 -- ════════════════════════════════════════
-Win:TabSection("TOOLS")
 local FPage = TabFly:Page("Fly & NoClip", "rocket")
 local FL    = FPage:Section("🚀 Fly", "Left")
 local FR    = FPage:Section("🚶 NoClip", "Right")
@@ -615,33 +542,29 @@ FL:Toggle("Fly Mode", "FlyToggle", false,
         Library:Notification("🚀 Fly", v and "ON" or "OFF", 2)
     end)
 
-FL:Slider("Kecepatan Fly", "FlySpeedSlider", 5, 300, 60,
+FL:Slider("Kecepatan", "FlySpeedSlider", 5, 300, 60,
     function(v) flySpeed = v end,
     "Kecepatan terbang (default 60)")
 
 FL:Slider("Sensitivitas Naik/Turun", "PitchSlider", 1, 9, 3,
     function(v)
-        -- v=1 → threshold=0.1 (sangat sensitif)
-        -- v=5 → threshold=0.5 (butuh miring banyak)
         PITCH_UP   =  v * 0.1
         PITCH_DOWN = -v * 0.1
-    end,
-    "1=Sangat sensitif · 5=Perlu miring banyak")
+    end, "1=Sangat sensitif · 9=Perlu miring banyak")
 
-FL:Paragraph("🎮 Cara Pakai Fly",
-    "✅ Toggle Fly → ON\n\n"..
-    "GERAK HORIZONTAL:\n"..
-    "  Joystick kiri seperti\n"..
-    "  biasa jalan\n\n"..
+FL:Paragraph("🎮 Cara Pakai",
+    "Toggle Fly → ON\n\n"..
+    "GERAK:\n"..
+    "Joystick kiri seperti jalan\n\n"..
     "NAIK:\n"..
-    "  Geser kamera ke ATAS\n"..
-    "  (slide layar ke bawah)\n\n"..
+    "Slide kamera ke atas\n"..
+    "(geser layar ke bawah)\n\n"..
     "TURUN:\n"..
-    "  Geser kamera ke BAWAH\n"..
-    "  (slide layar ke atas)\n\n"..
+    "Slide kamera ke bawah\n"..
+    "(geser layar ke atas)\n\n"..
     "DIAM MELAYANG:\n"..
-    "  Lepas joystick +\n"..
-    "  kamera lurus ke depan")
+    "Lepas joystick +\n"..
+    "kamera lurus ke depan")
 
 FR:Toggle("NoClip", "NoclipToggle", false,
     "Tembus semua dinding",
@@ -651,8 +574,7 @@ FR:Toggle("NoClip", "NoclipToggle", false,
             v and "ON — Tembus dinding" or "OFF", 2)
     end)
 
-FR:Paragraph("Fly + NoClip = OP",
-    "Aktifkan dua-duanya:\n\n"..
+FR:Paragraph("Fly + NoClip",
     "✅ Fly ON\n"..
     "✅ NoClip ON\n\n"..
     "→ Masuk private room\n"..
@@ -685,7 +607,7 @@ ER:Paragraph("Info ESP",
     "• Nama\n"..
     "• Jarak (meter)\n"..
     "• Area / room\n\n"..
-    "AlwaysOnTop =\ntembus semua dinding")
+    "Tembus semua dinding")
 
 -- ════════════════════════════════════════
 --  BUILD UI — TAB SPEED
@@ -783,19 +705,19 @@ PL:Button("📍 Posisi Saya", "Lihat koordinat sekarang",
 
 PR:Paragraph("Info",
     "Anti AFK:\nCegah auto-disconnect\n\n"..
-    "Anti Kick:\nJaga HP dari sistem\nkick game\n\n"..
-    "Rejoin:\nKoneksi ulang tanpa\ntutup game")
+    "Anti Kick:\nJaga HP dari kick\n\n"..
+    "Rejoin:\nKoneksi ulang cepat")
 
 -- ════════════════════════════════════════
 --  INIT
 -- ════════════════════════════════════════
-Library:Notification("🌟 XKID.HUB v4.0",
-    "Mobile Ready!\nScan Player → tab P1~P10", 5)
+Library:Notification("🌟 XKID.HUB v5.0",
+    "Ketik prefix nama → TP otomatis!", 5)
 Library:ConfigSystem(Win)
 
 print("╔══════════════════════════════════════╗")
-print("║   🌟  XKID.HUB  v4.0  Mobile       ║")
+print("║   🌟  XKID.HUB  v5.0  Mobile       ║")
+print("║   TP: Prefix → infer_plr            ║")
 print("║   Fly: Joystick + Kamera Pitch      ║")
-print("║   TP: Scan → Tab P1~P10             ║")
 print("║   Player: " .. LP.Name)
 print("╚══════════════════════════════════════╝")
