@@ -5,7 +5,7 @@
   ║      Fix: Scan NPC · Teleport Akurat                 ║
   ╚═══════════════════════════════════════════════════════╝
 
-  CHANGELOG v20.0:
+  CHANGELOG v20:
   [1] Fitur Scan NPC — temukan semua NPC di workspace
   [2] Teleport pakai posisi EXACT dari hasil scan (bukan hardcode Y)
   [3] NPC_OVERRIDE: hasil scan override koordinat default
@@ -71,11 +71,11 @@ local godConn         = nil
 --  DATA
 -- ════════════════════════════════════════════════
 local NPC_LIST = {
-    { label="NPC Penjual",        x=-59, z=-207 },
-    { label="NPC Bibit",          x=-42, z=-207 },
-    { label="NPC Alat",           x=-41, z=-100 },
-    { label="NPC Pedagang Sawit", x= 56, z=-208 },
-    { label="NPC Pedagang Telur", x=-98, z=-176 },
+    { label="NPC Penjual",        x=-59,   y=nil,  z=-207   },
+    { label="NPC Bibit",          x=-42,   y=nil,  z=-207   },
+    { label="NPC Alat",           x=-41.5, y=49.2, z=-180.8 }, -- koordinat exact
+    { label="NPC Pedagang Sawit", x= 56,   y=nil,  z=-208   },
+    { label="NPC Pedagang Telur", x=-98,   y=nil,  z=-176   },
 }
 local MANDI = { x=137, z=-235 }
 
@@ -225,19 +225,24 @@ local function raycastY(x, z)
     return res and (res.Position.Y + 3) or 42
 end
 
--- [v20] tpToNPC: pakai override CFrame jika ada, fallback raycast
-local function tpToNPC(x, z, label)
+-- [v20] tpToNPC: pakai override CFrame jika ada, lalu hardcode Y, fallback raycast
+local function tpToNPC(x, z, label, hardY)
     local root = getRoot(); if not root then return false, 0 end
-    -- Cek override dari hasil scan
+    -- 1. Cek override dari hasil scan NPC
     if label and NPC_OVERRIDE[label] then
         local cf = NPC_OVERRIDE[label]
-        -- Offset sedikit agar tidak stuck di dalam NPC
         local offsetCF = cf * CFrame.new(0, 0, 3)
         root.CFrame = offsetCF
         task.wait(0.35)
         return true, offsetCF.Position.Y
     end
-    -- Fallback: raycast Y dari koordinat hardcode
+    -- 2. Pakai Y hardcode jika disediakan (koordinat exact)
+    if hardY then
+        root.CFrame = CFrame.new(x, hardY, z)
+        task.wait(0.35)
+        return true, hardY
+    end
+    -- 3. Fallback: raycast Y dari koordinat hardcode
     local y = raycastY(x, z)
     root.CFrame = CFrame.new(x, y, z)
     task.wait(0.35)
@@ -785,12 +790,16 @@ TpLeft:Label("Scan dulu → TP otomatis ke posisi exact NPC")
 
 for _, npc in ipairs(NPC_LIST) do
     local n = npc
-    TpLeft:Button("🚀 "..n.label,
-        string.format("Hardcode: X=%.0f  Z=%.0f", n.x, n.z),
+    local desc = n.y
+        and string.format("X=%.1f  Y=%.1f  Z=%.1f  ✅ Exact", n.x, n.y, n.z)
+        or  string.format("X=%.0f  Z=%.0f  (Y auto)", n.x, n.z)
+    TpLeft:Button("🚀 "..n.label, desc,
         function()
             task.spawn(function()
-                local _, y = tpToNPC(n.x, n.z, n.label)
-                local src = NPC_OVERRIDE[n.label] and "📡 Scan" or "📌 Hardcode"
+                local _, y = tpToNPC(n.x, n.z, n.label, n.y)
+                local src = NPC_OVERRIDE[n.label] and "📡 Scan"
+                         or n.y                   and "📌 Exact"
+                         or                           "📌 Raycast"
                 notif("📍 TP", n.label.."\n"..src..string.format(" | Y=%.1f", y or 0), 3)
             end)
         end)
@@ -916,7 +925,7 @@ SetRight:Paragraph("Indo Farmer v20.0",
     "XKID HUB — Aurora UI\nSawah Indo")
 
 SetRight:Paragraph("NPC Coords",
-    "Penjual  X=-59  Z=-207\nBibit    X=-42  Z=-207\nAlat     X=-41  Z=-100\nSawit    X= 56  Z=-208\nTelur    X=-98  Z=-176\nMandi    X=137  Z=-235")
+    "Penjual  X=-59    Z=-207\nBibit    X=-42    Z=-207\nAlat     X=-41.5  Y=49.2  Z=-180.8  ✅\nSawit    X= 56    Z=-208\nTelur    X=-98    Z=-176\nMandi    X=137    Z=-235")
 
 -- ════════════════════════════════════════════════
 --  INIT
