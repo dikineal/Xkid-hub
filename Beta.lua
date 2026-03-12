@@ -1138,3 +1138,4 @@ print("║   AFK·Fly·NoClip·ESP·TP·Speed·Jump      ║")
 print("║   Scan NPC · Lahan · Toko · Auto Buy    ║")
 print("║   H=Fly · G=Anchor · L=Fast · K=Slow    ║")
 print("╚══════════════════════════════════════════╝")
+
