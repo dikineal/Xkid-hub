@@ -1,17 +1,16 @@
 --[[
   ╔═══════════════════════════════════════════════════════╗
-  ║      🌾  I N D O   F A R M E R  v19.0  🌾           ║
+  ║      🌾  I N D O   F A R M E R  v20.0  🌾           ║
   ║      XKID HUB  ✦  Aurora UI                         ║
-  ║      Fix: Teleport NPC · Harvest firesignal          ║
+  ║      Fix: Scan NPC · Teleport Akurat                 ║
   ╚═══════════════════════════════════════════════════════╝
 
-  CHANGELOG v19:
-  [1] Hapus Tab Farm (Full Auto Farm & Auto Tanam)
-  [2] Fix Teleport NPC — scan Model.HumanoidRootPart, radius ketat 15s
-  [3] Harvest via firesignal ke HarvestCrop.OnClientEvent
-  [4] Semua tanaman didukung: Padi·Jagung·Tomat·Terong·Strawberry·Sawit·Durian
-  [5] Info & Paragraph disederhanakan
-  [6] Hapus debug print berlebihan
+  CHANGELOG v20:
+  [1] Fitur Scan NPC — temukan semua NPC di workspace
+  [2] Teleport pakai posisi EXACT dari hasil scan (bukan hardcode Y)
+  [3] NPC_OVERRIDE: hasil scan override koordinat default
+  [4] Tombol Scan NPC di tab Teleport, hasil tampil di console F9
+  [5] tpToNPC pakai CFrame exact NPC jika scan berhasil
 ]]
 
 -- ════════════════════════════════════════════════
@@ -24,7 +23,7 @@ Library = loadstring(game:HttpGet(
 local Win = Library:Window(
     "Indo Farmer",
     "sprout",
-    "v19.0  |  XKID HUB",
+    "v20.0  |  XKID HUB",
     false
 )
 
@@ -137,32 +136,88 @@ local function tpCFrame(cf)
     root.CFrame = cf; task.wait(0.35); return true
 end
 
--- [FIX v19] Scan Model.HumanoidRootPart / PrimaryPart saja
--- radius ketat 15 studs, fallback Raycast
-local function findNpcY(x, z)
-    local bestY, bestDist = nil, math.huge
+-- ════════════════════════════════════════════════
+--  [v20] SISTEM SCAN NPC
+--
+--  scanAllNPC() → cari SEMUA Model di workspace
+--  yang punya Humanoid / HumanoidRootPart.
+--  Hasil disimpan di NpcScanResult = {
+--    { name, x, y, z, model }
+--  }
+--  NPC_OVERRIDE[label] = CFrame exact hasil scan
+--  → tombol TP pakai ini kalau ada, fallback ke hardcode
+-- ════════════════════════════════════════════════
+local NpcScanResult = {}   -- semua NPC ditemukan
+local NPC_OVERRIDE  = {}   -- label → CFrame exact
+
+-- Kata kunci untuk identifikasi NPC target kita
+local NPC_KEYWORDS = {
+    "npc", "pedagang", "penjual", "bibit", "alat",
+    "toko", "shop", "vendor", "seller", "merchant"
+}
+
+local function nameMatchNPC(n)
+    n = n:lower()
+    for _, kw in ipairs(NPC_KEYWORDS) do
+        if n:find(kw) then return true end
+    end
+    return false
+end
+
+-- Scan semua NPC di workspace, return list hasil
+local function scanAllNPC()
+    NpcScanResult = {}
+    local seen = {}
     for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Model") then
-            local n = v.Name:lower()
-            if n:find("npc") or n:find("pedagang") or n:find("penjual")
-            or n:find("bibit") or n:find("alat") then
-                local rootPart = v:FindFirstChild("HumanoidRootPart") or v.PrimaryPart
-                if rootPart then
-                    local d = math.sqrt(
-                        (rootPart.Position.X - x)^2 +
-                        (rootPart.Position.Z - z)^2
-                    )
-                    if d < bestDist then
-                        bestDist = d
-                        bestY    = rootPart.Position.Y
-                    end
-                end
+        if v:IsA("Model") and not seen[v] then
+            seen[v] = true
+            -- Cek punya Humanoid (NPC sejati)
+            local hasHum = v:FindFirstChildOfClass("Humanoid") ~= nil
+            local rootPart = v:FindFirstChild("HumanoidRootPart") or v.PrimaryPart
+            if (hasHum or nameMatchNPC(v.Name)) and rootPart then
+                table.insert(NpcScanResult, {
+                    name  = v.Name,
+                    x     = math.floor(rootPart.Position.X * 10 + 0.5) / 10,
+                    y     = rootPart.Position.Y,
+                    z     = math.floor(rootPart.Position.Z * 10 + 0.5) / 10,
+                    model = v,
+                    cf    = rootPart.CFrame,
+                })
             end
         end
     end
-    -- Pakai hasil scan hanya jika dalam radius 15 studs
-    if bestY and bestDist < 15 then return bestY + 2 end
-    -- Fallback: Raycast dari atas ke bawah
+    -- Sort by name
+    table.sort(NpcScanResult, function(a, b) return a.name < b.name end)
+    return NpcScanResult
+end
+
+-- Cocokkan NPC_LIST ke hasil scan berdasarkan jarak XZ terdekat
+-- radius max 40 studs dari koordinat hardcode
+local function buildNPCOverride()
+    NPC_OVERRIDE = {}
+    if #NpcScanResult == 0 then return end
+    for _, npc in ipairs(NPC_LIST) do
+        local bestDist, bestCF = math.huge, nil
+        for _, found in ipairs(NpcScanResult) do
+            local dx = found.x - npc.x
+            local dz = found.z - npc.z
+            local d  = math.sqrt(dx*dx + dz*dz)
+            if d < bestDist then
+                bestDist = d
+                bestCF   = found.cf
+            end
+        end
+        if bestCF and bestDist <= 40 then
+            NPC_OVERRIDE[npc.label] = bestCF
+            print(string.format("[ XKID SCAN ] ✅ %s → match dist=%.1f studs", npc.label, bestDist))
+        else
+            print(string.format("[ XKID SCAN ] ⚠️  %s → tidak match (dist=%.1f)", npc.label, bestDist))
+        end
+    end
+end
+
+-- Fallback Raycast untuk Y jika scan gagal
+local function raycastY(x, z)
     local rp = RaycastParams.new()
     rp.FilterType = Enum.RaycastFilterType.Exclude
     local ch = getChar(); if ch then rp.FilterDescendantsInstances = {ch} end
@@ -170,9 +225,20 @@ local function findNpcY(x, z)
     return res and (res.Position.Y + 3) or 42
 end
 
-local function tpToNPC(x, z)
+-- [v20] tpToNPC: pakai override CFrame jika ada, fallback raycast
+local function tpToNPC(x, z, label)
     local root = getRoot(); if not root then return false, 0 end
-    local y = findNpcY(x, z)
+    -- Cek override dari hasil scan
+    if label and NPC_OVERRIDE[label] then
+        local cf = NPC_OVERRIDE[label]
+        -- Offset sedikit agar tidak stuck di dalam NPC
+        local offsetCF = cf * CFrame.new(0, 0, 3)
+        root.CFrame = offsetCF
+        task.wait(0.35)
+        return true, offsetCF.Position.Y
+    end
+    -- Fallback: raycast Y dari koordinat hardcode
+    local y = raycastY(x, z)
     root.CFrame = CFrame.new(x, y, z)
     task.wait(0.35)
     return true, y
@@ -653,19 +719,80 @@ HarvRight:Paragraph("Info",
 -- ════════════════════════════════════════════════
 --  TAB: TELEPORT
 -- ════════════════════════════════════════════════
-local TpPage  = TabTP:Page("NPC & Posisi", "map-pin")
-local TpLeft  = TpPage:Section("Teleport NPC", "Left")
-local TpRight = TpPage:Section("Save & Load", "Right")
+local TpPage   = TabTP:Page("NPC & Posisi", "map-pin")
+local TpLeft   = TpPage:Section("Teleport NPC", "Left")
+local TpRight  = TpPage:Section("Save & Load", "Right")
+local TpScan   = TpPage:Section("🔍 Scan NPC", "Right")
 
-TpLeft:Label("Teleport ke 5 NPC — Y otomatis")
+-- ── Scan NPC Button ──
+TpScan:Label("Scan dulu agar TP akurat ke NPC")
+
+TpScan:Button("🔍 Scan Semua NPC", "Cari semua NPC di workspace & update posisi TP",
+    function()
+        task.spawn(function()
+            notif("🔍 Scan NPC", "Sedang scan workspace...", 2)
+            local found = scanAllNPC()
+            buildNPCOverride()
+
+            if #found == 0 then
+                notif("⚠️ Scan NPC", "Tidak ada NPC ditemukan!\nCoba scan saat sudah masuk game penuh.", 5)
+                return
+            end
+
+            -- Tampilkan semua NPC ditemukan ke notif
+            local txt = "#NPC ditemukan: "..#found.."\n\n"
+            for i, n in ipairs(found) do
+                txt = txt..string.format("[%d] %s\n    X=%.1f  Y=%.1f  Z=%.1f\n", i, n.name, n.x, n.y, n.z)
+                -- Print ke console F9 juga
+                print(string.format("[ XKID NPC #%d ] %-30s  X=%-8.1f Y=%-6.1f Z=%-8.1f", i, n.name, n.x, n.y, n.z))
+            end
+
+            -- Hitung berapa NPC target yang berhasil di-match
+            local matched = 0
+            for _, npc in ipairs(NPC_LIST) do
+                if NPC_OVERRIDE[npc.label] then matched = matched + 1 end
+            end
+
+            notif("✅ Scan Selesai",
+                #found.." NPC ditemukan\n"..matched.."/"..#NPC_LIST.." target ter-match\nLihat detail di console F9", 8)
+        end)
+    end)
+
+TpScan:Button("📋 Status Override NPC", "Cek NPC mana yang sudah ter-match scan",
+    function()
+        local txt = ""
+        for _, npc in ipairs(NPC_LIST) do
+            if NPC_OVERRIDE[npc.label] then
+                local p = NPC_OVERRIDE[npc.label].Position
+                txt = txt..string.format("✅ %s\n   X=%.1f Y=%.1f Z=%.1f\n", npc.label, p.X, p.Y, p.Z)
+            else
+                txt = txt.."❌ "..npc.label.." (belum scan)\n"
+            end
+        end
+        if txt == "" then txt = "Belum scan. Klik Scan Semua NPC dulu!" end
+        notif("📋 Status NPC Override", txt, 12)
+    end)
+
+TpScan:Button("🗑 Reset Override", "Hapus hasil scan, kembali ke koordinat hardcode",
+    function()
+        NPC_OVERRIDE = {}
+        NpcScanResult = {}
+        notif("Reset Override", "Semua override dihapus, pakai koordinat default", 3)
+    end)
+
+-- ── Tombol TP per NPC ──
+TpLeft:Label("Scan dulu → TP otomatis ke posisi exact NPC")
 
 for _, npc in ipairs(NPC_LIST) do
     local n = npc
     TpLeft:Button("🚀 "..n.label,
-        string.format("X=%.0f  Z=%.0f", n.x, n.z),
+        string.format("Hardcode: X=%.0f  Z=%.0f", n.x, n.z),
         function()
-            local _, y = tpToNPC(n.x, n.z)
-            notif("📍 TP", n.label..string.format(" | Y=%.1f", y or 0), 3)
+            task.spawn(function()
+                local _, y = tpToNPC(n.x, n.z, n.label)
+                local src = NPC_OVERRIDE[n.label] and "📡 Scan" or "📌 Hardcode"
+                notif("📍 TP", n.label.."\n"..src..string.format(" | Y=%.1f", y or 0), 3)
+            end)
         end)
 end
 
@@ -682,9 +809,11 @@ TpLeft:Button("📍 Posisi Saya", "Cetak koordinat ke notif & console",
         if pos then
             notif("📍 Posisi",
                 string.format("X=%.1f  Y=%.1f  Z=%.1f", pos.X, pos.Y, pos.Z), 6)
+            print(string.format("[ XKID 📍 ] X=%.4f  Y=%.4f  Z=%.4f", pos.X, pos.Y, pos.Z))
         end
     end)
 
+-- ── Save & Load ──
 TpRight:Label("Save posisi → Load kapanpun")
 
 for i = 1, 5 do
@@ -783,7 +912,7 @@ SetLeft:Button("🔄 Reset Stats", "Reset semua hitungan sesi",
         notif("Reset", "Stats di-reset", 2)
     end)
 
-SetRight:Paragraph("Indo Farmer v19.0",
+SetRight:Paragraph("Indo Farmer v20.0",
     "XKID HUB — Aurora UI\nSawah Indo")
 
 SetRight:Paragraph("NPC Coords",
@@ -794,12 +923,12 @@ SetRight:Paragraph("NPC Coords",
 -- ════════════════════════════════════════════════
 setupIntercepts()
 
-Library:Notification("Indo Farmer v19", "Welcome, "..LocalPlayer.Name.."! Ready.", 6)
+Library:Notification("Indo Farmer v20", "Welcome, "..LocalPlayer.Name.."! Scan NPC dulu di tab Teleport.", 6)
 Library:ConfigSystem(Win)
 
 print("╔══════════════════════════════════════════╗")
-print("║   🌾  INDO FARMER v19.0  — XKID HUB    ║")
-print("║   Aurora UI  ·  Farm Tab Removed        ║")
-print("║   Fix: Teleport NPC + Harvest Signal    ║")
+print("║   🌾  INDO FARMER v20.0  — XKID HUB    ║")
+print("║   Aurora UI  ·  Scan NPC System         ║")
+print("║   Fix: TP Akurat + Harvest Signal       ║")
 print("║   Player: "..LocalPlayer.Name)
 print("╚══════════════════════════════════════════╝")
