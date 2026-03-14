@@ -35,14 +35,16 @@ local LP          = Players.LocalPlayer
 local BN2    = RS:WaitForChild("BridgeNet2", 5)
 local dataRE = BN2 and BN2:WaitForChild("dataRemoteEvent", 5)
 
--- Identifier packet (dari hasil spy)
-local ID_BUY   = "\x05"
-local ID_PLANT = "\x06"
+-- Identifier packet (confirmed dari spy + hook)
+local ID_BUY     = "\x05"   -- beli bibit
+local ID_PLANT   = "\x06"   -- tanam
+local ID_HARVEST = "\x09"   -- harvest outgoing ← CONFIRMED!
+local ID_SHOP    = "\x0B"   -- buka toko
 
 -- ════════════════════════════════════════
 --  WINDOW
 -- ════════════════════════════════════════
-local Win = Library:Window("🌟 XKID FULL", "star", "v1.0 Farm+Hub", false)
+local Win = Library:Window("🌟 XKID FULL", "star", "v2.0 Farm+Pattern", false)
 
 -- ════════════════════════════════════════
 --  TABS
@@ -105,13 +107,26 @@ local totalHarvest  = 0
 local totalCoins    = 0
 local harvestConn   = nil
 
--- Posisi lahan (dari spy + bisa tambah manual)
+-- Posisi lahan (dari spy + hook log kedua map)
+-- Map 1 (Y~22-23):
 local LAHAN = {
     Vector3.new(517.92, 22.07, -58.40),
     Vector3.new(564.19, 22.83, -67.26),
     Vector3.new(582.31, 23.65, -171.46),
     Vector3.new(617.29, 41.72, -105.20),
     Vector3.new(619.11, 41.72, -105.57),
+    -- Map 2 area Y=42 (lantai atas):
+    Vector3.new(428.37, 42.00, -115.21),
+    Vector3.new(435.55, 42.00, -95.55),
+    Vector3.new(433.45, 42.00, -106.22),
+    Vector3.new(439.32, 42.00, -93.10),
+    Vector3.new(440.72, 42.00, -91.84),
+    -- Map 2 area Y=23 (lantai bawah):
+    Vector3.new(561.91, 23.29, -63.78),
+    Vector3.new(562.30, 23.29, -64.19),
+    Vector3.new(562.86, 23.29, -62.98),
+    Vector3.new(563.48, 23.29, -62.55),
+    Vector3.new(563.00, 23.29, -66.56),
 }
 
 -- Posisi toko (di-scan atau di-save manual)
@@ -304,18 +319,33 @@ local function tanamSemua(cropName)
 end
 
 -- ════════════════════════════════════════
---  AUTO PANEN — ProximityPrompt
+--  AUTO PANEN — FireServer \x09 (CONFIRMED)
+--  + Fallback ProximityPrompt
 -- ════════════════════════════════════════
-local autoPanenOn   = false
-local autoPanenLoop = nil
-local PANEN_INTERVAL = 5  -- detik
+local autoPanenOn    = false
+local autoPanenLoop  = nil
+local PANEN_INTERVAL = 5
 
--- Keyword nama tanaman untuk filter ProximityPrompt
+-- Harvest via FireServer \x09 (cara utama)
+local function harvestFireServer(cropName, amount)
+    if not dataRE then return false end
+    local ok = pcall(function()
+        dataRE:FireServer({
+            {
+                amount   = amount or 1,
+                cropName = cropName,
+            },
+            ID_HARVEST,
+        })
+    end)
+    return ok
+end
+
+-- Fallback: ProximityPrompt trigger
 local CROP_KEYWORDS = {
     "sawi","padi","tomat","melon","coconut","appletree",
     "daisy","fanpalm","sunflower","sawit","crop","plant",
-    "tanaman","harvest","panen","bibit","seed","flower",
-    "bunga","buah","sayur","pohon","tree","kebun"
+    "tanaman","harvest","panen","seed","flower","tree",
 }
 
 local function isTanamanPart(part)
@@ -324,7 +354,6 @@ local function isTanamanPart(part)
     for _, kw in ipairs(CROP_KEYWORDS) do
         if n:find(kw) then return true end
     end
-    -- Cek parent juga
     if part.Parent then
         local pn = part.Parent.Name:lower()
         for _, kw in ipairs(CROP_KEYWORDS) do
@@ -335,19 +364,10 @@ local function isTanamanPart(part)
 end
 
 local function triggerPrompt(prompt)
-    -- Coba fireproximityprompt dulu (executor function)
-    local ok1 = pcall(function()
-        fireproximityprompt(prompt)
-    end)
+    local ok1 = pcall(function() fireproximityprompt(prompt) end)
     if ok1 then return true end
-
-    -- Fallback: TriggerEnded
-    local ok2 = pcall(function()
-        prompt:TriggerEnded(LP)
-    end)
+    local ok2 = pcall(function() prompt:TriggerEnded(LP) end)
     if ok2 then return true end
-
-    -- Fallback 2: fireclickdetector pada parent
     local ok3 = pcall(function()
         local cd = prompt.Parent:FindFirstChildOfClass("ClickDetector")
         if cd then fireclickdetector(cd) end
@@ -356,39 +376,35 @@ local function triggerPrompt(prompt)
 end
 
 local function scanDanPanen()
-    local count = 0
-    local myRoot = getRoot()
+    local count  = 0
+    local crop   = getCrop(selectedCrop)
 
+    -- Cara 1: FireServer \x09 ke semua lahan
+    -- Server akan ignore kalau belum matang
+    for _, pos in ipairs(LAHAN) do
+        local ok = harvestFireServer(crop.cropName, 1)
+        if ok then count = count + 1 end
+        task.wait(0.1)
+    end
+
+    -- Cara 2: ProximityPrompt fallback
     for _, v in pairs(Workspace:GetDescendants()) do
         if v:IsA("ProximityPrompt") then
             local parent = v.Parent
             if not parent then continue end
-
-            -- Filter: hanya trigger prompt di dekat lahan kita
             local pos = parent:IsA("BasePart") and parent.Position
                      or (parent.PrimaryPart and parent.PrimaryPart.Position)
                      or nil
-
-            local dekatLahan = false
             if pos then
-                -- Cek apakah dekat salah satu lahan (radius 15 studs)
+                local dekat = false
                 for _, lahanPos in ipairs(LAHAN) do
                     if (pos - lahanPos).Magnitude < 15 then
-                        dekatLahan = true
-                        break
+                        dekat = true; break
                     end
                 end
-                -- Kalau tidak ada data lahan, trigger semua yang ada tanaman
-                if #LAHAN == 0 then
-                    dekatLahan = isTanamanPart(parent)
-                end
-            end
-
-            if dekatLahan or isTanamanPart(parent) then
-                local ok = triggerPrompt(v)
-                if ok then
-                    count = count + 1
-                    task.wait(0.1)  -- jeda kecil antar trigger
+                if dekat or isTanamanPart(parent) then
+                    triggerPrompt(v)
+                    task.wait(0.05)
                 end
             end
         end
@@ -405,12 +421,161 @@ local function startAutoPanen()
             local n = scanDanPanen()
             if n > 0 then
                 Library:Notification("🌾 Auto Panen",
-                    string.format("%d tanaman dipanen!\nTotal: %d | Coins: %d",
+                    string.format("Harvest request: %d\nTotal: %d | Coins: %d",
                         n, totalHarvest, totalCoins), 3)
             end
             task.wait(PANEN_INTERVAL)
         end
     end)
+end
+
+-- ════════════════════════════════════════
+--  POLA TANAM — Pattern Plant
+-- ════════════════════════════════════════
+local patternSize    = 10   -- radius/ukuran pola
+local patternSpacing = 2    -- jarak antar titik
+local selectedPattern = "Bulat"
+local previewPoints  = {}   -- simpan preview koordinat
+
+-- Generate koordinat per pola
+local function genCircle(cx, y, cz, radius, spacing)
+    local points = {}
+    local steps  = math.floor(2 * math.pi * radius / spacing)
+    steps = math.max(steps, 8)
+    for i = 0, steps-1 do
+        local angle = (2 * math.pi * i) / steps
+        local x = cx + radius * math.cos(angle)
+        local z = cz + radius * math.sin(angle)
+        table.insert(points, Vector3.new(x, y, z))
+    end
+    return points
+end
+
+local function genSquare(cx, y, cz, size, spacing)
+    local points = {}
+    local half   = size / 2
+    -- 4 sisi kotak
+    local s = -half
+    while s <= half do
+        table.insert(points, Vector3.new(cx+s,  y, cz-half))  -- atas
+        table.insert(points, Vector3.new(cx+s,  y, cz+half))  -- bawah
+        table.insert(points, Vector3.new(cx-half,y, cz+s))    -- kiri
+        table.insert(points, Vector3.new(cx+half,y, cz+s))    -- kanan
+        s = s + spacing
+    end
+    return points
+end
+
+local function genTriangle(cx, y, cz, size, spacing)
+    local points = {}
+    local height = size * math.sqrt(3) / 2
+    -- 3 titik sudut
+    local p1 = {x=cx,           z=cz - height*2/3}
+    local p2 = {x=cx - size/2,  z=cz + height/3}
+    local p3 = {x=cx + size/2,  z=cz + height/3}
+    -- Interpolasi sisi
+    local function addSide(ax, az, bx, bz)
+        local dist = math.sqrt((bx-ax)^2 + (bz-az)^2)
+        local steps = math.floor(dist / spacing)
+        for i = 0, steps do
+            local t = i / math.max(steps, 1)
+            table.insert(points, Vector3.new(
+                ax + (bx-ax)*t, y, az + (bz-az)*t))
+        end
+    end
+    addSide(p1.x,p1.z, p2.x,p2.z)
+    addSide(p2.x,p2.z, p3.x,p3.z)
+    addSide(p3.x,p3.z, p1.x,p1.z)
+    return points
+end
+
+local function genHeart(cx, y, cz, size, spacing)
+    local points = {}
+    local steps  = math.floor(200 * size / 10)
+    steps = math.max(steps, 30)
+    for i = 0, steps do
+        local t = (2 * math.pi * i) / steps
+        -- Parametric heart curve
+        local hx = 16 * math.sin(t)^3
+        local hz = -(13*math.cos(t) - 5*math.cos(2*t)
+                    - 2*math.cos(3*t) - math.cos(4*t))
+        local scale = size / 16
+        table.insert(points, Vector3.new(
+            cx + hx*scale, y, cz + hz*scale))
+    end
+    return points
+end
+
+local function genPlus(cx, y, cz, size, spacing)
+    local points = {}
+    -- Horizontal
+    local s = -size
+    while s <= size do
+        table.insert(points, Vector3.new(cx+s, y, cz))
+        s = s + spacing
+    end
+    -- Vertical
+    s = -size
+    while s <= size do
+        if math.abs(s) > spacing then  -- hindari duplikat tengah
+            table.insert(points, Vector3.new(cx, y, cz+s))
+        end
+        s = s + spacing
+    end
+    return points
+end
+
+local function genSpiral(cx, y, cz, size, spacing)
+    local points  = {}
+    local maxTurn = size / spacing
+    local step    = 0.1
+    local t       = 0
+    while t < maxTurn * 2 * math.pi do
+        local r = spacing * t / (2 * math.pi)
+        if r > size then break end
+        local x = cx + r * math.cos(t)
+        local z = cz + r * math.sin(t)
+        table.insert(points, Vector3.new(x, y, z))
+        t = t + step
+    end
+    return points
+end
+
+local function generatePattern(pattern, cx, y, cz)
+    local size    = patternSize
+    local spacing = patternSpacing
+    if pattern == "Bulat"    then return genCircle  (cx,y,cz,size,spacing)
+    elseif pattern == "Kotak"   then return genSquare  (cx,y,cz,size,spacing)
+    elseif pattern == "Segitiga"then return genTriangle(cx,y,cz,size,spacing)
+    elseif pattern == "Hati"    then return genHeart   (cx,y,cz,size,spacing)
+    elseif pattern == "Plus"    then return genPlus    (cx,y,cz,size,spacing)
+    elseif pattern == "Spiral"  then return genSpiral  (cx,y,cz,size,spacing)
+    end
+    return {}
+end
+
+-- Tanam ke koordinat pola
+local function tanamPola(points, cropName)
+    if not dataRE then
+        Library:Notification("❌","dataRE tidak ada",3); return 0
+    end
+    local landPart = Workspace:FindFirstChild("Land")
+    local success  = 0
+    for _, pos in ipairs(points) do
+        local ok = pcall(function()
+            dataRE:FireServer({
+                {
+                    slotIdx     = 1,
+                    hitPosition = pos,
+                    hitPart     = landPart,
+                },
+                ID_PLANT,
+            })
+        end)
+        if ok then success = success + 1 end
+        task.wait(plantDelay)
+    end
+    return success
 end
 
 local function stopAutoPanen()
@@ -967,31 +1132,28 @@ FarmRight:Toggle("👁 Monitor Panen", "MonitorToggle", false,
         Library:Notification("👁 Monitor", v and "ON" or "OFF", 2)
     end)
 
-FarmRight:Toggle("🌾 Auto Panen (ProximityPrompt)", "AutoPanenToggle", false,
-    "Scan & trigger ProximityPrompt tanaman tiap 5 detik",
+FarmRight:Toggle("🌾 Auto Panen (FireServer)", "AutoPanenToggle", false,
+    "Harvest via \\x09 + ProximityPrompt fallback tiap 5 detik",
     function(v)
         autoPanenOn = v
         if v then
             startAutoPanen()
             Library:Notification("🌾 Auto Panen",
-                "ON — Scan tiap 5 detik\nTrigger ProximityPrompt", 3)
+                "ON — FireServer \\x09\n+ ProximityPrompt fallback\nTiap 5 detik", 3)
         else
             stopAutoPanen()
             Library:Notification("🌾 Auto Panen","OFF",2)
         end
     end)
 
-FarmRight:Button("🌾 Panen Manual Sekarang", "Trigger semua ProximityPrompt tanaman sekali",
+FarmRight:Button("🌾 Panen Manual Sekarang", "Harvest sekali langsung",
     function()
         task.spawn(function()
-            Library:Notification("🌾","Scanning tanaman matang...",2)
+            Library:Notification("🌾","Harvesting...",2)
             local n = scanDanPanen()
             Library:Notification(
-                n > 0 and "✅ Panen!" or "⏳ Belum Ada",
-                n > 0
-                    and string.format("%d tanaman dipanen!", n)
-                    or "Tidak ada ProximityPrompt\nCoba lagi nanti",
-                4)
+                "✅ Harvest",
+                string.format("%d request dikirim\nServer proses jika matang", n), 4)
         end)
     end)
 
@@ -1061,6 +1223,110 @@ for i=1,5 do
                     root.Position.X, root.Position.Y, root.Position.Z), 3)
         end)
 end
+
+-- ════════════════════════════════════════
+--  BUILD UI — TAB POLA TANAM
+-- ════════════════════════════════════════
+local PolaPage  = TabFarm:Page("Pola Tanam", "grid")
+local PolaLeft  = PolaPage:Section("🎨 Pilih Pola", "Left")
+local PolaRight = PolaPage:Section("⚙ Setting & Tanam", "Right")
+
+PolaLeft:Dropdown("Pola Tanam", "PatternDropdown",
+    {"Bulat","Kotak","Segitiga","Hati","Plus","Spiral"},
+    function(v) selectedPattern = v end)
+
+PolaLeft:Paragraph("Info Pola",
+    "⭕ Bulat   — Lingkaran\n"..
+    "⬜ Kotak   — Persegi\n"..
+    "🔺 Segitiga — Tiga sisi\n"..
+    "❤️ Hati    — Love shape\n"..
+    "➕ Plus    — Salib/Cross\n"..
+    "🌀 Spiral  — Melingkar\n\n"..
+    "Berdiri di TENGAH\nlahan sebelum tanam!")
+
+PolaLeft:Button("👁 Preview Pola", "Tampilkan jumlah & posisi titik",
+    function()
+        local root = getRoot()
+        if not root then
+            Library:Notification("❌","Karakter tidak ada",2); return
+        end
+        local pos = root.Position
+        local pts = generatePattern(selectedPattern, pos.X, pos.Y, pos.Z)
+        previewPoints = pts
+        local text = string.format(
+            "Pola: %s\nTitik: %d tanaman\nUkuran: %d studs\nSpacing: %d studs\n\n"..
+            "Contoh posisi:\n",
+            selectedPattern, #pts, patternSize, patternSpacing)
+        for i = 1, math.min(5, #pts) do
+            text = text..string.format("  V3(%.0f,%.0f,%.0f)\n",
+                pts[i].X, pts[i].Y, pts[i].Z)
+        end
+        if #pts > 5 then text = text.."  ..."..#pts-5.." lagi" end
+        Library:Notification("👁 Preview "..selectedPattern, text, 10)
+    end)
+
+PolaRight:Slider("Ukuran Pola (studs)", "PatternSizeSlider", 2, 50, 10,
+    function(v) patternSize = v end, "Radius/ukuran pola (default 10)")
+
+PolaRight:Slider("Spacing Titik (studs)", "PatternSpacingSlider", 1, 10, 2,
+    function(v) patternSpacing = v end, "Jarak antar tanaman (default 2)")
+
+PolaRight:Button("🌱 Tanam Pola Sekarang", "Generate + tanam langsung",
+    function()
+        task.spawn(function()
+            local root = getRoot()
+            if not root then
+                Library:Notification("❌","Karakter tidak ada",2); return
+            end
+            local crop = getCrop(selectedCrop)
+            local pos  = root.Position
+            local pts  = generatePattern(selectedPattern, pos.X, pos.Y, pos.Z)
+
+            Library:Notification("🌱 Tanam Pola",
+                string.format("Pola: %s\n%d titik\nTanaman: %s\nMenanam...",
+                    selectedPattern, #pts, crop.cropName), 4)
+
+            -- Beli bibit dulu sesuai jumlah titik
+            local needed = #pts
+            beliBibit(crop.cropName, needed)
+            task.wait(1)
+
+            local n = tanamPola(pts, crop.cropName)
+            Library:Notification("✅ Pola Selesai",
+                string.format(
+                    "Pola: %s (%s)\n"..
+                    "%d/%d berhasil ditanam!\n"..
+                    "Ukuran: %d studs",
+                    selectedPattern, crop.cropName,
+                    n, #pts, patternSize), 6)
+        end)
+    end)
+
+PolaRight:Button("🌱 Tanam dari Preview", "Tanam dari hasil preview terakhir",
+    function()
+        if #previewPoints == 0 then
+            Library:Notification("❌","Preview dulu!",2); return
+        end
+        task.spawn(function()
+            local crop = getCrop(selectedCrop)
+            Library:Notification("🌱","Menanam dari preview...",2)
+            beliBibit(crop.cropName, #previewPoints)
+            task.wait(1)
+            local n = tanamPola(previewPoints, crop.cropName)
+            Library:Notification("✅ Selesai",
+                string.format("%d/%d ditanam!", n, #previewPoints), 4)
+        end)
+    end)
+
+PolaRight:Paragraph("Tips Pola",
+    "1. Pilih pola & tanaman\n\n"..
+    "2. Atur ukuran & spacing\n\n"..
+    "3. Berdiri di TENGAH\n"..
+    "   area yang mau ditanam\n\n"..
+    "4. Preview dulu untuk\n"..
+    "   cek jumlah titik\n\n"..
+    "5. Tanam!\n\n"..
+    "Bibit dibeli otomatis\nsesuai jumlah titik")
 
 -- ════════════════════════════════════════
 --  BUILD UI — TAB TELEPORT
