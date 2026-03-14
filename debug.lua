@@ -265,26 +265,40 @@ end
 
 local function tanamSemua(cropName)
     if not dataRE then return 0 end
-    local n = 0
+    -- Reset planted positions untuk sesi tanam baru
+    plantedPos = {}
+    local n        = 0
+    local landPart = Workspace:FindFirstChild("Land")
+    local minD     = math.huge
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("BasePart") then
+            local nl = v.Name:lower()
+            if nl:find("land") or nl:find("lahan") or nl:find("plot") then
+                local root = getRoot()
+                if root then
+                    local d = (v.Position - root.Position).Magnitude
+                    if d < minD then minD=d; landPart=v end
+                end
+            end
+        end
+    end
     for _, pos in ipairs(LAHAN) do
-        -- TP ke dekat lahan dulu (seperti player asli)
         local root = getRoot()
         if root then
-            root.CFrame = CFrame.new(pos.X, pos.Y + 3, pos.Z)
+            root.CFrame = CFrame.new(pos.X, pos.Y+3, pos.Z)
             task.wait(0.2)
         end
-        local landPart = findLandPart(pos)
         local ok = pcall(function()
             dataRE:FireServer({
-                {
-                    slotIdx     = 1,
-                    hitPosition = pos,
-                    hitPart     = landPart,
-                },
+                {slotIdx=1, hitPosition=pos, hitPart=landPart},
                 ID_PLANT,
             })
         end)
-        if ok then n = n + 1 end
+        if ok then
+            n = n + 1
+            -- Simpan posisi tanam untuk harvest nanti!
+            addPlantedPos(pos, cropName)
+        end
         task.wait(plantDelay)
     end
     return n
@@ -405,208 +419,81 @@ local function startHarvestMonitor()
 end
 
 -- ════════════════════════════════════════
---  HARVEST SYSTEM
---  Metode 1: Monitor \x0F dari server
---            Server kirim cropPos saat matang
---            → TP ke sana → trigger prompt
---  Metode 2: Scan ProximityPrompt
---            Filter ketat: hanya dekat LAHAN
---            dan nama parent = tanaman
+-- ════════════════════════════════════════
+--  HARVEST SYSTEM v3
+--  Posisi panen = posisi tanam (akurat!)
+--  Default: LAHAN list, update saat tanam
 -- ════════════════════════════════════════
 
--- List posisi tanaman matang dari server
-local matureCrops = {}  -- { cropName, cropPos }
+local plantedPos = {}
+local MY_NAME    = LP.Name
 
--- Keyword tanaman (bukan tombol lain seperti sit/ride)
-local TANAMAN_KW = {
-    "sawi","padi","tomat","melon","coconut","appletree",
-    "daisy","fanpalm","sunflower","sawit","crop","plant",
-    "tanaman","harvest","kebun","farm","seed","bibit",
-}
-local IGNORE_KW = {
-    "sit","chair","seat","ride","door","gate","shop",
-    "toko","npc","humanoid","vehicle","car","boat",
-}
-
-local function isTanamanPrompt(prompt)
-    local parent = prompt.Parent
-    if not parent then return false end
-    -- Cek action text prompt
-    local action = (prompt.ActionText or ""):lower()
-    local obj    = (prompt.ObjectText or ""):lower()
-    -- Kalau action text mengandung ignore keyword → skip
-    for _, kw in ipairs(IGNORE_KW) do
-        if action:find(kw) or obj:find(kw) then return false end
+local function initPlantedFromLahan(cropName)
+    plantedPos = {}
+    for _, pos in ipairs(LAHAN) do
+        table.insert(plantedPos, {pos=pos, cropName=cropName, time=os.time()})
     end
-    -- Cek nama parent
-    local pn = parent.Name:lower()
-    for _, kw in ipairs(TANAMAN_KW) do
-        if pn:find(kw) then return true end
-    end
-    -- Cek nama parent dari parent
-    if parent.Parent then
-        local ppn = parent.Parent.Name:lower()
-        for _, kw in ipairs(TANAMAN_KW) do
-            if ppn:find(kw) then return true end
-        end
-    end
-    -- Cek action text mengandung kata panen/harvest
-    if action:find("panen") or action:find("harvest")
-    or action:find("ambil") or action:find("collect")
-    or action:find("pick")  or action:find("petik") then
-        return true
-    end
-    return false
 end
 
-local function isDekatLahan(pos)
-    -- Cek apakah posisi dekat salah satu LAHAN (radius 20 studs)
-    -- ATAU dekat posisi tanaman matang yang diketahui
-    for _, lahanPos in ipairs(LAHAN) do
-        if (pos - lahanPos).Magnitude < 20 then return true end
-    end
-    for _, mc in ipairs(matureCrops) do
-        if mc.cropPos and (pos - mc.cropPos).Magnitude < 5 then
-            return true
+local function addPlantedPos(pos, cropName)
+    for _, p in ipairs(plantedPos) do
+        if (p.pos - pos).Magnitude < 2 then
+            p.cropName=cropName; p.time=os.time(); return
         end
     end
-    return false
+    table.insert(plantedPos, {pos=pos, cropName=cropName, time=os.time()})
+end
+
+local function findHarvestPromptAt(pos, radius)
+    radius = radius or 10
+    local best, bestDist = nil, math.huge
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            local parent = v.Parent
+            if parent then
+                local ppos = parent:IsA("BasePart") and parent.Position
+                          or (parent.PrimaryPart and parent.PrimaryPart.Position)
+                if ppos and (ppos - pos).Magnitude <= radius then
+                    local action = (v.ActionText or ""):lower()
+                    local obj    = (v.ObjectText  or ""):lower()
+                    local isPanen = action:find("panen") or action:find("harvest")
+                                 or action:find("petik") or action:find("ambil")
+                                 or obj:find(MY_NAME:lower())
+                    local isIgnore = action:find("sit") or action:find("ride")
+                                  or action:find("door") or action:find("shop")
+                    if isPanen and not isIgnore then
+                        local d = (ppos - pos).Magnitude
+                        if d < bestDist then bestDist=d; best=v end
+                    end
+                end
+            end
+        end
+    end
+    return best
 end
 
 local function harvestSemua(cropName)
+    local root = getRoot(); if not root then return 0 end
+    if #plantedPos == 0 then initPlantedFromLahan(cropName) end
+    local savedCF = root.CFrame
     local n = 0
-
-    -- ── Metode 1: FireServer \x09 ──
-    if dataRE then
-        for _ = 1, math.max(#LAHAN, 1) do
-            pcall(function()
-                dataRE:FireServer({
-                    { amount = 1, cropName = cropName },
-                    ID_HARVEST,
-                })
-            end)
-            task.wait(0.1)
+    for _, planted in ipairs(plantedPos) do
+        root.CFrame = CFrame.new(planted.pos.X, planted.pos.Y+2, planted.pos.Z)
+        task.wait(0.3)
+        local prompt = findHarvestPromptAt(planted.pos, 10)
+        if prompt then
+            pcall(function() fireproximityprompt(prompt) end)
+            pcall(function() prompt:TriggerEnded(LP) end)
             n = n + 1
         end
-    end
-
-    -- ── Metode 2: TP ke posisi tanaman matang ──
-    -- Dari data monitor \x0F
-    if #matureCrops > 0 then
-        local root = getRoot()
-        if root then
-            local savedCF = root.CFrame
-            for _, mc in ipairs(matureCrops) do
-                if mc.cropPos then
-                    -- TP ke dekat tanaman
-                    root.CFrame = CFrame.new(mc.cropPos) * CFrame.new(0, 3, 0)
-                    task.wait(0.3)
-                    -- Trigger ProximityPrompt terdekat
-                    local bestPrompt = nil
-                    local bestDist   = math.huge
-                    for _, v in pairs(Workspace:GetDescendants()) do
-                        if v:IsA("ProximityPrompt") and isTanamanPrompt(v) then
-                            local pp = v.Parent
-                            if pp and pp:IsA("BasePart") then
-                                local d = (pp.Position - mc.cropPos).Magnitude
-                                if d < bestDist then
-                                    bestDist   = d
-                                    bestPrompt = v
-                                end
-                            end
-                        end
-                    end
-                    if bestPrompt then
-                        pcall(function() fireproximityprompt(bestPrompt) end)
-                        pcall(function() bestPrompt:TriggerEnded(LP) end)
-                        n = n + 1
-                    end
-                    task.wait(0.1)
-                end
-            end
-            -- Kembali ke posisi semula
-            task.wait(0.2)
-            root.CFrame = savedCF
+        if dataRE then
+            pcall(function()
+                dataRE:FireServer({{amount=1,cropName=planted.cropName},ID_HARVEST})
+            end)
         end
+        task.wait(0.15)
     end
-
-    -- ── Metode 3: Scan ProximityPrompt ──
-    -- Filter ketat: harus dekat lahan DAN nama parent = tanaman
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("ProximityPrompt") and isTanamanPrompt(v) then
-            local parent = v.Parent
-            if parent then
-                local pos = parent:IsA("BasePart") and parent.Position
-                         or (parent.PrimaryPart and parent.PrimaryPart.Position)
-                if pos and isDekatLahan(pos) then
-                    pcall(function() fireproximityprompt(v) end)
-                    pcall(function() v:TriggerEnded(LP) end)
-                    n = n + 1
-                    task.wait(0.05)
-                end
-            end
-        end
-    end
-
-    return n
-end
-
--- ════════════════════════════════════════
---  SCAN PROMPT DEKAT LAHAN
--- ════════════════════════════════════════
-local function scanPromptsDekatLahan()
-    local root = getRoot()
-    if not root then return {} end
-    local savedCF = root.CFrame
-    local results = {}
-    local seen    = {}
-    for i, pos in ipairs(LAHAN) do
-        root.CFrame = CFrame.new(pos.X, pos.Y + 2, pos.Z)
-        task.wait(0.4)
-        for _, v in pairs(Workspace:GetDescendants()) do
-            if v:IsA("ProximityPrompt") and not seen[v] then
-                local parent = v.Parent
-                if parent then
-                    local ppos = parent:IsA("BasePart") and parent.Position
-                             or (parent.PrimaryPart and parent.PrimaryPart.Position)
-                    if ppos and (ppos - pos).Magnitude <= 10 then
-                        seen[v] = true
-                        table.insert(results, {
-                            prompt     = v,
-                            lahanIdx   = i,
-                            parentName = parent.Name,
-                            actionText = v.ActionText ~= "" and v.ActionText or "(none)",
-                            pos        = ppos,
-                            path       = v:GetFullName(),
-                        })
-                    end
-                end
-            end
-        end
-    end
-    task.wait(0.3)
-    root.CFrame = savedCF
-    return results
-end
-
-local function triggerPromptByIdx(list, idx)
-    if idx < 1 or idx > #list then return false end
-    local e = list[idx]
-    if not e or not e.prompt then return false end
-    local ok1 = pcall(function() fireproximityprompt(e.prompt) end)
-    local ok2 = pcall(function() e.prompt:TriggerEnded(LP) end)
-    return ok1 or ok2
-end
-
-local function triggerAllPrompts(list)
-    local n = 0
-    for _, e in ipairs(list) do
-        if e.prompt then
-            pcall(function() fireproximityprompt(e.prompt) end)
-            pcall(function() e.prompt:TriggerEnded(LP) end)
-            n = n + 1; task.wait(0.05)
-        end
-    end
+    task.wait(0.3); root.CFrame = savedCF
     return n
 end
 
@@ -616,40 +503,16 @@ local function startHarvestMonitor()
     harvestConn = dataRE.OnClientEvent:Connect(function(data)
         if type(data) ~= "table" then return end
         for k, v in pairs(data) do
-            -- \x0F = data tanaman matang dari server
             if k == "\x0F" and type(v) == "table" then
                 for _, entry in ipairs(v) do
-                    if type(entry) == "table" and entry.cropName then
+                    if type(entry)=="table" and entry.cropName then
                         totalHarvest = totalHarvest + 1
                         totalCoins   = totalCoins + (entry.sellPrice or 0)
-                        -- Simpan posisi tanaman matang
-                        if entry.cropPos then
-                            -- Cek duplikat
-                            local isDup = false
-                            for _, mc in ipairs(matureCrops) do
-                                if mc.cropPos and
-                                   (mc.cropPos - entry.cropPos).Magnitude < 2 then
-                                    isDup = true; break
-                                end
-                            end
-                            if not isDup then
-                                table.insert(matureCrops, {
-                                    cropName = entry.cropName,
-                                    cropPos  = entry.cropPos,
-                                })
-                                -- Max 50 entri
-                                if #matureCrops > 50 then
-                                    table.remove(matureCrops, 1)
-                                end
-                            end
-                        end
+                        if entry.cropPos then addPlantedPos(entry.cropPos, entry.cropName) end
                     end
                 end
             end
-            -- \x04 = update coins
-            if k == "\x04" and type(v) == "table" and v[1] then
-                totalCoins = v[1]
-            end
+            if k == "\x04" and type(v)=="table" and v[1] then totalCoins = v[1] end
         end
     end)
 end
@@ -1029,11 +892,16 @@ FarmL:Toggle("🌾 Auto Panen", "AutoPanenTog", false,
             autoPanenLoop = task.spawn(function()
                 while autoPanenOn do
                     local crop = getCrop(selectedCrop)
-                    harvestSemua(crop.cropName)
-                    task.wait(5)
+                    local n = harvestSemua(crop.cropName)
+                    if n > 0 then
+                        Library:Notification("🌾 Auto Panen",
+                            string.format("✅ %d dipanen!\n💰 Coins: %d", n, totalCoins), 3)
+                    end
+                    task.wait(10)  -- tiap 10 detik
                 end
             end)
-            Library:Notification("🌾 Auto Panen", "✅ ON — tiap 5 detik", 2)
+            Library:Notification("🌾 Auto Panen",
+                "✅ ON — tiap 10 detik\nTP ke tiap lahan → panen", 3)
         else
             if autoPanenLoop then
                 pcall(function() task.cancel(autoPanenLoop) end)
