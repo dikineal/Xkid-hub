@@ -1592,7 +1592,7 @@ Library:Notification("🌟 XKID FULL v1.0",
 Library:ConfigSystem(Win)
 
 print("╔══════════════════════════════════════╗")
-print("║   🌟  XKID FULL v1.0               ║")
+print("║   🌟  XKID FULL v1.0              ║")
 print("║   Farm · TP · Fly · Speed · Prot    ║")
 print("║   Player: "..LP.Name)
 print("╚══════════════════════════════════════╝")
