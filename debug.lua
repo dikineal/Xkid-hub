@@ -391,7 +391,7 @@ local function scanDanPanen()
     for _, v in pairs(Workspace:GetDescendants()) do
         if v:IsA("ProximityPrompt") then
             local parent = v.Parent
-            if not parent then continue end
+            if not parent then goto skipPanen end
             local pos = parent:IsA("BasePart") and parent.Position
                      or (parent.PrimaryPart and parent.PrimaryPart.Position)
                      or nil
@@ -407,6 +407,7 @@ local function scanDanPanen()
                     task.wait(0.05)
                 end
             end
+            ::skipPanen::
         end
     end
     return count
@@ -1595,4 +1596,3 @@ print("║   🌟  XKID FULL v1.0               ║")
 print("║   Farm · TP · Fly · Speed · Prot    ║")
 print("║   Player: "..LP.Name)
 print("╚══════════════════════════════════════╝")
-
