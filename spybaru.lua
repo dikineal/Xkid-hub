@@ -1,371 +1,408 @@
 --[[
   ╔══════════════════════════════════════════════════════╗
-  ║    🌱  BRIDGENET2 SPY  v1.0  🌱                    ║
-  ║    Capture semua packet BridgeNet2                  ║
+  ║    🔌  BN2 FIRESERVER HOOK  v1.0  🔌               ║
+  ║    Tangkap semua packet OUTGOING BridgeNet2         ║
   ╚══════════════════════════════════════════════════════╝
   Cara pakai:
   1. Jalankan script ini
-  2. Lakukan aksi di game:
+  2. Toggle Hook ON
+  3. Lakukan aksi di game:
+     - Klik lahan untuk TANAM
      - Beli bibit
-     - Klik lahan untuk tanam
-     - Panen tanaman
-  3. Tekan tombol di UI untuk lihat hasil
-  4. Copy ke clipboard
+     - Panen
+  4. Lihat hasil & copy
 ]]
 
 Library = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
 ))()
 
-local RS  = game:GetService("ReplicatedStorage")
-local LP  = game:GetService("Players").LocalPlayer
+local RS = game:GetService("ReplicatedStorage")
+local LP = game:GetService("Players").LocalPlayer
 
-local Win = Library:Window("🌱 BN2 SPY", "cpu", "v1.0", false)
-Win:TabSection("SPY")
-local TabSpy = Win:Tab("Spy", "eye")
+local Win = Library:Window("🔌 BN2 HOOK", "cpu", "v1.0 FireServer", false)
+Win:TabSection("HOOK")
+local TabHook = Win:Tab("Hook", "eye")
 
 -- ════════════════════════════════════════
 --  STATE
 -- ════════════════════════════════════════
-local capturedPackets = {}
-local spyConn         = nil
-local spyOn           = false
-local MAX_PACKETS     = 100
-local currentPage     = 1
-local PAGE_SIZE       = 3
+local hookOn       = false
+local origNamecall = nil
+local captured     = {}   -- semua packet outgoing
+local MAX_CAP      = 100
+local currentPage  = 1
+local PAGE_SIZE    = 3
 
 -- ════════════════════════════════════════
---  SERIALIZE TABLE → STRING
---  Untuk tampilkan isi packet
+--  SERIALIZE
 -- ════════════════════════════════════════
 local function serializeValue(v, depth)
     depth = depth or 0
-    if depth > 4 then return "..." end
+    if depth > 5 then return "..." end
     local t = typeof(v)
     if t == "string" then
-        -- Tampilkan hex untuk key pendek/tidak visible
         if #v <= 4 then
             local hex = ""
             for i = 1, #v do
                 hex = hex .. string.format("\\x%02X", string.byte(v, i))
             end
-            return string.format('"%s"[hex:%s]', v, hex)
+            return string.format('STR[hex:%s]', hex)
         end
         return string.format('"%s"', v)
     elseif t == "number"  then return tostring(v)
     elseif t == "boolean" then return tostring(v)
     elseif t == "Vector3" then
         return string.format("V3(%.2f,%.2f,%.2f)", v.X, v.Y, v.Z)
-    elseif t == "table" then
+    elseif t == "CFrame"  then
+        local p = v.Position
+        return string.format("CF(%.2f,%.2f,%.2f)", p.X, p.Y, p.Z)
+    elseif t == "table"   then
         local parts = {}
         local count = 0
         for k, val in pairs(v) do
             count = count + 1
-            if count > 10 then
-                table.insert(parts, "...+"..tostring(select(2,pcall(function()
-                    local n=0; for _ in pairs(v) do n=n+1 end; return n
-                end)) or "?").." more")
+            if count > 8 then
+                table.insert(parts, "...more")
                 break
             end
             local ks = serializeValue(k, depth+1)
             local vs = serializeValue(val, depth+1)
             table.insert(parts, string.format("[%s]=%s", ks, vs))
         end
-        if #parts == 0 then return "{}" end
+        if #parts == 0 then return "{EMPTY}" end
         return "{\n"..string.rep("  ", depth+1)..
                table.concat(parts, ",\n"..string.rep("  ", depth+1))..
                "\n"..string.rep("  ", depth).."}"
     elseif t == "Instance" then
-        return "Instance:"..v:GetFullName()
+        return "Inst:"..v:GetFullName()
     else
-        return "["..t.."]"
+        return "["..t..":"..tostring(v).."]"
     end
 end
 
 -- ════════════════════════════════════════
---  DETEKSI JENIS AKSI dari isi packet
+--  DETEKSI AKSI dari packet outgoing
 -- ════════════════════════════════════════
-local function detectAction(data)
-    local str = serializeValue(data, 0)
+local function detectOutgoingAction(args)
+    -- args = semua argumen yang dikirim ke FireServer
+    local str = ""
+    for _, a in ipairs(args) do
+        str = str .. serializeValue(a, 0)
+    end
 
-    -- Cek pola harvest/panen
-    if str:find("cropPos") and str:find("sellPrice") then
-        return "🌾 HARVEST/PANEN"
+    if str:find("cropName") and str:find("count") then
+        return "🛒 BELI BIBIT (outgoing)"
+    elseif str:find("cropName") and str:find("cropPos") then
+        return "🌱 TANAM (outgoing)"
+    elseif str:find("cropName") and not str:find("count") then
+        return "🌾 HARVEST (outgoing)"
+    elseif str:find("EMPTY") or str == "" then
+        return "📦 REQUEST KOSONG"
+    else
+        return "❓ UNKNOWN OUTGOING"
     end
-    -- Cek pola beli bibit
-    if str:find("cropName") and str:find("count") and str:find("success") then
-        return "🛒 BELI BIBIT"
-    end
-    -- Cek pola tanam
-    if str:find("cropName") and str:find("cropPos") and not str:find("sellPrice") then
-        return "🌱 TANAM"
-    end
-    -- Cek pola shop data
-    if str:find("seedPrice") and str:find("sellPrice") and str:find("items") then
-        return "🏪 DATA TOKO"
-    end
-    -- Cek pola update coins
-    if str:find("coins") then
-        return "💰 UPDATE COINS"
-    end
-    return "❓ UNKNOWN"
 end
 
 -- ════════════════════════════════════════
---  START SPY
+--  HOOK __namecall
 -- ════════════════════════════════════════
-local function startSpy()
-    -- Spy dataRemoteEvent (BridgeNet2 utama)
-    local dataRE = RS:FindFirstChild("BridgeNet2")
-        and RS.BridgeNet2:FindFirstChild("dataRemoteEvent")
 
-    if not dataRE then
-        Library:Notification("❌", "BridgeNet2.dataRemoteEvent tidak ditemukan", 3)
-        return false
+-- Remote yang di-hook
+local function getTargetRemotes()
+    local bn2 = RS:FindFirstChild("BridgeNet2")
+    local net  = RS:FindFirstChild("Networking")
+    local targets = {}
+
+    if bn2 then
+        local dataRE = bn2:FindFirstChild("dataRemoteEvent")
+        local metaRE = bn2:FindFirstChild("metaRemoteEvent")
+        if dataRE then table.insert(targets, dataRE) end
+        if metaRE then table.insert(targets, metaRE) end
+    end
+    if net then
+        local re = net:FindFirstChild("RemoteEvent")
+        if re then table.insert(targets, re) end
     end
 
-    spyConn = dataRE.OnClientEvent:Connect(function(data)
-        local action = detectAction(data)
-        local serialized = serializeValue(data, 0)
-
-        local entry = {
-            action = action,
-            data   = data,
-            raw    = serialized,
-            time   = os.time(),
-        }
-
-        table.insert(capturedPackets, 1, entry)
-        if #capturedPackets > MAX_PACKETS then
-            table.remove(capturedPackets, #capturedPackets)
+    -- Tambah semua RemoteEvent di RS root
+    for _, child in ipairs(RS:GetChildren()) do
+        if child:IsA("RemoteEvent") then
+            table.insert(targets, child)
         end
+    end
+
+    return targets
+end
+
+local function startHook()
+    local targets = getTargetRemotes()
+    local targetSet = {}
+    for _, r in ipairs(targets) do
+        targetSet[r] = true
+    end
+
+    origNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        local args   = {...}
+
+        -- Hanya tangkap FireServer / InvokeServer
+        if (method == "FireServer" or method == "InvokeServer") then
+            -- Cek apakah self adalah remote yang kita target
+            local isTarget = targetSet[self]
+
+            -- Atau cek nama path mengandung BridgeNet / Networking
+            if not isTarget then
+                local path = (pcall(function() return self:GetFullName() end))
+                    and self:GetFullName() or ""
+                isTarget = path:find("BridgeNet") or path:find("Networking")
+                        or path:find("Packet")
+            end
+
+            if isTarget then
+                -- Serialize semua argumen
+                local argStrs = {}
+                for i, a in ipairs(args) do
+                    table.insert(argStrs, string.format(
+                        "  [arg%d] %s", i, serializeValue(a, 0)))
+                end
+
+                local action = detectOutgoingAction(args)
+                local remotePath = pcall(function() return self:GetFullName() end)
+                    and self:GetFullName() or tostring(self)
+
+                local entry = {
+                    action = action,
+                    method = method,
+                    remote = remotePath,
+                    raw    = table.concat(argStrs, "\n"),
+                    args   = args,
+                    time   = os.clock(),
+                }
+
+                table.insert(captured, 1, entry)
+                if #captured > MAX_CAP then
+                    table.remove(captured, #captured)
+                end
+            end
+        end
+
+        return origNamecall(self, ...)
     end)
 
-    return true
+    Library:Notification("🔌 Hook ON",
+        string.format("Monitoring %d remote\n\nLakukan aksi:\n🌱 Klik lahan tanam\n🛒 Beli bibit\n🌾 Panen", #targets), 6)
 end
 
-local function stopSpy()
-    if spyConn then spyConn:Disconnect(); spyConn = nil end
-end
-
--- ════════════════════════════════════════
---  DISPLAY PACKET
--- ════════════════════════════════════════
-local function showPackets(page)
-    if #capturedPackets == 0 then
-        Library:Notification("📭", "Belum ada packet\nLakukan aksi di game dulu!", 3)
-        return
+local function stopHook()
+    if origNamecall then
+        hookmetamethod(game, "__namecall", origNamecall)
+        origNamecall = nil
     end
+    Library:Notification("🔌 Hook", "OFF", 2)
+end
 
-    local totalPages = math.ceil(#capturedPackets / PAGE_SIZE)
+-- ════════════════════════════════════════
+--  DISPLAY
+-- ════════════════════════════════════════
+local function showPackets(list, page, title)
+    if #list == 0 then
+        Library:Notification("📭", "Belum ada packet", 3)
+        return page
+    end
+    local totalPages = math.ceil(#list / PAGE_SIZE)
     page = math.max(1, math.min(page, totalPages))
-    currentPage = page
 
     local startIdx = (page-1)*PAGE_SIZE + 1
-    local endIdx   = math.min(page*PAGE_SIZE, #capturedPackets)
+    local endIdx   = math.min(page*PAGE_SIZE, #list)
 
-    local text = string.format(
-        "📦 Packet %d-%d / %d\n\n",
-        startIdx, endIdx, #capturedPackets)
+    local text = string.format("📦 %d-%d / %d\n\n", startIdx, endIdx, #list)
 
     for i = startIdx, endIdx do
-        local p = capturedPackets[i]
+        local p = list[i]
         text = text..string.format(
-            "━━━ [%d] %s ━━━\n%s\n\n",
-            i, p.action, p.raw)
+            "━[%d] %s━\n"..
+            "Remote: %s\n"..
+            "Method: %s\n"..
+            "%s\n\n",
+            i, p.action,
+            p.remote:match("[^.]+$") or p.remote,  -- nama terakhir saja
+            p.method,
+            p.raw ~= "" and p.raw or "(no args)")
+    end
+
+    if totalPages > 1 then
+        text = text..string.format("Hal %d/%d", page, totalPages)
     end
 
     Library:Notification(
-        string.format("🌱 BN2 Spy [%d/%d]", page, totalPages),
+        string.format("%s [%d-%d]", title, startIdx, endIdx),
         text, 20)
+    return page
 end
 
 -- ════════════════════════════════════════
---  COPY HELPERS
+--  COPY
 -- ════════════════════════════════════════
-local function copyAllPackets()
-    if #capturedPackets == 0 then
-        Library:Notification("❌", "Belum ada packet", 2); return
-    end
-    local text = string.format(
-        "=== BRIDGENET2 SPY LOG (%d packets) ===\n\n",
-        #capturedPackets)
-    for i, p in ipairs(capturedPackets) do
-        text = text..string.format(
-            "[%d] %s\n%s\n\n",
-            i, p.action, p.raw)
-    end
-    pcall(function() setclipboard(text) end)
-    Library:Notification("📋 Copied!", #capturedPackets.." packet di-copy", 3)
+local function doCopy(text)
+    local ok = pcall(function() setclipboard(text) end)
+    Library:Notification(
+        ok and "📋 Copied!" or "❌ Gagal",
+        ok and "Berhasil copy!" or "Executor tidak support setclipboard", 3)
 end
 
-local function copyPacketByIndex(idx)
-    if idx < 1 or idx > #capturedPackets then
-        Library:Notification("❌", "Nomor tidak valid", 2); return
-    end
-    local p = capturedPackets[idx]
-    local text = string.format("[%d] %s\n%s", idx, p.action, p.raw)
-    pcall(function() setclipboard(text) end)
-    Library:Notification("📋 Copy #"..idx, p.action, 3)
-end
-
--- Filter hanya aksi tertentu
-local function copyFilteredPackets(keyword)
+local function copyFiltered(list, keyword)
     local filtered = {}
-    for _, p in ipairs(capturedPackets) do
+    for _, p in ipairs(list) do
         if p.action:lower():find(keyword:lower()) then
             table.insert(filtered, p)
         end
     end
     if #filtered == 0 then
-        Library:Notification("❌", "Tidak ada packet '"..keyword.."'", 2); return
+        Library:Notification("❌", "Tidak ada packet '"..keyword.."'", 2)
+        return
     end
-    local text = string.format(
-        "=== FILTER: %s (%d) ===\n\n", keyword:upper(), #filtered)
+    local text = string.format("=== %s (%d) ===\n\n", keyword:upper(), #filtered)
     for i, p in ipairs(filtered) do
-        text = text..string.format("[%d] %s\n%s\n\n", i, p.action, p.raw)
+        text = text..string.format(
+            "[%d] %s\nRemote: %s\nMethod: %s\n%s\n\n",
+            i, p.action, p.remote, p.method, p.raw)
     end
-    pcall(function() setclipboard(text) end)
-    Library:Notification("📋 Filter Copy", #filtered.." packet '"..keyword.."'", 3)
+    doCopy(text)
 end
 
 -- ════════════════════════════════════════
 --  BUILD UI
 -- ════════════════════════════════════════
-local SpyPage  = TabSpy:Page("BN2 Spy", "eye")
-local SpyLeft  = SpyPage:Section("👁 Monitor", "Left")
-local SpyRight = SpyPage:Section("📋 Hasil", "Right")
+local HookPage  = TabHook:Page("FireServer Hook", "eye")
+local HookLeft  = HookPage:Section("🔌 Hook Control", "Left")
+local HookRight = HookPage:Section("📋 Hasil", "Right")
 
-SpyLeft:Toggle("🌱 Start Spy", "SpyToggle", false,
-    "Monitor semua packet BridgeNet2",
+HookLeft:Toggle("🔌 Hook FireServer", "HookToggle", false,
+    "Intercept semua FireServer outgoing",
     function(v)
-        spyOn = v
+        hookOn = v
         if v then
-            local ok = startSpy()
-            if ok then
-                Library:Notification("👁 Spy ON",
-                    "Lakukan aksi di game:\n"..
-                    "• Beli bibit\n"..
-                    "• Klik lahan → tanam\n"..
-                    "• Panen tanaman\n\n"..
-                    "Lalu lihat hasil di sini!", 8)
+            local ok, err = pcall(startHook)
+            if not ok then
+                Library:Notification("❌ Hook Error",
+                    "hookmetamethod tidak support!\n"..tostring(err), 5)
+                hookOn = false
             end
         else
-            stopSpy()
-            Library:Notification("👁 Spy", "OFF", 2)
+            stopHook()
         end
     end)
 
-SpyLeft:Button("🗑 Clear Packets", "Hapus semua packet",
+HookLeft:Button("🗑 Clear Packets", "Hapus semua packet",
     function()
-        capturedPackets = {}
-        Library:Notification("🗑", "Packet dihapus", 2)
+        captured = {}
+        Library:Notification("🗑", "Cleared", 2)
     end)
 
-SpyLeft:Paragraph("📋 Panduan",
-    "1. Toggle Spy → ON\n\n"..
-    "2. Di game lakukan:\n"..
+HookLeft:Paragraph("Panduan",
+    "1. Toggle Hook → ON\n\n"..
+    "2. Lakukan di game:\n"..
+    "   🌱 Klik lahan TANAM\n"..
     "   🛒 Beli bibit\n"..
-    "   🌱 Klik lahan tanam\n"..
-    "   🌾 Panen tanaman\n\n"..
-    "3. Lihat Hasil →\n"..
-    "   setiap aksi ke-\n"..
-    "   capture otomatis\n\n"..
-    "4. Copy packet yang\n"..
-    "   diinginkan")
+    "   🌾 Panen\n\n"..
+    "3. Tekan filter di\n"..
+    "   kanan untuk lihat\n"..
+    "   packet per aksi\n\n"..
+    "4. Copy untuk analisa")
 
--- Navigasi packet
-SpyRight:Button("📄 Lihat Semua Packet", "Tampilkan packet terbaru",
+-- Navigasi
+HookRight:Button("📄 Lihat Semua", "Tampilkan semua packet",
     function()
-        showPackets(1)
+        currentPage = showPackets(captured, 1, "🔌 Hook")
     end)
 
-SpyRight:Button("▶ Packet Berikutnya", "Halaman berikutnya",
+HookRight:Button("▶ Berikutnya", "Halaman berikutnya",
     function()
-        showPackets(currentPage + 1)
+        currentPage = showPackets(captured, currentPage+1, "🔌 Hook")
     end)
 
-SpyRight:Button("◀ Packet Sebelumnya", "Halaman sebelumnya",
+HookRight:Button("◀ Sebelumnya", "Halaman sebelumnya",
     function()
-        showPackets(currentPage - 1)
+        currentPage = showPackets(captured, currentPage-1, "🔌 Hook")
     end)
 
 -- Filter per aksi
-SpyRight:Button("🌱 Lihat Packet TANAM", "Filter packet aksi tanam saja",
+HookRight:Button("🌱 Lihat TANAM", "Filter packet tanam saja",
     function()
         local filtered = {}
-        for _, p in ipairs(capturedPackets) do
-            if p.action:find("TANAM") then table.insert(filtered, p) end
-        end
-        if #filtered == 0 then
-            Library:Notification("🌱", "Belum ada packet tanam\nCoba klik lahan dulu!", 3)
-            return
-        end
-        local text = string.format("🌱 TANAM (%d packet)\n\n", #filtered)
-        for i, p in ipairs(filtered) do
-            text = text..string.format("[%d]\n%s\n\n", i, p.raw)
-        end
-        Library:Notification("🌱 Packet Tanam", text, 20)
-    end)
-
-SpyRight:Button("🌾 Lihat Packet PANEN", "Filter packet aksi panen saja",
-    function()
-        local filtered = {}
-        for _, p in ipairs(capturedPackets) do
-            if p.action:find("HARVEST") or p.action:find("PANEN") then
+        for _, p in ipairs(captured) do
+            if p.action:find("TANAM") or p.action:find("KOSONG") then
                 table.insert(filtered, p)
             end
         end
-        if #filtered == 0 then
-            Library:Notification("🌾", "Belum ada packet panen\nCoba panen dulu!", 3)
-            return
-        end
-        local text = string.format("🌾 PANEN (%d packet)\n\n", #filtered)
-        for i, p in ipairs(filtered) do
-            text = text..string.format("[%d]\n%s\n\n", i, p.raw)
-        end
-        Library:Notification("🌾 Packet Panen", text, 20)
+        showPackets(filtered, 1, "🌱 Tanam")
     end)
 
-SpyRight:Button("🛒 Lihat Packet BELI", "Filter packet aksi beli bibit",
+HookRight:Button("🛒 Lihat BELI", "Filter packet beli bibit",
     function()
         local filtered = {}
-        for _, p in ipairs(capturedPackets) do
-            if p.action:find("BELI") then table.insert(filtered, p) end
+        for _, p in ipairs(captured) do
+            if p.action:find("BELI") then
+                table.insert(filtered, p)
+            end
         end
-        if #filtered == 0 then
-            Library:Notification("🛒", "Belum ada packet beli\nCoba beli bibit dulu!", 3)
-            return
+        showPackets(filtered, 1, "🛒 Beli")
+    end)
+
+HookRight:Button("🌾 Lihat HARVEST", "Filter packet panen",
+    function()
+        local filtered = {}
+        for _, p in ipairs(captured) do
+            if p.action:find("HARVEST") then
+                table.insert(filtered, p)
+            end
         end
-        local text = string.format("🛒 BELI (%d packet)\n\n", #filtered)
-        for i, p in ipairs(filtered) do
-            text = text..string.format("[%d]\n%s\n\n", i, p.raw)
-        end
-        Library:Notification("🛒 Packet Beli", text, 20)
+        showPackets(filtered, 1, "🌾 Harvest")
     end)
 
 -- Copy
-SpyRight:Button("📋 Copy Semua", "Copy semua packet ke clipboard",
-    function() copyAllPackets() end)
+HookRight:Button("📋 Copy SEMUA", "Copy semua packet",
+    function()
+        if #captured == 0 then
+            Library:Notification("❌", "Belum ada packet", 2); return
+        end
+        local text = string.format("=== BN2 HOOK LOG (%d) ===\n\n", #captured)
+        for i, p in ipairs(captured) do
+            text = text..string.format(
+                "[%d] %s\nRemote: %s\nMethod: %s\n%s\n\n",
+                i, p.action, p.remote, p.method, p.raw)
+        end
+        doCopy(text)
+    end)
 
-SpyRight:Button("📋 Copy Packet TANAM", "Copy semua packet tanam",
-    function() copyFilteredPackets("tanam") end)
+HookRight:Button("📋 Copy TANAM", "Copy packet tanam saja",
+    function() copyFiltered(captured, "tanam") end)
 
-SpyRight:Button("📋 Copy Packet PANEN", "Copy semua packet panen",
-    function() copyFilteredPackets("harvest") end)
+HookRight:Button("📋 Copy BELI", "Copy packet beli saja",
+    function() copyFiltered(captured, "beli") end)
 
 local copyIdx = 1
-SpyRight:Slider("Nomor Packet", "CopyIdxSlider", 1, 100, 1,
-    function(v) copyIdx = v end, "Nomor packet yang mau di-copy")
+HookRight:Slider("Nomor Packet", "CopySlider", 1, 100, 1,
+    function(v) copyIdx = v end, "Pilih nomor packet")
 
-SpyRight:Button("📋 Copy Packet #", "Copy 1 packet sesuai nomor",
-    function() copyPacketByIndex(copyIdx) end)
+HookRight:Button("📋 Copy Packet #", "Copy 1 packet sesuai nomor",
+    function()
+        if copyIdx > #captured then
+            Library:Notification("❌", "Max: "..#captured, 2); return
+        end
+        local p = captured[copyIdx]
+        local text = string.format(
+            "[%d] %s\nRemote: %s\nMethod: %s\n%s",
+            copyIdx, p.action, p.remote, p.method, p.raw)
+        doCopy(text)
+    end)
 
 -- ════════════════════════════════════════
 --  INIT
 -- ════════════════════════════════════════
-Library:Notification("🌱 BN2 Spy v1.0",
-    "Toggle Spy ON\nlalu lakukan aksi di game!", 5)
+Library:Notification("🔌 BN2 Hook v1.0",
+    "Toggle Hook ON\nlalu lakukan aksi tanam!", 5)
 Library:ConfigSystem(Win)
 
-print("[ BN2 SPY v1.0 ] Ready — " .. LP.Name)
+print("[ BN2 HOOK v1.0 ] Ready — " .. LP.Name)
