@@ -1,1068 +1,1034 @@
--- ╔═══════════════════════════════════════════════════════╗
--- ║                                                       ║
--- ║      🌾  I N D O   F A R M E R  v14.0  🌾           ║
--- ║      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━          ║
--- ║      XKID HUB  ✦  Cobalt Confirmed Edition           ║
--- ║      Flee⚡  AutoFarm 🌱  AutoSell 💰                ║
--- ╚═══════════════════════════════════════════════════════╝
-
 --[[
-  ╭──────────────────────────────────────────────────────╮
-  │  REMOTE CONFIRMED  ✦  Cobalt Spy v14                 │
-  ├──────────────────────────────────────────────────────┤
-  │  RequestShop  → BUY, GET_LIST                        │
-  │  RequestSell  → GET_LIST, SELL (nama, qty) ✅        │
-  │  PlantCrop    → FireServer(Vector3) ✅               │
-  │  HarvestCrop  → OnClientEvent(crop, qty) ✅          │
-  ├──────────────────────────────────────────────────────┤
-  │  NPC COORDS  (Scan Confirmed)                        │
-  │  NPC Penjual       X=-59   Z=-207                    │
-  │  NPC Bibit         X=-42   Z=-207                    │
-  │  NPC Alat          X=-41   Z=-100                    │
-  │  NPC PedagangSawit X= 56   Z=-208                    │
-  │  NPCPedagangTelur  X=-98   Z=-176                    │
-  │  🚿 Mandi          X= 137  Z=-235                    │
-  ╰──────────────────────────────────────────────────────╯
+  ╔══════════════════════════════════════════════════════╗
+  ║       🌟  X K I D . H U B  F U L L  v1.0  🌟      ║
+  ║       Aurora UI  ✦  Mobile  ✦  BridgeNet2          ║
+  ╚══════════════════════════════════════════════════════╝
+  Tab Farm      : Auto Farm + Manual Farm + Scan Lahan/Toko
+  Tab Teleport  : infer_plr + Daftar Player
+  Tab Fly       : BodyVelocity + NoClip
+  Tab Speed     : WalkSpeed + JumpPower + InfJump
+  Tab Protection: Anti AFK + Anti Kick + Rejoin + ESP
 ]]
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  RAYFIELD UI
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+-- ════════════════════════════════════════
+--  AURORA UI
+-- ════════════════════════════════════════
+Library = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
+))()
 
-local Window = Rayfield:CreateWindow({
-    Name            = "🌾 INDO FARMER  v14.0",
-    LoadingTitle    = "✦ XKID HUB ✦",
-    LoadingSubtitle = "Cobalt Confirmed  ·  Flee Edition",
-    ConfigurationSaving = { Enabled = false },
-    KeySystem       = false,
-})
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- ════════════════════════════════════════
 --  SERVICES
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- ════════════════════════════════════════
 local Players     = game:GetService("Players")
+local RunService  = game:GetService("RunService")
+local UIS         = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+local TpService   = game:GetService("TeleportService")
 local Workspace   = game:GetService("Workspace")
 local RS          = game:GetService("ReplicatedStorage")
-local RunService  = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
+local LP          = Players.LocalPlayer
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  FLAGS
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-_G.ScriptRunning  = true
-_G.AutoFarm       = false
-_G.AutoTanam      = false
-_G.AutoSell       = false
-_G.AutoHarvest    = false
-_G.PenangkalPetir = false
-_G.AntiAFK        = false
-_G.AutoConfirm    = false
-_G.NotifLevelUp   = true
-_G.AutoMandi      = false
+-- ════════════════════════════════════════
+--  REMOTE BRIDGENET2
+-- ════════════════════════════════════════
+local BN2    = RS:WaitForChild("BridgeNet2", 5)
+local dataRE = BN2 and BN2:WaitForChild("dataRemoteEvent", 5)
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  STATE
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local PlayerData     = { Coins=0, Level=1, XP=0, Needed=50 }
-local SiklusCount    = 0
-local lightningHits  = 0
-local levelUpCount   = 0
-local totalEarned    = 0
-local harvestCount   = 0
-local LahanCache     = {}
-local LahanCacheTime = 0
-local SellLoop       = nil
-local HarvestLoop    = nil
-local selectedBibit  = "Bibit Padi"
-local jumlahBeli     = 1
-local dTanam         = 0.5
-local waitPanen      = 60
-local harvestInterval= 5
-local isPetirFleeing = false  -- flag sedang kabur dari petir
+-- Identifier packet (dari hasil spy)
+local ID_BUY   = "\x05"
+local ID_PLANT = "\x06"
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  NPC COORDS — hardcoded, Y otomatis via raycast
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local NPC_LIST = {
-    { id="penjual", label="🛒  NPC Penjual",        x=-59,  z=-207 },
-    { id="bibit",   label="🌱  NPC Bibit",           x=-42,  z=-207 },
-    { id="alat",    label="🔧  NPC Alat",            x=-41,  z=-100 },
-    { id="sawit",   label="🌴  NPC Pedagang Sawit",  x= 56,  z=-208 },
-    { id="telur",   label="🥚  NPC Pedagang Telur",  x=-98,  z=-176 },
-}
-local MANDI = { x=137, z=-235 }
+-- ════════════════════════════════════════
+--  WINDOW
+-- ════════════════════════════════════════
+local Win = Library:Window("🌟 XKID FULL", "star", "v1.0 Farm+Hub", false)
 
-local ITEM_LIST = {
-    { name="Padi",       icon="🌾", price=10 },
-    { name="Jagung",     icon="🌽", price=20 },
-    { name="Tomat",      icon="🍅", price=30 },
-    { name="Terong",     icon="🍆", price=50 },
-    { name="Strawberry", icon="🍓", price=75 },
-}
+-- ════════════════════════════════════════
+--  TABS
+-- ════════════════════════════════════════
+Win:TabSection("🌾 FARM")
+local TabFarm = Win:Tab("Farm",       "wheat")
 
-local BIBIT_LIST = {
-    { name="Bibit Padi",       icon="🌾", price=5,    minLv=1   },
-    { name="Bibit Jagung",     icon="🌽", price=15,   minLv=20  },
-    { name="Bibit Tomat",      icon="🍅", price=25,   minLv=40  },
-    { name="Bibit Terong",     icon="🍆", price=40,   minLv=60  },
-    { name="Bibit Strawberry", icon="🍓", price=60,   minLv=80  },
-    { name="Bibit Sawit",      icon="🌴", price=1000, minLv=80  },
-    { name="Bibit Durian",     icon="🍈", price=2000, minLv=120 },
-}
+Win:TabSection("🛠 HUB")
+local TabTP   = Win:Tab("Teleport",   "map-pin")
+local TabFly  = Win:Tab("Fly",        "rocket")
+local TabSpd  = Win:Tab("Speed",      "zap")
+local TabProt = Win:Tab("Protection", "shield")
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  NOTIF
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function notif(title, body, dur)
-    pcall(function()
-        Rayfield:Notify({ Title=title, Content=body, Duration=dur or 3, Image=4483362458 })
-    end)
-    print(string.format("[ XKID ✦ ] %s  |  %s", title, tostring(body)))
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  RAYCAST — cari Y tanah yang benar
---  Tembak dari atas (Y+500) ke bawah, ambil hit Y
---  Ini mencegah TP nembus tanah / melayang
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function getGroundY(x, z, startY)
-    startY = startY or 500
-    local origin    = Vector3.new(x, startY, z)
-    local direction = Vector3.new(0, -1000, 0)
-
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-    -- exclude karakter sendiri biar tidak nge-hit diri sendiri
-    local char = LocalPlayer.Character
-    if char then rayParams.FilterDescendantsInstances = {char} end
-
-    local result = Workspace:Raycast(origin, direction, rayParams)
-    if result then
-        -- +3 supaya karakter berdiri di atas tanah, tidak nyemplung
-        return result.Position.Y + 3
-    end
-    -- fallback Y kalau raycast miss (area kosong/void)
-    return 42
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TELEPORT — pakai raycast Y
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function tpXZ(x, z)
-    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return false end
-    local y = getGroundY(x, z)
-    root.CFrame = CFrame.new(x, y, z)
-    task.wait(0.35)
-    return true
-end
-
-local function tpVec(vec3)
-    -- Untuk Vector3 yang sudah ada Y — tetap raycast ulang X/Z-nya
-    return tpXZ(vec3.X, vec3.Z)
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  CHARACTER HELPERS
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- ════════════════════════════════════════
+--  HELPERS
+-- ════════════════════════════════════════
+local function getChar()  return LP.Character end
 local function getRoot()
-    local c = LocalPlayer.Character
+    local c = getChar()
     return c and c:FindFirstChild("HumanoidRootPart")
 end
 local function getHum()
-    local c = LocalPlayer.Character
+    local c = getChar()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
-local function getPos()
-    local r = getRoot(); return r and r.Position
+local function getDist(a, b)
+    return math.floor((a - b).Magnitude + 0.5)
 end
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  REMOTE HELPER
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local remoteCache = {}
-local function getR(name)
-    if remoteCache[name] then return remoteCache[name] end
-    local folder = RS:FindFirstChild("Remotes")
-    folder = folder and folder:FindFirstChild("TutorialRemotes")
-    if not folder then return nil end
-    local r = folder:FindFirstChild(name)
-    if r then remoteCache[name] = r end
-    return r
-end
-local function fireEv(name, ...)
-    local r = getR(name)
-    if not r or not r:IsA("RemoteEvent") then return false, "not found" end
-    return pcall(function(...) r:FireServer(...) end, ...)
-end
-local function invokeRF(name, ...)
-    local r = getR(name)
-    if not r or not r:IsA("RemoteFunction") then return false, nil end
-    local ok, res = pcall(function(...) return r:InvokeServer(...) end, ...)
-    return ok, res
-end
-local function unwrap(res)
-    if type(res)=="table" then
-        return type(res[1])=="table" and res[1] or res
-    end
-    return nil
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  ⚡ PENANGKAL PETIR — FLEE & RETURN  v14
---
---  Cara kerja:
---  1. Saat LightningStrike event masuk:
---     → Simpan posisi saat ini (returnPos)
---     → TP kabur ke titik aman jauh (fleePos)
---     → Tunggu 4 detik (petir selesai)
---     → TP balik ke returnPos
---  2. fleePos = posisi saat ini + offset acak
---     agar server tidak bisa predict
---  3. Jika sedang kabur (isPetirFleeing),
---     event baru diabaikan agar tidak loop
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
--- Titik aman default (dalam bangunan / jauh dari sawah)
--- User bisa set via tombol "Set Titik Aman"
-local fleeBase = nil  -- diisi user, atau auto pakai offset
-
-local function fleePetir()
-    if isPetirFleeing then return end  -- sudah kabur, abaikan
-    isPetirFleeing = true
-
-    local currentPos = getPos()
-    if not currentPos then isPetirFleeing=false; return end
-
-    -- Simpan posisi sebelum kabur
-    local returnX = currentPos.X
-    local returnZ = currentPos.Z
-
-    -- Tentukan titik kabur:
-    -- Pakai fleeBase jika sudah diset user
-    -- Kalau belum, kabur ke offset +100 dari posisi sekarang
-    local fX, fZ
-    if fleeBase then
-        fX = fleeBase.x
-        fZ = fleeBase.z
-    else
-        -- Kabur ke arah acak sejauh ~80 studs
-        local angle = math.random() * math.pi * 2
-        fX = currentPos.X + math.cos(angle) * 80
-        fZ = currentPos.Z + math.sin(angle) * 80
-    end
-
-    -- TP kabur
-    tpXZ(fX, fZ)
-    notif("⚡  KABUR!",
-        string.format("Petir #%d — menjauh!\nKembali dalam 4 detik...", lightningHits), 4)
-
-    -- Tunggu petir selesai
-    task.wait(4)
-
-    -- TP balik ke posisi semula
-    tpXZ(returnX, returnZ)
-    notif("✅  Kembali",
-        string.format("Balik ke X=%.0f Z=%.0f", returnX, returnZ), 3)
-
-    task.wait(0.5)
-    isPetirFleeing = false
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  ANTI AFK
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local antiAFKConn = nil
-local function startAntiAFK()
-    if antiAFKConn then antiAFKConn:Disconnect() end
-    local last = tick()
-    antiAFKConn = RunService.Heartbeat:Connect(function()
-        if not _G.AntiAFK then antiAFKConn:Disconnect(); antiAFKConn=nil; return end
-        if tick()-last >= 120 then
-            last=tick()
-            local h=getHum(); if h then h.Jump=true end
-        end
-    end)
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  SCAN LAHAN
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function scanLahan()
-    if tick()-LahanCacheTime < 10 and #LahanCache>0 then return LahanCache end
-    LahanCache = {}
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("BasePart") then
-            local n = v.Name:lower()
-            if n:find("areatanambesar") or n:find("areatanampadi")
-            or n:find("areatanamsawah") or n:find("areatanamsawit") then
-                table.insert(LahanCache, v.Position)
-            end
-        end
-    end
-    LahanCacheTime = tick()
-    return LahanCache
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  BELI BIBIT ✅
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function beliBibit(nama, qty)
-    nama = nama or selectedBibit; qty = qty or jumlahBeli
-    local ok, res = invokeRF("RequestShop","BUY",nama,qty)
-    if not ok then return false,"RequestShop gagal" end
-    local data = unwrap(res)
-    if data and data.Success then
-        PlayerData.Coins = data.NewCoins or PlayerData.Coins
-        return true, data.Message or "Berhasil"
-    end
-    return false, (data and data.Message) or "Gagal"
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  JUAL ✅ CONFIRMED
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function getInventoryJual()
-    local ok, res = invokeRF("RequestSell","GET_LIST")
-    if not ok then return nil end
-    local data = unwrap(res)
-    if data then PlayerData.Coins = data.Coins or PlayerData.Coins end
-    return data
-end
-
-local function jualItem(nama, qty)
-    local ok, res = invokeRF("RequestSell","SELL",nama,qty or 1)
-    if not ok then return false,"Remote gagal",0 end
-    local data = unwrap(res)
-    if data and data.Success then
-        local earned = data.Earned or 0
-        PlayerData.Coins = data.NewCoins or PlayerData.Coins
-        totalEarned = totalEarned + earned
-        return true, data.Message or "Terjual", earned
-    end
-    if type(res)=="number" then PlayerData.Coins=res; return true,"Terjual",0 end
-    return false, (data and data.Message) or "Gagal", 0
-end
-
-local function jualSemua()
-    local data = getInventoryJual()
-    if not data or not data.Items then return false,"GET_LIST gagal" end
-    local totalItem, totalCoin = 0, 0
-    for _, item in ipairs(data.Items) do
-        if item.Owned and item.Owned > 0 then
-            local ok, _, _ = jualItem(item.Name, item.Owned)
-            if ok then
-                totalItem = totalItem + item.Owned
-                totalCoin = totalCoin + (item.Price * item.Owned)
-            end
-            task.wait(0.3)
-        end
-    end
-    if totalItem == 0 then return false,"Tidak ada item" end
-    return true, totalItem.." item  ·  +"..totalCoin.."💰"
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  AUTO HARVEST
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function autoHarvestTick()
-    local harvested = 0
-    local myPos = getPos(); if not myPos then return 0 end
-    for _, v in pairs(Workspace:GetDescendants()) do
-        local n = v.Name:lower()
-        local isCrop = n:find("crop") or n:find("plant") or n:find("padi")
-            or n:find("jagung") or n:find("tomat") or n:find("terong")
-            or n:find("sawit") or n:find("durian") or n:find("strawberry")
-        if isCrop then
-            local pp = v:FindFirstChildWhichIsA("ProximityPrompt", true)
-            if pp then
-                local partPos
-                if v:IsA("BasePart") then partPos=v.Position
-                elseif v.PrimaryPart then partPos=v.PrimaryPart.Position end
-                if partPos and (partPos-myPos).Magnitude < 20 then
-                    pcall(function() fireproximityprompt(pp) end)
-                    harvested = harvested+1; task.wait(0.1)
-                end
-            end
-        end
-    end
-    return harvested
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  MANDI
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function goMandi()
-    tpXZ(MANDI.x, MANDI.z)
-    notif("🚿  Mandi", string.format("TP  X=%.0f  Z=%.0f", MANDI.x, MANDI.z), 3)
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  STOP ALL
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function stopSemua()
-    _G.AutoFarm=false; _G.AutoTanam=false
-    _G.AutoSell=false; _G.AutoHarvest=false; _G.AutoMandi=false
-    if SellLoop    then pcall(function() task.cancel(SellLoop)    end); SellLoop=nil    end
-    if HarvestLoop then pcall(function() task.cancel(HarvestLoop) end); HarvestLoop=nil end
-    notif("⛔  STOP ALL","Semua fitur dimatikan",3)
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  INTERCEPTS
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local function setupIntercepts()
-
-    -- ⚡ LIGHTNING STRIKE — Flee & Return
-    task.spawn(function()
-        local r
-        for i=1,20 do r=getR("LightningStrike"); if r then break end; task.wait(1) end
-        if not r then
-            print("[ XKID ⚠️ ] LightningStrike remote tidak ditemukan")
-            return
-        end
-        r.OnClientEvent:Connect(function(data)
-            lightningHits = lightningHits + 1
-            print(string.format("[ XKID ⚡ ] Petir #%d | Reason=%s",
-                lightningHits, tostring(data and data.Reason)))
-            if not _G.PenangkalPetir then return end
-            -- Spawn biar tidak block thread lain
-            task.spawn(fleePetir)
-        end)
-        print("[ XKID ✦ ] ⚡ LightningStrike intercept ready")
-    end)
-
-    -- 📊 LEVEL UP
-    task.spawn(function()
-        local r
-        for i=1,15 do r=getR("UpdateLevel"); if r then break end; task.wait(1) end
-        if not r then return end
-        r.OnClientEvent:Connect(function(data)
-            if type(data)~="table" then return end
-            PlayerData.Level  = data.Level  or PlayerData.Level
-            PlayerData.XP     = data.XP     or PlayerData.XP
-            PlayerData.Needed = data.Needed or PlayerData.Needed
-            if data.LeveledUp and _G.NotifLevelUp then
-                levelUpCount=levelUpCount+1
-                notif("🎉  Level Up!  #"..levelUpCount,
-                    "Level "..data.Level.."  ·  XP "..data.XP.."/"..data.Needed, 6)
-            end
-        end)
-    end)
-
-    -- 🔔 NOTIFICATION
-    task.spawn(function()
-        local r
-        for i=1,15 do r=getR("Notification"); if r then break end; task.wait(1) end
-        if not r then return end
-        r.OnClientEvent:Connect(function(msg)
-            if type(msg)~="string" then return end
-            local ml = msg:lower()
-            if ml:find("hujan") then
-                notif("🌧  Hujan!","Tanaman tumbuh lebih cepat",4)
-            elseif ml:find("petir") or ml:find("gosong") then
-                notif("⚡  Petir!",msg,4)
-            elseif ml:find("mandi") or ml:find("segar") or ml:find("kotor") then
-                notif("🚿  Perlu Mandi!",msg,4)
-                if _G.AutoMandi then task.delay(0.5, goMandi) end
-            end
-        end)
-    end)
-
-    -- 🌾 HARVEST COUNT
-    task.spawn(function()
-        local r
-        for i=1,15 do r=getR("HarvestCrop"); if r then break end; task.wait(1) end
-        if not r then return end
-        r.OnClientEvent:Connect(function(cropName, qty)
-            harvestCount = harvestCount+(tonumber(qty) or 1)
-            print(string.format("[ XKID 🌾 ] Panen: %s x%d  ·  Total: %d",
-                tostring(cropName), tonumber(qty) or 1, harvestCount))
-        end)
-    end)
-
-    -- 💰 SELL CROP (GUI open intercept)
-    task.spawn(function()
-        local r
-        for i=1,15 do r=getR("SellCrop"); if r then break end; task.wait(1) end
-        if not r then return end
-        r.OnClientEvent:Connect(function(_, p41)
-            if _G.AutoSell and type(p41)=="string" and p41:find("OPEN") then
-                task.delay(0.6, function()
-                    local ok,msg=jualSemua()
-                    notif(ok and "💰  Auto Sell ✅" or "❌  Sell", msg, 3)
-                end)
-            end
-        end)
-    end)
-
-    -- ✅ CONFIRM
-    task.spawn(function()
-        local r
-        for i=1,15 do r=getR("ConfirmAction"); if r then break end; task.wait(1) end
-        if not r or not r:IsA("RemoteFunction") then return end
-        r.OnClientInvoke = function(data)
-            if _G.AutoConfirm then notif("✅  Auto Confirm",tostring(data),2); return true end
-            return nil
-        end
-    end)
-
-    print("[ XKID ✦ ] ══ ALL INTERCEPTS READY ══")
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TABS
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-local TabStatus  = Window:CreateTab("📊  Status",     nil)
-local TabFarm    = Window:CreateTab("🤖  Auto Farm",  nil)
-local TabBibit   = Window:CreateTab("🛒  Bibit",      nil)
-local TabJual    = Window:CreateTab("💰  Jual",       nil)
-local TabHarvest = Window:CreateTab("🌾  Harvest",    nil)
-local TabTP      = Window:CreateTab("📍  Teleport",   nil)
-local TabPetir   = Window:CreateTab("⚡  Petir",      nil)
-local TabSet     = Window:CreateTab("⚙  Setting",   nil)
-local TabTest    = Window:CreateTab("🧪  Debug",      nil)
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TAB STATUS
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TabStatus:CreateSection("✦  Live Monitor")
-local St = {
-    farm    = TabStatus:CreateParagraph({Title="🤖  Auto Farm",     Content="○  Offline"}),
-    harvest = TabStatus:CreateParagraph({Title="🌾  Auto Harvest",  Content="○  Offline"}),
-    sell    = TabStatus:CreateParagraph({Title="💰  Auto Sell",     Content="○  Offline"}),
-    petir   = TabStatus:CreateParagraph({Title="⚡  Penangkal Petir",Content="○  Offline"}),
-    player  = TabStatus:CreateParagraph({Title="👤  Player",        Content="..."}),
-    lahan   = TabStatus:CreateParagraph({Title="🗺  Lahan",         Content="Belum scan"}),
-    afk     = TabStatus:CreateParagraph({Title="🛡  Anti AFK",      Content="○  Offline"}),
-    stats   = TabStatus:CreateParagraph({Title="💸  Session",       Content="—"}),
+-- ════════════════════════════════════════
+--  TANAMAN DATA
+-- ════════════════════════════════════════
+local CROPS = {
+    { name="Sawi",  cropName="Sawi",     seedName="Bibit Sawi",   sellPrice=20,    seedPrice=15    },
+    { name="Padi",  cropName="Padi",     seedName="Bibit Padi",   sellPrice=35,    seedPrice=20    },
+    { name="Tomat", cropName="Tomat",    seedName="Bibit Tomat",  sellPrice=65,    seedPrice=40    },
+    { name="Melon", cropName="Melon",    seedName="Bibit Melon",  sellPrice=130,   seedPrice=70    },
+    { name="Kelapa",cropName="Coconut",  seedName="Bibit Kelapa", sellPrice=1150,  seedPrice=800   },
+    { name="Apel",  cropName="AppleTree",seedName="Bibit Apel",   sellPrice=2667,  seedPrice=2000  },
+    { name="Daisy", cropName="Daisy",    seedName="Bibit Daisy",  sellPrice=18333, seedPrice=15000 },
 }
 
-task.spawn(function()
-    while _G.ScriptRunning do
-        pcall(function()
-            St.farm:Set({Title="🤖  Auto Farm",
-                Content=_G.AutoFarm and ("●  Running  ·  Siklus "..SiklusCount) or "○  Offline"})
-            St.harvest:Set({Title="🌾  Auto Harvest",
-                Content=_G.AutoHarvest and ("●  Active  ·  "..harvestCount.."×") or ("○  Offline  ·  Total "..harvestCount.."×")})
-            St.sell:Set({Title="💰  Auto Sell",
-                Content=_G.AutoSell and "●  Active" or "○  Offline"})
-            St.petir:Set({Title="⚡  Penangkal Petir",
-                Content=(_G.PenangkalPetir and "●  ACTIVE" or "○  Offline")
-                    .."  ·  "..lightningHits.."× tangkal"
-                    ..(isPetirFleeing and "  ·  🏃 Kabur!" or "")
-                    ..(fleeBase and "  ·  ✅ Titik aman set" or "  ·  ⚠️ Auto flee")})
-            St.player:Set({Title="👤  "..LocalPlayer.Name,
-                Content="💰 "..PlayerData.Coins
-                    .."   ⭐ Lv."..PlayerData.Level
-                    .."   📊 "..PlayerData.XP.."/"..PlayerData.Needed
-                    .."\n🎉 Level Up: "..levelUpCount.."×"})
-            St.lahan:Set({Title="🗺  Lahan",
-                Content=#LahanCache.." plot"
-                    ..(LahanCacheTime>0 and ("  ·  "..string.format("%.0f",tick()-LahanCacheTime).."s ago") or "")})
-            St.afk:Set({Title="🛡  Anti AFK", Content=_G.AntiAFK and "●  Active" or "○  Offline"})
-            St.stats:Set({Title="💸  Session Stats",
-                Content="Earned: "..totalEarned.."💰  ·  Panen: "..harvestCount.."×  ·  Siklus: "..SiklusCount})
-        end)
-        task.wait(1)
+local function getCrop(name)
+    for _, c in ipairs(CROPS) do
+        if c.name == name then return c end
+    end
+    return CROPS[1]
+end
+
+-- ════════════════════════════════════════
+--  STATE — FARM
+-- ════════════════════════════════════════
+local farmOn        = false
+local farmLoop      = nil
+local selectedCrop  = "Sawi"
+local buyQty        = 5
+local plantDelay    = 0.5   -- detik antar tanam
+local farmStatus    = "Idle"
+local totalHarvest  = 0
+local totalCoins    = 0
+local harvestConn   = nil
+
+-- Posisi lahan (dari spy + bisa tambah manual)
+local LAHAN = {
+    Vector3.new(517.92, 22.07, -58.40),
+    Vector3.new(564.19, 22.83, -67.26),
+    Vector3.new(582.31, 23.65, -171.46),
+    Vector3.new(617.29, 41.72, -105.20),
+    Vector3.new(619.11, 41.72, -105.57),
+}
+
+-- Posisi toko (di-scan atau di-save manual)
+local tokoPos = nil
+local tokoNPC = nil
+
+-- ════════════════════════════════════════
+--  STATE — HUB
+-- ════════════════════════════════════════
+local curWS      = 16
+local curJP      = 50
+local flyOn      = false
+local flySpeed   = 60
+local flyBV, flyBG, flyConn
+local noclipOn   = false
+local noclipConn = nil
+local espOn      = false
+local espBills   = {}
+local espConns   = {}
+local afkConn    = nil
+local antiKickOn = false
+local slots      = {}
+local PITCH_UP   =  0.3
+local PITCH_DOWN = -0.3
+
+-- ════════════════════════════════════════
+--  RE-APPLY ON RESPAWN
+-- ════════════════════════════════════════
+LP.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid", 5)
+    if not hum then return end
+    task.wait(0.5)
+    hum.WalkSpeed    = curWS
+    hum.JumpPower    = curJP
+    hum.UseJumpPower = true
+    if flyOn then
+        task.wait(0.3)
+        local r2 = char:FindFirstChild("HumanoidRootPart")
+        if r2 then
+            if flyBV then pcall(function() flyBV:Destroy() end) end
+            if flyBG then pcall(function() flyBG:Destroy() end) end
+            flyBV = Instance.new("BodyVelocity", r2)
+            flyBV.Velocity = Vector3.new()
+            flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+            flyBG = Instance.new("BodyGyro", r2)
+            flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+            flyBG.P = 1e4; flyBG.D = 100
+            flyBG.CFrame = r2.CFrame
+            hum.PlatformStand = true
+        end
     end
 end)
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TAB AUTO FARM
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TabFarm:CreateSection("✦  Full Auto Farm")
-TabFarm:CreateParagraph({Title="Flow",
-    Content="① Beli Bibit\n② Tanam ke semua lahan\n③ Tunggu panen\n④ Harvest\n⑤ Mandi (opsional)\n⑥ Jual semua\n\n— Scan Lahan dulu di tab 📍"})
-TabFarm:CreateSlider({Name="Delay Tanam  (detik)", Range={0.1,3}, Increment=0.1, CurrentValue=0.5,
-    Callback=function(v) dTanam=v end})
-TabFarm:CreateSlider({Name="Tunggu Panen  (detik)", Range={10,300}, Increment=5, CurrentValue=60,
-    Callback=function(v) waitPanen=v end})
-TabFarm:CreateToggle({Name="🚿  Auto Mandi tiap siklus", CurrentValue=false,
-    Callback=function(v) _G.AutoMandi=v end})
+-- ════════════════════════════════════════
+--  ① SCAN TOKO NPC
+-- ════════════════════════════════════════
+local TOKO_KEYWORDS = {
+    "toko","shop","bibit","seed","store","merchant",
+    "vendor","seller","jual","dagang","market"
+}
 
-TabFarm:CreateToggle({Name="🔥  FULL AUTO FARM", CurrentValue=false,
-    Callback=function(v)
-        _G.AutoFarm=v
-        if not v then notif("🤖  Auto Farm","Dihentikan",2); return end
-        if #LahanCache==0 then scanLahan() end
-        if #LahanCache==0 then
-            notif("⚠️","Scan Lahan dulu!",5); _G.AutoFarm=false; return
-        end
-        SiklusCount=0
-        notif("🔥  Auto Farm ON","Lahan: "..#LahanCache.."  ·  Bibit: "..selectedBibit,4)
-        task.spawn(function()
-            while _G.AutoFarm do
-                SiklusCount=SiklusCount+1
-                -- Beli
-                local ok,msg=beliBibit(selectedBibit,jumlahBeli)
-                notif(ok and "🛒  Beli ✅" or "🛒  Beli ❌",msg,2)
-                if not _G.AutoFarm then break end; task.wait(1)
-                -- Tanam
-                local planted=0
-                for _,pos in ipairs(LahanCache) do
-                    if not _G.AutoFarm then break end
-                    if fireEv("PlantCrop",pos) then planted=planted+1 end
-                    task.wait(dTanam)
-                end
-                notif("🌱  Tanam ✅",planted.."/"..#LahanCache.." plot",2)
-                if not _G.AutoFarm then break end
-                -- Tunggu panen
-                local w=0
-                while w<waitPanen and _G.AutoFarm do task.wait(1); w=w+1 end
-                if not _G.AutoFarm then break end
-                -- Harvest
-                local h=autoHarvestTick()
-                if h>0 then notif("🌾  Harvest ✅",h.." tanaman",2) end
-                task.wait(1)
-                -- Mandi
-                if _G.AutoMandi then goMandi(); task.wait(3) end
-                -- Jual
-                local sOk,sMsg=jualSemua()
-                notif(sOk and "💰  Jual ✅" or "💰  Jual ❌",sMsg,3)
-                task.wait(2)
-            end
-            notif("⛔  Farm Stop","Siklus: "..SiklusCount.."  ·  Earned: "..totalEarned.."💰",4)
-        end)
-    end})
-
-TabFarm:CreateToggle({Name="🌱  Auto Tanam Loop", CurrentValue=false,
-    Callback=function(v)
-        _G.AutoTanam=v
-        if v then
-            task.spawn(function()
-                while _G.AutoTanam do
-                    if #LahanCache==0 then scanLahan() end
-                    local c=0
-                    for _,pos in ipairs(LahanCache) do
-                        if not _G.AutoTanam then break end
-                        if fireEv("PlantCrop",pos) then c=c+1 end
-                        task.wait(dTanam)
-                    end
-                    notif("🌱  Tanam ✅",c.." plot",2); task.wait(5)
-                end
-            end)
-            notif("🌱  Auto Tanam","ON ✅",3)
-        else notif("🌱  Auto Tanam","OFF",2) end
-    end})
-
-TabFarm:CreateButton({Name="⛔  STOP SEMUA", Callback=stopSemua})
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TAB BIBIT
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TabBibit:CreateSection("✦  Beli Bibit")
-local opsiB={}
-for _,b in ipairs(BIBIT_LIST) do
-    table.insert(opsiB, b.icon.."  "..b.name.."  ·  Lv."..b.minLv.."  ·  "..b.price.."💰")
-end
-TabBibit:CreateDropdown({Name="Pilih Bibit", Options=opsiB, CurrentOption={opsiB[1]},
-    Callback=function(v)
-        for _,b in ipairs(BIBIT_LIST) do
-            if v[1]:find(b.name,1,true) then
-                selectedBibit=b.name; notif("✅  Dipilih",b.name,2); break
-            end
-        end
-    end})
-TabBibit:CreateSlider({Name="Jumlah", Range={1,99}, Increment=1, CurrentValue=1,
-    Callback=function(v) jumlahBeli=v end})
-TabBibit:CreateButton({Name="🛒  Beli Sekarang",
-    Callback=function()
-        task.spawn(function()
-            local ok,msg=beliBibit(selectedBibit,jumlahBeli)
-            notif(ok and "🛒  Beli ✅" or "❌",msg,4)
-        end)
-    end})
-
-TabBibit:CreateSection("✦  Beli Cepat")
-for _,b in ipairs(BIBIT_LIST) do
-    local bb=b
-    TabBibit:CreateButton({Name=bb.icon.."  "..bb.name.."  ·  "..bb.price.."💰",
-        Callback=function()
-            task.spawn(function()
-                selectedBibit=bb.name
-                local ok,msg=beliBibit(bb.name,jumlahBeli)
-                notif(ok and "✅" or "❌",msg,3)
-            end)
-        end})
-end
-
-TabBibit:CreateSection("✦  Stok")
-TabBibit:CreateButton({Name="📋  Lihat Stok Bibit",
-    Callback=function()
-        task.spawn(function()
-            local ok,res=invokeRF("RequestShop","GET_LIST")
-            if not ok then notif("❌","Gagal",3); return end
-            local data=unwrap(res)
-            if not data or not data.Seeds then notif("❌","Kosong",3); return end
-            PlayerData.Coins=data.Coins or PlayerData.Coins
-            local txt="💰 "..tostring(data.Coins).."\n\n"
-            for _,s in ipairs(data.Seeds) do
-                txt=txt..(s.Locked and "🔒" or "✅").."  "..s.Name
-                    .."  x"..s.Owned.."  ·  "..s.Price.."💰\n"
-            end
-            notif("🛒  Bibit Shop",txt,10)
-        end)
-    end})
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TAB JUAL
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TabJual:CreateSection("✦  Jual  —  Confirmed")
-TabJual:CreateParagraph({Title="Method ✅",
-    Content="RequestSell:InvokeServer('SELL', nama, qty)\n\n"
-        .."Harga confirmed:\n"
-        .."🌾 Padi 10💰  ·  🌽 Jagung 20💰\n"
-        .."🍅 Tomat 30💰  ·  🍆 Terong 50💰\n"
-        .."🍓 Strawberry 75💰"})
-
-TabJual:CreateButton({Name="💰  Jual Semua",
-    Callback=function()
-        task.spawn(function()
-            local ok,msg=jualSemua()
-            notif(ok and "💰  Jual ✅" or "❌",msg,4)
-        end)
-    end})
-
-TabJual:CreateToggle({Name="🔄  Auto Sell Loop  (30s)", CurrentValue=false,
-    Callback=function(v)
-        _G.AutoSell=v
-        if v then
-            SellLoop=task.spawn(function()
-                while _G.AutoSell do
-                    local ok,msg=jualSemua()
-                    notif(ok and "💰  Auto Sell ✅" or "❌",msg,3)
-                    task.wait(30)
-                end
-            end)
-            notif("💰  Auto Sell","ON  ·  tiap 30s",3)
-        else
-            if SellLoop then pcall(function() task.cancel(SellLoop) end); SellLoop=nil end
-            notif("💰  Auto Sell","OFF",2)
-        end
-    end})
-
-TabJual:CreateSection("✦  Preview Inventory")
-TabJual:CreateButton({Name="📋  Lihat Inventory",
-    Callback=function()
-        task.spawn(function()
-            local data=getInventoryJual()
-            if not data or not data.Items then notif("❌","Gagal",3); return end
-            local txt="SellMult: "..tostring(data.SellMult).."  ·  💰 "..tostring(data.Coins).."\n\n"
-            for _,item in ipairs(data.Items) do
-                txt=txt..(item.Owned>0 and "✅" or "⬜").."  "
-                    ..item.DisplayName.."  x"..item.Owned.."  ·  "..item.Price.."💰\n"
-            end
-            notif("📦  Inventory",txt,10)
-        end)
-    end})
-
-TabJual:CreateSection("✦  Jual Cepat Per Item")
-for _,item in ipairs(ITEM_LIST) do
-    local it=item
-    TabJual:CreateButton({Name=it.icon.."  "..it.name.."  ·  "..it.price.."💰/pcs",
-        Callback=function()
-            task.spawn(function()
-                local data=getInventoryJual()
-                local owned=0
-                if data and data.Items then
-                    for _,i in ipairs(data.Items) do
-                        if i.Name==it.name then owned=i.Owned; break end
+local function scanTokoNPC()
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("Model") then
+            local n = v.Name:lower()
+            for _, kw in ipairs(TOKO_KEYWORDS) do
+                if n:find(kw) then
+                    local hrp = v:FindFirstChild("HumanoidRootPart")
+                              or v:FindFirstChildOfClass("Part")
+                              or v.PrimaryPart
+                    if hrp then
+                        tokoNPC = v
+                        tokoPos = hrp.Position
+                        return true, v.Name, hrp.Position
                     end
                 end
-                if owned==0 then notif("⬜  "..it.name,"Stok kosong",3); return end
-                local ok,msg,earned=jualItem(it.name,owned)
-                notif(ok and "💰  Jual ✅" or "❌",
-                    it.name.."  x"..owned..(ok and "  +"..earned.."💰" or "  ·  "..msg),4)
-            end)
-        end})
-end
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TAB HARVEST
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TabHarvest:CreateSection("✦  Auto Harvest")
-TabHarvest:CreateParagraph({Title="Cara Kerja",
-    Content="Scan ProximityPrompt tanaman\ndi radius 20 studs dari karakter\n→ fireproximityprompt() otomatis\n\nConfirmed: HarvestCrop.OnClientEvent"})
-TabHarvest:CreateSlider({Name="Interval  (detik)", Range={1,30}, Increment=1, CurrentValue=5,
-    Callback=function(v) harvestInterval=v end})
-TabHarvest:CreateToggle({Name="🌾  AUTO HARVEST", CurrentValue=false,
-    Callback=function(v)
-        _G.AutoHarvest=v
-        if v then
-            HarvestLoop=task.spawn(function()
-                while _G.AutoHarvest do
-                    local h=autoHarvestTick()
-                    if h>0 then notif("🌾  Harvest ✅",h.." tanaman",2) end
-                    task.wait(harvestInterval)
+            end
+        end
+        -- Cek Part/BasePart juga
+        if v:IsA("BasePart") then
+            local n = v.Name:lower()
+            for _, kw in ipairs(TOKO_KEYWORDS) do
+                if n:find(kw) then
+                    tokoPos = v.Position
+                    return true, v.Name, v.Position
                 end
-            end)
-            notif("🌾  Auto Harvest","ON  ·  tiap "..harvestInterval.."s",3)
-        else
-            if HarvestLoop then pcall(function() task.cancel(HarvestLoop) end); HarvestLoop=nil end
-            notif("🌾  Auto Harvest","OFF  ·  Total: "..harvestCount.."×",3)
+            end
         end
-    end})
-TabHarvest:CreateButton({Name="🌾  Harvest Sekali",
-    Callback=function()
-        task.spawn(function()
-            local h=autoHarvestTick()
-            notif("🌾  Harvest", h>0 and h.." tanaman" or "Tidak ada tanaman dekat",3)
-        end)
-    end})
-TabHarvest:CreateButton({Name="🗑  Reset Counter",
-    Callback=function() harvestCount=0; notif("✅  Reset","Counter panen di-reset",2) end})
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TAB TELEPORT
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TabTP:CreateSection("✦  Teleport NPC  —  5 NPC Confirmed")
-TabTP:CreateParagraph({Title="📌  Koordinat Confirmed",
-    Content="Y otomatis via Raycast — tidak nembus tanah\n\n"
-        .."🛒  Penjual      X=-59   Z=-207\n"
-        .."🌱  Bibit        X=-42   Z=-207\n"
-        .."🔧  Alat         X=-41   Z=-100\n"
-        .."🌴  Sawit        X= 56   Z=-208\n"
-        .."🥚  Telur        X=-98   Z=-176\n"
-        .."🚿  Mandi        X=137   Z=-235"})
-
-for _,npc in ipairs(NPC_LIST) do
-    local n=npc
-    TabTP:CreateButton({Name="🚀  "..n.label,
-        Callback=function()
-            tpXZ(n.x, n.z)
-            notif("📍  TP",n.label..string.format("  ·  X=%.0f  Z=%.0f",n.x,n.z),3)
-        end})
-end
-
-TabTP:CreateSection("✦  Mandi")
-TabTP:CreateButton({Name="🚿  TP ke Tempat Mandi",
-    Callback=function() goMandi() end})
-TabTP:CreateToggle({Name="🚿  Auto Mandi  (saat notif kotor)", CurrentValue=false,
-    Callback=function(v) _G.AutoMandi=v; notif("🚿  Auto Mandi",v and "ON ✅" or "OFF",2) end})
-
-TabTP:CreateSection("✦  Scan Lahan")
-local LahanPara = TabTP:CreateParagraph({Title="🗺  Lahan", Content="Belum scan"})
-TabTP:CreateButton({Name="🔍  Scan Lahan",
-    Callback=function()
-        LahanCacheTime=0; local l=scanLahan()
-        LahanPara:Set({Title="🗺  Lahan",
-            Content=#l.." plot  "..(#l>0 and "✅  Siap!" or "❌  Tidak ada")})
-        notif("🔍  Scan",#l.." plot ditemukan",3)
-    end})
-
-TabTP:CreateSection("✦  Manual Koordinat  (Y otomatis)")
-local tpX,tpZ2=0,0
-TabTP:CreateInput({Name="X", PlaceholderText="-59",
-    RemoveTextAfterFocusLost=false, Callback=function(v) tpX=tonumber(v) or 0 end})
-TabTP:CreateInput({Name="Z", PlaceholderText="-207",
-    RemoveTextAfterFocusLost=false, Callback=function(v) tpZ2=tonumber(v) or 0 end})
-TabTP:CreateButton({Name="🚀  TP ke Koordinat",
-    Callback=function()
-        tpXZ(tpX, tpZ2)
-        notif("📍  TP",string.format("X=%.1f  Z=%.1f  (Y otomatis)",tpX,tpZ2),3)
-    end})
-TabTP:CreateButton({Name="📍  Print Posisi Saya",
-    Callback=function()
-        local pos=getPos()
-        if pos then
-            notif("📍  Posisi Saya",
-                string.format("X=%.2f\nY=%.2f\nZ=%.2f",pos.X,pos.Y,pos.Z),5)
-            print(string.format("[ XKID 📍 ] X=%.4f  Y=%.4f  Z=%.4f",pos.X,pos.Y,pos.Z))
-        end
-    end})
-
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TAB PENANGKAL PETIR
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TabPetir:CreateSection("⚡  Penangkal Petir  —  Flee & Return")
-TabPetir:CreateParagraph({Title="Cara Kerja  v14",
-    Content="Saat LightningStrike event masuk:\n\n"
-        .."① Simpan posisi sekarang\n"
-        .."② TP kabur ke titik aman\n"
-        .."   (set manual atau auto-acak)\n"
-        .."③ Tunggu 4 detik (petir selesai)\n"
-        .."④ TP balik ke posisi semula\n\n"
-        .."✅ Set Titik Aman = lebih akurat\n"
-        .."⚠️ Auto-acak = offset random ~80 studs"})
-
-TabPetir:CreateToggle({Name="⚡  Penangkal Petir  AKTIF", CurrentValue=false,
-    Callback=function(v)
-        _G.PenangkalPetir=v
-        notif("⚡  Penangkal Petir",
-            v and "●  AKTIF  —  Akan kabur saat petir" or "○  OFF", 3)
-    end})
-
-TabPetir:CreateSection("✦  Titik Aman  (opsional tapi direkomendasikan)")
-TabPetir:CreateParagraph({Title="Tips",
-    Content="Set titik aman di dalam bangunan\natau area yang tidak kena petir\n\nKalau tidak di-set, script auto kabur\nke arah acak sejauh ~80 studs"})
-
-TabPetir:CreateButton({Name="📍  Set Titik Aman  (posisi saya)",
-    Callback=function()
-        local pos=getPos()
-        if pos then
-            fleeBase = { x=pos.X, z=pos.Z }
-            notif("✅  Titik Aman Set",
-                string.format("X=%.1f  Z=%.1f\nAkan kabur ke sini saat petir",pos.X,pos.Z),5)
-        end
-    end})
-
-TabPetir:CreateButton({Name="🗑  Hapus Titik Aman  (pakai auto-acak)",
-    Callback=function()
-        fleeBase=nil
-        notif("🗑  Titik Aman Dihapus","Sekarang pakai auto-acak offset",3)
-    end})
-
-TabPetir:CreateButton({Name="⚡  Test Flee Sekarang  (manual)",
-    Callback=function()
-        if not getRoot() then notif("❌","Karakter tidak ada",3); return end
-        task.spawn(function()
-            lightningHits=lightningHits+1
-            fleePetir()
-        end)
-    end})
-
-TabPetir:CreateButton({Name="🗑  Reset Counter Petir",
-    Callback=function() lightningHits=0; notif("✅  Reset","Counter petir di-reset",2) end})
-
--- Live stats petir
-local petirPara = TabPetir:CreateParagraph({Title="📊  Stats",Content="—"})
-task.spawn(function()
-    while _G.ScriptRunning do
-        pcall(function()
-            petirPara:Set({Title="📊  Stats Petir",
-                Content="Total petir: "..lightningHits.."×\n"
-                    .."Status: "..(_G.PenangkalPetir and "●  AKTIF" or "○  OFF").."\n"
-                    .."Sedang kabur: "..(isPetirFleeing and "🏃  YA" or "—").."\n"
-                    .."Titik aman: "..(fleeBase
-                        and string.format("✅  X=%.0f Z=%.0f",fleeBase.x,fleeBase.z)
-                        or "⚠️  Auto-acak")})
-        end)
-        task.wait(1)
     end
-end)
+    return false, nil, nil
+end
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TAB SETTING
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TabSet:CreateSection("✦  Anti AFK")
-TabSet:CreateToggle({Name="🛡  Anti AFK", CurrentValue=false,
-    Callback=function(v)
-        _G.AntiAFK=v
-        if v then startAntiAFK() end
-        notif("🛡  Anti AFK",v and "ON  ·  Jump tiap 2 menit" or "OFF",3)
-    end})
+-- ════════════════════════════════════════
+--  ② FARM — CORE FUNCTIONS
+-- ════════════════════════════════════════
 
-TabSet:CreateSection("✦  Farm Timing")
-TabSet:CreateSlider({Name="Delay Tanam  (s)", Range={0.1,3}, Increment=0.1, CurrentValue=0.5,
-    Callback=function(v) dTanam=v end})
-TabSet:CreateSlider({Name="Tunggu Panen  (s)", Range={10,300}, Increment=5, CurrentValue=60,
-    Callback=function(v) waitPanen=v end})
-TabSet:CreateSlider({Name="Harvest Interval  (s)", Range={1,30}, Increment=1, CurrentValue=5,
-    Callback=function(v) harvestInterval=v end})
+-- Teleport ke toko
+local function tpToToko()
+    if not tokoPos then
+        Library:Notification("❌","Scan toko dulu!",2); return false
+    end
+    local root = getRoot(); if not root then return false end
+    root.CFrame = CFrame.new(tokoPos) * CFrame.new(0,3,0)
+    task.wait(0.5)
+    return true
+end
 
-TabSet:CreateSection("✦  Misc")
-TabSet:CreateToggle({Name="✅  Auto Confirm", CurrentValue=false,
-    Callback=function(v) _G.AutoConfirm=v; notif("✅  Auto Confirm",v and "ON" or "OFF",2) end})
-TabSet:CreateToggle({Name="🎉  Notif Level Up", CurrentValue=true,
-    Callback=function(v) _G.NotifLevelUp=v end})
-TabSet:CreateButton({Name="⛔  STOP SEMUA", Callback=stopSemua})
-TabSet:CreateButton({Name="🔄  Reset Session Stats",
-    Callback=function()
-        totalEarned=0; harvestCount=0; SiklusCount=0; levelUpCount=0; lightningHits=0
-        notif("✅  Reset","Semua stats di-reset",2)
-    end})
+-- Beli bibit via FireServer BridgeNet2
+local function beliBibit(cropName, qty)
+    if not dataRE then
+        Library:Notification("❌","dataRemoteEvent tidak ada",3); return false
+    end
+    local ok, err = pcall(function()
+        dataRE:FireServer({
+            [1] = { {
+                cropName = cropName,
+                count    = qty,
+            } },
+            [2] = ID_BUY,
+        })
+    end)
+    if not ok then
+        Library:Notification("❌ Beli Error", tostring(err), 3)
+        return false
+    end
+    return true
+end
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
---  TAB DEBUG
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TabTest:CreateSection("✦  Remote Confirmed")
-TabTest:CreateParagraph({Title="Cobalt ✅",
-    Content="✅  RequestShop('BUY', nama, qty)\n"
-        .."✅  RequestShop('GET_LIST')\n"
-        .."✅  RequestSell('GET_LIST')\n"
-        .."✅  RequestSell('SELL', nama, qty)\n"
-        .."✅  PlantCrop:FireServer(Vector3)\n"
-        .."✅  HarvestCrop.OnClientEvent"})
+-- Teleport ke lahan (lahan terdekat atau index tertentu)
+local function tpToLahan(idx)
+    if #LAHAN == 0 then
+        Library:Notification("❌","Tidak ada data lahan",2); return false
+    end
+    idx = idx or 1
+    if idx > #LAHAN then idx = 1 end
+    local root = getRoot(); if not root then return false end
+    local pos  = LAHAN[idx]
+    root.CFrame = CFrame.new(pos.X, pos.Y + 3, pos.Z)
+    task.wait(0.3)
+    return true
+end
 
-TabTest:CreateSection("✦  Test SELL")
-local sellCmd,sellArg,sellQty2="SELL","Padi","7"
-TabTest:CreateInput({Name="Command", PlaceholderText="SELL / GET_LIST",
-    RemoveTextAfterFocusLost=false, Callback=function(v) sellCmd=v end})
-TabTest:CreateInput({Name="Nama Item", PlaceholderText="Padi",
-    RemoveTextAfterFocusLost=false, Callback=function(v) sellArg=v end})
-TabTest:CreateInput({Name="Qty", PlaceholderText="7",
-    RemoveTextAfterFocusLost=false, Callback=function(v) sellQty2=v end})
-TabTest:CreateButton({Name="🔥  Test RequestSell",
-    Callback=function()
-        task.spawn(function()
-            local qty=tonumber(sellQty2)
-            local ok,res
-            if qty and sellArg~="" then ok,res=invokeRF("RequestSell",sellCmd,sellArg,qty)
-            elseif sellArg~="" then ok,res=invokeRF("RequestSell",sellCmd,sellArg)
-            else ok,res=invokeRF("RequestSell",sellCmd) end
-            notif("RequestSell("..sellCmd..")",ok and "✅  Lihat console" or "❌  "..tostring(res),5)
-            if ok then
-                local d=unwrap(res) or res
-                if type(d)=="table" then
-                    for k,v in pairs(d) do
-                        if type(v)~="table" then
-                            print(string.format("[ XKID SELL ] %s = %s",tostring(k),tostring(v)))
+-- Tanam ke semua lahan
+local function tanamSemua(cropName)
+    if not dataRE then
+        Library:Notification("❌","dataRemoteEvent tidak ada",3); return
+    end
+    local root = getRoot(); if not root then return end
+
+    local success = 0
+    for i, pos in ipairs(LAHAN) do
+        -- Cari part Land di dekat posisi
+        local landPart = nil
+        local minDist  = math.huge
+        for _, v in pairs(Workspace:GetDescendants()) do
+            if v:IsA("BasePart") then
+                local n = v.Name:lower()
+                if n:find("land") or n:find("lahan") or n:find("plot") or n:find("farm") then
+                    local d = (v.Position - pos).Magnitude
+                    if d < minDist then
+                        minDist  = d
+                        landPart = v
+                    end
+                end
+            end
+        end
+
+        -- Fallback: pakai Workspace.Land
+        if not landPart then
+            landPart = Workspace:FindFirstChild("Land")
+        end
+
+        local ok = pcall(function()
+            dataRE:FireServer({
+                [1] = {
+                    slotIdx     = 1,
+                    hitPosition = pos,
+                    hitPart     = landPart,
+                },
+                [2] = ID_PLANT,
+            })
+        end)
+
+        if ok then success = success + 1 end
+        task.wait(plantDelay)
+    end
+    return success
+end
+
+-- Monitor harvest dari server
+local function startHarvestMonitor()
+    if harvestConn then
+        pcall(function() harvestConn:Disconnect() end)
+    end
+    if not dataRE then return end
+
+    harvestConn = dataRE.OnClientEvent:Connect(function(data)
+        if type(data) ~= "table" then return end
+        -- Cek identifier harvest \x0F
+        for k, v in pairs(data) do
+            if type(k) == "string" and k == "\x0F" then
+                if type(v) == "table" then
+                    for _, entry in ipairs(v) do
+                        if type(entry) == "table" and entry.cropName then
+                            totalHarvest = totalHarvest + 1
+                            local price  = entry.sellPrice or 0
+                            totalCoins   = totalCoins + price
+                            Library:Notification(
+                                "🌾 Panen!",
+                                string.format("%s +%d coins\nTotal: %d panen | %d coins",
+                                    entry.cropName, price, totalHarvest, totalCoins), 3)
                         end
                     end
                 end
             end
-        end)
-    end})
-
-TabTest:CreateSection("✦  Quick Test")
-for _,q in ipairs({
-    {"SummonRain",   "🌧  SummonRain"},
-    {"SkipTutorial", "📖  SkipTutorial"},
-    {"RefreshShop",  "🔄  RefreshShop"},
-}) do
-    local qq=q
-    TabTest:CreateButton({Name=qq[2],
-        Callback=function()
-            task.spawn(function()
-                local ok,err=fireEv(qq[1])
-                notif(qq[1],ok and "Fired ✅" or "❌  "..tostring(err),3)
-            end)
-        end})
+            -- Update coins \x04
+            if type(k) == "string" and k == "\x04" then
+                if type(v) == "table" and v[1] then
+                    totalCoins = v[1]
+                end
+            end
+        end
+    end)
 end
 
-TabTest:CreateButton({Name="🔍  Test Raycast Y  (posisi saya)",
-    Callback=function()
-        local pos=getPos()
-        if not pos then notif("❌","Karakter tidak ada",3); return end
-        local y=getGroundY(pos.X, pos.Z)
-        notif("🔍  Raycast Y",
-            string.format("X=%.2f  Z=%.2f\nGround Y = %.4f",pos.X,pos.Z,y),5)
-        print(string.format("[ XKID RAYCAST ] X=%.2f Z=%.2f → Y=%.4f",pos.X,pos.Z,y))
-    end})
+local function stopHarvestMonitor()
+    if harvestConn then
+        pcall(function() harvestConn:Disconnect() end)
+        harvestConn = nil
+    end
+end
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- ════════════════════════════════════════
+--  ③ AUTO FARM LOOP
+-- ════════════════════════════════════════
+local function setFarmStatus(s)
+    farmStatus = s
+    Library:Notification("🌾 Farm", s, 2)
+end
+
+local function startAutoFarm()
+    if not dataRE then
+        Library:Notification("❌","BridgeNet2 tidak tersedia!",4); return
+    end
+
+    startHarvestMonitor()
+    farmLoop = task.spawn(function()
+        while farmOn do
+            local crop = getCrop(selectedCrop)
+
+            -- 1. TP ke toko
+            setFarmStatus("📍 TP ke Toko...")
+            if tokoPos then
+                tpToToko()
+                task.wait(1)
+            end
+
+            -- 2. Beli bibit
+            setFarmStatus("🛒 Beli " .. crop.seedName .. " x" .. buyQty)
+            beliBibit(crop.cropName, buyQty)
+            task.wait(1)
+
+            -- 3. TP ke lahan pertama
+            setFarmStatus("📍 TP ke Lahan...")
+            tpToLahan(1)
+            task.wait(0.5)
+
+            -- 4. Tanam ke semua lahan
+            setFarmStatus("🌱 Menanam " .. crop.cropName .. "...")
+            local n = tanamSemua(crop.cropName)
+            Library:Notification("🌱 Tanam",
+                string.format("%d lahan ditanam\nMenunggu panen...", n), 3)
+
+            -- 5. Tunggu panen (monitor dari server)
+            setFarmStatus("⏳ Menunggu Panen...")
+            -- Tunggu minimal 30 detik lalu coba harvest ulang
+            local waited = 0
+            while farmOn and waited < 300 do
+                task.wait(5)
+                waited = waited + 5
+            end
+
+            if not farmOn then break end
+
+            -- 6. Ulangi
+            setFarmStatus("🔄 Loop berikutnya...")
+            task.wait(1)
+        end
+        setFarmStatus("⛔ Farm dihentikan")
+    end)
+end
+
+local function stopAutoFarm()
+    farmOn = false
+    if farmLoop then
+        pcall(function() task.cancel(farmLoop) end)
+        farmLoop = nil
+    end
+    stopHarvestMonitor()
+    setFarmStatus("⛔ Dihentikan")
+end
+
+-- ════════════════════════════════════════
+--  ④ FLY
+-- ════════════════════════════════════════
+local function startFly()
+    local root = getRoot(); if not root then return end
+    local hum  = getHum();  if not hum  then return end
+    if flyBV   then pcall(function() flyBV:Destroy() end) end
+    if flyBG   then pcall(function() flyBG:Destroy() end) end
+    if flyConn then pcall(function() flyConn:Disconnect() end) end
+    flyBV = Instance.new("BodyVelocity", root)
+    flyBV.Velocity = Vector3.new()
+    flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+    flyBG = Instance.new("BodyGyro", root)
+    flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+    flyBG.P = 1e4; flyBG.D = 100
+    flyBG.CFrame = root.CFrame
+    hum.PlatformStand = true
+    flyConn = RunService.Heartbeat:Connect(function()
+        local r2 = getRoot(); if not r2 or not flyBV then return end
+        local h2 = getHum();  if not h2 then return end
+        local cam = Workspace.CurrentCamera
+        local cf  = cam.CFrame
+        local camFwd = Vector3.new(cf.LookVector.X,0,cf.LookVector.Z)
+        local camRgt = Vector3.new(cf.RightVector.X,0,cf.RightVector.Z)
+        if camFwd.Magnitude>0 then camFwd=camFwd.Unit end
+        if camRgt.Magnitude>0 then camRgt=camRgt.Unit end
+        local md = h2.MoveDirection
+        local horizontal = Vector3.new()
+        if md.Magnitude > 0.05 then
+            horizontal = camFwd*md:Dot(camFwd) + camRgt*md:Dot(camRgt)
+            if horizontal.Magnitude>1 then horizontal=horizontal.Unit end
+        end
+        local pitchY = cf.LookVector.Y
+        local vertical = Vector3.new()
+        if pitchY > PITCH_UP then
+            vertical = Vector3.new(0, math.min((pitchY-PITCH_UP)/(1-PITCH_UP),1), 0)
+        elseif pitchY < PITCH_DOWN then
+            vertical = Vector3.new(0,-math.min((-pitchY+PITCH_DOWN)/(1+PITCH_DOWN),1),0)
+        end
+        local dir = horizontal + vertical
+        if dir.Magnitude>0 then
+            flyBV.Velocity = (dir.Magnitude>1 and dir.Unit or dir)*flySpeed
+            if horizontal.Magnitude>0.05 then
+                flyBG.CFrame = CFrame.new(Vector3.new(), horizontal)
+            end
+        else
+            flyBV.Velocity = Vector3.new()
+        end
+        h2.PlatformStand = true
+    end)
+end
+
+local function stopFly()
+    if flyConn then pcall(function() flyConn:Disconnect() end); flyConn=nil end
+    if flyBV   then pcall(function() flyBV:Destroy()      end); flyBV=nil  end
+    if flyBG   then pcall(function() flyBG:Destroy()      end); flyBG=nil  end
+    local hum = getHum()
+    if hum then hum.PlatformStand=false end
+end
+
+-- ════════════════════════════════════════
+--  ⑤ NOCLIP
+-- ════════════════════════════════════════
+local function setNoclip(state)
+    noclipOn = state
+    if state then
+        noclipConn = RunService.Stepped:Connect(function()
+            local c = getChar(); if not c then return end
+            for _,p in pairs(c:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide=false end
+            end
+        end)
+    else
+        if noclipConn then noclipConn:Disconnect(); noclipConn=nil end
+        local c = getChar()
+        if c then
+            for _,p in pairs(c:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide=true end
+            end
+        end
+    end
+end
+
+-- ════════════════════════════════════════
+--  ⑥ ESP
+-- ════════════════════════════════════════
+local function clearESP()
+    for _,b in ipairs(espBills) do pcall(function() b:Destroy()    end) end
+    for _,c in ipairs(espConns) do pcall(function() c:Disconnect() end) end
+    espBills={}; espConns={}
+end
+
+local function getArea(char)
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return "?" end
+    local pos = root.Position
+    for _,v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("BasePart") then
+            local n = v.Name:lower()
+            if n:find("room") or n:find("area") or n:find("zone")
+            or n:find("vip")  or n:find("priv") or n:find("salon") then
+                if (v.Position-pos).Magnitude < 25 then return v.Name end
+            end
+        end
+    end
+    return "Area"
+end
+
+local function makeESP(player)
+    if player==LP then return end
+    local function onChar(char)
+        if not espOn then return end
+        task.wait(0.5)
+        local head = char:FindFirstChild("Head"); if not head then return end
+        local bill = Instance.new("BillboardGui")
+        bill.Size=UDim2.new(0,180,0,50); bill.StudsOffset=Vector3.new(0,3,0)
+        bill.AlwaysOnTop=true; bill.Adornee=head; bill.Parent=char
+        local bg=Instance.new("Frame",bill)
+        bg.Size=UDim2.new(1,0,1,0); bg.BackgroundColor3=Color3.fromRGB(0,0,0)
+        bg.BackgroundTransparency=0.45; bg.BorderSizePixel=0
+        Instance.new("UICorner",bg).CornerRadius=UDim.new(0,6)
+        local lbl=Instance.new("TextLabel",bg)
+        lbl.Size=UDim2.new(1,-6,1,-4); lbl.Position=UDim2.new(0,3,0,2)
+        lbl.BackgroundTransparency=1; lbl.TextColor3=Color3.fromRGB(255,230,80)
+        lbl.TextStrokeTransparency=0.3; lbl.TextScaled=true
+        lbl.Font=Enum.Font.GothamBold; lbl.TextXAlignment=Enum.TextXAlignment.Center
+        local upd=RunService.Heartbeat:Connect(function()
+            if not bill or not bill.Parent then return end
+            local mr=getRoot()
+            local d=mr and getDist(head.Position,mr.Position) or 0
+            lbl.Text=string.format("👤 %s\n📍 %dm | %s",player.Name,d,getArea(char))
+        end)
+        table.insert(espConns,upd); table.insert(espBills,bill)
+    end
+    if player.Character then onChar(player.Character) end
+    table.insert(espConns,player.CharacterAdded:Connect(onChar))
+end
+
+local function toggleESP(state)
+    espOn=state; clearESP()
+    if state then
+        for _,p in pairs(Players:GetPlayers()) do makeESP(p) end
+        table.insert(espConns,Players.PlayerAdded:Connect(makeESP))
+    end
+    Library:Notification("👁 ESP",state and "ON" or "OFF",2)
+end
+
+-- ════════════════════════════════════════
+--  ⑦ TELEPORT — infer_plr
+-- ════════════════════════════════════════
+local function infer_plr(ref)
+    if typeof(ref)~="string" then return ref end
+    local to_pl, min = nil, math.huge
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP then
+            local nv=math.huge
+            local un,dn=p.Name,p.DisplayName
+            if     un:find("^"..ref)            then nv=1.0*(#un-#ref)
+            elseif dn:find("^"..ref)            then nv=1.5*(#dn-#ref)
+            elseif un:lower():find("^"..ref:lower()) then nv=2.0*(#un-#ref)
+            elseif dn:lower():find("^"..ref:lower()) then nv=2.5*(#dn-#ref) end
+            if nv<min then to_pl=p; min=nv end
+        end
+    end
+    return to_pl
+end
+
+local function tpToPlayer(ref)
+    if not ref or ref=="" then
+        Library:Notification("❌","Ketik nama dulu!",2); return
+    end
+    local pl=infer_plr(ref)
+    if not pl then Library:Notification("❌","Tidak ditemukan",2); return end
+    if not pl.Character then Library:Notification("❌",pl.Name.." tidak ada karakter",2); return end
+    local hrp=pl.Character:FindFirstChild("HumanoidRootPart")
+           or pl.Character:FindFirstChild("Torso")
+    if not hrp then Library:Notification("❌","Karakter tidak valid",2); return end
+    local myChar=getChar()
+    if myChar then
+        myChar:PivotTo(hrp.CFrame*CFrame.new(0,3,0))
+        Library:Notification("📍 TP","→ "..pl.Name,2)
+    end
+end
+
+local function tpToMouse()
+    local mouse=LP:GetMouse()
+    if mouse and mouse.Hit then
+        local root=getRoot()
+        if root then
+            root.CFrame=mouse.Hit*CFrame.new(0,3,0)
+            Library:Notification("📍 TP","Ke posisi mouse",2)
+        end
+    end
+end
+
+local function quickRespawn()
+    local root=getRoot()
+    if not root then Library:Notification("❌","Karakter tidak ada",2); return end
+    local savedCF=root.CFrame; local sWS=curWS; local sJP=curJP
+    local c=getChar(); if c then c:BreakJoints() end
+    local conn
+    conn=LP.CharacterAdded:Connect(function(newChar)
+        conn:Disconnect(); task.wait(0.8)
+        local hrp=newChar:WaitForChild("HumanoidRootPart",5)
+        local hum=newChar:WaitForChild("Humanoid",5)
+        if hrp then hrp.CFrame=savedCF end
+        if hum then hum.WalkSpeed=sWS; hum.JumpPower=sJP; hum.UseJumpPower=true end
+        Library:Notification("✅ Respawn","Kembali ke posisi semula",2)
+    end)
+end
+
+-- ════════════════════════════════════════
+--  ⑧ PROTECTION
+-- ════════════════════════════════════════
+local function startAntiAFK()
+    if afkConn then return end
+    afkConn=LP.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+end
+local function stopAntiAFK()
+    if afkConn then afkConn:Disconnect(); afkConn=nil end
+end
+local function startAntiKick()
+    if antiKickOn then return end
+    antiKickOn=true
+    task.spawn(function()
+        while antiKickOn do
+            pcall(function()
+                local hum=getHum()
+                if hum and hum.Health>0 and hum.Health<hum.MaxHealth*0.1 then
+                    hum.Health=hum.MaxHealth
+                end
+            end)
+            task.wait(0.5)
+        end
+    end)
+end
+local function stopAntiKick() antiKickOn=false end
+
+-- ════════════════════════════════════════
+--  BUILD UI — TAB FARM
+-- ════════════════════════════════════════
+local FarmPage  = TabFarm:Page("Auto Farm", "wheat")
+local FarmLeft  = FarmPage:Section("🌾 Auto Farm", "Left")
+local FarmRight = FarmPage:Section("🔧 Manual", "Right")
+
+-- Dropdown pilih tanaman
+local cropNames = {}
+for _,c in ipairs(CROPS) do table.insert(cropNames, c.name) end
+
+FarmLeft:Dropdown("Pilih Tanaman", "CropDropdown", cropNames,
+    function(v) selectedCrop=v end)
+
+FarmLeft:Slider("Beli Qty", "BuyQtySlider", 1, 50, 5,
+    function(v) buyQty=v end, "Jumlah bibit dibeli per siklus")
+
+FarmLeft:Slider("Delay Tanam (detik)", "PlantDelaySlider", 1, 10, 5,
+    function(v) plantDelay=v*0.1 end, "Jeda antar tanam (x0.1 detik)")
+
+FarmLeft:Toggle("🌾 AUTO FARM", "AutoFarmToggle", false,
+    "Otomatis beli → tanam → panen loop",
+    function(v)
+        farmOn=v
+        if v then
+            startAutoFarm()
+            Library:Notification("🌾 Auto Farm",
+                "ON — "..selectedCrop.."\nLoop dimulai!", 3)
+        else
+            stopAutoFarm()
+        end
+    end)
+
+FarmLeft:Paragraph("Status Farm",
+    "Toggle untuk lihat\nstatus terbaru di\nnotifikasi\n\n"..
+    "Counter panen muncul\ntiap kali harvest")
+
+-- Manual step buttons
+FarmRight:Button("🔍 Scan Toko Bibit", "Cari NPC toko di Workspace",
+    function()
+        task.spawn(function()
+            Library:Notification("🔍","Scanning toko...",2)
+            local ok, name, pos = scanTokoNPC()
+            if ok then
+                Library:Notification("✅ Toko Ditemukan",
+                    string.format("Nama: %s\nX=%.1f Y=%.1f Z=%.1f",
+                        name, pos.X, pos.Y, pos.Z), 6)
+            else
+                Library:Notification("❌","Toko tidak ditemukan\nSave manual di bawah",4)
+            end
+        end)
+    end)
+
+FarmRight:Button("💾 Save Posisi Toko (di sini)", "Simpan posisi toko dari posisi kamu sekarang",
+    function()
+        local root=getRoot()
+        if root then
+            tokoPos=root.Position
+            Library:Notification("💾 Toko",
+                string.format("Saved!\nX=%.1f Y=%.1f Z=%.1f",
+                    tokoPos.X, tokoPos.Y, tokoPos.Z), 4)
+        end
+    end)
+
+FarmRight:Button("📍 TP ke Toko", "Teleport ke NPC toko bibit",
+    function()
+        if tpToToko() then
+            Library:Notification("📍","Tiba di toko",2)
+        end
+    end)
+
+FarmRight:Button("🛒 Beli Bibit Sekarang", "FireServer beli bibit pilihan",
+    function()
+        local crop=getCrop(selectedCrop)
+        Library:Notification("🛒","Beli "..crop.seedName.." x"..buyQty,2)
+        task.spawn(function()
+            local ok=beliBibit(crop.cropName, buyQty)
+            if ok then
+                Library:Notification("✅ Beli",
+                    crop.seedName.." x"..buyQty.." berhasil!", 3)
+            end
+        end)
+    end)
+
+FarmRight:Button("📍 TP ke Lahan", "Teleport ke lahan pertama",
+    function() tpToLahan(1) end)
+
+FarmRight:Button("🌱 Tanam Sekarang", "Tanam ke semua lahan",
+    function()
+        task.spawn(function()
+            local crop=getCrop(selectedCrop)
+            Library:Notification("🌱","Menanam "..crop.cropName.."...",2)
+            local n=tanamSemua(crop.cropName)
+            Library:Notification("✅ Tanam",n.." lahan ditanam",3)
+        end)
+    end)
+
+FarmRight:Toggle("👁 Monitor Panen", "MonitorToggle", false,
+    "Monitor notif panen dari server",
+    function(v)
+        if v then startHarvestMonitor()
+        else stopHarvestMonitor() end
+        Library:Notification("👁 Monitor", v and "ON" or "OFF", 2)
+    end)
+
+FarmRight:Button("📊 Lihat Statistik", "Total panen & coins sesi ini",
+    function()
+        Library:Notification("📊 Statistik",
+            string.format(
+                "Total Panen: %d kali\n"..
+                "Total Coins: %d\n"..
+                "Tanaman: %s\n"..
+                "Status: %s",
+                totalHarvest, totalCoins,
+                selectedCrop, farmStatus), 8)
+    end)
+
+FarmRight:Button("🔄 Reset Statistik", "Reset counter panen & coins",
+    function()
+        totalHarvest=0; totalCoins=0
+        Library:Notification("🔄","Statistik direset",2)
+    end)
+
+-- Lahan section
+local LahanPage  = TabFarm:Page("Kelola Lahan", "map-pin")
+local LahanLeft  = LahanPage:Section("📍 Daftar Lahan", "Left")
+local LahanRight = LahanPage:Section("➕ Tambah Lahan", "Right")
+
+-- Tampilkan lahan yang ada
+LahanLeft:Button("📄 Lihat Semua Lahan", "Tampilkan daftar posisi lahan",
+    function()
+        if #LAHAN==0 then
+            Library:Notification("❌","Belum ada data lahan",2); return
+        end
+        local text=string.format("%d lahan tersimpan:\n\n",#LAHAN)
+        for i,pos in ipairs(LAHAN) do
+            text=text..string.format("[%d] X=%.0f Y=%.0f Z=%.0f\n",
+                i, pos.X, pos.Y, pos.Z)
+        end
+        Library:Notification("📍 Lahan",text,10)
+    end)
+
+LahanLeft:Button("📍 TP ke Lahan 1", "Teleport ke lahan pertama",
+    function() tpToLahan(1) end)
+LahanLeft:Button("📍 TP ke Lahan 2", "Teleport ke lahan kedua",
+    function() tpToLahan(2) end)
+LahanLeft:Button("📍 TP ke Lahan 3", "Teleport ke lahan ketiga",
+    function() tpToLahan(3) end)
+LahanLeft:Button("📍 TP ke Lahan 4", "Teleport ke lahan keempat",
+    function() tpToLahan(4) end)
+LahanLeft:Button("📍 TP ke Lahan 5", "Teleport ke lahan kelima",
+    function() tpToLahan(5) end)
+
+LahanRight:Paragraph("Tambah Lahan Manual",
+    "Berdiri di atas lahan\nlalu tekan tombol\nSave di bawah\n\n"..
+    "Lahan baru otomatis\nditambah ke daftar")
+
+for i=1,5 do
+    local idx=i
+    LahanRight:Button("💾 Save Lahan "..idx, "Simpan posisi kamu sebagai lahan "..idx,
+        function()
+            local root=getRoot()
+            if not root then
+                Library:Notification("❌","Karakter tidak ada",2); return
+            end
+            LAHAN[idx]=root.Position
+            Library:Notification("💾 Lahan "..idx,
+                string.format("X=%.1f Y=%.1f Z=%.1f",
+                    root.Position.X, root.Position.Y, root.Position.Z), 3)
+        end)
+end
+
+-- ════════════════════════════════════════
+--  BUILD UI — TAB TELEPORT
+-- ════════════════════════════════════════
+local TPage  = TabTP:Page("Teleport","map-pin")
+local TLeft  = TPage:Section("👥 Ke Player","Left")
+local TRight = TPage:Section("💾 Slot","Right")
+
+TLeft:Button("👥 Lihat Player Online","Tampilkan semua player",
+    function()
+        local list,n="",0
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP then
+                local r2=p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                local mr=getRoot()
+                local d=(r2 and mr) and getDist(r2.Position,mr.Position) or "?"
+                n=n+1
+                list=list..string.format("• %s — %sm\n",p.Name,tostring(d))
+            end
+        end
+        Library:Notification("👥 "..n.." Online",
+            n>0 and list or "Tidak ada player lain",10)
+    end)
+
+local tpInput=""
+TLeft:TextBox("Nama / Prefix","TPInput","",
+    function(v) tpInput=v end,"Ketik 1-2 huruf pertama nama")
+TLeft:Button("📍 Teleport ke Player","TP ke player",
+    function() tpToPlayer(tpInput) end)
+TLeft:Button("🖱 TP ke Mouse","TP ke posisi tap",
+    function() tpToMouse() end)
+TLeft:Button("💀 Respawn Cepat","Mati & spawn di posisi sama",
+    function() quickRespawn() end)
+
+TLeft:Paragraph("Cara Pakai",
+    "1. Lihat Player Online\n\n"..
+    "2. Ketik 1-2 huruf\n"..
+    "   pertama nama\n\n"..
+    "3. Tekan TP!")
+
+TRight:Label("💾 Save & Load Posisi")
+for i=1,5 do
+    local idx=i
+    TRight:Button("💾 Save Slot "..idx,"Simpan posisi",
+        function()
+            local root=getRoot()
+            if not root then return end
+            slots[idx]=root.CFrame
+            local p=root.Position
+            Library:Notification("💾 Slot "..idx,
+                string.format("X=%.0f Y=%.0f Z=%.0f",p.X,p.Y,p.Z),3)
+        end)
+    TRight:Button("🚀 Load Slot "..idx,"TP ke slot",
+        function()
+            if not slots[idx] then
+                Library:Notification("❌","Slot "..idx.." kosong",2); return
+            end
+            local root=getRoot()
+            if root then root.CFrame=slots[idx] end
+            local p=slots[idx].Position
+            Library:Notification("📍 Slot "..idx,
+                string.format("X=%.0f Y=%.0f Z=%.0f",p.X,p.Y,p.Z),3)
+        end)
+end
+
+-- ════════════════════════════════════════
+--  BUILD UI — TAB FLY
+-- ════════════════════════════════════════
+local FlyPage = TabFly:Page("Fly & NoClip","rocket")
+local FL      = FlyPage:Section("🚀 Fly","Left")
+local FR      = FlyPage:Section("🚶 NoClip","Right")
+
+FL:Toggle("Fly Mode","FlyToggle",false,"Terbang bebas",
+    function(v)
+        flyOn=v
+        if v then startFly() else stopFly() end
+        Library:Notification("🚀 Fly",v and "ON" or "OFF",2)
+    end)
+FL:Slider("Kecepatan","FlySpeedSlider",5,300,60,
+    function(v) flySpeed=v end,"Default 60")
+FL:Slider("Sensitivitas Naik/Turun","PitchSlider",1,9,3,
+    function(v) PITCH_UP=v*0.1; PITCH_DOWN=-v*0.1 end,
+    "1=Sensitif · 9=Perlu miring banyak")
+FL:Paragraph("🎮 Kontrol",
+    "Joystick → maju/mundur\nKanan/kiri\n\n"..
+    "Kamera atas → NAIK\n"..
+    "Kamera bawah → TURUN\n\n"..
+    "Lepas semua → melayang")
+
+FR:Toggle("NoClip","NoclipToggle",false,"Tembus semua dinding",
+    function(v)
+        setNoclip(v)
+        Library:Notification("🚶 NoClip",v and "ON" or "OFF",2)
+    end)
+FR:Toggle("ESP Player","ESPToggle",false,"Lihat player tembus dinding",
+    function(v) toggleESP(v) end)
+FR:Button("🔄 Refresh ESP","Perbarui ESP",
+    function()
+        if espOn then
+            clearESP(); task.wait(0.2)
+            for _,p in pairs(Players:GetPlayers()) do makeESP(p) end
+            Library:Notification("👁 ESP","Refreshed",2)
+        end
+    end)
+
+-- ════════════════════════════════════════
+--  BUILD UI — TAB SPEED
+-- ════════════════════════════════════════
+local SPage = TabSpd:Page("Speed & Jump","zap")
+local SL    = SPage:Section("⚡ Speed","Left")
+local SR    = SPage:Section("🦘 Jump","Right")
+
+SL:Slider("WalkSpeed","WSSlider",1,500,16,
+    function(v) curWS=v; local h=getHum(); if h then h.WalkSpeed=v end end,
+    "Default 16")
+SL:Button("🔁 Reset Speed","Kembalikan ke 16",
+    function()
+        curWS=16; local h=getHum()
+        if h then h.WalkSpeed=16 end
+        Library:Notification("Speed","Reset → 16",2)
+    end)
+
+SR:Slider("JumpPower","JPSlider",1,500,50,
+    function(v)
+        curJP=v; local h=getHum()
+        if h then h.JumpPower=v; h.UseJumpPower=true end
+    end,"Default 50")
+SR:Button("🔁 Reset Jump","Kembalikan ke 50",
+    function()
+        curJP=50; local h=getHum()
+        if h then h.JumpPower=50; h.UseJumpPower=true end
+        Library:Notification("Jump","Reset → 50",2)
+    end)
+SR:Toggle("Infinite Jump","InfJumpToggle",false,"Lompat terus di udara",
+    function(v)
+        if v then
+            _G.xkid_ij=UIS.JumpRequest:Connect(function()
+                local h=getHum()
+                if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+            end)
+        else
+            if _G.xkid_ij then _G.xkid_ij:Disconnect(); _G.xkid_ij=nil end
+        end
+        Library:Notification("Inf Jump",v and "ON" or "OFF",2)
+    end)
+
+-- ════════════════════════════════════════
+--  BUILD UI — TAB PROTECTION
+-- ════════════════════════════════════════
+local PPage = TabProt:Page("Protection","shield")
+local PL    = PPage:Section("🛡 Controls","Left")
+local PR    = PPage:Section("ℹ Info","Right")
+
+PL:Toggle("Anti AFK","AntiAFKToggle",false,"Cegah disconnect",
+    function(v)
+        if v then startAntiAFK() else stopAntiAFK() end
+        Library:Notification("Anti AFK",v and "ON" or "OFF",2)
+    end)
+PL:Toggle("Anti Kick","AntiKickToggle",false,"Cegah dikeluarkan",
+    function(v)
+        if v then startAntiKick() else stopAntiKick() end
+        Library:Notification("Anti Kick",v and "ON" or "OFF",2)
+    end)
+PL:Button("🔄 Rejoin Server","Koneksi ulang",
+    function()
+        Library:Notification("🔄","Menghubungkan ulang...",3)
+        task.wait(1); TpService:Teleport(game.PlaceId,LP)
+    end)
+PL:Button("📍 Posisi Saya","Lihat koordinat sekarang",
+    function()
+        local root=getRoot()
+        if root then
+            local p=root.Position
+            Library:Notification("📍 Posisi",
+                string.format("X=%.1f\nY=%.1f\nZ=%.1f",p.X,p.Y,p.Z),6)
+        end
+    end)
+
+PR:Paragraph("Info",
+    "Anti AFK:\nCegah auto-disconnect\n\n"..
+    "Anti Kick:\nJaga HP dari kick\n\n"..
+    "Rejoin:\nKoneksi ulang cepat\n\n"..
+    "ESP:\nDi tab Fly section\nNoClip")
+
+-- ════════════════════════════════════════
 --  INIT
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-setupIntercepts()
-
+-- ════════════════════════════════════════
+-- Auto scan toko saat load
 task.spawn(function()
-    task.wait(3)
-    scanLahan()
-    notif("🔍  Auto Scan", #LahanCache.." lahan ditemukan", 4)
+    task.wait(2)
+    local ok, name, pos = scanTokoNPC()
+    if ok then
+        Library:Notification("✅ Toko Auto-Scan",
+            "Toko: "..name.."\nSiap digunakan!", 4)
+    end
 end)
 
-notif("🌾  INDO FARMER  v14.0","Welcome,  "..LocalPlayer.Name.."  ✦",5)
-task.wait(1.5)
-notif("✦  v14  Fix",
-    "✅ TP tidak nembus tanah (Raycast Y)\n"
-    .."✅ Penangkal petir Flee & Return\n"
-    .."✅ 5 NPC hardcoded\n"
-    .."✅ Backpack dihapus", 8)
+Library:Notification("🌟 XKID FULL v1.0",
+    "Farm+Hub siap!\nScan toko otomatis...", 4)
+Library:ConfigSystem(Win)
 
-print("╔═══════════════════════════════════════════╗")
-print("║   🌾  INDO FARMER  v14.0  —  XKID HUB   ║")
-print("║   Flee⚡  RaycastTP  ·  5 NPC Confirmed  ║")
-print("║   Player: "..LocalPlayer.Name)
-print("╚═══════════════════════════════════════════╝")
+print("╔══════════════════════════════════════╗")
+print("║   🌟  XKID FULL v1.0               ║")
+print("║   Farm · TP · Fly · Speed · Prot    ║")
+print("║   Player: "..LP.Name)
+print("╚══════════════════════════════════════╝")
