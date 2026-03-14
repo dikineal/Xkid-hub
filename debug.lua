@@ -220,17 +220,20 @@ local function tpToToko()
 end
 
 -- Beli bibit via FireServer BridgeNet2
+-- Format benar dari Cobalt spy
 local function beliBibit(cropName, qty)
     if not dataRE then
         Library:Notification("❌","dataRemoteEvent tidak ada",3); return false
     end
     local ok, err = pcall(function()
         dataRE:FireServer({
-            [1] = { {
-                cropName = cropName,
-                count    = qty,
-            } },
-            [2] = ID_BUY,
+            {   -- wrapper table (dari Cobalt)
+                {
+                    cropName = cropName,
+                    count    = qty,
+                }
+            },
+            ID_BUY,
         })
     end)
     if not ok then
@@ -240,7 +243,7 @@ local function beliBibit(cropName, qty)
     return true
 end
 
--- Teleport ke lahan (lahan terdekat atau index tertentu)
+-- Teleport ke lahan
 local function tpToLahan(idx)
     if #LAHAN == 0 then
         Library:Notification("❌","Tidak ada data lahan",2); return false
@@ -255,21 +258,22 @@ local function tpToLahan(idx)
 end
 
 -- Tanam ke semua lahan
+-- Format benar dari Cobalt spy
 local function tanamSemua(cropName)
     if not dataRE then
-        Library:Notification("❌","dataRemoteEvent tidak ada",3); return
+        Library:Notification("❌","dataRemoteEvent tidak ada",3); return 0
     end
-    local root = getRoot(); if not root then return end
 
     local success = 0
-    for i, pos in ipairs(LAHAN) do
-        -- Cari part Land di dekat posisi
+    for _, pos in ipairs(LAHAN) do
+        -- Cari BasePart Land terdekat dari posisi lahan
         local landPart = nil
         local minDist  = math.huge
         for _, v in pairs(Workspace:GetDescendants()) do
             if v:IsA("BasePart") then
                 local n = v.Name:lower()
-                if n:find("land") or n:find("lahan") or n:find("plot") or n:find("farm") then
+                if n:find("land") or n:find("lahan")
+                or n:find("plot") or n:find("farm") then
                     local d = (v.Position - pos).Magnitude
                     if d < minDist then
                         minDist  = d
@@ -278,20 +282,18 @@ local function tanamSemua(cropName)
                 end
             end
         end
-
-        -- Fallback: pakai Workspace.Land
         if not landPart then
             landPart = Workspace:FindFirstChild("Land")
         end
 
         local ok = pcall(function()
             dataRE:FireServer({
-                [1] = {
+                {   -- wrapper table (dari Cobalt)
                     slotIdx     = 1,
                     hitPosition = pos,
                     hitPart     = landPart,
                 },
-                [2] = ID_PLANT,
+                ID_PLANT,
             })
         end)
 
@@ -299,6 +301,124 @@ local function tanamSemua(cropName)
         task.wait(plantDelay)
     end
     return success
+end
+
+-- ════════════════════════════════════════
+--  AUTO PANEN — ProximityPrompt
+-- ════════════════════════════════════════
+local autoPanenOn   = false
+local autoPanenLoop = nil
+local PANEN_INTERVAL = 5  -- detik
+
+-- Keyword nama tanaman untuk filter ProximityPrompt
+local CROP_KEYWORDS = {
+    "sawi","padi","tomat","melon","coconut","appletree",
+    "daisy","fanpalm","sunflower","sawit","crop","plant",
+    "tanaman","harvest","panen","bibit","seed","flower",
+    "bunga","buah","sayur","pohon","tree","kebun"
+}
+
+local function isTanamanPart(part)
+    if not part then return false end
+    local n = part.Name:lower()
+    for _, kw in ipairs(CROP_KEYWORDS) do
+        if n:find(kw) then return true end
+    end
+    -- Cek parent juga
+    if part.Parent then
+        local pn = part.Parent.Name:lower()
+        for _, kw in ipairs(CROP_KEYWORDS) do
+            if pn:find(kw) then return true end
+        end
+    end
+    return false
+end
+
+local function triggerPrompt(prompt)
+    -- Coba fireproximityprompt dulu (executor function)
+    local ok1 = pcall(function()
+        fireproximityprompt(prompt)
+    end)
+    if ok1 then return true end
+
+    -- Fallback: TriggerEnded
+    local ok2 = pcall(function()
+        prompt:TriggerEnded(LP)
+    end)
+    if ok2 then return true end
+
+    -- Fallback 2: fireclickdetector pada parent
+    local ok3 = pcall(function()
+        local cd = prompt.Parent:FindFirstChildOfClass("ClickDetector")
+        if cd then fireclickdetector(cd) end
+    end)
+    return ok3
+end
+
+local function scanDanPanen()
+    local count = 0
+    local myRoot = getRoot()
+
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            local parent = v.Parent
+            if not parent then continue end
+
+            -- Filter: hanya trigger prompt di dekat lahan kita
+            local pos = parent:IsA("BasePart") and parent.Position
+                     or (parent.PrimaryPart and parent.PrimaryPart.Position)
+                     or nil
+
+            local dekatLahan = false
+            if pos then
+                -- Cek apakah dekat salah satu lahan (radius 15 studs)
+                for _, lahanPos in ipairs(LAHAN) do
+                    if (pos - lahanPos).Magnitude < 15 then
+                        dekatLahan = true
+                        break
+                    end
+                end
+                -- Kalau tidak ada data lahan, trigger semua yang ada tanaman
+                if #LAHAN == 0 then
+                    dekatLahan = isTanamanPart(parent)
+                end
+            end
+
+            if dekatLahan or isTanamanPart(parent) then
+                local ok = triggerPrompt(v)
+                if ok then
+                    count = count + 1
+                    task.wait(0.1)  -- jeda kecil antar trigger
+                end
+            end
+        end
+    end
+    return count
+end
+
+local function startAutoPanen()
+    if autoPanenLoop then
+        pcall(function() task.cancel(autoPanenLoop) end)
+    end
+    autoPanenLoop = task.spawn(function()
+        while autoPanenOn do
+            local n = scanDanPanen()
+            if n > 0 then
+                Library:Notification("🌾 Auto Panen",
+                    string.format("%d tanaman dipanen!\nTotal: %d | Coins: %d",
+                        n, totalHarvest, totalCoins), 3)
+            end
+            task.wait(PANEN_INTERVAL)
+        end
+    end)
+end
+
+local function stopAutoPanen()
+    autoPanenOn = false
+    if autoPanenLoop then
+        pcall(function() task.cancel(autoPanenLoop) end)
+        autoPanenLoop = nil
+    end
 end
 
 -- Monitor harvest dari server
@@ -385,11 +505,17 @@ local function startAutoFarm()
             Library:Notification("🌱 Tanam",
                 string.format("%d lahan ditanam\nMenunggu panen...", n), 3)
 
-            -- 5. Tunggu panen (monitor dari server)
-            setFarmStatus("⏳ Menunggu Panen...")
-            -- Tunggu minimal 30 detik lalu coba harvest ulang
+            -- 5. Tunggu & auto panen via ProximityPrompt
+            setFarmStatus("⏳ Menunggu & Memanen...")
             local waited = 0
             while farmOn and waited < 300 do
+                -- Scan ProximityPrompt tiap 5 detik
+                local n = scanDanPanen()
+                if n > 0 then
+                    Library:Notification("🌾 Auto Panen",
+                        string.format("%d tanaman dipanen!\nTotal: %d",
+                            n, totalHarvest), 3)
+                end
                 task.wait(5)
                 waited = waited + 5
             end
@@ -656,6 +782,87 @@ end
 local function stopAntiKick() antiKickOn=false end
 
 -- ════════════════════════════════════════
+--  ⑨ AUTO RESPAWN
+-- ════════════════════════════════════════
+local autoRespawnOn   = false
+local respawnMode     = "Natural"  -- "Natural" atau "Cepat"
+local respawnConn     = nil
+local lastPos         = nil
+local respawnWaitTime = 1.0  -- detik tunggu setelah spawn
+
+local function setupAutoRespawn()
+    -- Cleanup koneksi lama
+    if respawnConn then
+        pcall(function() respawnConn:Disconnect() end)
+        respawnConn = nil
+    end
+    if not autoRespawnOn then return end
+
+    local function hookCharacter(char)
+        local hum  = char:WaitForChild("Humanoid", 5)
+        local root = char:WaitForChild("HumanoidRootPart", 5)
+        if not hum or not root then return end
+
+        -- Simpan posisi terus menerus saat hidup
+        local posConn = RunService.Heartbeat:Connect(function()
+            if root and root.Parent then
+                lastPos = root.CFrame
+            end
+        end)
+
+        -- Deteksi mati
+        hum.Died:Connect(function()
+            posConn:Disconnect()
+            local savedCF = lastPos
+            if not savedCF then return end
+
+            if respawnMode == "Cepat" then
+                -- Mode Cepat: BreakJoints setelah deteksi mati
+                task.wait(0.1)
+                pcall(function() char:BreakJoints() end)
+            end
+            -- Mode Natural: tunggu game respawn sendiri
+
+            -- Tunggu karakter baru
+            local conn2
+            conn2 = LP.CharacterAdded:Connect(function(newChar)
+                conn2:Disconnect()
+                task.wait(respawnWaitTime)
+                local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+                local hum2 = newChar:WaitForChild("Humanoid", 5)
+                if hrp then
+                    hrp.CFrame = savedCF
+                end
+                if hum2 then
+                    hum2.WalkSpeed    = curWS
+                    hum2.JumpPower    = curJP
+                    hum2.UseJumpPower = true
+                end
+                Library:Notification("✅ Auto Respawn",
+                    string.format("Kembali!\nMode: %s\nX=%.0f Y=%.0f Z=%.0f",
+                        respawnMode,
+                        savedCF.Position.X,
+                        savedCF.Position.Y,
+                        savedCF.Position.Z), 4)
+                -- Hook karakter baru
+                task.wait(1)
+                if autoRespawnOn then
+                    hookCharacter(newChar)
+                end
+            end)
+        end)
+    end
+
+    -- Hook karakter saat ini
+    if LP.Character then
+        hookCharacter(LP.Character)
+    end
+
+    -- Hook karakter berikutnya (sudah di-handle di Died)
+    respawnConn = LP.CharacterAdded:Connect(function() end) -- placeholder
+end
+
+-- ════════════════════════════════════════
 --  BUILD UI — TAB FARM
 -- ════════════════════════════════════════
 local FarmPage  = TabFarm:Page("Auto Farm", "wheat")
@@ -758,6 +965,34 @@ FarmRight:Toggle("👁 Monitor Panen", "MonitorToggle", false,
         if v then startHarvestMonitor()
         else stopHarvestMonitor() end
         Library:Notification("👁 Monitor", v and "ON" or "OFF", 2)
+    end)
+
+FarmRight:Toggle("🌾 Auto Panen (ProximityPrompt)", "AutoPanenToggle", false,
+    "Scan & trigger ProximityPrompt tanaman tiap 5 detik",
+    function(v)
+        autoPanenOn = v
+        if v then
+            startAutoPanen()
+            Library:Notification("🌾 Auto Panen",
+                "ON — Scan tiap 5 detik\nTrigger ProximityPrompt", 3)
+        else
+            stopAutoPanen()
+            Library:Notification("🌾 Auto Panen","OFF",2)
+        end
+    end)
+
+FarmRight:Button("🌾 Panen Manual Sekarang", "Trigger semua ProximityPrompt tanaman sekali",
+    function()
+        task.spawn(function()
+            Library:Notification("🌾","Scanning tanaman matang...",2)
+            local n = scanDanPanen()
+            Library:Notification(
+                n > 0 and "✅ Panen!" or "⏳ Belum Ada",
+                n > 0
+                    and string.format("%d tanaman dipanen!", n)
+                    or "Tidak ada ProximityPrompt\nCoba lagi nanti",
+                4)
+        end)
     end)
 
 FarmRight:Button("📊 Lihat Statistik", "Total panen & coins sesi ini",
@@ -975,9 +1210,9 @@ SR:Toggle("Infinite Jump","InfJumpToggle",false,"Lompat terus di udara",
 -- ════════════════════════════════════════
 --  BUILD UI — TAB PROTECTION
 -- ════════════════════════════════════════
-local PPage = TabProt:Page("Protection","shield")
-local PL    = PPage:Section("🛡 Controls","Left")
-local PR    = PPage:Section("ℹ Info","Right")
+local PPage  = TabProt:Page("Protection","shield")
+local PL     = PPage:Section("🛡 Controls","Left")
+local PR     = PPage:Section("💀 Auto Respawn","Right")
 
 PL:Toggle("Anti AFK","AntiAFKToggle",false,"Cegah disconnect",
     function(v)
@@ -1004,11 +1239,73 @@ PL:Button("📍 Posisi Saya","Lihat koordinat sekarang",
         end
     end)
 
-PR:Paragraph("Info",
+PL:Paragraph("Info",
     "Anti AFK:\nCegah auto-disconnect\n\n"..
     "Anti Kick:\nJaga HP dari kick\n\n"..
     "Rejoin:\nKoneksi ulang cepat\n\n"..
-    "ESP:\nDi tab Fly section\nNoClip")
+    "ESP:\nDi tab Fly → NoClip")
+
+-- ── Auto Respawn ──
+PR:Toggle("💀 Auto Respawn","AutoRespawnToggle",false,
+    "Otomatis kembali ke posisi terakhir saat mati",
+    function(v)
+        autoRespawnOn = v
+        if v then
+            setupAutoRespawn()
+            Library:Notification("💀 Auto Respawn",
+                "ON — Mode: "..respawnMode.."\nPosisi terakhir tersimpan", 3)
+        else
+            if respawnConn then
+                pcall(function() respawnConn:Disconnect() end)
+                respawnConn = nil
+            end
+            Library:Notification("💀 Auto Respawn","OFF",2)
+        end
+    end)
+
+PR:Dropdown("Mode Respawn","RespawnModeDropdown",
+    {"Natural — Tunggu game","Cepat — BreakJoints"},
+    function(v)
+        if v:find("Natural") then
+            respawnMode     = "Natural"
+            respawnWaitTime = 1.0
+        else
+            respawnMode     = "Cepat"
+            respawnWaitTime = 0.5
+        end
+        Library:Notification("Mode Respawn",respawnMode,2)
+        -- Re-setup jika sudah aktif
+        if autoRespawnOn then setupAutoRespawn() end
+    end)
+
+PR:Button("💀 Respawn Sekarang (Natural)","Mati & kembali ke posisi sekarang",
+    function()
+        local root=getRoot()
+        if not root then
+            Library:Notification("❌","Karakter tidak ada",2); return
+        end
+        local savedCF = root.CFrame
+        local sWS,sJP = curWS,curJP
+        local c=getChar(); if c then c:BreakJoints() end
+        local conn
+        conn=LP.CharacterAdded:Connect(function(newChar)
+            conn:Disconnect(); task.wait(0.8)
+            local hrp=newChar:WaitForChild("HumanoidRootPart",5)
+            local hum=newChar:WaitForChild("Humanoid",5)
+            if hrp then hrp.CFrame=savedCF end
+            if hum then
+                hum.WalkSpeed=sWS
+                hum.JumpPower=sJP
+                hum.UseJumpPower=true
+            end
+            Library:Notification("✅ Respawn","Kembali ke posisi semula",2)
+        end)
+    end)
+
+PR:Paragraph("Info Respawn",
+    "Natural:\nTunggu animasi mati\nlebih aman\n\n"..
+    "Cepat:\nBreakJoints langsung\nrespawn lebih cepat\n\n"..
+    "Posisi disimpan\nsecara otomatis\ntiap detik saat hidup")
 
 -- ════════════════════════════════════════
 --  INIT
