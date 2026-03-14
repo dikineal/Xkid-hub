@@ -1595,3 +1595,4 @@ print("║   🌟  XKID FULL v1.0               ║")
 print("║   Farm · TP · Fly · Speed · Prot    ║")
 print("║   Player: "..LP.Name)
 print("╚══════════════════════════════════════╝")
+
