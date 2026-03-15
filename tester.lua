@@ -2351,4 +2351,327 @@ function OrionLib:Destroy()
 Orion:Destroy()
 end
 
-return OrionLib
+-- ================================================
+--         xkid hub | Universal Script
+--         Made by xkid | All Games Support
+-- ================================================
+
+local XkidLib = OrionLib
+
+-- ================================================
+--                  MAKE WINDOW
+-- ================================================
+
+local Window = XkidLib:MakeWindow({
+    Name = "xkid hub",
+    HidePremium = true,
+    SaveConfig = false,
+    IntroEnabled = true,
+    IntroText = "xkid hub",
+})
+
+-- ================================================
+--                  TAB: PLAYER
+-- ================================================
+
+local PlayerTab = Window:MakeTab({
+    Name = "Player",
+    Icon = "user",
+    PremiumOnly = false
+})
+
+PlayerTab:AddToggle({
+    Name = "Infinite Jump",
+    Default = false,
+    Callback = function(Value)
+        local UIS = game:GetService("UserInputService")
+        if Value then
+            _G.InfiniteJump = UIS.JumpRequest:Connect(function()
+                local Character = game:GetService("Players").LocalPlayer.Character
+                if Character then
+                    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+                    if Humanoid then
+                        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end
+                end
+            end)
+        else
+            if _G.InfiniteJump then _G.InfiniteJump:Disconnect() end
+        end
+    end
+})
+
+PlayerTab:AddToggle({
+    Name = "Noclip",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            _G.NoclipConn = game:GetService("RunService").Stepped:Connect(function()
+                local Character = game:GetService("Players").LocalPlayer.Character
+                if Character then
+                    for _, Part in pairs(Character:GetDescendants()) do
+                        if Part:IsA("BasePart") then
+                            Part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+        else
+            if _G.NoclipConn then _G.NoclipConn:Disconnect() end
+        end
+    end
+})
+
+PlayerTab:AddSlider({
+    Name = "Walk Speed",
+    Min = 16,
+    Max = 200,
+    Default = 16,
+    Color = Color3.fromRGB(210, 60, 180),
+    Increment = 1,
+    ValueName = "Speed",
+    Callback = function(Value)
+        local Character = game:GetService("Players").LocalPlayer.Character
+        if Character then
+            local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+            if Humanoid then Humanoid.WalkSpeed = Value end
+        end
+    end
+})
+
+PlayerTab:AddSlider({
+    Name = "Jump Power",
+    Min = 50,
+    Max = 300,
+    Default = 50,
+    Color = Color3.fromRGB(210, 60, 180),
+    Increment = 1,
+    ValueName = "Power",
+    Callback = function(Value)
+        local Character = game:GetService("Players").LocalPlayer.Character
+        if Character then
+            local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+            if Humanoid then Humanoid.JumpPower = Value end
+        end
+    end
+})
+
+-- ================================================
+--                TAB: VISUAL
+-- ================================================
+
+local VisualTab = Window:MakeTab({
+    Name = "Visual",
+    Icon = "eye",
+    PremiumOnly = false
+})
+
+VisualTab:AddToggle({
+    Name = "Player ESP",
+    Default = false,
+    Callback = function(Value)
+        local Players = game:GetService("Players")
+        local LocalPlayer = Players.LocalPlayer
+        local CoreGui = game:GetService("CoreGui")
+
+        local function AddESP(Player)
+            if Player == LocalPlayer then return end
+            local function OnChar(Char)
+                local Head = Char:WaitForChild("Head", 5)
+                if not Head then return end
+
+                local Box = Instance.new("SelectionBox")
+                Box.Name = "xkidESP"
+                Box.Color3 = Color3.fromRGB(210, 60, 180)
+                Box.LineThickness = 0.05
+                Box.Adornee = Char
+                Box.Parent = CoreGui
+
+                local Billboard = Instance.new("BillboardGui")
+                Billboard.Name = "xkidESPTag"
+                Billboard.Size = UDim2.new(0, 100, 0, 40)
+                Billboard.StudsOffset = Vector3.new(0, 3, 0)
+                Billboard.Adornee = Head
+                Billboard.AlwaysOnTop = true
+                Billboard.Parent = CoreGui
+
+                local Label = Instance.new("TextLabel")
+                Label.BackgroundTransparency = 1
+                Label.Size = UDim2.new(1, 0, 1, 0)
+                Label.TextColor3 = Color3.fromRGB(255, 220, 240)
+                Label.TextStrokeTransparency = 0
+                Label.Text = Player.Name
+                Label.Font = Enum.Font.GothamBold
+                Label.TextSize = 14
+                Label.Parent = Billboard
+            end
+            if Player.Character then OnChar(Player.Character) end
+            Player.CharacterAdded:Connect(OnChar)
+        end
+
+        if Value then
+            for _, Player in pairs(Players:GetPlayers()) do AddESP(Player) end
+            _G.ESPConn = Players.PlayerAdded:Connect(AddESP)
+        else
+            if _G.ESPConn then _G.ESPConn:Disconnect() end
+            for _, v in pairs(CoreGui:GetChildren()) do
+                if v.Name == "xkidESP" or v.Name == "xkidESPTag" then v:Destroy() end
+            end
+        end
+    end
+})
+
+VisualTab:AddToggle({
+    Name = "Fullbright",
+    Default = false,
+    Callback = function(Value)
+        local Lighting = game:GetService("Lighting")
+        if Value then
+            Lighting.Brightness = 5
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = false
+            Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        else
+            Lighting.Brightness = 1
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = true
+            Lighting.Ambient = Color3.fromRGB(127, 127, 127)
+        end
+    end
+})
+
+-- ================================================
+--                TAB: TELEPORT
+-- ================================================
+
+local TeleportTab = Window:MakeTab({
+    Name = "Teleport",
+    Icon = "map-pin",
+    PremiumOnly = false
+})
+
+TeleportTab:AddDropdown({
+    Name = "Teleport to Player",
+    Default = "Select Player",
+    Options = (function()
+        local names = {}
+        for _, v in pairs(game:GetService("Players"):GetPlayers()) do
+            if v ~= game:GetService("Players").LocalPlayer then
+                table.insert(names, v.Name)
+            end
+        end
+        return names
+    end)(),
+    Callback = function(Value)
+        local Players = game:GetService("Players")
+        local Target = Players:FindFirstChild(Value)
+        local LocalPlayer = Players.LocalPlayer
+        if Target and Target.Character then
+            local Root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local TargetRoot = Target.Character:FindFirstChild("HumanoidRootPart")
+            if Root and TargetRoot then
+                Root.CFrame = TargetRoot.CFrame + Vector3.new(0, 3, 0)
+            end
+        end
+    end
+})
+
+TeleportTab:AddButton({
+    Name = "Teleport to Spawn",
+    Callback = function()
+        local Character = game:GetService("Players").LocalPlayer.Character
+        if Character then
+            local Root = Character:FindFirstChild("HumanoidRootPart")
+            local Spawn = workspace:FindFirstChildOfClass("SpawnLocation")
+            if Root and Spawn then
+                Root.CFrame = Spawn.CFrame + Vector3.new(0, 5, 0)
+            end
+        end
+    end
+})
+
+-- ================================================
+--                TAB: MISC
+-- ================================================
+
+local MiscTab = Window:MakeTab({
+    Name = "Misc",
+    Icon = "settings",
+    PremiumOnly = false
+})
+
+MiscTab:AddToggle({
+    Name = "Anti AFK",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            local VirtualUser = game:GetService("VirtualUser")
+            _G.AntiAFKConn = game:GetService("Players").LocalPlayer.Idled:Connect(function()
+                VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                task.wait(1)
+                VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            end)
+        else
+            if _G.AntiAFKConn then _G.AntiAFKConn:Disconnect() end
+        end
+    end
+})
+
+MiscTab:AddTextbox({
+    Name = "Chat Bypass",
+    Default = "",
+    TextDisappear = true,
+    Callback = function(Value)
+        local RS = game:GetService("ReplicatedStorage")
+        local ChatEvents = RS:FindFirstChild("DefaultChatSystemChatEvents")
+        if ChatEvents then
+            local SayMsg = ChatEvents:FindFirstChild("SayMessageRequest")
+            if SayMsg then SayMsg:FireServer(Value, "All") end
+        end
+    end
+})
+
+MiscTab:AddButton({
+    Name = "Rejoin Game",
+    Callback = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId, game:GetService("Players").LocalPlayer)
+    end
+})
+
+MiscTab:AddButton({
+    Name = "Server Hop",
+    Callback = function()
+        local TS = game:GetService("TeleportService")
+        local HS = game:GetService("HttpService")
+        local PlaceId = game.PlaceId
+        local CurrentJobId = game.JobId
+        local ok, res = pcall(function()
+            return HS:JSONDecode(game:HttpGetAsync("https://games.roblox.com/v1/games/"..PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+        end)
+        if ok and res and res.data then
+            for _, server in pairs(res.data) do
+                if server.id ~= CurrentJobId and server.playing < server.maxPlayers then
+                    TS:TeleportToPlaceInstance(PlaceId, server.id, game:GetService("Players").LocalPlayer)
+                    return
+                end
+            end
+        end
+    end
+})
+
+-- ================================================
+--             TAB: CREDITS
+-- ================================================
+
+local CreditsTab = Window:MakeTab({
+    Name = "Credits",
+    Icon = "info",
+    PremiumOnly = false
+})
+
+CreditsTab:AddLabel("xkid hub - Universal Script")
+CreditsTab:AddLabel("Made with love by xkid")
+CreditsTab:AddLabel("Version: 1.0")
+CreditsTab:AddLabel("Player | Visual | Teleport | Misc")
