@@ -420,101 +420,112 @@ end
 
 -- ════════════════════════════════════════
 -- ════════════════════════════════════════
---  HARVEST SYSTEM v3
---  Posisi panen = posisi tanam (akurat!)
---  Default: LAHAN list, update saat tanam
+-- ════════════════════════════════════════
+--  HARVEST SYSTEM v4
+--  Scan Workspace cari prompt username kita
+--  Coba SEMUA metode trigger
 -- ════════════════════════════════════════
 
-local plantedPos = {}
-local MY_NAME    = LP.Name
-
-local function initPlantedFromLahan(cropName)
-    plantedPos = {}
-    for _, pos in ipairs(LAHAN) do
-        table.insert(plantedPos, {pos=pos, cropName=cropName, time=os.time()})
-    end
-end
-
-local function addPlantedPos(pos, cropName)
-    for _, p in ipairs(plantedPos) do
-        if (p.pos - pos).Magnitude < 2 then
-            p.cropName=cropName; p.time=os.time(); return
-        end
-    end
-    table.insert(plantedPos, {pos=pos, cropName=cropName, time=os.time()})
-end
-
-local function findHarvestPromptAt(pos, radius)
-    radius = radius or 10
-    local best, bestDist = nil, math.huge
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then
-            local parent = v.Parent
-            if parent then
-                local ppos = parent:IsA("BasePart") and parent.Position
-                          or (parent.PrimaryPart and parent.PrimaryPart.Position)
-                if ppos and (ppos - pos).Magnitude <= radius then
-                    local action = (v.ActionText or ""):lower()
-                    local obj    = (v.ObjectText  or ""):lower()
-                    local isPanen = action:find("panen") or action:find("harvest")
-                                 or action:find("petik") or action:find("ambil")
-                                 or obj:find(MY_NAME:lower())
-                    local isIgnore = action:find("sit") or action:find("ride")
-                                  or action:find("door") or action:find("shop")
-                    if isPanen and not isIgnore then
-                        local d = (ppos - pos).Magnitude
-                        if d < bestDist then bestDist=d; best=v end
-                    end
-                end
+local function triggerPromptAllMethods(prompt)
+    if not prompt then return false end
+    local root = getRoot()
+    -- Method 1: fireproximityprompt (executor)
+    pcall(function() fireproximityprompt(prompt) end)
+    task.wait(0.05)
+    -- Method 2: InputHoldBegin/End
+    pcall(function()
+        prompt:InputHoldBegin(); task.wait(0.1); prompt:InputHoldEnd()
+    end)
+    task.wait(0.05)
+    -- Method 3: TriggerEnded
+    pcall(function() prompt:TriggerEnded(LP) end)
+    task.wait(0.05)
+    -- Method 4: TP dekat lalu trigger
+    if root then
+        local parent = prompt.Parent
+        if parent then
+            local ppos = parent:IsA("BasePart") and parent.Position
+                      or (parent.PrimaryPart and parent.PrimaryPart.Position)
+            if ppos then
+                local savedCF = root.CFrame
+                root.CFrame   = CFrame.new(ppos)*CFrame.new(0,2,0)
+                task.wait(0.15)
+                pcall(function() fireproximityprompt(prompt) end)
+                pcall(function()
+                    prompt:InputHoldBegin(); task.wait(0.1); prompt:InputHoldEnd()
+                end)
+                task.wait(0.1)
+                root.CFrame = savedCF
             end
         end
     end
-    return best
+    return true
+end
+
+local function findAllMyPrompts()
+    local result  = {}
+    local nameLow = MY_NAME:lower()
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            local obj    = (v.ObjectText or ""):lower()
+            local action = (v.ActionText or ""):lower()
+            -- Filter: objecttext ada nama kita
+            if obj:find(nameLow) or
+               (action:find("panen") and obj == "") then
+                table.insert(result, v)
+            end
+        end
+    end
+    return result
 end
 
 local function harvestSemua(cropName)
     local root = getRoot(); if not root then return 0 end
-    if #plantedPos == 0 then initPlantedFromLahan(cropName) end
     local savedCF = root.CFrame
     local n = 0
-    for _, planted in ipairs(plantedPos) do
-        root.CFrame = CFrame.new(planted.pos.X, planted.pos.Y+2, planted.pos.Z)
-        task.wait(0.3)
-        local prompt = findHarvestPromptAt(planted.pos, 10)
-        if prompt then
-            pcall(function() fireproximityprompt(prompt) end)
-            pcall(function() prompt:TriggerEnded(LP) end)
-            n = n + 1
-        end
-        if dataRE then
-            pcall(function()
-                dataRE:FireServer({{amount=1,cropName=planted.cropName},ID_HARVEST})
-            end)
-        end
-        task.wait(0.15)
-    end
-    task.wait(0.3); root.CFrame = savedCF
-    return n
-end
 
-local function startHarvestMonitor()
-    if harvestConn then pcall(function() harvestConn:Disconnect() end) end
-    if not dataRE then return end
-    harvestConn = dataRE.OnClientEvent:Connect(function(data)
-        if type(data) ~= "table" then return end
-        for k, v in pairs(data) do
-            if k == "\x0F" and type(v) == "table" then
-                for _, entry in ipairs(v) do
-                    if type(entry)=="table" and entry.cropName then
-                        totalHarvest = totalHarvest + 1
-                        totalCoins   = totalCoins + (entry.sellPrice or 0)
-                        if entry.cropPos then addPlantedPos(entry.cropPos, entry.cropName) end
+    -- Cara utama: scan prompt ObjectText = nama kita
+    local myPrompts = findAllMyPrompts()
+    if #myPrompts > 0 then
+        for _, prompt in ipairs(myPrompts) do
+            triggerPromptAllMethods(prompt)
+            n = n + 1; task.wait(0.1)
+        end
+    else
+        -- Fallback: TP ke tiap lahan → trigger terdekat
+        if #plantedPos == 0 then initPlantedFromLahan(cropName) end
+        for _, planted in ipairs(plantedPos) do
+            root.CFrame = CFrame.new(planted.pos.X, planted.pos.Y+2, planted.pos.Z)
+            task.wait(0.3)
+            local best, bestDist = nil, math.huge
+            for _, v in pairs(Workspace:GetDescendants()) do
+                if v:IsA("ProximityPrompt") then
+                    local obj  = (v.ObjectText or ""):lower()
+                    local act  = (v.ActionText or ""):lower()
+                    local par  = v.Parent
+                    if par and (obj:find(MY_NAME:lower()) or act:find("panen")) then
+                        local pp = par:IsA("BasePart") and par.Position
+                               or (par.PrimaryPart and par.PrimaryPart.Position)
+                        if pp then
+                            local d = (pp - planted.pos).Magnitude
+                            if d < bestDist and d < 10 then bestDist=d; best=v end
+                        end
                     end
                 end
             end
-            if k == "\x04" and type(v)=="table" and v[1] then totalCoins = v[1] end
+            if best then triggerPromptAllMethods(best); n=n+1 end
+            task.wait(0.1)
         end
-    end)
+        task.wait(0.3); root.CFrame = savedCF
+    end
+
+    -- Always fallback: FireServer \x09
+    if dataRE then
+        pcall(function()
+            dataRE:FireServer({{amount=1, cropName=cropName}, ID_HARVEST})
+        end)
+    end
+    return n
 end
 
 local function startAutoFarm()
