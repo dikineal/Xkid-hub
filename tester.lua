@@ -2356,19 +2356,19 @@ end
 --         Made by xkid | All Games Support
 -- ================================================
 
-local XkidLib = OrionLib
-
 -- ================================================
 --                  MAKE WINDOW
 -- ================================================
 
-local Window = XkidLib:MakeWindow({
+local Window = OrionLib:MakeWindow({
     Name = "xkid hub",
     HidePremium = true,
     SaveConfig = false,
     IntroEnabled = true,
     IntroText = "xkid hub",
 })
+
+OrionLib:Init(Window)
 
 -- ================================================
 --                  TAB: PLAYER
