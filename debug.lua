@@ -931,6 +931,47 @@ FarmL:Button("🔄 Reset Statistik", "Reset counter",
         Library:Notification("🔄", "Statistik direset", 2)
     end)
 
+FarmL:Button("🛑 STOP ALL", "Hentikan semua fitur sekaligus",
+    function()
+        -- Stop Farm
+        farmOn = false
+        if farmLoop then pcall(function() task.cancel(farmLoop) end); farmLoop=nil end
+        if timerLoop then pcall(function() task.cancel(timerLoop) end); timerLoop=nil end
+        if harvestConn then pcall(function() harvestConn:Disconnect() end); harvestConn=nil end
+        -- Stop Auto Panen
+        autoPanenOn = false
+        if autoPanenLoop then pcall(function() task.cancel(autoPanenLoop) end); autoPanenLoop=nil end
+        -- Stop Fly
+        flyOn = false
+        if flyConn then pcall(function() flyConn:Disconnect() end); flyConn=nil end
+        if flyBV then pcall(function() flyBV:Destroy() end); flyBV=nil end
+        if flyBG then pcall(function() flyBG:Destroy() end); flyBG=nil end
+        local hum = getHum(); if hum then hum.PlatformStand=false end
+        -- Stop NoClip
+        noclipOn = false
+        if noclipConn then pcall(function() noclipConn:Disconnect() end); noclipConn=nil end
+        local c = getChar()
+        if c then for _,p in pairs(c:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide=true end end end
+        -- Stop ESP
+        espOn = false
+        for _,b in ipairs(espBills) do pcall(function() b:Destroy() end) end
+        for _,conn in ipairs(espConns) do pcall(function() conn:Disconnect() end) end
+        espBills={}; espConns={}
+        -- Stop Anti AFK & Kick
+        if afkConn then afkConn:Disconnect(); afkConn=nil end
+        antiKickOn = false
+        -- Stop Auto Respawn
+        autoRespawnOn = false
+        if respawnConn then pcall(function() respawnConn:Disconnect() end); respawnConn=nil end
+        -- Reset status
+        farmStatus = "💤 Idle"
+        Library:Notification("🛑 STOP ALL",
+            "✅ Semua fitur dihentikan!\n"..
+            "Farm · AutoPanen · Fly\n"..
+            "NoClip · ESP · AFK · Respawn", 5)
+    end)
+
 -- KANAN: Tanaman + Buy Qty
 FarmR:Dropdown("🌱 Pilih Tanaman", "CropDD", cropNames,
     function(v) selectedCrop = v end)
@@ -1038,35 +1079,41 @@ ManR:Button("🔍 Scan Prompt di Lahan", "TP ke lahan → kumpulkan daftar Proxi
                     "Tidak ada ProximityPrompt\ndi dekat lahan kamu\n\nPastikan ada tanaman\nyang sudah tumbuh", 5)
                 return
             end
+            -- Tampilkan daftar dengan nama jelas
             local text = #scannedPrompts .. " prompt ditemukan:\n\n"
             for i, e in ipairs(scannedPrompts) do
                 text = text .. string.format(
-                    "[%d] %s\n    Action: %s\n\n",
+                    "[%d] %s\n    → %s\n\n",
                     i, e.parentName, e.actionText)
             end
+            text = text .. "Tekan tombol per prompt di bawah!"
             Library:Notification("🔍 Prompt Lahan", text, 15)
         end)
     end)
 
-ManR:Slider("🎯 Pilih Prompt #", "PromptIdxSl", 1, 30, 1,
-    function(v) selectedPromptIdx = v end,
-    "Nomor prompt dari hasil scan")
-
-ManR:Button("⚡ Trigger Prompt #", "Trigger prompt sesuai nomor",
-    function()
-        if #scannedPrompts == 0 then
-            Library:Notification("❌", "Scan prompt dulu!", 2); return
-        end
-        local ok = triggerPromptByIdx(scannedPrompts, selectedPromptIdx)
-        if ok then
-            Library:Notification("✅ Trigger",
-                "Prompt #" .. selectedPromptIdx .. " di-trigger!\n"..
-                (scannedPrompts[selectedPromptIdx] and
-                 scannedPrompts[selectedPromptIdx].parentName or ""), 3)
-        else
-            Library:Notification("❌", "Gagal trigger prompt #" .. selectedPromptIdx, 2)
-        end
-    end)
+-- Tombol per prompt — generate saat scan
+-- Karena Aurora tidak bisa dynamic, kita pre-buat 10 tombol
+-- yang aktif hanya kalau ada data di index tersebut
+for i = 1, 10 do
+    local idx = i
+    ManR:Button("⚡ Trigger Prompt [" .. idx .. "]",
+        "Trigger prompt nomor " .. idx .. " dari hasil scan",
+        function()
+            if #scannedPrompts == 0 then
+                Library:Notification("❌", "Scan prompt dulu!", 2); return
+            end
+            if idx > #scannedPrompts then
+                Library:Notification("❌",
+                    "Prompt #"..idx.." tidak ada\nHanya ada "..#scannedPrompts.." prompt", 3)
+                return
+            end
+            local e  = scannedPrompts[idx]
+            local ok = triggerPromptByIdx(scannedPrompts, idx)
+            Library:Notification(
+                ok and "✅ Trigger!" or "❌ Gagal",
+                string.format("[%d] %s\n→ %s", idx, e.parentName, e.actionText), 3)
+        end)
+end
 
 ManR:Button("⚡ Trigger SEMUA Prompt", "Trigger semua prompt hasil scan",
     function()
@@ -1075,8 +1122,7 @@ ManR:Button("⚡ Trigger SEMUA Prompt", "Trigger semua prompt hasil scan",
         end
         task.spawn(function()
             local n = triggerAllPrompts(scannedPrompts)
-            Library:Notification("✅ Trigger Semua",
-                n .. " prompt di-trigger!", 3)
+            Library:Notification("✅ Trigger Semua", n .. " prompt di-trigger!", 3)
         end)
     end)
 
