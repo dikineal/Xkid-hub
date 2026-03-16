@@ -15,7 +15,7 @@ local MOBILE  = UIS.TouchEnabled and not UIS.KeyboardEnabled
 local Library = {}
 Library.Version = "3.1"
 
--- ── xkid hub Icon System ─────────────────────────────────────────────
+-- ── VenturaUI Icon System ─────────────────────────────────────────────
 -- All icons are emoji — full color, render in Roblox TextLabels.
 -- Usage:  icon = Library.Icons.sword
 --         icon = "⚔️"   (direct emoji also works)
@@ -185,7 +185,7 @@ local function destroyExistingVenturaGUI()
 	end)
 	for _, container in ipairs(containers) do
 		for _, child in ipairs(container:GetChildren()) do
-			if child:IsA("ScreenGui") and child.Name == "xkid hub" then
+			if child:IsA("ScreenGui") and child.Name == "VenturaUI" then
 				pcall(function() child:Destroy() end)
 			end
 		end
@@ -205,17 +205,17 @@ local function resolveIcon(icon)
 end
 
 Library.Theme = {
-	Accent        = Color3.fromRGB(210, 60, 180),
-	Background    = Color3.fromRGB(18, 10, 28),
-	Surface       = Color3.fromRGB(28, 15, 42),
-	SurfaceHover  = Color3.fromRGB(45, 22, 62),
-	Nav           = Color3.fromRGB(14, 8, 22),
-	Topbar        = Color3.fromRGB(12, 6, 20),
-	Border        = Color3.fromRGB(100, 40, 110),
-	BorderHover   = Color3.fromRGB(180, 60, 160),
-	TextPrimary   = Color3.fromRGB(255, 220, 240),
-	TextSecondary = Color3.fromRGB(180, 120, 170),
-	TextDisabled  = Color3.fromRGB(100, 60, 100),
+	Accent        = Color3.fromRGB(100, 150, 255),
+	Background    = Color3.fromRGB(22, 22, 22),
+	Surface       = Color3.fromRGB(28, 28, 28),
+	SurfaceHover  = Color3.fromRGB(36, 36, 36),
+	Nav           = Color3.fromRGB(18, 18, 18),
+	Topbar        = Color3.fromRGB(16, 16, 16),
+	Border        = Color3.fromRGB(50, 50, 50),
+	BorderHover   = Color3.fromRGB(82, 82, 82),
+	TextPrimary   = Color3.fromRGB(220, 220, 220),
+	TextSecondary = Color3.fromRGB(130, 130, 130),
+	TextDisabled  = Color3.fromRGB(75, 75, 75),
 }
 
 local function tw(obj, goal, ti, cb)
@@ -286,7 +286,7 @@ end
 
 function Library:new(options)
 	options=validate({
-		name            = "xkid hub",
+		name            = "Ventura UI",
 		subtitle        = nil,
 		toggleKey       = Enum.KeyCode.Insert,
 		minimizeKey     = Enum.KeyCode.K,
@@ -318,7 +318,7 @@ function Library:new(options)
 
 	local SG=Instance.new("ScreenGui",
 		RunService:IsStudio() and LP:WaitForChild("PlayerGui") or CoreGui)
-	SG.Name="xkid hub"; SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+	SG.Name="VenturaUI"; SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 	SG.IgnoreGuiInset=true; SG.ResetOnSpawn=false
 	SG.DisplayOrder=999
 	GUI._sg=SG; setupTooltip(SG)
@@ -855,7 +855,7 @@ function Library:new(options)
 		progFill.Size             = UDim2.new(1, 0, 1, 0)
 		progFill.BackgroundColor3 = accentCol
 		progFill.BorderSizePixel  = 0; progFill.ZIndex = 602
-		local tTitle = lbl(card, title or "xkid hub", 12, Library.Theme.TextPrimary,
+		local tTitle = lbl(card, title or "VenturaUI", 12, Library.Theme.TextPrimary,
 			Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Bold))
 		tTitle.Size     = UDim2.new(1, -18, 0, 16)
 		tTitle.Position = UDim2.new(0, 12, 0, 8); tTitle.ZIndex = 601
@@ -949,7 +949,7 @@ function Library:new(options)
 			local byeDur = 3
 			local notifSG = Instance.new("ScreenGui",
 				RunService:IsStudio() and LP:WaitForChild("PlayerGui") or CoreGui)
-			notifSG.Name = "xkid hub_Goodbye"
+			notifSG.Name = "VenturaUI_Goodbye"
 			notifSG.IgnoreGuiInset = true
 			notifSG.DisplayOrder = 1000
 			notifSG.ResetOnSpawn = false
@@ -971,10 +971,10 @@ function Library:new(options)
 			local pf = Instance.new("Frame", pb)
 			pf.Size = UDim2.new(1,0,1,0); pf.BackgroundColor3 = Library.Theme.Accent
 			pf.BorderSizePixel = 0; pf.ZIndex = 602
-			local t1 = lbl(card, "xkid hub", 12, Library.Theme.TextPrimary,
+			local t1 = lbl(card, "Ventura UI", 12, Library.Theme.TextPrimary,
 				Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Bold))
 			t1.Size = UDim2.new(1,-18,0,16); t1.Position = UDim2.new(0,12,0,8); t1.ZIndex = 601
-			local t2 = lbl(card, "Thanks for using xkid hub — see you! 👋", 11, Library.Theme.TextSecondary)
+			local t2 = lbl(card, "Thanks for using Ventura UI — see you! 👋", 11, Library.Theme.TextSecondary)
 			t2.Size = UDim2.new(1,-18,0,24); t2.Position = UDim2.new(0,12,0,26)
 			t2.TextWrapped = true; t2.TextYAlignment = Enum.TextYAlignment.Top; t2.ZIndex = 601
 			tw(card, { Position = UDim2.new(1, -(NW+NR), 1, -NB) }, TI_FAST)
@@ -1772,13 +1772,13 @@ function Library:new(options)
 	-- ══════════════════════════════════════════════════════════════════════
 	-- Config save / load
 	-- ══════════════════════════════════════════════════════════════════════
-	local _cfgFolder = "xkid hub"
+	local _cfgFolder = "VenturaUI"
 	local _cfgFile   = _cfgFolder .. "/" .. options.name:gsub("[^%w%-%_]","_") .. ".json"
 
 	local THEMES = {
-		Dark    = { bg=Color3.fromRGB(18,10,28),  nav=Color3.fromRGB(14,8,22),   top=Color3.fromRGB(12,6,20),   ub=Color3.fromRGB(16,9,25)  },
+		Dark    = { bg=Color3.fromRGB(22,22,22),  nav=Color3.fromRGB(18,18,18),  top=Color3.fromRGB(16,16,16),  ub=Color3.fromRGB(20,20,20) },
 		Crimson = { bg=Color3.fromRGB(42,18,18),  nav=Color3.fromRGB(34,12,12),  top=Color3.fromRGB(30,10,10),  ub=Color3.fromRGB(38,14,14) },
-		Magenta = { bg=Color3.fromRGB(28,10,38),  nav=Color3.fromRGB(20,6,30),   top=Color3.fromRGB(16,4,26),   ub=Color3.fromRGB(24,8,34)  },
+		Magenta = { bg=Color3.fromRGB(36,16,38),  nav=Color3.fromRGB(28,10,30),  top=Color3.fromRGB(24,8,26),   ub=Color3.fromRGB(32,12,34) },
 		Teal    = { bg=Color3.fromRGB(14,34,34),  nav=Color3.fromRGB(10,26,26),  top=Color3.fromRGB(8,22,22),   ub=Color3.fromRGB(12,30,30) },
 	}
 
@@ -1803,303 +1803,7 @@ function Library:new(options)
 	end
 	local function _hexToC3(h)
 		h = (h or ""):gsub("#","")
-		if #h < 6 then -- ════════════════════════════════════════════════════════
---              xkid hub | Universal Script
---              Made by xkid | All Games Support
--- ════════════════════════════════════════════════════════
-
-local GUI = Library:new({
-    name        = "xkid hub",
-    subtitle    = "Universal Script",
-    toggleKey   = Enum.KeyCode.RightShift,
-    loadingTime = 1.5,
-    accent      = Color3.fromRGB(210, 60, 180),
-    aiEnabled   = false,
-})
-
--- ── TAB: PLAYER ──────────────────────────────────────────────────────
-local Player = GUI:CreateTab({ name = "Player", icon = "👤" })
-
-Player:Section({ name = "Movement" })
-
-Player:Toggle({
-    name     = "Infinite Jump",
-    default  = false,
-    tooltip  = "Lompat berkali-kali di udara",
-    callback = function(v)
-        if v then
-            _G.InfJump = game:GetService("UserInputService").JumpRequest:Connect(function()
-                local char = game:GetService("Players").LocalPlayer.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-            end)
-        else
-            if _G.InfJump then _G.InfJump:Disconnect() end
-        end
-    end,
-})
-
-Player:Toggle({
-    name     = "Noclip",
-    default  = false,
-    tooltip  = "Tembus dinding",
-    callback = function(v)
-        if v then
-            _G.NoclipConn = game:GetService("RunService").Stepped:Connect(function()
-                local char = game:GetService("Players").LocalPlayer.Character
-                if char then
-                    for _, p in pairs(char:GetDescendants()) do
-                        if p:IsA("BasePart") then p.CanCollide = false end
-                    end
-                end
-            end)
-        else
-            if _G.NoclipConn then _G.NoclipConn:Disconnect() end
-        end
-    end,
-})
-
-Player:Slider({
-    name     = "Walk Speed",
-    min      = 16,
-    max      = 250,
-    default  = 16,
-    suffix   = " speed",
-    tooltip  = "Ubah kecepatan jalan",
-    callback = function(v)
-        local char = game:GetService("Players").LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.WalkSpeed = v end
-    end,
-})
-
-Player:Slider({
-    name     = "Jump Power",
-    min      = 50,
-    max      = 350,
-    default  = 50,
-    suffix   = " power",
-    tooltip  = "Ubah kekuatan lompat",
-    callback = function(v)
-        local char = game:GetService("Players").LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.JumpPower = v end
-    end,
-})
-
-Player:Section({ name = "Character" })
-
-Player:Button({
-    name        = "Reset Character",
-    description = "Respawn karakter kamu",
-    callback    = function()
-        local hum = game:GetService("Players").LocalPlayer.Character
-            and game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.Health = 0 end
-    end,
-})
-
--- ── TAB: VISUAL ──────────────────────────────────────────────────────
-local Visual = GUI:CreateTab({ name = "Visual", icon = "👁️" })
-
-Visual:Section({ name = "ESP" })
-
-Visual:Toggle({
-    name     = "Player ESP",
-    default  = false,
-    tooltip  = "Lihat player lewat dinding",
-    callback = function(v)
-        local Players  = game:GetService("Players")
-        local LP       = Players.LocalPlayer
-        local CoreGui  = game:GetService("CoreGui")
-
-        local function addESP(plr)
-            if plr == LP then return end
-            local function onChar(char)
-                local head = char:WaitForChild("Head", 5)
-                if not head then return end
-
-                local box = Instance.new("SelectionBox")
-                box.Name = "xkidESP"
-                box.Color3 = Color3.fromRGB(210, 60, 180)
-                box.LineThickness = 0.05
-                box.Adornee = char
-                box.Parent = CoreGui
-
-                local bb = Instance.new("BillboardGui")
-                bb.Name = "xkidESPTag"
-                bb.Size = UDim2.new(0, 100, 0, 30)
-                bb.StudsOffset = Vector3.new(0, 3, 0)
-                bb.Adornee = head
-                bb.AlwaysOnTop = true
-                bb.Parent = CoreGui
-
-                local lbl = Instance.new("TextLabel", bb)
-                lbl.BackgroundTransparency = 1
-                lbl.Size = UDim2.new(1,0,1,0)
-                lbl.TextColor3 = Color3.fromRGB(255, 220, 240)
-                lbl.TextStrokeTransparency = 0
-                lbl.Text = plr.Name
-                lbl.Font = Enum.Font.GothamBold
-                lbl.TextSize = 13
-            end
-            if plr.Character then onChar(plr.Character) end
-            plr.CharacterAdded:Connect(onChar)
-        end
-
-        if v then
-            for _, p in pairs(Players:GetPlayers()) do addESP(p) end
-            _G.ESPConn = Players.PlayerAdded:Connect(addESP)
-        else
-            if _G.ESPConn then _G.ESPConn:Disconnect() end
-            for _, c in pairs(CoreGui:GetChildren()) do
-                if c.Name == "xkidESP" or c.Name == "xkidESPTag" then c:Destroy() end
-            end
-        end
-    end,
-})
-
-Visual:Section({ name = "Lighting" })
-
-Visual:Toggle({
-    name     = "Fullbright",
-    default  = false,
-    tooltip  = "Terangin semua area",
-    callback = function(v)
-        local L = game:GetService("Lighting")
-        if v then
-            L.Brightness = 5; L.ClockTime = 14
-            L.FogEnd = 100000; L.GlobalShadows = false
-            L.Ambient = Color3.fromRGB(255,255,255)
-        else
-            L.Brightness = 1; L.ClockTime = 14
-            L.FogEnd = 100000; L.GlobalShadows = true
-            L.Ambient = Color3.fromRGB(127,127,127)
-        end
-    end,
-})
-
--- ── TAB: TELEPORT ────────────────────────────────────────────────────
-local Teleport = GUI:CreateTab({ name = "Teleport", icon = "⊛" })
-
-Teleport:Section({ name = "Players" })
-
-local playerNames = {}
-for _, p in pairs(game:GetService("Players"):GetPlayers()) do
-    if p ~= game:GetService("Players").LocalPlayer then
-        table.insert(playerNames, p.Name)
-    end
-end
-if #playerNames == 0 then playerNames = {"(No players)"}  end
-
-Teleport:Dropdown({
-    name     = "Teleport to Player",
-    items    = playerNames,
-    default  = playerNames[1],
-    tooltip  = "TP ke player yang dipilih",
-    callback = function(name)
-        local target = game:GetService("Players"):FindFirstChild(name)
-        local LP = game:GetService("Players").LocalPlayer
-        if target and target.Character then
-            local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-            local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
-            if root and tRoot then root.CFrame = tRoot.CFrame + Vector3.new(0,3,0) end
-        end
-    end,
-})
-
-Teleport:Section({ name = "World" })
-
-Teleport:Button({
-    name        = "Teleport to Spawn",
-    description = "TP ke titik spawn",
-    callback    = function()
-        local char = game:GetService("Players").LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
-        if root and spawn then root.CFrame = spawn.CFrame + Vector3.new(0,5,0) end
-    end,
-})
-
--- ── TAB: MISC ────────────────────────────────────────────────────────
-local Misc = GUI:CreateTab({ name = "Misc", icon = "⚙️" })
-
-Misc:Section({ name = "Utility" })
-
-Misc:Toggle({
-    name     = "Anti AFK",
-    default  = false,
-    tooltip  = "Cegah kick karena AFK",
-    callback = function(v)
-        if v then
-            local VU = game:GetService("VirtualUser")
-            _G.AntiAFK = game:GetService("Players").LocalPlayer.Idled:Connect(function()
-                VU:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                task.wait(1)
-                VU:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-            end)
-        else
-            if _G.AntiAFK then _G.AntiAFK:Disconnect() end
-        end
-    end,
-})
-
-Misc:TextInput({
-    name        = "Chat Bypass",
-    placeholder = "Ketik pesan...",
-    tooltip     = "Kirim chat bypass filter",
-    callback    = function(v)
-        local RS = game:GetService("ReplicatedStorage")
-        local ev = RS:FindFirstChild("DefaultChatSystemChatEvents")
-        local sr = ev and ev:FindFirstChild("SayMessageRequest")
-        if sr then sr:FireServer(v, "All") end
-    end,
-})
-
-Misc:Button({
-    name        = "Rejoin",
-    description = "Rejoin game sekarang",
-    callback    = function()
-        game:GetService("TeleportService"):Teleport(
-            game.PlaceId,
-            game:GetService("Players").LocalPlayer
-        )
-    end,
-})
-
-Misc:Button({
-    name        = "Server Hop",
-    description = "Pindah ke server lain",
-    callback    = function()
-        local TS = game:GetService("TeleportService")
-        local HS = game:GetService("HttpService")
-        local ok, res = pcall(function()
-            return HS:JSONDecode(game:HttpGetAsync(
-                "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
-            ))
-        end)
-        if ok and res and res.data then
-            for _, s in pairs(res.data) do
-                if s.id ~= game.JobId and s.playing < s.maxPlayers then
-                    TS:TeleportToPlaceInstance(game.PlaceId, s.id, game:GetService("Players").LocalPlayer)
-                    return
-                end
-            end
-        end
-        GUI.notify("Server Hop", "Tidak ada server lain ditemukan.", 3)
-    end,
-})
-
--- ── TAB: CREDITS ─────────────────────────────────────────────────────
-local Credits = GUI:CreateTab({ name = "Credits", icon = "👑" })
-
-Credits:Section({ name = "xkid hub" })
-Credits:Label({ text = "🌸 xkid hub - Universal Script" })
-Credits:Label({ text = "✨ Made with love by xkid" })
-Credits:Label({ text = "🔖 Version: 1.0  |  Ventura Library v3.1" })
-Credits:Divider()
-Credits:Label({ text = "🎨 Pink & Purple Dark Theme" })
-Credits:Label({ text = "📦 Player | Visual | Teleport | Misc" }).Theme.Accent end
+		if #h < 6 then return Library.Theme.Accent end
 		return Color3.fromRGB(
 			tonumber(h:sub(1,2),16) or 0,
 			tonumber(h:sub(3,4),16) or 0,
@@ -2146,7 +1850,7 @@ Credits:Label({ text = "📦 Player | Visual | Teleport | Misc" }).Theme.Accent 
 			})
 			writefile(_cfgFile, data)
 		end)
-		if not ok then warn("[xkid hub] SaveConfig failed: " .. tostring(err)) end
+		if not ok then warn("[VenturaUI] SaveConfig failed: " .. tostring(err)) end
 	end
 
 	function GUI:LoadConfig()
@@ -2214,7 +1918,7 @@ Credits:Label({ text = "📦 Player | Visual | Teleport | Misc" }).Theme.Accent 
 
 			AI:Paragraph({
 				title = "AI Assistant",
-				text  = "Ask anything about Roblox scripting, exploiting, or xkid hub. "
+				text  = "Ask anything about Roblox scripting, exploiting, or VenturaUI. "
 					.. "Free — no key or signup needed.",
 			})
 
@@ -2316,8 +2020,8 @@ Credits:Label({ text = "📦 Player | Visual | Teleport | Misc" }).Theme.Accent 
 					end
 					local context = table.concat(contextMsgs, "\n")
 
-					local systemPrompt = "You are a helpful Roblox scripting assistant inside xkid hub. "
-						.. "Answer questions about Roblox Lua, game development, exploiting, and xkid hub. "
+					local systemPrompt = "You are a helpful Roblox scripting assistant inside VenturaUI. "
+						.. "Answer questions about Roblox Lua, game development, exploiting, and VenturaUI. "
 						.. "Be concise and use plain text only, no markdown."
 
 					local fullPrompt = systemPrompt .. "\n\nConversation so far:\n" .. context
@@ -2428,7 +2132,7 @@ Credits:Label({ text = "📦 Player | Visual | Teleport | Misc" }).Theme.Accent 
 
 			AI:TextInput({
 				name        = "Message",
-				placeholder = "Ask about Roblox scripting or xkid hub...",
+				placeholder = "Ask about Roblox scripting or VenturaUI...",
 				callback    = _send,
 			})
 
@@ -2552,7 +2256,7 @@ Credits:Label({ text = "📦 Player | Visual | Teleport | Misc" }).Theme.Accent 
 		end
 
 		S:Section({ name = "Config" })
-		S:Info({ text = "Auto-saves on every change. File: xkid hub/" .. options.name:gsub("[^%w%-%_]","_") .. ".json" })
+		S:Info({ text = "Auto-saves on every change. File: VenturaUI/" .. options.name:gsub("[^%w%-%_]","_") .. ".json" })
 
 		S:Button({
 			name        = "Save Config",
@@ -2587,7 +2291,7 @@ Credits:Label({ text = "📦 Player | Visual | Teleport | Misc" }).Theme.Accent 
 		})
 
 		S:Section({ name = "Info" })
-		S:Label({ text = "xkid hub v" .. Library.Version .. "  •  codeberg.org/dikineal/Xkid-hub" })
+		S:Label({ text = "VenturaUI v" .. Library.Version .. "  •  codeberg.org/VenomVent/Ventura-UI" })
 		S:Label({ text = "Logged in as: " .. LP.Name .. "  (UserId: " .. LP.UserId .. ")" })
 		S:Label({ text = "Toggle: " .. keys.toggle.Name .. "   |   Minimize: " .. keys.minimize.Name })
 		S:Divider()
@@ -2604,300 +2308,4 @@ Credits:Label({ text = "📦 Player | Visual | Teleport | Misc" }).Theme.Accent 
 	return GUI
 end -- Library:new
 
--- ════════════════════════════════════════════════════════
---              xkid hub | Universal Script
---              Made by xkid | All Games Support
--- ════════════════════════════════════════════════════════
-
-local GUI = Library:new({
-    name        = "xkid hub",
-    subtitle    = "Universal Script",
-    toggleKey   = Enum.KeyCode.RightShift,
-    loadingTime = 1.5,
-    accent      = Color3.fromRGB(210, 60, 180),
-    aiEnabled   = false,
-})
-
--- ── TAB: PLAYER ──────────────────────────────────────────────────────
-local Player = GUI:CreateTab({ name = "Player", icon = "👤" })
-
-Player:Section({ name = "Movement" })
-
-Player:Toggle({
-    name     = "Infinite Jump",
-    default  = false,
-    tooltip  = "Lompat berkali-kali di udara",
-    callback = function(v)
-        if v then
-            _G.InfJump = game:GetService("UserInputService").JumpRequest:Connect(function()
-                local char = game:GetService("Players").LocalPlayer.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-            end)
-        else
-            if _G.InfJump then _G.InfJump:Disconnect() end
-        end
-    end,
-})
-
-Player:Toggle({
-    name     = "Noclip",
-    default  = false,
-    tooltip  = "Tembus dinding",
-    callback = function(v)
-        if v then
-            _G.NoclipConn = game:GetService("RunService").Stepped:Connect(function()
-                local char = game:GetService("Players").LocalPlayer.Character
-                if char then
-                    for _, p in pairs(char:GetDescendants()) do
-                        if p:IsA("BasePart") then p.CanCollide = false end
-                    end
-                end
-            end)
-        else
-            if _G.NoclipConn then _G.NoclipConn:Disconnect() end
-        end
-    end,
-})
-
-Player:Slider({
-    name     = "Walk Speed",
-    min      = 16,
-    max      = 250,
-    default  = 16,
-    suffix   = " speed",
-    tooltip  = "Ubah kecepatan jalan",
-    callback = function(v)
-        local char = game:GetService("Players").LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.WalkSpeed = v end
-    end,
-})
-
-Player:Slider({
-    name     = "Jump Power",
-    min      = 50,
-    max      = 350,
-    default  = 50,
-    suffix   = " power",
-    tooltip  = "Ubah kekuatan lompat",
-    callback = function(v)
-        local char = game:GetService("Players").LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.JumpPower = v end
-    end,
-})
-
-Player:Section({ name = "Character" })
-
-Player:Button({
-    name        = "Reset Character",
-    description = "Respawn karakter kamu",
-    callback    = function()
-        local hum = game:GetService("Players").LocalPlayer.Character
-            and game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.Health = 0 end
-    end,
-})
-
--- ── TAB: VISUAL ──────────────────────────────────────────────────────
-local Visual = GUI:CreateTab({ name = "Visual", icon = "👁️" })
-
-Visual:Section({ name = "ESP" })
-
-Visual:Toggle({
-    name     = "Player ESP",
-    default  = false,
-    tooltip  = "Lihat player lewat dinding",
-    callback = function(v)
-        local Players  = game:GetService("Players")
-        local LP       = Players.LocalPlayer
-        local CoreGui  = game:GetService("CoreGui")
-
-        local function addESP(plr)
-            if plr == LP then return end
-            local function onChar(char)
-                local head = char:WaitForChild("Head", 5)
-                if not head then return end
-
-                local box = Instance.new("SelectionBox")
-                box.Name = "xkidESP"
-                box.Color3 = Color3.fromRGB(210, 60, 180)
-                box.LineThickness = 0.05
-                box.Adornee = char
-                box.Parent = CoreGui
-
-                local bb = Instance.new("BillboardGui")
-                bb.Name = "xkidESPTag"
-                bb.Size = UDim2.new(0, 100, 0, 30)
-                bb.StudsOffset = Vector3.new(0, 3, 0)
-                bb.Adornee = head
-                bb.AlwaysOnTop = true
-                bb.Parent = CoreGui
-
-                local lbl = Instance.new("TextLabel", bb)
-                lbl.BackgroundTransparency = 1
-                lbl.Size = UDim2.new(1,0,1,0)
-                lbl.TextColor3 = Color3.fromRGB(255, 220, 240)
-                lbl.TextStrokeTransparency = 0
-                lbl.Text = plr.Name
-                lbl.Font = Enum.Font.GothamBold
-                lbl.TextSize = 13
-            end
-            if plr.Character then onChar(plr.Character) end
-            plr.CharacterAdded:Connect(onChar)
-        end
-
-        if v then
-            for _, p in pairs(Players:GetPlayers()) do addESP(p) end
-            _G.ESPConn = Players.PlayerAdded:Connect(addESP)
-        else
-            if _G.ESPConn then _G.ESPConn:Disconnect() end
-            for _, c in pairs(CoreGui:GetChildren()) do
-                if c.Name == "xkidESP" or c.Name == "xkidESPTag" then c:Destroy() end
-            end
-        end
-    end,
-})
-
-Visual:Section({ name = "Lighting" })
-
-Visual:Toggle({
-    name     = "Fullbright",
-    default  = false,
-    tooltip  = "Terangin semua area",
-    callback = function(v)
-        local L = game:GetService("Lighting")
-        if v then
-            L.Brightness = 5; L.ClockTime = 14
-            L.FogEnd = 100000; L.GlobalShadows = false
-            L.Ambient = Color3.fromRGB(255,255,255)
-        else
-            L.Brightness = 1; L.ClockTime = 14
-            L.FogEnd = 100000; L.GlobalShadows = true
-            L.Ambient = Color3.fromRGB(127,127,127)
-        end
-    end,
-})
-
--- ── TAB: TELEPORT ────────────────────────────────────────────────────
-local Teleport = GUI:CreateTab({ name = "Teleport", icon = "⊛" })
-
-Teleport:Section({ name = "Players" })
-
-local playerNames = {}
-for _, p in pairs(game:GetService("Players"):GetPlayers()) do
-    if p ~= game:GetService("Players").LocalPlayer then
-        table.insert(playerNames, p.Name)
-    end
-end
-if #playerNames == 0 then playerNames = {"(No players)"}  end
-
-Teleport:Dropdown({
-    name     = "Teleport to Player",
-    items    = playerNames,
-    default  = playerNames[1],
-    tooltip  = "TP ke player yang dipilih",
-    callback = function(name)
-        local target = game:GetService("Players"):FindFirstChild(name)
-        local LP = game:GetService("Players").LocalPlayer
-        if target and target.Character then
-            local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-            local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
-            if root and tRoot then root.CFrame = tRoot.CFrame + Vector3.new(0,3,0) end
-        end
-    end,
-})
-
-Teleport:Section({ name = "World" })
-
-Teleport:Button({
-    name        = "Teleport to Spawn",
-    description = "TP ke titik spawn",
-    callback    = function()
-        local char = game:GetService("Players").LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
-        if root and spawn then root.CFrame = spawn.CFrame + Vector3.new(0,5,0) end
-    end,
-})
-
--- ── TAB: MISC ────────────────────────────────────────────────────────
-local Misc = GUI:CreateTab({ name = "Misc", icon = "⚙️" })
-
-Misc:Section({ name = "Utility" })
-
-Misc:Toggle({
-    name     = "Anti AFK",
-    default  = false,
-    tooltip  = "Cegah kick karena AFK",
-    callback = function(v)
-        if v then
-            local VU = game:GetService("VirtualUser")
-            _G.AntiAFK = game:GetService("Players").LocalPlayer.Idled:Connect(function()
-                VU:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                task.wait(1)
-                VU:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-            end)
-        else
-            if _G.AntiAFK then _G.AntiAFK:Disconnect() end
-        end
-    end,
-})
-
-Misc:TextInput({
-    name        = "Chat Bypass",
-    placeholder = "Ketik pesan...",
-    tooltip     = "Kirim chat bypass filter",
-    callback    = function(v)
-        local RS = game:GetService("ReplicatedStorage")
-        local ev = RS:FindFirstChild("DefaultChatSystemChatEvents")
-        local sr = ev and ev:FindFirstChild("SayMessageRequest")
-        if sr then sr:FireServer(v, "All") end
-    end,
-})
-
-Misc:Button({
-    name        = "Rejoin",
-    description = "Rejoin game sekarang",
-    callback    = function()
-        game:GetService("TeleportService"):Teleport(
-            game.PlaceId,
-            game:GetService("Players").LocalPlayer
-        )
-    end,
-})
-
-Misc:Button({
-    name        = "Server Hop",
-    description = "Pindah ke server lain",
-    callback    = function()
-        local TS = game:GetService("TeleportService")
-        local HS = game:GetService("HttpService")
-        local ok, res = pcall(function()
-            return HS:JSONDecode(game:HttpGetAsync(
-                "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
-            ))
-        end)
-        if ok and res and res.data then
-            for _, s in pairs(res.data) do
-                if s.id ~= game.JobId and s.playing < s.maxPlayers then
-                    TS:TeleportToPlaceInstance(game.PlaceId, s.id, game:GetService("Players").LocalPlayer)
-                    return
-                end
-            end
-        end
-        GUI.notify("Server Hop", "Tidak ada server lain ditemukan.", 3)
-    end,
-})
-
--- ── TAB: CREDITS ─────────────────────────────────────────────────────
-local Credits = GUI:CreateTab({ name = "Credits", icon = "👑" })
-
-Credits:Section({ name = "xkid hub" })
-Credits:Label({ text = "🌸 xkid hub - Universal Script" })
-Credits:Label({ text = "✨ Made with love by xkid" })
-Credits:Label({ text = "🔖 Version: 1.0  |  Ventura Library v3.1" })
-Credits:Divider()
-Credits:Label({ text = "🎨 Pink & Purple Dark Theme" })
-Credits:Label({ text = "📦 Player | Visual | Teleport | Misc" })
+return Library
