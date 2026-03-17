@@ -919,10 +919,10 @@ SyncL:Button("🔄 Sync", "Mulai sinkronisasi",
         Library:Notification("🔄", "Sync dikirim!", 2)
     end)
 
-SyncL:Button("⛔ UnSync", "Stop sinkronisasi",
+SyncL:Button("X UnSync", "Stop sinkronisasi",
     function()
         pcall(function() SyncR.UnSync:FireServer() end)
-        Library:Notification("⛔", "UnSync dikirim!", 2)
+        Library:Notification("X", "UnSync dikirim!", 2)
     end)
 
 SyncL:Button("📡 Sync Data", "Sinkronisasi data pemain",
@@ -937,10 +937,10 @@ SyncL:Button("🔃 Refresh Event", "Refresh event game",
         Library:Notification("🔃", "RefreshEvent dikirim!", 2)
     end)
 
-SyncL:Button("↔️ Request Transfer", "Transfer data/item",
+SyncL:Button("<<>> Request Transfer", "Transfer data/item",
     function()
         pcall(function() TutRem.RequestTransfer:InvokeServer() end)
-        Library:Notification("↔️", "RequestTransfer dikirim!", 2)
+        Library:Notification("<<>>", "RequestTransfer dikirim!", 2)
     end)
 
 SyncL:Button("🪟 Transfer Prompt Open", "Buka prompt transfer",
@@ -967,10 +967,10 @@ SyncR2:Button("📈 Update Step", "Update step tutorial",
         Library:Notification("📈", "UpdateStep dikirim!", 2)
     end)
 
-SyncR2:Button("⬆️ Update Level", "Update level pemain",
+SyncR2:Button("[UP] Update Level", "Update level pemain",
     function()
         pcall(function() TutRem.UpdateLevel:FireServer() end)
-        Library:Notification("⬆️", "UpdateLevel dikirim!", 2)
+        Library:Notification("[UP]", "UpdateLevel dikirim!", 2)
     end)
 
 SyncR2:Button("🔔 Storage Notify", "Notifikasi storage",
