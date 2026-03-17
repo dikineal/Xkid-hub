@@ -1,8 +1,17 @@
 --[[
   ╔══════════════════════════════════════════════════════╗
-  ║      🔌  X K I D   U L T I M A T E  v3.1          ║
-  ║      FARMING SPY FIXED - KHUSUS GAME FARMING       ║
+  ║      🔌  X K I D   R E M O T E  A N A L Y Z E R   ║
+  ║                     v4.0                            ║
+  ║           FOKUS 100% DETEKSI REMOTE                ║
   ╚══════════════════════════════════════════════════════╝
+  FITUR:
+  ✓ Scan semua remote (Event + Function)
+  ✓ Auto detect exploit (10 kategori)
+  ✓ Spy incoming (server → client)
+  ✓ Hook outgoing (client → server) - UNTUK DETEKSI SEMUA!
+  ✓ BN2 decoder
+  ✓ Farming Spy KHUSUS (deteksi tanam/panen/jual)
+  ✓ Fire manual
 ]]
 
 -- ============================================
@@ -20,25 +29,21 @@ local RS = game:GetService("ReplicatedStorage")
 local RF = game:GetService("ReplicatedFirst")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local LP = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
 
 -- ============================================
 --  WINDOW & TABS
 -- ============================================
-local Win = Library:Window("🔌 XKID ULTIMATE v3.1", "cpu", "Farming Spy Fixed", false)
-Win:TabSection("REMOTE")
+local Win = Library:Window("🔌 XKID ANALYZER v4.0", "cpu", "Fokus Deteksi Remote", false)
+Win:TabSection("REMOTE TOOLS")
 
 local TabScan     = Win:Tab("Scan", "search")
 local TabExploit  = Win:Tab("Exploit", "alert-triangle")
-local TabSpy      = Win:Tab("Spy", "eye")
-local TabHook     = Win:Tab("Hook", "terminal")
+local TabSpy      = Win:Tab("Spy In", "eye")        -- Server → Client
+local TabHook     = Win:Tab("Hook Out", "terminal") -- Client → Server (DETEKSI SEMUA!)
 local TabBN2      = Win:Tab("BN2", "radio")
+local TabFarmSpy  = Win:Tab("🌾 Farm Spy", "eye")   -- Khusus farming
 local TabFire     = Win:Tab("Fire", "zap")
-local TabFarmSpy  = Win:Tab("🌾 Farm Spy", "eye")  -- FIXED!
-local TabAutoFarm = Win:Tab("🚜 Auto Farm", "tractor")
-local TabMap      = Win:Tab("🗺️ Map", "map")
 
 -- ============================================
 --  SCAN LOCATIONS
@@ -61,41 +66,17 @@ end
 -- ============================================
 local allRemotes = {}
 local exploitList = {}
-local spyLog = {}; local hookLog = {}; local bn2Log = {}
+local spyLog = {}; local hookLog = {}; local bn2Log = {}; local farmLog = {}
 local spyConns = {}; local origNamecall = nil; local bn2Conn = nil
-local spyOn = false; local hookOn = false; local bn2On = false
+local spyOn = false; local hookOn = false; local bn2On = false; local farmSpyOn = false
 local filterKeyword = ""
 local currentPage = 1; local exploitPage = 1; local spyPage = 1
-local hookPage = 1; local bn2Page = 1
+local hookPage = 1; local bn2Page = 1; local farmPage = 1
 local firePath = ""; local fireArgs = ""
 local PAGE_SIZE = 5; local MAX_LOG = 80
 
--- Farming Spy State (FIXED)
-local farmSpyActive = false
-local farmSpyHook = nil  -- Ini pake hook, bukan connections biasa
-local farmSpyLog = {}
-local farmSpyFilter = "Semua"
-local farmSpyPage = 1
-
--- Auto Farm State
-local autoFarmActive = false
-local autoFarmConn = nil
-local farmMode = "Keduanya"
-local farmCrop = "Wheat"
-local farmRadius = 50
-local autoSell = false
-local sellRemotePath = ""
-
--- Map Exploit State
-local mapActive = false
-local noclipActive = false
-local speedActive = false
-local speedValue = 50
-local originalSpeed = 16
-local teleportPoints = {}
-local selectedPoint = nil
-local noclipConn = nil
-local speedConn = nil
+-- Untuk hook - target semua remote
+local allRemoteRefs = {}
 
 -- ============================================
 --  UTILITY FUNCTIONS
@@ -154,10 +135,6 @@ local function parseArgs(str)
     return args
 end
 
-local function getCharacter()
-    return LP.Character or LP.CharacterAdded:Wait()
-end
-
 -- ============================================
 --  SCAN FUNCTIONS
 -- ============================================
@@ -168,9 +145,13 @@ local function scanRemotes(root, targetClass, results, seen)
     for _, child in ipairs(children) do
         if child:IsA(targetClass) then
             table.insert(results, {
-                name = child.Name, path = child:GetFullName(),
+                name = child.Name,
+                path = child:GetFullName(),
                 rtype = targetClass == "RemoteEvent" and "EVENT" or "FUNC",
-                ref = child, cat = nil, prio = 99, tip = "",
+                ref = child,
+                cat = nil,
+                prio = 99,
+                tip = "",
             })
         end
         scanRemotes(child, targetClass, results, seen)
@@ -195,7 +176,7 @@ local function applyFilter(list, kw)
 end
 
 -- ============================================
---  AUTO DETECT EXPLOIT
+--  AUTO DETECT EXPLOIT (10 KATEGORI)
 -- ============================================
 local CATEGORIES = {
     { name="💰 Economy", prio=1, keys={"givemoney","addmoney","addcash","addcoin","givecoin","addgold","updatecurrency","rewardmoney","earnmoney","collectmoney","getcoin","getmoney","purchase","buycoin","reward","payout","transfer","earn","claim","collect","sell"}, tip="Fire dengan nilai besar (999999 atau -1)" },
@@ -251,57 +232,170 @@ local function showPage(list, page, title, isExploit)
 end
 
 -- ============================================
---  FARMING SPY - FIXED VERSION (PAKE HOOK)
+--  SPY INCOMING (Server → Client)
 -- ============================================
-local farmingTargets = {}  -- Remote yang akan di-spy
-
-local function detectFarmingAction(remoteName)
-    remoteName = remoteName:lower()
-    
-    if remoteName:find("plant") or remoteName:find("tanam") or remoteName:find("bibit") or remoteName:find("seed") then
-        return "🌱 TANAM", 1
-    end
-    
-    if remoteName:find("harvest") or remoteName:find("panen") or remoteName:find("collect") or remoteName:find("petik") then
-        return "🌾 PANEN", 2
-    end
-    
-    if remoteName:find("sell") or remoteName:find("jual") then
-        return "💰 JUAL", 3
-    end
-    
-    if remoteName:find("get") or remoteName:find("beli") or remoteName:find("buy") or remoteName:find("purchase") then
-        return "🛒 BELI", 4
-    end
-    
-    if remoteName:find("lahan") or remoteName:find("field") or remoteName:find("plot") then
-        return "🏞️ LAHAN", 5
-    end
-    
-    if remoteName:find("rain") or remoteName:find("hujan") or remoteName:find("weather") or remoteName:find("cuaca") then
-        return "🌧️ WEATHER", 6
-    end
-    
-    return nil, nil
+local function detectSpyAction(data)
+    local s = serializeValue(data, 0)
+    if s:find("cropPos") and s:find("sellPrice") then return "🌾 HARVEST"
+    elseif s:find("seedPrice") and s:find("items") then return "🏪 SHOP DATA"
+    elseif s:find("cropName") and s:find("count") then return "🛒 BELI"
+    elseif s:find("coins") then return "💰 COINS"
+    elseif s:find("success") then return "✅ RESPONSE"
+    elseif s:find("health") or s:find("damage") then return "⚔️ COMBAT"
+    elseif s:find("rank") or s:find("role") then return "🏆 RANK"
+    else return "❓ UNKNOWN" end
 end
+
+local function startSpy()
+    for _, c in ipairs(spyConns) do pcall(function() c:Disconnect() end) end
+    spyConns = {}
+    local events = scanAll("RemoteEvent")
+    local count = 0
+    for _, r in ipairs(events) do
+        local ok, conn = pcall(function()
+            return r.ref.OnClientEvent:Connect(function(...)
+                local args = {...}
+                local action = detectSpyAction(args[1] or args)
+                local argStrs = {}
+                for _, a in ipairs(args) do table.insert(argStrs, serializeValue(a, 0)) end
+                local catName, _, _ = detectCategory(r)
+                local flag = catName and ("⚠️ "..catName) or ""
+                local entry = string.format("%s %s\n[%s]\nArgs: %s", flag, action, r.path, table.concat(argStrs, ", "))
+                table.insert(spyLog, 1, entry)
+                if #spyLog > MAX_LOG then table.remove(spyLog, #spyLog) end
+            end)
+        end)
+        if ok and conn then table.insert(spyConns, conn); count = count + 1 end
+    end
+    Library:Notification("👁 Spy ON", string.format("Memantau %d RemoteEvent", count), 5)
+    return count
+end
+
+local function stopSpy()
+    for _, c in ipairs(spyConns) do pcall(function() c:Disconnect() end) end
+    spyConns = {}
+end
+
+-- ============================================
+--  HOOK OUTGOING (Client → Server) - DETEKSI SEMUA!
+-- ============================================
+local function buildAllRemoteSet()
+    local set = {}
+    for _, r in ipairs(allRemotes) do
+        if r.ref then set[r.ref] = true end
+    end
+    return set
+end
+
+local function detectHookAction(remoteName, args)
+    remoteName = remoteName:lower()
+    local s = ""
+    for _, a in ipairs(args) do s = s..serializeValue(a, 0) end
+    
+    -- Farming
+    if remoteName:find("plant") or remoteName:find("tanam") or s:find("cropName") then return "🌱 TANAM" end
+    if remoteName:find("harvest") or remoteName:find("panen") or s:find("harvest") then return "🌾 PANEN" end
+    if remoteName:find("sell") or remoteName:find("jual") then return "💰 JUAL" end
+    if remoteName:find("bibit") or remoteName:find("seed") then return "🌱 BELI BENIH" end
+    
+    -- Combat
+    if remoteName:find("damage") or remoteName:find("attack") or s:find("damage") then return "⚔️ COMBAT" end
+    if remoteName:find("kill") then return "💀 KILL" end
+    
+    -- Economy
+    if remoteName:find("money") or remoteName:find("coin") or remoteName:find("cash") then return "💰 ECONOMY" end
+    
+    -- Admin
+    if remoteName:find("admin") or remoteName:find("rank") or remoteName:find("role") then return "👑 ADMIN" end
+    
+    -- Teleport
+    if remoteName:find("teleport") or remoteName:find("move") or s:find("position") then return "🚀 TELEPORT" end
+    
+    -- Weather
+    if remoteName:find("rain") or remoteName:find("weather") then return "🌧️ WEATHER" end
+    
+    return "❓ UNKNOWN"
+end
+
+local function startHook()
+    local targetSet = buildAllRemoteSet()
+    if not next(targetSet) then
+        Library:Notification("❌", "Tidak ada remote untuk di-hook!\nScan dulu!", 4)
+        return false
+    end
+    
+    origNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if method == "FireServer" or method == "InvokeServer" then
+            -- Cek apakah ini remote (semua remote)
+            local isRemote = targetSet[self]
+            if not isRemote then
+                -- Coba cek berdasarkan path
+                local ok, path = pcall(function() return self:GetFullName() end)
+                if ok then
+                    isRemote = path:find("Remote") or path:find("Event") or path:find("Function")
+                end
+            end
+            
+            if isRemote then
+                local args = {...}
+                local argStrs = {}
+                for i, a in ipairs(args) do
+                    table.insert(argStrs, string.format("  [%d] %s", i, serializeValue(a, 0)))
+                end
+                
+                local remoteName = "?"
+                local remotePath = "?"
+                pcall(function() remoteName = self.Name; remotePath = self:GetFullName() end)
+                
+                local action = detectHookAction(remoteName, args)
+                
+                local entry = string.format(
+                    "[%s] %s %s\nMethod: %s\nPath: %s\nArgs:\n%s",
+                    os.date("%H:%M:%S"),
+                    action,
+                    remoteName,
+                    method,
+                    remotePath,
+                    table.concat(argStrs, "\n")
+                )
+                
+                table.insert(hookLog, 1, entry)
+                if #hookLog > MAX_LOG then table.remove(hookLog, #hookLog) end
+            end
+        end
+        return origNamecall(self, ...)
+    end)
+    
+    hookOn = true
+    Library:Notification("🔌 Hook ON", string.format("Memantau SEMUA remote (%d target)", #allRemotes), 4)
+    return true
+end
+
+local function stopHook()
+    if origNamecall then
+        pcall(function() hookmetamethod(game, "__namecall", origNamecall) end)
+        origNamecall = nil
+    end
+    hookOn = false
+    Library:Notification("🔌 Hook", "OFF", 2)
+end
+
+-- ============================================
+--  FARMING SPY (KHUSUS DETEKSI FARMING)
+-- ============================================
+local farmingTargets = {}
 
 local function buildFarmingTargets()
     farmingTargets = {}
+    local farmingKeywords = {"plant", "tanam", "harvest", "panen", "sell", "jual", "bibit", "seed", "crop", "lahan", "rain", "weather"}
     
-    -- Daftar keyword remote farming
-    local farmingKeywords = {
-        "Plant", "Tanam", "Harvest", "Panen", "Sell", "Jual",
-        "Bibit", "Seed", "Crop", "Lahan", "Field", "Rain", "Hujan",
-        "Weather", "Cuaca", "Collect", "Petik", "Get", "Beli"
-    }
-    
-    -- Cari di semua remotes hasil scan
     for _, r in ipairs(allRemotes) do
-        local name = r.name
+        local nl = r.name:lower()
         for _, kw in ipairs(farmingKeywords) do
-            if name:find(kw, 1, true) then
+            if nl:find(kw, 1, true) then
                 farmingTargets[r.ref] = {
-                    name = name,
+                    name = r.name,
                     path = r.path
                 }
                 break
@@ -309,294 +403,156 @@ local function buildFarmingTargets()
         end
     end
     
-    -- Tambah manual dari hasil scan lo
-    local manualTargets = {
-        "PlantCrop", "HarvestCrop", "SellCrop", "GetBibit",
-        "PlantLahanCrop", "LahanUpdate", "ToggleAutoHarvest",
-        "RainSync", "SummonRain", "WeatherSync"
-    }
-    
-    for _, targetName in ipairs(manualTargets) do
-        local remote = RS:FindFirstChild("Remotes") and 
-                      RS.Remotes:FindFirstChild("TutorialRemotes") and 
-                      RS.Remotes.TutorialRemotes:FindFirstChild(targetName)
-        if remote then
-            farmingTargets[remote] = {
-                name = targetName,
-                path = remote:GetFullName()
-            }
-        end
-    end
-    
     return farmingTargets
 end
 
 local function startFarmingSpy()
-    if farmSpyHook then
-        Library:Notification("⚠️", "Farming Spy sudah aktif", 2)
-        return
-    end
+    if farmSpyOn then return true end
     
-    -- Bangun target farming
     buildFarmingTargets()
-    
     if not next(farmingTargets) then
-        Library:Notification("❌", "Tidak ada remote farming ditemukan!\nScan dulu di tab Scan", 4)
+        Library:Notification("❌", "Tidak ada remote farming!\nScan dulu!", 4)
         return false
     end
     
-    -- Reset log
-    farmSpyLog = {}
+    farmLog = {}
     
-    -- Pasang hook
-    local oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local oldHook = origNamecall
+    origNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
         
-        -- Cek apakah ini remote yang kita targetkan
-        local target = farmingTargets[self]
-        if target and (method == "FireServer" or method == "InvokeServer") then
-            -- Deteksi aksi
-            local action, priority = detectFarmingAction(target.name)
-            if not action then action = "❓ FARM" end
+        if farmingTargets[self] and (method == "FireServer" or method == "InvokeServer") then
+            local target = farmingTargets[self]
             
-            -- Format argumen
-            local argStrs = {}
-            for i, a in ipairs(args) do
-                table.insert(argStrs, string.format("[%d] %s", i, serializeValue(a, 0)))
+            -- Deteksi aksi
+            local action = "❓"
+            local nl = target.name:lower()
+            if nl:find("plant") or nl:find("tanam") then action = "🌱 TANAM"
+            elseif nl:find("harvest") or nl:find("panen") then action = "🌾 PANEN"
+            elseif nl:find("sell") or nl:find("jual") then action = "💰 JUAL"
+            elseif nl:find("bibit") then action = "🌱 BELI"
+            elseif nl:find("rain") then action = "🌧️ HUJAN"
             end
             
-            -- Format waktu
-            local timeStr = os.date("%H:%M:%S")
-            
-            -- Ekstrak info crop kalo ada
+            -- Ambil info crop
             local cropInfo = ""
             for _, a in ipairs(args) do
-                if type(a) == "string" and #a < 30 then
-                    cropInfo = a
-                    break
-                elseif type(a) == "table" then
-                    if a.crop then cropInfo = a.crop
-                    elseif a.cropName then cropInfo = a.cropName
-                    elseif a.seed then cropInfo = a.seed end
-                end
+                if type(a) == "string" and #a < 30 then cropInfo = a; break end
             end
             
-            -- Buat entry
+            -- Format args
+            local argStrs = {}
+            for i, a in ipairs(args) do table.insert(argStrs, string.format("[%d]%s", i, serializeValue(a,0))) end
+            
             local entry = string.format(
                 "[%s] %s %s\nCrop: %s\nArgs: %s\nPath: %s",
-                timeStr,
+                os.date("%H:%M:%S"),
                 action,
                 target.name,
                 cropInfo ~= "" and cropInfo or "?",
-                table.concat(argStrs, ", "),
+                table.concat(argStrs, " "),
                 target.path
             )
             
-            -- Simpan ke log
-            table.insert(farmSpyLog, 1, entry)
-            if #farmSpyLog > 50 then
-                table.remove(farmSpyLog, #farmSpyLog)
-            end
-            
-            -- Notifikasi (opsional, bisa dimatiin)
-            Library:Notification("🌾 FARM", action .. " " .. target.name, 1.5)
+            table.insert(farmLog, 1, entry)
+            if #farmLog > 50 then table.remove(farmLog, #farmLog) end
         end
         
-        return oldNamecall(self, ...)
+        return (oldHook or origNamecall)(self, ...)
     end)
     
-    farmSpyHook = oldNamecall
-    farmSpyActive = true
-    
-    Library:Notification("🌾 FARMING SPY FIXED", 
-        string.format("Memantau %d remote farming\nLakukan tanam/panen sekarang!", 
-        #farmingTargets), 5)
-    
+    farmSpyOn = true
+    Library:Notification("🌾 FARM SPY ON", string.format("Memantau %d remote farming", #farmingTargets), 4)
     return true
 end
 
 local function stopFarmingSpy()
-    if farmSpyHook then
-        -- Kembalikan hook ke semula
-        hookmetamethod(game, "__namecall", farmSpyHook)
-        farmSpyHook = nil
+    if farmSpyOn and origNamecall then
+        -- Kembalikan hook (tapi hati-hati jangan ngerusak hook utama)
+        -- Untuk simplicity, kita matikan aja dgn restart hook
+        stopHook()
+        farmSpyOn = false
+        Library:Notification("🌾 FARM SPY", "OFF", 2)
     end
-    farmSpyActive = false
-    Library:Notification("🌾 Farming Spy", "OFF", 2)
-end
-
-local function showFarmLogs(page)
-    if #farmSpyLog == 0 then
-        Library:Notification("📭", "Belum ada log farming\nLakukan tanam/panen dulu!", 3)
-        return
-    end
-    
-    -- Filter berdasarkan pilihan
-    local displayLogs = farmSpyLog
-    if farmSpyFilter ~= "Semua" then
-        displayLogs = {}
-        for _, entry in ipairs(farmSpyLog) do
-            if (farmSpyFilter == "Tanam" and entry:find("🌱")) or
-               (farmSpyFilter == "Panen" and entry:find("🌾")) or
-               (farmSpyFilter == "Jual" and entry:find("💰")) then
-                table.insert(displayLogs, entry)
-            end
-        end
-    end
-    
-    if #displayLogs == 0 then
-        Library:Notification("📭", "Tidak ada log dengan filter: " .. farmSpyFilter, 2)
-        return
-    end
-    
-    local totalPages = math.ceil(#displayLogs / PAGE_SIZE)
-    page = math.max(1, math.min(page, totalPages))
-    local startIdx = (page-1)*PAGE_SIZE + 1
-    local endIdx = math.min(page*PAGE_SIZE, #displayLogs)
-    
-    local text = string.format("🌾 FARM SPY [Hal %d/%d]\nFilter: %s | Total: %d\n\n", 
-        page, totalPages, farmSpyFilter, #displayLogs)
-    
-    for i = startIdx, endIdx do
-        text = text .. string.format("[%d] %s\n\n", i, displayLogs[i])
-    end
-    
-    Library:Notification("🌾 Farming Spy Log", text, 20)
-    farmSpyPage = page
-end
-
-local function copyFarmLogs()
-    if #farmSpyLog == 0 then
-        Library:Notification("❌", "Tidak ada log untuk di-copy", 2)
-        return
-    end
-    
-    local text = "=== FARMING SPY LOG ===\n\n"
-    for i, entry in ipairs(farmSpyLog) do
-        text = text .. string.format("[%d] %s\n\n", i, entry)
-    end
-    
-    doCopy(text)
 end
 
 -- ============================================
---  AUTO FARM FUNCTIONS (SEDERHANA)
+--  BN2 FUNCTIONS
 -- ============================================
-local function findPlantRemote()
-    for _, r in ipairs(allRemotes) do
-        if r.name:find("Plant") or r.name:find("Tanam") then
-            return r.ref
-        end
-    end
-    return nil
+local function detectBN2Action(data)
+    if type(data) ~= "table" then return "❓ NON-TABLE" end
+    local s = serializeValue(data, 0)
+    if s:find("cropPos") and s:find("sellPrice") then return "🌾 HARVEST"
+    elseif s:find("seedPrice") and s:find("items") then return "🏪 SHOP DATA"
+    elseif s:find("cropName") and s:find("count") then return "🛒 BELI"
+    elseif s:find("success") then return "✅ RESPONSE"
+    elseif s:find("coins") then return "💰 COINS"
+    elseif s:find("\\x06") then return "🌱 TANAM"
+    elseif s:find("\\x05") then return "📦 REQUEST"
+    else return "❓ UNKNOWN BN2" end
 end
 
-local function findHarvestRemote()
-    for _, r in ipairs(allRemotes) do
-        if r.name:find("Harvest") or r.name:find("Panen") then
-            return r.ref
-        end
-    end
-    return nil
-end
-
-local function findSellRemote()
-    for _, r in ipairs(allRemotes) do
-        if r.name:find("Sell") or r.name:find("Jual") then
-            return r.ref
-        end
-    end
-    return nil
-end
-
-local function startAutoFarm()
-    if autoFarmConn then autoFarmConn:Disconnect() end
+local function startBN2Spy()
+    if bn2Conn then pcall(function() bn2Conn:Disconnect() end) end
     
-    local plantRemote = findPlantRemote()
-    local harvestRemote = findHarvestRemote()
-    local sellRemote = findSellRemote()
+    local bn2 = RS:FindFirstChild("BridgeNet2")
+    local dataRE = bn2 and bn2:FindFirstChild("dataRemoteEvent")
+    local metaRE = bn2 and bn2:FindFirstChild("metaRemoteEvent")
+    local netRE = RS:FindFirstChild("Networking") and RS.Networking:FindFirstChild("RemoteEvent")
     
-    autoFarmConn = RunService.Heartbeat:Connect(function()
-        if not autoFarmActive then return end
-        
-        if farmMode == "Tanam" or farmMode == "Keduanya" then
-            if plantRemote then
-                pcall(function() plantRemote:FireServer(farmCrop, "Lahan1") end)
-            end
-        end
-        
-        if farmMode == "Panen" or farmMode == "Keduanya" then
-            if harvestRemote then
-                pcall(function() harvestRemote:FireServer("Lahan1") end)
-            end
-        end
-        
-        if autoSell and sellRemote then
-            pcall(function() sellRemote:FireServer("all") end)
-        end
-        
-        task.wait(2)
-    end)
-end
-
--- ============================================
---  MAP EXPLOIT FUNCTIONS
--- ============================================
-local function teleportTo(position)
-    local char = getCharacter()
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        hrp.CFrame = CFrame.new(position)
-        Library:Notification("📌 Teleport", string.format("Ke (%.1f, %.1f, %.1f)", position.X, position.Y, position.Z), 3)
+    local targets = {}
+    if dataRE then table.insert(targets, dataRE) end
+    if metaRE then table.insert(targets, metaRE) end
+    if netRE then table.insert(targets, netRE) end
+    
+    if #targets == 0 then
+        Library:Notification("❌ BN2", "BridgeNet2 tidak ditemukan", 4)
+        return false
     end
-end
-
-local function toggleNoclip(enable)
-    noclipActive = enable
-    if noclipConn then noclipConn:Disconnect() end
-    if enable then
-        noclipConn = RunService.Stepped:Connect(function()
-            if noclipActive then
-                local char = getCharacter()
-                for _, part in ipairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then part.CanCollide = false end
-                end
-            end
+    
+    local conns = {}
+    for _, re in ipairs(targets) do
+        local ok, conn = pcall(function()
+            return re.OnClientEvent:Connect(function(data)
+                local action = detectBN2Action(data)
+                local raw = serializeValue(data, 0)
+                local entry = string.format("%s\n[%s]\n%s", action, re.Name, raw)
+                table.insert(bn2Log, 1, entry)
+                if #bn2Log > MAX_LOG then table.remove(bn2Log, #bn2Log) end
+            end)
         end)
-        Library:Notification("👻 Noclip", "ON", 2)
-    else Library:Notification("👻 Noclip", "OFF", 2) end
+        if ok and conn then table.insert(conns, conn) end
+    end
+    
+    bn2Conn = { Disconnect = function() for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end end }
+    Library:Notification("📡 BN2 Spy ON", string.format("Monitoring %d BN2 remote", #targets), 4)
+    return true
 end
 
-local function toggleSpeed(enable)
-    speedActive = enable
-    if speedConn then speedConn:Disconnect() end
-    if enable then
-        local char = getCharacter()
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then originalSpeed = humanoid.WalkSpeed; humanoid.WalkSpeed = speedValue end
-        speedConn = RunService.Heartbeat:Connect(function()
-            if speedActive then
-                local char = getCharacter()
-                local humanoid = char:FindFirstChild("Humanoid")
-                if humanoid and humanoid.WalkSpeed ~= speedValue then humanoid.WalkSpeed = speedValue end
-            end
-        end)
-        Library:Notification("⚡ Speed", string.format("%d (ON)", speedValue), 2)
+local function stopBN2Spy()
+    if bn2Conn then pcall(function() bn2Conn:Disconnect() end); bn2Conn = nil end
+end
+
+-- ============================================
+--  FIRE REMOTE
+-- ============================================
+local function doFire(path, argsStr)
+    if not path or path == "" then Library:Notification("❌", "Path kosong!", 2); return end
+    local remote = findByPath(path)
+    if not remote then Library:Notification("❌", "Tidak ditemukan:\n"..path, 4); return end
+    local args = parseArgs(argsStr)
+    
+    if remote:IsA("RemoteEvent") then
+        local ok, err = pcall(function() remote:FireServer(table.unpack(args)) end)
+        Library:Notification(ok and "✅ FireServer" or "❌ Error",
+            ok and (remote.Name.."\nArgs: "..(argsStr=="" and "(none)" or argsStr)) or tostring(err), 4)
+    elseif remote:IsA("RemoteFunction") then
+        local ok, res = pcall(function() return remote:InvokeServer(table.unpack(args)) end)
+        Library:Notification(ok and "✅ InvokeServer" or "❌ Error",
+            ok and (remote.Name.."\nResult: "..serializeValue(res,0)) or tostring(res), 5)
     else
-        local char = getCharacter()
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then humanoid.WalkSpeed = originalSpeed end
-        Library:Notification("⚡ Speed", "OFF", 2)
-    end
-end
-
-local function saveCurrentPosition(name)
-    local char = getCharacter()
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        table.insert(teleportPoints, {name = name, pos = hrp.Position})
-        Library:Notification("💾 Saved", string.format("Posisi '%s' disimpan", name), 2)
+        Library:Notification("❌", "Bukan Remote", 3)
     end
 end
 
@@ -699,133 +655,198 @@ ExRight:Button("🔥 Kirim ke Tab Fire", "Paste path exploit ke Fire", function(
 end)
 
 -- ============================================
---  BUILD UI - FARMING SPY TAB (FIXED)
+--  BUILD UI - SPY IN TAB
 -- ============================================
-local FarmSpyPage = TabFarmSpy:Page("🌾 Farming Spy", "eye")
-local FarmSpyLeft = FarmSpyPage:Section("🕵️ Spy Control", "Left")
-local FarmSpyRight = FarmSpyPage:Section("📋 Log & Copy", "Right")
+local SpyPage = TabSpy:Page("Spy Incoming", "eye")
+local SpyLeft = SpyPage:Section("👁 Monitor", "Left")
+local SpyRight = SpyPage:Section("📋 Log", "Right")
 
-FarmSpyLeft:Toggle("🌾 Aktifkan Farming Spy (FIXED)", "FarmSpyToggle", false, "Deteksi tanam/panen pake HOOK (PASTI WORK)", function(v)
+SpyLeft:Toggle("👁 Spy Incoming", "SpyToggle", false, "Monitor server → client", function(v)
+    spyOn = v
+    if v then startSpy() else stopSpy(); Library:Notification("👁 Spy","OFF",2) end
+end)
+SpyLeft:Button("🔄 Restart Spy", "Scan ulang & restart", function()
+    if spyOn then stopSpy(); task.wait(0.2); startSpy() else Library:Notification("❌","Aktifkan Spy dulu",2) end
+end)
+SpyLeft:Button("🗑 Clear Log", "Hapus log spy", function() spyLog={}; Library:Notification("🗑","Cleared",2) end)
+
+SpyRight:Button("📄 Lihat Log", "Tampilkan log spy", function()
+    if #spyLog == 0 then Library:Notification("📭","Belum ada log",2); return end
+    local total = math.ceil(#spyLog/PAGE_SIZE); local text = string.format("📄 Log 1/%d (%d total)\n\n", total, #spyLog)
+    for i = 1, math.min(PAGE_SIZE, #spyLog) do text = text..string.format("[%d] %s\n\n", i, spyLog[i]) end
+    Library:Notification("👁 Spy Log", text, 18); spyPage = 1
+end)
+SpyRight:Button("▶ Log Berikutnya", "Halaman berikutnya", function()
+    spyPage = spyPage + 1; local total = math.ceil(#spyLog/PAGE_SIZE); if spyPage > total then spyPage = total end
+    local startIdx = (spyPage-1)*PAGE_SIZE+1; local endIdx = math.min(spyPage*PAGE_SIZE, #spyLog)
+    local text = string.format("📄 Log Hal %d/%d\n\n", spyPage, total)
+    for i = startIdx, endIdx do text = text..string.format("[%d] %s\n\n", i, spyLog[i]) end
+    Library:Notification("👁 Spy Log", text, 18)
+end)
+SpyRight:Button("📋 Copy Log Spy", "Copy semua log ke clipboard", function()
+    if #spyLog == 0 then Library:Notification("❌","Belum ada log",2); return end
+    local text = string.format("=== SPY LOG (%d) ===\n\n", #spyLog)
+    for i, e in ipairs(spyLog) do text = text..string.format("[%d] %s\n\n", i, e) end; doCopy(text)
+end)
+
+-- ============================================
+--  BUILD UI - HOOK OUT TAB (YANG PALING PENTING!)
+-- ============================================
+local HookPage = TabHook:Page("Hook Outgoing", "terminal")
+local HookLeft = HookPage:Section("🔌 Hook Control", "Left")
+local HookRight = HookPage:Section("📋 Log SEMUA Remote", "Right")
+
+HookLeft:Toggle("🔌 Hook SEMUA Remote", "HookToggle", false, "Intercept semua FireServer (DETEKSI SEMUA)", function(v)
+    hookOn = v
     if v then
         if #allRemotes == 0 then
-            Library:Notification("⚠️", "Scan dulu di tab Scan!\nSupaya tau remote farming", 4)
+            Library:Notification("⚠️", "Scan dulu! Biar tau remote apa aja", 4)
             return
         end
-        local success = startFarmingSpy()
-        if not success then
-            -- Gagal, toggle balik
-            FarmSpyLeft.Toggles.FarmSpyToggle = false
+        local ok, err = pcall(startHook)
+        if not ok then
+            Library:Notification("❌ Error", "hookmetamethod tidak support!\n"..tostring(err), 5)
+            hookOn = false
         end
+    else
+        stopHook()
+        Library:Notification("🔌 Hook","OFF",2)
+    end
+end)
+
+HookLeft:Button("🗑 Clear Hook Log", "Hapus log hook", function() hookLog={}; Library:Notification("🗑","Cleared",2) end)
+HookLeft:Paragraph("📊 Info", string.format("Remote terdeteksi: %d\nAktifkan Hook, lalu lakukan apapun di game!\nSemua kiriman akan tercatat", #allRemotes))
+
+HookRight:Button("📄 Lihat Log", "Tampilkan log hook", function()
+    if #hookLog == 0 then Library:Notification("📭","Belum ada log\nLakukan aksi dulu!",3); return end
+    local total = math.ceil(#hookLog/PAGE_SIZE)
+    local text = string.format("📄 Hook Log (%d total)\n\n", #hookLog)
+    for i = 1, math.min(PAGE_SIZE, #hookLog) do
+        text = text..string.format("[%d] %s\n\n", i, hookLog[i])
+    end
+    Library:Notification("🔌 Hook Log", text, 18); hookPage = 1
+end)
+
+HookRight:Button("▶ Log Berikutnya","Halaman berikutnya", function()
+    hookPage = hookPage + 1; local total = math.ceil(#hookLog/PAGE_SIZE); if hookPage > total then hookPage = total end
+    local si = (hookPage-1)*PAGE_SIZE+1; local ei = math.min(hookPage*PAGE_SIZE, #hookLog)
+    local text = string.format("📄 Hal %d/%d\n\n", hookPage, total)
+    for i = si, ei do text = text..string.format("[%d] %s\n\n", i, hookLog[i]) end
+    Library:Notification("🔌 Hook Log", text, 18)
+end)
+
+HookRight:Button("📋 Copy Log Hook","Copy semua hook log", function()
+    if #hookLog == 0 then Library:Notification("❌","Belum ada log",2); return end
+    local text = string.format("=== HOOK LOG (%d) ===\n\n", #hookLog)
+    for i, e in ipairs(hookLog) do text = text..string.format("[%d] %s\n\n", i, e) end; doCopy(text)
+end)
+
+-- ============================================
+--  BUILD UI - BN2 TAB
+-- ============================================
+local BN2Page = TabBN2:Page("BridgeNet2", "radio")
+local BN2Left = BN2Page:Section("📡 BN2 Spy", "Left")
+local BN2Right = BN2Page:Section("📋 Log", "Right")
+
+BN2Left:Toggle("📡 BN2 Spy", "BN2Toggle", false, "Monitor BridgeNet2", function(v)
+    bn2On = v
+    if v then local ok = startBN2Spy(); if not ok then bn2On = false end
+    else stopBN2Spy(); Library:Notification("📡 BN2","OFF",2) end
+end)
+BN2Left:Button("🗑 Clear BN2 Log","Hapus log BN2", function() bn2Log={}; Library:Notification("🗑","Cleared",2) end)
+
+BN2Right:Button("📄 Lihat Log BN2","Tampilkan log BN2", function()
+    if #bn2Log == 0 then Library:Notification("📭","Belum ada log",3); return end
+    local text = string.format("📄 BN2 Log (%d)\n\n", #bn2Log)
+    for i = 1, math.min(PAGE_SIZE, #bn2Log) do text = text..string.format("[%d] %s\n\n", i, bn2Log[i]) end
+    Library:Notification("📡 BN2 Log", text, 18); bn2Page = 1
+end)
+BN2Right:Button("▶ Log Berikutnya","Halaman berikutnya", function()
+    bn2Page = bn2Page + 1; local total = math.ceil(#bn2Log/PAGE_SIZE); if bn2Page > total then bn2Page = total end
+    local si = (bn2Page-1)*PAGE_SIZE+1; local ei = math.min(bn2Page*PAGE_SIZE, #bn2Log)
+    local text = string.format("📄 Hal %d/%d\n\n", bn2Page, total)
+    for i = si, ei do text = text..string.format("[%d] %s\n\n", i, bn2Log[i]) end
+    Library:Notification("📡 BN2 Log", text, 18)
+end)
+BN2Right:Button("📋 Copy BN2 Log","Copy semua log BN2", function()
+    if #bn2Log == 0 then Library:Notification("❌","Belum ada log",2); return end
+    local text = string.format("=== BN2 LOG (%d) ===\n\n", #bn2Log)
+    for i, e in ipairs(bn2Log) do text = text..string.format("[%d] %s\n\n", i, e) end; doCopy(text)
+end)
+
+-- ============================================
+--  BUILD UI - FARM SPY TAB
+-- ============================================
+local FarmSpyPage = TabFarmSpy:Page("🌾 Farming Spy", "eye")
+local FarmSpyLeft = FarmSpyPage:Section("🕵️ Farm Spy", "Left")
+local FarmSpyRight = FarmSpyPage:Section("📋 Log", "Right")
+
+FarmSpyLeft:Toggle("🌾 Farming Spy", "FarmSpyToggle", false, "Deteksi khusus tanam/panen/jual", function(v)
+    if v then
+        if #allRemotes == 0 then Library:Notification("⚠️", "Scan dulu!", 4); return end
+        startFarmingSpy()
     else
         stopFarmingSpy()
     end
 end)
 
-FarmSpyLeft:Dropdown("🔍 Filter Log", "FarmSpyFilter", {"Semua", "Tanam", "Panen", "Jual"}, 
-    function(v) farmSpyFilter = v end, "Pilih jenis aksi")
+FarmSpyLeft:Button("🗑 Clear Log", "Hapus log farm", function() farmLog = {}; Library:Notification("🗑","Cleared",2) end)
 
-FarmSpyLeft:Button("🔄 Reset Log", "Hapus semua log", function() 
-    farmSpyLog = {} 
-    Library:Notification("🗑️", "Log farming dihapus", 2) 
+FarmSpyRight:Button("📄 Lihat Log", "Tampilkan log farming", function()
+    if #farmLog == 0 then Library:Notification("📭","Belum ada log",2); return end
+    local text = string.format("🌾 FARM LOG (%d)\n\n", #farmLog)
+    for i = 1, math.min(PAGE_SIZE, #farmLog) do text = text..string.format("[%d] %s\n\n", i, farmLog[i]) end
+    Library:Notification("🌾 Farm Spy", text, 18); farmPage = 1
 end)
 
-FarmSpyLeft:Paragraph("📊 Info", "Farming Spy ini pake HOOK\nBukan OnClientEvent\n\nJadi bakal mencatat SEMUA\nkiriman ke server\n\nLakukan tanam/panen\nsetelah mengaktifkan!")
-
-FarmSpyRight:Button("📄 Lihat Log", "Tampilkan log farming", function() 
-    showFarmLogs(1) 
+FarmSpyRight:Button("▶ Log Berikutnya", "Halaman berikutnya", function()
+    farmPage = farmPage + 1; local total = math.ceil(#farmLog/PAGE_SIZE); if farmPage > total then farmPage = total end
+    local si = (farmPage-1)*PAGE_SIZE+1; local ei = math.min(farmPage*PAGE_SIZE, #farmLog)
+    local text = string.format("🌾 Hal %d/%d\n\n", farmPage, total)
+    for i = si, ei do text = text..string.format("[%d] %s\n\n", i, farmLog[i]) end
+    Library:Notification("🌾 Farm Spy", text, 18)
 end)
 
-FarmSpyRight:Button("▶ Log Berikutnya", "Halaman berikutnya", function() 
-    showFarmLogs(farmSpyPage + 1) 
-end)
-
-FarmSpyRight:Button("◀ Log Sebelumnya", "Halaman sebelumnya", function() 
-    showFarmLogs(farmSpyPage - 1) 
-end)
-
-FarmSpyRight:Button("📋 Copy Semua Log", "Copy semua log ke clipboard", function() 
-    copyFarmLogs() 
+FarmSpyRight:Button("📋 Copy Log", "Copy semua log farm", function()
+    if #farmLog == 0 then Library:Notification("❌","Belum ada log",2); return end
+    local text = string.format("=== FARM LOG (%d) ===\n\n", #farmLog)
+    for i, e in ipairs(farmLog) do text = text..string.format("[%d] %s\n\n", i, e) end; doCopy(text)
 end)
 
 -- ============================================
---  BUILD UI - AUTO FARM TAB
+--  BUILD UI - FIRE TAB
 -- ============================================
-local FarmPage = TabAutoFarm:Page("Auto Farm", "tractor")
-local FarmLeft = FarmPage:Section("🚜 Kontrol Farm", "Left")
-local FarmRight = FarmPage:Section("⚙️ Pengaturan", "Right")
+local FirePage = TabFire:Page("Fire Remote", "zap")
+local FireLeft = FirePage:Section("🔥 Fire / Invoke", "Left")
+local FireRight = FirePage:Section("ℹ Panduan", "Right")
 
-FarmLeft:Toggle("🌱 Aktifkan Auto Farm", "AutoFarmToggle", false, "Mulai auto tanam/panen", function(v)
-    autoFarmActive = v
-    if v then
-        if #allRemotes == 0 then
-            Library:Notification("⚠️", "Scan dulu!", 4)
-            autoFarmActive = false
-            return
-        end
-        startAutoFarm()
-        Library:Notification("🚜 Auto Farm ON", string.format("Mode: %s\nCrop: %s", farmMode, farmCrop), 4)
-    else
-        if autoFarmConn then autoFarmConn:Disconnect(); autoFarmConn = nil end
-        Library:Notification("🚜 Auto Farm", "OFF", 2)
-    end
+FireLeft:TextBox("Path Remote", "FirePathBox", "", function(v) firePath = v end, "Contoh: ReplicatedStorage.Remotes.X")
+FireLeft:TextBox("Argumen (pisah koma)", "FireArgsBox", "", function(v) fireArgs = v end, "Contoh: Hello, 123, true")
+FireLeft:Button("🔥 Fire / Invoke", "Kirim remote ke server", function() doFire(firePath, fireArgs) end)
+
+local pasteIdx = 1
+FireLeft:Slider("Nomor dari Scan", "PasteSlider", 1, 200, 1, function(v) pasteIdx = v end, "Nomor remote dari tab Scan")
+FireLeft:Button("📋 Paste dari Scan", "Isi path dari hasil scan", function()
+    if #allRemotes == 0 then Library:Notification("❌","Scan dulu!",3); return end
+    if pasteIdx > #allRemotes then Library:Notification("❌","Max: "..#allRemotes,2); return end
+    local r = allRemotes[pasteIdx]; firePath = r.path:gsub("^game%.","")
+    Library:Notification("📋 Paste", string.format("[%s] %s\nPath siap!", r.rtype, r.name), 4)
 end)
 
-FarmLeft:Dropdown("🌾 Mode Farm", "FarmMode", {"Tanam", "Panen", "Keduanya"}, function(v) farmMode = v end, "Pilih mode")
-FarmLeft:TextBox("🌽 Nama Crop", "FarmCropName", farmCrop, function(v) farmCrop = v end, "Contoh: Wheat, Corn")
-FarmLeft:Toggle("💰 Auto Sell", "AutoSellToggle", false, "Jual otomatis", function(v) autoSell = v end)
-
--- ============================================
---  BUILD UI - MAP EXPLOIT TAB
--- ============================================
-local MapPage = TabMap:Page("Map Exploit", "map")
-local MapLeft = MapPage:Section("🗺️ Kontrol Map", "Left")
-local MapRight = MapPage:Section("📌 Waypoints", "Right")
-
-MapLeft:Toggle("👻 Noclip", "NoclipToggle", false, "Tembus dinding", function(v) toggleNoclip(v) end)
-MapLeft:Toggle("⚡ Speed Boost", "SpeedToggle", false, "Jalan lebih cepat", function(v) toggleSpeed(v) end)
-MapLeft:Slider("🚀 Speed Value", "SpeedValue", 16, 250, speedValue, function(v) speedValue = v; if speedActive then toggleSpeed(true) end end)
-
-MapLeft:TextBox("📍 Koordinat X", "CoordX", "", function(v) end)
-MapLeft:TextBox("📍 Koordinat Y", "CoordY", "", function(v) end)
-MapLeft:TextBox("📍 Koordinat Z", "CoordZ", "", function(v) end)
-MapLeft:Button("📌 Teleport ke Koordinat", "Pergi ke posisi yang diinput", function()
-    local x = tonumber(MapLeft.Inputs.CoordX) or 0
-    local y = tonumber(MapLeft.Inputs.CoordY) or 0
-    local z = tonumber(MapLeft.Inputs.CoordZ) or 0
-    teleportTo(Vector3.new(x, y, z))
-end)
-
-MapRight:TextBox("📝 Nama Waypoint", "WaypointName", "", function(v) end)
-MapRight:Button("💾 Simpan Posisi", "Simpan posisi saat ini", function()
-    local name = MapRight.Inputs.WaypointName
-    if name and name ~= "" then saveCurrentPosition(name) else Library:Notification("❌", "Masukkan nama!", 2) end
-end)
-
-MapRight:Button("📋 Lihat Waypoint", "Tampilkan daftar waypoint", function()
-    if #teleportPoints == 0 then Library:Notification("📭", "Belum ada waypoint", 2); return end
-    local text = "📌 WAYPOINT:\n\n"
-    for i, wp in ipairs(teleportPoints) do
-        text = text .. string.format("[%d] %s\n(%.1f,%.1f,%.1f)\n\n", i, wp.name, wp.pos.X, wp.pos.Y, wp.pos.Z)
-    end
-    Library:Notification("🗺️ Waypoints", text, 15)
-end)
-
-local wpIdx = 1
-MapRight:Slider("Nomor Waypoint", "WpIdx", 1, 10, 1, function(v) wpIdx = v end)
-MapRight:Button("📌 Teleport ke Waypoint #", "Pergi ke waypoint", function()
-    if wpIdx > #teleportPoints then Library:Notification("❌", "Nomor tidak valid", 2); return end
-    teleportTo(teleportPoints[wpIdx].pos)
-end)
+FireRight:Paragraph("Cara Pakai", "1. Scan → Exploit\n2. Pilih remote\n3. Kirim ke Fire\n4. Isi argumen\n5. Fire!")
 
 -- ============================================
 --  INIT
 -- ============================================
-Library:Notification("🔌 XKID ULTIMATE v3.1", "✅ FARMING SPY FIXED!\nScan dulu, lalu aktifkan Farming Spy", 6)
+Library:Notification("🔌 XKID ANALYZER v4.0", "✅ FOKUS DETEKSI REMOTE\n✅ Hook untuk SEMUA remote\n✅ Farming Spy khusus\n✅ Tanpa auto farm!", 6)
 Library:ConfigSystem(Win)
 
 print("╔══════════════════════════════════════╗")
-print("║   🔌 XKID ULTIMATE v3.1            ║")
-print("║   🌾 FARMING SPY FIXED!             ║")
-print("║   Scan dulu → Aktifkan Farming Spy  ║")
-print("║   Player: "..LP.Name)
+print("║   🔌 XKID ANALYZER v4.0            ║")
+print("║   FOKUS DETEKSI SEMUA REMOTE        ║")
+print("║                                      ║")
+print("║   1. SCAN DULU!                      ║")
+print("║   2. AKTIFKAN HOOK (Tab Hook)        ║")
+print("║   3. LAKUKAN AKTIVITAS DI GAME       ║")
+print("║   4. LIHAT LOG SEMUA KIRIMAN         ║")
 print("╚══════════════════════════════════════╝")
