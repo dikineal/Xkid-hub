@@ -694,3 +694,138 @@ ExRight:Button("📋 Copy Exploit #", "Copy 1 exploit sesuai nomor", function()
 end)
 ExRight:Button("🔥 Kirim ke Tab Fire", "Paste path exploit ke Fire", function()
     if exIdx > #exploitList then Library:Notification("❌","Max: "..#exploitList,2); return end
+    local r = exploitList[exIdx]; firePath = r.path:gsub("^game%.","")
+    Library:Notification("🔥 Siap Fire", string.format("%s\n%s\n💡 %s\n\nBuka tab Fire!", r.name, r.cat, r.tip), 6)
+end)
+
+-- ============================================
+--  BUILD UI - FARMING SPY TAB (FIXED)
+-- ============================================
+local FarmSpyPage = TabFarmSpy:Page("🌾 Farming Spy", "eye")
+local FarmSpyLeft = FarmSpyPage:Section("🕵️ Spy Control", "Left")
+local FarmSpyRight = FarmSpyPage:Section("📋 Log & Copy", "Right")
+
+FarmSpyLeft:Toggle("🌾 Aktifkan Farming Spy (FIXED)", "FarmSpyToggle", false, "Deteksi tanam/panen pake HOOK (PASTI WORK)", function(v)
+    if v then
+        if #allRemotes == 0 then
+            Library:Notification("⚠️", "Scan dulu di tab Scan!\nSupaya tau remote farming", 4)
+            return
+        end
+        local success = startFarmingSpy()
+        if not success then
+            -- Gagal, toggle balik
+            FarmSpyLeft.Toggles.FarmSpyToggle = false
+        end
+    else
+        stopFarmingSpy()
+    end
+end)
+
+FarmSpyLeft:Dropdown("🔍 Filter Log", "FarmSpyFilter", {"Semua", "Tanam", "Panen", "Jual"}, 
+    function(v) farmSpyFilter = v end, "Pilih jenis aksi")
+
+FarmSpyLeft:Button("🔄 Reset Log", "Hapus semua log", function() 
+    farmSpyLog = {} 
+    Library:Notification("🗑️", "Log farming dihapus", 2) 
+end)
+
+FarmSpyLeft:Paragraph("📊 Info", "Farming Spy ini pake HOOK\nBukan OnClientEvent\n\nJadi bakal mencatat SEMUA\nkiriman ke server\n\nLakukan tanam/panen\nsetelah mengaktifkan!")
+
+FarmSpyRight:Button("📄 Lihat Log", "Tampilkan log farming", function() 
+    showFarmLogs(1) 
+end)
+
+FarmSpyRight:Button("▶ Log Berikutnya", "Halaman berikutnya", function() 
+    showFarmLogs(farmSpyPage + 1) 
+end)
+
+FarmSpyRight:Button("◀ Log Sebelumnya", "Halaman sebelumnya", function() 
+    showFarmLogs(farmSpyPage - 1) 
+end)
+
+FarmSpyRight:Button("📋 Copy Semua Log", "Copy semua log ke clipboard", function() 
+    copyFarmLogs() 
+end)
+
+-- ============================================
+--  BUILD UI - AUTO FARM TAB
+-- ============================================
+local FarmPage = TabAutoFarm:Page("Auto Farm", "tractor")
+local FarmLeft = FarmPage:Section("🚜 Kontrol Farm", "Left")
+local FarmRight = FarmPage:Section("⚙️ Pengaturan", "Right")
+
+FarmLeft:Toggle("🌱 Aktifkan Auto Farm", "AutoFarmToggle", false, "Mulai auto tanam/panen", function(v)
+    autoFarmActive = v
+    if v then
+        if #allRemotes == 0 then
+            Library:Notification("⚠️", "Scan dulu!", 4)
+            autoFarmActive = false
+            return
+        end
+        startAutoFarm()
+        Library:Notification("🚜 Auto Farm ON", string.format("Mode: %s\nCrop: %s", farmMode, farmCrop), 4)
+    else
+        if autoFarmConn then autoFarmConn:Disconnect(); autoFarmConn = nil end
+        Library:Notification("🚜 Auto Farm", "OFF", 2)
+    end
+end)
+
+FarmLeft:Dropdown("🌾 Mode Farm", "FarmMode", {"Tanam", "Panen", "Keduanya"}, function(v) farmMode = v end, "Pilih mode")
+FarmLeft:TextBox("🌽 Nama Crop", "FarmCropName", farmCrop, function(v) farmCrop = v end, "Contoh: Wheat, Corn")
+FarmLeft:Toggle("💰 Auto Sell", "AutoSellToggle", false, "Jual otomatis", function(v) autoSell = v end)
+
+-- ============================================
+--  BUILD UI - MAP EXPLOIT TAB
+-- ============================================
+local MapPage = TabMap:Page("Map Exploit", "map")
+local MapLeft = MapPage:Section("🗺️ Kontrol Map", "Left")
+local MapRight = MapPage:Section("📌 Waypoints", "Right")
+
+MapLeft:Toggle("👻 Noclip", "NoclipToggle", false, "Tembus dinding", function(v) toggleNoclip(v) end)
+MapLeft:Toggle("⚡ Speed Boost", "SpeedToggle", false, "Jalan lebih cepat", function(v) toggleSpeed(v) end)
+MapLeft:Slider("🚀 Speed Value", "SpeedValue", 16, 250, speedValue, function(v) speedValue = v; if speedActive then toggleSpeed(true) end end)
+
+MapLeft:TextBox("📍 Koordinat X", "CoordX", "", function(v) end)
+MapLeft:TextBox("📍 Koordinat Y", "CoordY", "", function(v) end)
+MapLeft:TextBox("📍 Koordinat Z", "CoordZ", "", function(v) end)
+MapLeft:Button("📌 Teleport ke Koordinat", "Pergi ke posisi yang diinput", function()
+    local x = tonumber(MapLeft.Inputs.CoordX) or 0
+    local y = tonumber(MapLeft.Inputs.CoordY) or 0
+    local z = tonumber(MapLeft.Inputs.CoordZ) or 0
+    teleportTo(Vector3.new(x, y, z))
+end)
+
+MapRight:TextBox("📝 Nama Waypoint", "WaypointName", "", function(v) end)
+MapRight:Button("💾 Simpan Posisi", "Simpan posisi saat ini", function()
+    local name = MapRight.Inputs.WaypointName
+    if name and name ~= "" then saveCurrentPosition(name) else Library:Notification("❌", "Masukkan nama!", 2) end
+end)
+
+MapRight:Button("📋 Lihat Waypoint", "Tampilkan daftar waypoint", function()
+    if #teleportPoints == 0 then Library:Notification("📭", "Belum ada waypoint", 2); return end
+    local text = "📌 WAYPOINT:\n\n"
+    for i, wp in ipairs(teleportPoints) do
+        text = text .. string.format("[%d] %s\n(%.1f,%.1f,%.1f)\n\n", i, wp.name, wp.pos.X, wp.pos.Y, wp.pos.Z)
+    end
+    Library:Notification("🗺️ Waypoints", text, 15)
+end)
+
+local wpIdx = 1
+MapRight:Slider("Nomor Waypoint", "WpIdx", 1, 10, 1, function(v) wpIdx = v end)
+MapRight:Button("📌 Teleport ke Waypoint #", "Pergi ke waypoint", function()
+    if wpIdx > #teleportPoints then Library:Notification("❌", "Nomor tidak valid", 2); return end
+    teleportTo(teleportPoints[wpIdx].pos)
+end)
+
+-- ============================================
+--  INIT
+-- ============================================
+Library:Notification("🔌 XKID ULTIMATE v3.1", "✅ FARMING SPY FIXED!\nScan dulu, lalu aktifkan Farming Spy", 6)
+Library:ConfigSystem(Win)
+
+print("╔══════════════════════════════════════╗")
+print("║   🔌 XKID ULTIMATE v3.1            ║")
+print("║   🌾 FARMING SPY FIXED!             ║")
+print("║   Scan dulu → Aktifkan Farming Spy  ║")
+print("║   Player: "..LP.Name)
+print("╚══════════════════════════════════════╝")
