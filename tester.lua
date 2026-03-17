@@ -29,14 +29,16 @@ local Lighting    = game:GetService("Lighting")
 local LP          = Players.LocalPlayer
 
 -- ════════════════════════════════════════
---  REMOTE SHORTCUTS
+--  REMOTE SHORTCUTS (lazy - safe)
 -- ════════════════════════════════════════
-local RS      = game:GetService("ReplicatedStorage")
-local TutRem  = RS:WaitForChild("Remotes"):WaitForChild("TutorialRemotes")
-local DNRem   = RS:WaitForChild("Remotes"):WaitForChild("DayNightRemotes")
-local CarryR  = RS:WaitForChild("Carry")
-local SyncR   = RS:WaitForChild("Syncing")
-local BoatR   = RS:WaitForChild("RemotesBoat")
+local RS = game:GetService("ReplicatedStorage")
+local function getTut()  return RS:FindFirstChild("Remotes") and RS.Remotes:FindFirstChild("TutorialRemotes") end
+local function getDN()   return RS:FindFirstChild("Remotes") and RS.Remotes:FindFirstChild("DayNightRemotes") end
+local function getCarry() return RS:FindFirstChild("Carry") end
+local function getSync()  return RS:FindFirstChild("Syncing") end
+local function getBoat()  return RS:FindFirstChild("RemotesBoat") end
+local function fire(fn, ...)   pcall(function() fn:FireServer(...) end) end
+local function invoke(fn, ...) pcall(function() fn:InvokeServer(...) end) end
 
 -- ════════════════════════════════════════
 --  WINDOW
@@ -53,7 +55,6 @@ local TabESP   = Win:Tab("ESP",        "eye")
 local TabSpeed = Win:Tab("Speed",      "zap")
 local TabProt  = Win:Tab("Protection", "shield")
 
-Win:TabSection("GAME")
 local TabFarm  = Win:Tab("Farming",    "leaf")
 local TabShop  = Win:Tab("Shop",       "shopping-cart")
 local TabWorld = Win:Tab("World",      "globe")
@@ -659,9 +660,9 @@ FarmL:Toggle("Auto Farm", "AutoFarmToggle", false,
         if v then
             autoFarmConn = RunService.Heartbeat:Connect(function()
                 task.wait(autoFarmDelay)
-                pcall(function() TutRem.PlantCrop:FireServer() end)
-                pcall(function() TutRem.ToggleAutoHarvest:FireServer() end)
-                pcall(function() TutRem.LahanUpdate:FireServer() end)
+                local _r=getTut(); if _r then pcall(function() _r.PlantCrop:FireServer() end) end
+                local _r=getTut(); if _r then pcall(function() _r.ToggleAutoHarvest:FireServer() end) end
+                local _r=getTut(); if _r then pcall(function() _r.LahanUpdate:FireServer() end) end
             end)
         end
         Library:Notification("🌾 Auto Farm", v and "ON" or "OFF", 2)
@@ -677,8 +678,8 @@ FarmL:Toggle("⚡ Penangkal Petir", "LightningToggle", false,
         if v then
             lightningConn = RunService.Heartbeat:Connect(function()
                 task.wait(2)
-                pcall(function() TutRem.WeatherSync:FireServer() end)
-                pcall(function() TutRem.HygieneSync:FireServer() end)
+                local _r=getTut(); if _r then pcall(function() _r.WeatherSync:FireServer() end) end
+                local _r=getTut(); if _r then pcall(function() _r.HygieneSync:FireServer() end) end
             end)
         end
         Library:Notification("⚡ Penangkal Petir", v and "ON" or "OFF", 2)
@@ -686,31 +687,31 @@ FarmL:Toggle("⚡ Penangkal Petir", "LightningToggle", false,
 
 FarmR:Button("🌱 PlantCrop", "Tanam tanaman",
     function()
-        pcall(function() TutRem.PlantCrop:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.PlantCrop:FireServer() end) end
         Library:Notification("🌱", "PlantCrop dikirim!", 2)
     end)
 
 FarmR:Button("🔄 ToggleAutoHarvest", "Aktifkan auto harvest",
     function()
-        pcall(function() TutRem.ToggleAutoHarvest:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.ToggleAutoHarvest:FireServer() end) end
         Library:Notification("🔄", "ToggleAutoHarvest dikirim!", 2)
     end)
 
 FarmR:Button("🌾 GetBibit", "Ambil bibit",
     function()
-        pcall(function() TutRem.GetBibit:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.GetBibit:FireServer() end) end
         Library:Notification("🌾", "GetBibit dikirim!", 2)
     end)
 
 FarmR:Button("🗺 LahanUpdate", "Update kondisi lahan",
     function()
-        pcall(function() TutRem.LahanUpdate:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.LahanUpdate:FireServer() end) end
         Library:Notification("🗺", "LahanUpdate dikirim!", 2)
     end)
 
 FarmR:Button("📦 RequestStorage", "Buka storage",
     function()
-        pcall(function() TutRem.RequestStorage:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.RequestStorage:InvokeServer() end) end
         Library:Notification("📦", "RequestStorage dikirim!", 2)
     end)
 
@@ -723,55 +724,55 @@ local ShopR    = ShopPage:Section("🎁 Gift & Donasi", "Right")
 
 ShopL:Button("🛒 Request Shop", "Buka toko",
     function()
-        pcall(function() TutRem.RequestShop:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.RequestShop:InvokeServer() end) end
         Library:Notification("🛒", "RequestShop dikirim!", 2)
     end)
 
 ShopL:Button("🔧 Request Tool Shop", "Buka toko alat",
     function()
-        pcall(function() TutRem.RequestToolShop:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.RequestToolShop:InvokeServer() end) end
         Library:Notification("🔧", "RequestToolShop dikirim!", 2)
     end)
 
 ShopL:Button("🔁 Refresh Shop", "Refresh isi toko",
     function()
-        pcall(function() TutRem.RefreshShop:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.RefreshShop:FireServer() end) end
         Library:Notification("🔁", "RefreshShop dikirim!", 2)
     end)
 
 ShopL:Button("💰 Request Sell", "Jual item",
     function()
-        pcall(function() TutRem.RequestSell:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.RequestSell:InvokeServer() end) end
         Library:Notification("💰", "RequestSell dikirim!", 2)
     end)
 
 ShopL:Button("🎮 Request Gamepass", "Buka gamepass",
     function()
-        pcall(function() TutRem.RequestGamepass:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.RequestGamepass:InvokeServer() end) end
         Library:Notification("🎮", "RequestGamepass dikirim!", 2)
     end)
 
 ShopR:Button("🎁 Request Gift", "Request hadiah",
     function()
-        pcall(function() TutRem.RequestGift:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.RequestGift:InvokeServer() end) end
         Library:Notification("🎁", "RequestGift dikirim!", 2)
     end)
 
 ShopR:Button("✅ Gift Purchase Done", "Konfirmasi pembelian hadiah",
     function()
-        pcall(function() TutRem.GiftPurchaseDone:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.GiftPurchaseDone:FireServer() end) end
         Library:Notification("✅", "GiftPurchaseDone dikirim!", 2)
     end)
 
 ShopR:Button("🔔 Gift Notify", "Kirim notifikasi hadiah",
     function()
-        pcall(function() TutRem.GiftNotify:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.GiftNotify:FireServer() end) end
         Library:Notification("🔔", "GiftNotify dikirim!", 2)
     end)
 
 ShopR:Button("💸 Request Donation", "Buka donasi",
     function()
-        pcall(function() TutRem.RequestDonation:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.RequestDonation:InvokeServer() end) end
         Library:Notification("💸", "RequestDonation dikirim!", 2)
     end)
 
@@ -784,25 +785,25 @@ local WorldR    = WorldPage:Section("🌍 Lighting", "Right")
 
 WorldL:Button("🌧 Summon Rain", "Panggil hujan",
     function()
-        pcall(function() TutRem.SummonRain:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.SummonRain:FireServer() end) end
         Library:Notification("🌧", "SummonRain dikirim!", 2)
     end)
 
 WorldL:Button("🌤 Weather Sync", "Sinkronisasi cuaca",
     function()
-        pcall(function() TutRem.WeatherSync:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.WeatherSync:FireServer() end) end
         Library:Notification("🌤", "WeatherSync dikirim!", 2)
     end)
 
 WorldL:Button("🌙 Phase Changed", "Ganti fase siang/malam",
     function()
-        pcall(function() DNRem.PhaseChanged:FireServer() end)
+        local _r=getDN(); if _r then pcall(function() _r.PhaseChanged:FireServer() end) end
         Library:Notification("🌙", "PhaseChanged dikirim!", 2)
     end)
 
 WorldL:Button("😴 Sleep Notify", "Notifikasi tidur",
     function()
-        pcall(function() DNRem.SleepNotify:FireServer() end)
+        local _r=getDN(); if _r then pcall(function() _r.SleepNotify:FireServer() end) end
         Library:Notification("😴", "SleepNotify dikirim!", 2)
     end)
 
@@ -835,37 +836,37 @@ local CarryR2   = CarryPage:Section("📊 Status", "Right")
 
 CarryL:Button("📩 Request Carry", "Minta digendong",
     function()
-        pcall(function() CarryR.RequestCarry:FireServer() end)
+        local _r=getCarry(); if _r then pcall(function() _r.RequestCarry:FireServer() end) end
         Library:Notification("📩", "RequestCarry dikirim!", 2)
     end)
 
 CarryL:Button("💬 Prompt Carry", "Prompt carry ke player lain",
     function()
-        pcall(function() CarryR.PromptCarry:FireServer() end)
+        local _r=getCarry(); if _r then pcall(function() _r.PromptCarry:FireServer() end) end
         Library:Notification("💬", "PromptCarry dikirim!", 2)
     end)
 
 CarryL:Button("✅ Respond to Carry", "Jawab request carry",
     function()
-        pcall(function() CarryR.RespondToCarry:FireServer() end)
+        local _r=getCarry(); if _r then pcall(function() _r.RespondToCarry:FireServer() end) end
         Library:Notification("✅", "RespondToCarry dikirim!", 2)
     end)
 
 CarryL:Button("🛑 Stop Carry", "Berhenti carry",
     function()
-        pcall(function() CarryR.StopCarry:FireServer() end)
+        local _r=getCarry(); if _r then pcall(function() _r.StopCarry:FireServer() end) end
         Library:Notification("🛑", "StopCarry dikirim!", 2)
     end)
 
 CarryR2:Button("📊 Update Status", "Update status carry",
     function()
-        pcall(function() CarryR.UpdateStatus:FireServer() end)
+        local _r=getCarry(); if _r then pcall(function() _r.UpdateStatus:FireServer() end) end
         Library:Notification("📊", "UpdateStatus dikirim!", 2)
     end)
 
 CarryR2:Button("🔔 Carry Notify", "Kirim notifikasi carry",
     function()
-        pcall(function() CarryR.Notify:FireServer() end)
+        local _r=getCarry(); if _r then pcall(function() _r.Notify:FireServer() end) end
         Library:Notification("🔔", "Carry Notify dikirim!", 2)
     end)
 
@@ -878,31 +879,31 @@ local BoatR2   = BoatPage:Section("🔧 Misc", "Right")
 
 BoatL:Button("🚢 Boat Control", "Kendalikan perahu",
     function()
-        pcall(function() BoatR.BoatControl:FireServer() end)
+        local _r=getBoat(); if _r then pcall(function() _r.BoatControl:FireServer() end) end
         Library:Notification("🚢", "BoatControl dikirim!", 2)
     end)
 
 BoatL:Button("📯 Horn (Klakson)", "Bunyikan klakson perahu",
     function()
-        pcall(function() BoatR.HornRemote:FireServer() end)
+        local _r=getBoat(); if _r then pcall(function() _r.HornRemote:FireServer() end) end
         Library:Notification("📯", "HornRemote dikirim!", 2)
     end)
 
 BoatL:Button("👥 Assign Boat Group", "Assign grup perahu",
     function()
-        pcall(function() RS.AssignBoatGroup:FireServer() end)
+        local _r=RS:FindFirstChild("AssignBoatGroup"); if _r then pcall(function() _r:FireServer() end) end
         Library:Notification("👥", "AssignBoatGroup dikirim!", 2)
     end)
 
 BoatR2:Button("🎮 Kite Event", "Event layang-layang",
     function()
-        pcall(function() TutRem.KiteEvent:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.KiteEvent:FireServer() end) end
         Library:Notification("🎮", "KiteEvent dikirim!", 2)
     end)
 
 BoatR2:Button("🚲 Bike Remote", "Kendali sepeda",
     function()
-        pcall(function() TutRem.BikeRemote:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.BikeRemote:FireServer() end) end
         Library:Notification("🚲", "BikeRemote dikirim!", 2)
     end)
 
@@ -915,73 +916,73 @@ local SyncR2   = SyncPage:Section("📋 Tutorial", "Right")
 
 SyncL:Button("🔄 Sync", "Mulai sinkronisasi",
     function()
-        pcall(function() SyncR.Sync:FireServer() end)
+        local _r=getSync(); if _r then pcall(function() _r.Sync:FireServer() end) end
         Library:Notification("🔄", "Sync dikirim!", 2)
     end)
 
 SyncL:Button("X UnSync", "Stop sinkronisasi",
     function()
-        pcall(function() SyncR.UnSync:FireServer() end)
+        local _r=getSync(); if _r then pcall(function() _r.UnSync:FireServer() end) end
         Library:Notification("X", "UnSync dikirim!", 2)
     end)
 
 SyncL:Button("📡 Sync Data", "Sinkronisasi data pemain",
     function()
-        pcall(function() TutRem.SyncData:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.SyncData:InvokeServer() end) end
         Library:Notification("📡", "SyncData dikirim!", 2)
     end)
 
 SyncL:Button("🔃 Refresh Event", "Refresh event game",
     function()
-        pcall(function() RS.RefreshEvent:FireServer() end)
+        local _r=RS:FindFirstChild("RefreshEvent"); if _r then pcall(function() _r:FireServer() end) end
         Library:Notification("🔃", "RefreshEvent dikirim!", 2)
     end)
 
 SyncL:Button("<<>> Request Transfer", "Transfer data/item",
     function()
-        pcall(function() TutRem.RequestTransfer:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.RequestTransfer:InvokeServer() end) end
         Library:Notification("<<>>", "RequestTransfer dikirim!", 2)
     end)
 
 SyncL:Button("🪟 Transfer Prompt Open", "Buka prompt transfer",
     function()
-        pcall(function() TutRem.TransferPromptOpen:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.TransferPromptOpen:FireServer() end) end
         Library:Notification("🪟", "TransferPromptOpen dikirim!", 2)
     end)
 
 SyncL:Button("✅ Confirm Action", "Konfirmasi aksi",
     function()
-        pcall(function() TutRem.ConfirmAction:InvokeServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.ConfirmAction:InvokeServer() end) end
         Library:Notification("✅", "ConfirmAction dikirim!", 2)
     end)
 
 SyncR2:Button("⏩ Skip Tutorial", "Lewati tutorial",
     function()
-        pcall(function() TutRem.SkipTutorial:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.SkipTutorial:FireServer() end) end
         Library:Notification("⏩", "SkipTutorial dikirim!", 2)
     end)
 
 SyncR2:Button("📈 Update Step", "Update step tutorial",
     function()
-        pcall(function() TutRem.UpdateStep:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.UpdateStep:FireServer() end) end
         Library:Notification("📈", "UpdateStep dikirim!", 2)
     end)
 
 SyncR2:Button("[UP] Update Level", "Update level pemain",
     function()
-        pcall(function() TutRem.UpdateLevel:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.UpdateLevel:FireServer() end) end
         Library:Notification("[UP]", "UpdateLevel dikirim!", 2)
     end)
 
 SyncR2:Button("🔔 Storage Notify", "Notifikasi storage",
     function()
-        pcall(function() TutRem.StorageNotify:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.StorageNotify:FireServer() end) end
         Library:Notification("🔔", "StorageNotify dikirim!", 2)
     end)
 
 SyncR2:Button("🚿 Hygiene Sync", "Sinkronisasi kebersihan",
     function()
-        pcall(function() TutRem.HygieneSync:FireServer() end)
+        local _r=getTut(); if _r then pcall(function() _r.HygieneSync:FireServer() end) end
         Library:Notification("🚿", "HygieneSync dikirim!", 2)
     end)
 
