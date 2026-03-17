@@ -1,31 +1,27 @@
 --[[
   ╔═══════════════════════════════════════════════════════╗
-  ║      🔌  X K I D   T R A C K E R   V 5              ║
-  ║          DENGAN LIST REMOTE & COPY LOG               ║
-  ║              FIX UNTUK DELTA EXECUTOR                ║
+  ║      🔌  X K I D   S U P E R   L I T E              ║
+  ║          VERSI PALING SEDERHANA - PASTI WORK         ║
   ╚═══════════════════════════════════════════════════════╝
-
-  📋 FITUR:
-  ✓ LIST REMOTE (bisa lihat semua remote)
-  ✓ COPY LOG ke clipboard
-  ✓ TRACK pergerakan player
-  ✓ TRACK objek baru/hilang
-  ✓ SEMUA TOMBOL BERFUNGSI
 ]]
 
 -- ============================================
---  LOAD UI (VERSI STABIL UNTUK DELTA)
+--  LOAD UI YANG PALING RINGAN
 -- ============================================
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"))()
-local Win = Library:Window("🔍 XKID TRACKER V5", "cpu", "Dengan Copy Log", false)
+
+-- ============================================
+--  BUAT WINDOW SEDERHANA
+-- ============================================
+local Win = Library:Window("XKID LITE", "cpu", "Untuk Delta", false)
 
 -- ============================================
 --  TABS
 -- ============================================
-local TabScan   = Win:Tab("📡 SCAN", "search")
-local TabMove   = Win:Tab("🚶 MOVE", "activity")
-local TabObj    = Win:Tab("📦 OBJEK", "package")
-local TabLog    = Win:Tab("📋 LOG", "file-text")
+local Tab1 = Win:Tab("📡 REMOTE", "search")
+local Tab2 = Win:Tab("🚶 MOVE", "activity")
+local Tab3 = Win:Tab("📦 OBJEK", "package")
+local Tab4 = Win:Tab("📋 LOG", "file-text")
 
 -- ============================================
 --  SERVICES
@@ -37,536 +33,257 @@ local RunService = game:GetService("RunService")
 local LP = Players.LocalPlayer
 
 -- ============================================
---  GLOBAL STATE
+--  DATA
 -- ============================================
 local allRemotes = {}
 local moveLog = {}
 local objLog = {}
-local allLogs = {}  -- Gabungan semua log
-
-local trackMove = false
-local trackObj = false
-local moveConn = nil
-local objAddedConn = nil
-local objRemovedConn = nil
-
--- UI Pages
-local scanPage = 1
-local movePage = 1
-local objPage = 1
-local logPage = 1
-local PAGE_SIZE = 10
-local MAX_LOG = 100
 
 -- ============================================
---  CLIPBOARD FUNCTION (FIX UNTUK DELTA)
+--  FUNGSI COPY (PASTI WORK)
 -- ============================================
-local function copyToClipboard(text)
-    local success = pcall(function()
-        -- Method yang work di kebanyakan executor
-        setclipboard(text)
-    end)
-    
-    if success then
-        Library:Notification("✅ COPY", "Berhasil copy ke clipboard", 2)
-    else
-        -- Fallback: tampilkan di console
-        print("📋 TEXT TO COPY:")
-        print(text)
-        Library:Notification("⚠️ COPY", "Gagal copy. Lihat di console (F9)", 3)
-    end
+local function copyText(text)
+    pcall(function() setclipboard(text) end)
+    Library:Notification("✅", "Copied!", 1)
 end
 
 -- ============================================
---  SCAN FUNCTIONS
+--  SCAN REMOTE
 -- ============================================
-local function scanAllRemotes()
-    local results = {}
-    local locations = {
-        RS,
-        Workspace,
-        LP:FindFirstChild("PlayerGui"),
-        LP:FindFirstChild("Backpack"),
-        game:GetService("CoreGui")
-    }
+local function scanRemotes()
+    allRemotes = {}
+    local places = {RS, Workspace}
     
-    for _, loc in ipairs(locations) do
-        if loc then
-            for _, obj in ipairs(loc:GetDescendants()) do
+    for _, place in ipairs(places) do
+        if place then
+            for _, obj in ipairs(place:GetDescendants()) do
                 if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                    table.insert(results, {
-                        name = obj.Name,
-                        path = obj:GetFullName(),
-                        class = obj.ClassName,
-                        ref = obj
-                    })
+                    table.insert(allRemotes, obj.Name .. " | " .. obj.ClassName)
                 end
             end
         end
     end
-    return results
 end
 
 -- ============================================
---  DISPLAY PAGE
+--  TAB 1: REMOTE
 -- ============================================
-local function showPage(list, page, title)
-    if #list == 0 then
-        Library:Notification("📭", "Tidak ada data", 2)
-        return page
-    end
-    
-    local totalPages = math.ceil(#list / PAGE_SIZE)
-    page = math.max(1, math.min(page, totalPages))
-    local startIdx = (page-1)*PAGE_SIZE + 1
-    local endIdx = math.min(page*PAGE_SIZE, #list)
-    
-    local text = string.format("📄 HALAMAN %d/%d | TOTAL: %d\n\n", page, totalPages, #list)
-    for i = startIdx, endIdx do
-        text = text .. string.format("[%d] %s\n\n", i, list[i])
-        text = text .. string.format("─" .. string.rep("─", 30) .. "\n\n")
-    end
-    
-    Library:Notification(title, text, 15)
-    return page
-end
+local Page1 = Tab1:Page("REMOTE", "search")
+local Left1 = Page1:Section("KONTROL", "Left")
+local Right1 = Page1:Section("LIST", "Right")
 
--- ============================================
---  MOVEMENT TRACKER
--- ============================================
-local function startMoveTrack()
-    if trackMove then return end
-    moveLog = {}
-    local lastPos = nil
-    local lastTime = tick()
-    
-    moveConn = RunService.Heartbeat:Connect(function()
-        if not trackMove then return end
-        
-        local char = LP.Character
-        if not char then return end
-        
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        
-        local pos = hrp.Position
-        local currentTime = tick()
-        
-        if lastPos and (currentTime - lastTime) > 1 then
-            local jarak = (pos - lastPos).Magnitude
-            if jarak > 1 then
-                local entry = string.format(
-                    "[%s] 🚶 PERGERAKAN\n📍 Posisi: (%.1f, %.1f, %.1f)\n📏 Jarak: %.1f",
-                    os.date("%H:%M:%S"),
-                    pos.X, pos.Y, pos.Z,
-                    jarak
-                )
-                table.insert(moveLog, 1, entry)
-                table.insert(allLogs, 1, "[MOVE] " .. entry)
-                
-                if #moveLog > MAX_LOG then table.remove(moveLog, #moveLog) end
-                if #allLogs > MAX_LOG * 3 then table.remove(allLogs, #allLogs) end
-            end
-            lastPos = pos
-            lastTime = currentTime
-        elseif not lastPos then
-            lastPos = pos
-            lastTime = currentTime
-        end
-    end)
-    
-    trackMove = true
-    Library:Notification("✅", "Movement tracking ON", 2)
-end
-
-local function stopMoveTrack()
-    if moveConn then
-        moveConn:Disconnect()
-        moveConn = nil
-    end
-    trackMove = false
-    Library:Notification("✅", "Movement tracking OFF", 2)
-end
-
--- ============================================
---  OBJECT TRACKER
--- ============================================
-local function startObjTrack()
-    if trackObj then return end
-    objLog = {}
-    
-    objAddedConn = Workspace.DescendantAdded:Connect(function(obj)
-        if not trackObj then return end
-        
-        -- Filter objek yang relevan
-        if obj:IsA("BasePart") and #obj.Name > 1 and obj.Name ~= "Terrain" then
-            local entry = string.format(
-                "[%s] ➕ OBJEK BARU\n📦 Nama: %s\n📍 Posisi: (%.1f, %.1f, %.1f)\n🏷️ Class: %s",
-                os.date("%H:%M:%S"),
-                obj.Name,
-                obj.Position.X, obj.Position.Y, obj.Position.Z,
-                obj.ClassName
-            )
-            table.insert(objLog, 1, entry)
-            table.insert(allLogs, 1, "[OBJ] " .. entry)
-            
-            if #objLog > MAX_LOG then table.remove(objLog, #objLog) end
-            if #allLogs > MAX_LOG * 3 then table.remove(allLogs, #allLogs) end
-        end
-    end)
-    
-    objRemovedConn = Workspace.DescendantRemoving:Connect(function(obj)
-        if not trackObj then return end
-        
-        if obj:IsA("BasePart") and #obj.Name > 1 and obj.Name ~= "Terrain" then
-            local entry = string.format(
-                "[%s] ➖ OBJEK HILANG\n📦 Nama: %s",
-                os.date("%H:%M:%S"),
-                obj.Name
-            )
-            table.insert(objLog, 1, entry)
-            table.insert(allLogs, 1, "[OBJ] " .. entry)
-            
-            if #objLog > MAX_LOG then table.remove(objLog, #objLog) end
-            if #allLogs > MAX_LOG * 3 then table.remove(allLogs, #allLogs) end
-        end
-    end)
-    
-    trackObj = true
-    Library:Notification("✅", "Object tracking ON", 2)
-end
-
-local function stopObjTrack()
-    if objAddedConn then
-        objAddedConn:Disconnect()
-        objAddedConn = nil
-    end
-    if objRemovedConn then
-        objRemovedConn:Disconnect()
-        objRemovedConn = nil
-    end
-    trackObj = false
-    Library:Notification("✅", "Object tracking OFF", 2)
-end
-
--- ============================================
---  BUILD UI - SCAN TAB (DENGAN LIST REMOTE)
--- ============================================
-local ScanPage = TabScan:Page("📡 SCAN REMOTE", "search")
-local ScanLeft = ScanPage:Section("🔍 KONTROL", "Left")
-local ScanRight = ScanPage:Section("📋 LIST REMOTE", "Right")
-
--- LEFT SECTION
-ScanLeft:Button("🔍 SCAN SEMUA REMOTE", "Scan RemoteEvent & Function", function()
-    task.spawn(function()
-        Library:Notification("⏳", "Scanning...", 2)
-        allRemotes = scanAllRemotes()
-        
-        local eventCount = 0
-        local funcCount = 0
-        for _, r in ipairs(allRemotes) do
-            if r.class == "RemoteEvent" then
-                eventCount = eventCount + 1
-            else
-                funcCount = funcCount + 1
-            end
-        end
-        
-        Library:Notification(
-            "✅ SCAN SELESAI",
-            string.format("Total: %d remote\n📡 Event: %d\n🔧 Function: %d", 
-                #allRemotes, eventCount, funcCount),
-            4
-        )
-    end)
+Left1:Button("🔍 SCAN", "Scan semua remote", function()
+    scanRemotes()
+    Library:Notification("✅", "Ditemukan " .. #allRemotes .. " remote", 2)
 end)
 
-ScanLeft:Button("🗑️ RESET SCAN", "Hapus hasil scan", function()
+Left1:Button("🗑️ CLEAR", "Hapus", function()
     allRemotes = {}
-    Library:Notification("🗑️", "Hasil scan dihapus", 2)
+    Library:Notification("✅", "Cleared", 1)
 end)
 
-ScanLeft:Paragraph("📊 STATISTIK",
-    function()
-        return string.format("Remote: %d", #allRemotes)
-    end
-)
-
--- RIGHT SECTION - LIST REMOTE
-ScanRight:Button("📋 TAMPILKAN LIST", "Lihat daftar remote", function()
+Right1:Button("📋 LIST", "Tampilkan remote", function()
     if #allRemotes == 0 then
-        Library:Notification("📭", "Scan dulu!", 2)
+        Library:Notification("❌", "Scan dulu", 1)
         return
     end
     
-    local display = {}
-    for i, r in ipairs(allRemotes) do
-        table.insert(display, string.format("[%d] [%s] %s\n%s", 
-            i,
-            r.class == "RemoteEvent" and "EVENT" or "FUNC",
-            r.name,
-            r.path
-        ))
+    local text = "REMOTE:\n"
+    for i = 1, math.min(15, #allRemotes) do
+        text = text .. i .. ". " .. allRemotes[i] .. "\n"
     end
-    
-    scanPage = showPage(display, 1, "📡 LIST REMOTE")
+    Library:Notification("📋 LIST", text, 8)
 end)
 
-ScanRight:Button("⏩ NEXT", "Halaman berikutnya", function()
+Right1:Button("📋 COPY", "Copy ke clipboard", function()
     if #allRemotes == 0 then return end
-    local display = {}
-    for i, r in ipairs(allRemotes) do
-        table.insert(display, string.format("[%d] [%s] %s\n%s", 
-            i,
-            r.class == "RemoteEvent" and "EVENT" or "FUNC",
-            r.name,
-            r.path
-        ))
-    end
-    scanPage = showPage(display, scanPage + 1, "📡 LIST REMOTE")
-end)
-
-ScanRight:Button("⏪ PREV", "Halaman sebelumnya", function()
-    if #allRemotes == 0 then return end
-    local display = {}
-    for i, r in ipairs(allRemotes) do
-        table.insert(display, string.format("[%d] [%s] %s\n%s", 
-            i,
-            r.class == "RemoteEvent" and "EVENT" or "FUNC",
-            r.name,
-            r.path
-        ))
-    end
-    scanPage = showPage(display, scanPage - 1, "📡 LIST REMOTE")
-end)
-
-ScanRight:Button("📋 COPY SEMUA REMOTE", "Copy semua remote ke clipboard", function()
-    if #allRemotes == 0 then
-        Library:Notification("❌", "Tidak ada data", 2)
-        return
-    end
-    
-    local text = "=== XKID REMOTE LIST ===\n\n"
-    for i, r in ipairs(allRemotes) do
-        text = text .. string.format("[%d] [%s] %s\n%s\n\n", 
-            i, 
-            r.class == "RemoteEvent" and "EVENT" or "FUNC",
-            r.name, 
-            r.path
-        )
-    end
-    
-    copyToClipboard(text)
+    copyText(table.concat(allRemotes, "\n"))
 end)
 
 -- ============================================
---  BUILD UI - MOVE TAB (DENGAN COPY)
+--  TAB 2: MOVE TRACKER
 -- ============================================
-local MovePage = TabMove:Page("🚶 MOVEMENT", "activity")
-local MoveLeft = MovePage:Section("🎮 KONTROL", "Left")
-local MoveRight = MovePage:Section("📋 LOG MOVE", "Right")
+local Page2 = Tab2:Page("MOVE", "activity")
+local Left2 = Page2:Section("KONTROL", "Left")
+local Right2 = Page2:Section("LOG", "Right")
 
-MoveLeft:Toggle("🚶 TRACK MOVE", "MoveToggle", false, "Track pergerakan player", function(v)
-    if v then startMoveTrack() else stopMoveTrack() end
+local moveActive = false
+local moveConn = nil
+
+Left2:Toggle("🚶 TRACK", "MoveToggle", false, "Track pergerakan", function(v)
+    moveActive = v
+    
+    if v then
+        moveLog = {}
+        local lastPos = nil
+        
+        moveConn = RunService.Heartbeat:Connect(function()
+            if not moveActive then return end
+            
+            local char = LP.Character
+            if not char then return end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            
+            local pos = hrp.Position
+            if lastPos and (pos - lastPos).Magnitude > 3 then
+                local entry = string.format("[%s] (%.1f,%.1f,%.1f)", 
+                    os.date("%H:%M:%S"), pos.X, pos.Y, pos.Z)
+                table.insert(moveLog, 1, entry)
+                if #moveLog > 20 then table.remove(moveLog) end
+            end
+            lastPos = pos
+        end)
+        
+        Library:Notification("✅", "Move ON", 1)
+    else
+        if moveConn then
+            moveConn:Disconnect()
+            moveConn = nil
+        end
+        Library:Notification("✅", "Move OFF", 1)
+    end
 end)
 
-MoveLeft:Button("🗑️ CLEAR MOVE LOG", "Hapus log movement", function()
+Left2:Button("🗑️ CLEAR", "Hapus log", function()
     moveLog = {}
-    Library:Notification("🗑️", "Move log cleared", 2)
+    Library:Notification("✅", "Cleared", 1)
 end)
 
-MoveLeft:Paragraph("📊 STAT MOVE",
-    function()
-        return string.format("Total log: %d", #moveLog)
-    end
-)
-
-MoveRight:Button("📋 LIHAT MOVE LOG", "Tampilkan log movement", function()
+Right2:Button("📋 LIHAT", "Lihat log", function()
     if #moveLog == 0 then
-        Library:Notification("📭", "Belum ada log", 2)
-        return
-    end
-    movePage = showPage(moveLog, 1, "🚶 MOVE LOG")
-end)
-
-MoveRight:Button("⏩ NEXT", "Halaman berikutnya", function()
-    if #moveLog == 0 then return end
-    movePage = showPage(moveLog, movePage + 1, "🚶 MOVE LOG")
-end)
-
-MoveRight:Button("⏪ PREV", "Halaman sebelumnya", function()
-    if #moveLog == 0 then return end
-    movePage = showPage(moveLog, movePage - 1, "🚶 MOVE LOG")
-end)
-
-MoveRight:Button("📋 COPY MOVE LOG", "Copy semua log movement", function()
-    if #moveLog == 0 then
-        Library:Notification("❌", "Tidak ada log", 2)
+        Library:Notification("❌", "Kosong", 1)
         return
     end
     
-    local text = "=== MOVEMENT LOG ===\n\n"
-    for i, e in ipairs(moveLog) do
-        text = text .. string.format("[%d] %s\n\n", i, e)
+    local text = "MOVE LOG:\n"
+    for i = 1, math.min(10, #moveLog) do
+        text = text .. moveLog[i] .. "\n"
     end
+    Library:Notification("📋 LOG", text, 6)
+end)
+
+Right2:Button("📋 COPY", "Copy log", function()
+    if #moveLog == 0 then return end
+    copyText(table.concat(moveLog, "\n"))
+end)
+
+-- ============================================
+--  TAB 3: OBJEK TRACKER
+-- ============================================
+local Page3 = Tab3:Page("OBJEK", "package")
+local Left3 = Page3:Section("KONTROL", "Left")
+local Right3 = Page3:Section("LOG", "Right")
+
+local objActive = false
+local objAdded = nil
+local objRemoved = nil
+
+Left3:Toggle("📦 TRACK", "ObjToggle", false, "Track objek", function(v)
+    objActive = v
     
-    copyToClipboard(text)
+    if v then
+        objLog = {}
+        
+        objAdded = Workspace.DescendantAdded:Connect(function(obj)
+            if not objActive then return end
+            if obj:IsA("BasePart") and #obj.Name > 1 then
+                local entry = string.format("[%s] + %s", os.date("%H:%M:%S"), obj.Name)
+                table.insert(objLog, 1, entry)
+                if #objLog > 20 then table.remove(objLog) end
+            end
+        end)
+        
+        objRemoved = Workspace.DescendantRemoving:Connect(function(obj)
+            if not objActive then return end
+            if obj:IsA("BasePart") and #obj.Name > 1 then
+                local entry = string.format("[%s] - %s", os.date("%H:%M:%S"), obj.Name)
+                table.insert(objLog, 1, entry)
+                if #objLog > 20 then table.remove(objLog) end
+            end
+        end)
+        
+        Library:Notification("✅", "Objek ON", 1)
+    else
+        if objAdded then objAdded:Disconnect() end
+        if objRemoved then objRemoved:Disconnect() end
+        Library:Notification("✅", "Objek OFF", 1)
+    end
 end)
 
--- ============================================
---  BUILD UI - OBJEK TAB (DENGAN COPY)
--- ============================================
-local ObjPage = TabObj:Page("📦 OBJEK", "package")
-local ObjLeft = ObjPage:Section("🎮 KONTROL", "Left")
-local ObjRight = ObjPage:Section("📋 LOG OBJEK", "Right")
-
-ObjLeft:Toggle("📦 TRACK OBJEK", "ObjToggle", false, "Track objek baru/hilang", function(v)
-    if v then startObjTrack() else stopObjTrack() end
-end)
-
-ObjLeft:Button("🗑️ CLEAR OBJ LOG", "Hapus log objek", function()
+Left3:Button("🗑️ CLEAR", "Hapus log", function()
     objLog = {}
-    Library:Notification("🗑️", "Obj log cleared", 2)
+    Library:Notification("✅", "Cleared", 1)
 end)
 
-ObjLeft:Paragraph("📊 STAT OBJEK",
-    function()
-        return string.format("Total log: %d", #objLog)
-    end
-)
-
-ObjRight:Button("📋 LIHAT OBJ LOG", "Tampilkan log objek", function()
+Right3:Button("📋 LIHAT", "Lihat log", function()
     if #objLog == 0 then
-        Library:Notification("📭", "Belum ada log", 2)
-        return
-    end
-    objPage = showPage(objLog, 1, "📦 OBJEK LOG")
-end)
-
-ObjRight:Button("⏩ NEXT", "Halaman berikutnya", function()
-    if #objLog == 0 then return end
-    objPage = showPage(objLog, objPage + 1, "📦 OBJEK LOG")
-end)
-
-ObjRight:Button("⏪ PREV", "Halaman sebelumnya", function()
-    if #objLog == 0 then return end
-    objPage = showPage(objLog, objPage - 1, "📦 OBJEK LOG")
-end)
-
-ObjRight:Button("📋 COPY OBJ LOG", "Copy semua log objek", function()
-    if #objLog == 0 then
-        Library:Notification("❌", "Tidak ada log", 2)
+        Library:Notification("❌", "Kosong", 1)
         return
     end
     
-    local text = "=== OBJEK LOG ===\n\n"
-    for i, e in ipairs(objLog) do
-        text = text .. string.format("[%d] %s\n\n", i, e)
+    local text = "OBJEK LOG:\n"
+    for i = 1, math.min(10, #objLog) do
+        text = text .. objLog[i] .. "\n"
     end
-    
-    copyToClipboard(text)
+    Library:Notification("📋 LOG", text, 6)
+end)
+
+Right3:Button("📋 COPY", "Copy log", function()
+    if #objLog == 0 then return end
+    copyText(table.concat(objLog, "\n"))
 end)
 
 -- ============================================
---  BUILD UI - LOG TAB (GABUNGAN SEMUA LOG)
+--  TAB 4: GABUNGAN LOG
 -- ============================================
-local LogPage = TabLog:Page("📋 SEMUA LOG", "file-text")
-local LogLeft = LogPage:Section("🎮 KONTROL", "Left")
-local LogRight = LogPage:Section("📋 LOG GABUNGAN", "Right")
+local Page4 = Tab4:Page("LOG", "file-text")
+local Left4 = Page4:Section("KONTROL", "Left")
+local Right4 = Page4:Section("GABUNGAN", "Right")
 
-LogLeft:Button("🗑️ CLEAR ALL LOGS", "Hapus semua log", function()
+Left4:Button("🗑️ CLEAR ALL", "Hapus semua", function()
     moveLog = {}
     objLog = {}
-    allLogs = {}
-    Library:Notification("🗑️", "Semua log dihapus", 2)
+    Library:Notification("✅", "All cleared", 1)
 end)
 
-LogLeft:Paragraph("📊 STAT TOTAL",
-    function()
-        return string.format("Move: %d\nObjek: %d\nTotal: %d", 
-            #moveLog, #objLog, #allLogs)
-    end
-)
-
-LogRight:Button("📋 LIHAT SEMUA LOG", "Tampilkan semua log", function()
-    if #allLogs == 0 then
-        Library:Notification("📭", "Belum ada log", 2)
-        return
-    end
-    logPage = showPage(allLogs, 1, "📋 SEMUA LOG")
-end)
-
-LogRight:Button("⏩ NEXT", "Halaman berikutnya", function()
-    if #allLogs == 0 then return end
-    logPage = showPage(allLogs, logPage + 1, "📋 SEMUA LOG")
-end)
-
-LogRight:Button("⏪ PREV", "Halaman sebelumnya", function()
-    if #allLogs == 0 then return end
-    logPage = showPage(allLogs, logPage - 1, "📋 SEMUA LOG")
-end)
-
-LogRight:Button("📋 COPY SEMUA LOG", "Copy semua log ke clipboard", function()
-    if #allLogs == 0 then
-        Library:Notification("❌", "Tidak ada log", 2)
+Right4:Button("📋 LIHAT", "Lihat gabungan", function()
+    local all = {}
+    for _, v in ipairs(moveLog) do table.insert(all, "[MOVE] " .. v) end
+    for _, v in ipairs(objLog) do table.insert(all, "[OBJ] " .. v) end
+    
+    if #all == 0 then
+        Library:Notification("❌", "Kosong", 1)
         return
     end
     
-    local text = "=== XKID ALL LOGS ===\n\n"
-    for i, e in ipairs(allLogs) do
-        text = text .. string.format("[%d] %s\n\n", i, e)
+    local text = "SEMUA LOG:\n"
+    for i = 1, math.min(15, #all) do
+        text = text .. all[i] .. "\n"
     end
-    
-    copyToClipboard(text)
+    Library:Notification("📋 LOG", text, 8)
 end)
 
-LogRight:Button("📋 COPY 20 TERAKHIR", "Copy 20 log terbaru", function()
-    if #allLogs == 0 then
-        Library:Notification("❌", "Tidak ada log", 2)
-        return
-    end
+Right4:Button("📋 COPY", "Copy semua", function()
+    local all = {}
+    for _, v in ipairs(moveLog) do table.insert(all, "[MOVE] " .. v) end
+    for _, v in ipairs(objLog) do table.insert(all, "[OBJ] " .. v) end
     
-    local text = "=== XKID LAST 20 LOGS ===\n\n"
-    for i = 1, math.min(20, #allLogs) do
-        text = text .. string.format("[%d] %s\n\n", i, allLogs[i])
-    end
-    
-    copyToClipboard(text)
+    if #all == 0 then return end
+    copyText(table.concat(all, "\n"))
 end)
 
 -- ============================================
---  INIT
+--  START
 -- ============================================
-Library:Notification(
-    "🚀 XKID TRACKER V5",
-    "✅ LIST REMOTE\n" ..
-    "✅ COPY LOG\n" ..
-    "✅ TRACK MOVE & OBJEK\n\n" ..
-    "🔥 SEMUA TOMBOL BERFUNGSI!",
-    5
-)
+Library:Notification("✅ XKID LITE", "Siap! Pilih tab:", 3)
 
-Library:ConfigSystem(Win)
-
-print("╔═══════════════════════════════════════════════════════╗")
-print("║                                                       ║")
-print("║      🔌 XKID TRACKER V5                              ║")
-print("║          DENGAN LIST REMOTE & COPY LOG               ║")
-print("║                                                       ║")
-print("║  📋 FITUR:                                            ║")
-print("║  ✓ LIST REMOTE (lihat semua remote)                  ║")
-print("║  ✓ COPY LOG ke clipboard                             ║")
-print("║  ✓ TRACK pergerakan player                           ║")
-print("║  ✓ TRACK objek baru/hilang                           ║")
-print("║                                                       ║")
-print("║  🚀 CARA PAKAI:                                       ║")
-print("║  1. Buka tab SCAN → SCAN SEMUA REMOTE                ║")
-print("║  2. Lihat LIST REMOTE (tombol TAMPILKAN LIST)        ║")
-print("║  3. Aktifkan TRACK MOVE & TRACK OBJEK                ║")
-print("║  4. Jalankan auto farm orang                         ║")
-print("║  5. Lihat LOG di masing-masing tab                   ║")
-print("║  6. COPY LOG dengan tombol COPY                      ║")
-print("║                                                       ║")
-print("║  ✅ SEMUA TOMBOL BERFUNGSI DI DELTA!                 ║")
-print("║                                                       ║")
-print("╚═══════════════════════════════════════════════════════╝")
+print("╔══════════════════════════════════════╗")
+print("║   🔌 XKID SUPER LITE                ║")
+print("║   PALING RINGAN - PASTI WORK        ║")
+print("║                                      ║")
+print("║   CARA PAKAI:                        ║")
+print("║   1. SCAN remote (tab REMOTE)        ║")
+print("║   2. TRACK MOVE & OBJEK               ║")
+print("║   3. LIHAT LOG & COPY                  ║")
+print("╚══════════════════════════════════════╝")
