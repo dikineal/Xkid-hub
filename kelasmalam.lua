@@ -1,6 +1,8 @@
--- XKID HUB MOBILE + FLY GUI
+-- XKID HUB MOBILE FINAL
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"))()
+local Library = loadstring(game:HttpGet(
+"https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
+))()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -49,27 +51,26 @@ end)
 -- WINDOW
 --------------------------------------------------
 
-local Win = Library:Window("🌟 XKID HUB", "star", "Fly GUI", false)
+local Win = Library:Window("🌟 XKID HUB", "star", "Mobile Final", false)
 
 Win:TabSection("🛠 HUB")
 
-local TabTP   = Win:Tab("📍 Teleport","map-pin")
-local TabFly  = Win:Tab("🚀 Fly","rocket")
-local TabSpd  = Win:Tab("⚡ Speed","zap")
+local TabTP = Win:Tab("📍 Teleport","map-pin")
+local TabPl = Win:Tab("👤 Player","user")
 local TabProt = Win:Tab("🛡 Protect","shield")
 
 --------------------------------------------------
--- TELEPORT PLAYER LIST
+-- TELEPORT PLAYER
 --------------------------------------------------
 
-local TPage = TabTP:Page("📍 Teleport Player","map-pin")
-local TL = TPage:Section("👥 Player List","Left")
+local TPage = TabTP:Page("Teleport Player","map-pin")
+local TL = TPage:Section("Players","Left")
 
 for _,p in pairs(Players:GetPlayers()) do
 
 if p ~= LP then
 
-TL:Button("👤 "..p.Name,"Teleport",function()
+TL:Button(p.Name,"Teleport",function()
 
 if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 
@@ -85,7 +86,167 @@ end
 end
 
 --------------------------------------------------
--- ESP SYSTEM
+-- PLAYER FEATURES
+--------------------------------------------------
+
+local Page = TabPl:Page("Player","user")
+
+local Left = Page:Section("Movement","Left")
+
+--------------------------------------------------
+-- SPEED
+--------------------------------------------------
+
+local speed=16
+
+RunService.RenderStepped:Connect(function()
+
+local hum=getHum()
+
+if hum then
+hum.WalkSpeed=speed
+end
+
+end)
+
+Left:Slider("Speed","speed",16,80,16,function(v)
+speed=v
+end)
+
+--------------------------------------------------
+-- NOCLIP
+--------------------------------------------------
+
+local noclip=false
+
+RunService.Stepped:Connect(function()
+
+if noclip then
+
+local char=getChar()
+
+if char then
+
+for _,p in pairs(char:GetDescendants()) do
+if p:IsA("BasePart") then
+p.CanCollide=false
+end
+end
+
+end
+
+end
+
+end)
+
+Left:Toggle("NoClip","noclip",false,function(v)
+noclip=v
+end)
+
+--------------------------------------------------
+-- INFINITE JUMP
+--------------------------------------------------
+
+local infJump=false
+
+UIS.JumpRequest:Connect(function()
+
+if infJump then
+
+local hum=getHum()
+
+if hum then
+hum:ChangeState(Enum.HumanoidStateType.Jumping)
+end
+
+end
+
+end)
+
+Left:Toggle("Infinite Jump","jump",false,function(v)
+infJump=v
+end)
+
+--------------------------------------------------
+-- FLY SYSTEM
+--------------------------------------------------
+
+local flying=false
+local flySpeed=60
+
+local bv
+local bg
+local flyConn
+
+local function startFly()
+
+local root=getRoot()
+local hum=getHum()
+
+if not root or not hum then return end
+
+bv=Instance.new("BodyVelocity")
+bv.MaxForce=Vector3.new(1e5,1e5,1e5)
+bv.Parent=root
+
+bg=Instance.new("BodyGyro")
+bg.MaxTorque=Vector3.new(1e5,1e5,1e5)
+bg.P=1e4
+bg.Parent=root
+
+hum.PlatformStand=true
+
+flyConn=RunService.RenderStepped:Connect(function()
+
+local cam=Workspace.CurrentCamera
+local moveDir=hum.MoveDirection
+
+local forward=cam.CFrame.LookVector
+local right=cam.CFrame.RightVector
+
+local dir=(forward*moveDir.Z)+(right*moveDir.X)
+
+bv.Velocity=dir*flySpeed
+bg.CFrame=cam.CFrame
+
+end)
+
+end
+
+local function stopFly()
+
+if flyConn then
+flyConn:Disconnect()
+end
+
+if bv then bv:Destroy() end
+if bg then bg:Destroy() end
+
+local hum=getHum()
+if hum then
+hum.PlatformStand=false
+end
+
+end
+
+Left:Toggle("Fly","fly",false,function(v)
+
+flying=v
+
+if v then
+startFly()
+else
+stopFly()
+end
+
+end)
+
+Left:Slider("Fly Speed","flyspeed",10,200,60,function(v)
+flySpeed=v
+end)
+
+--------------------------------------------------
+-- ESP
 --------------------------------------------------
 
 local espEnabled=false
@@ -103,32 +264,32 @@ end
 
 local function createESP(plr)
 
-if plr == LP then return end
+if plr==LP then return end
 
 local function setup(char)
 
 if not espEnabled then return end
 
-local head = char:WaitForChild("Head",5)
-local root = char:WaitForChild("HumanoidRootPart",5)
+local head=char:WaitForChild("Head",5)
+local root=char:WaitForChild("HumanoidRootPart",5)
 
-local bill = Instance.new("BillboardGui")
-bill.Adornee = head
-bill.Size = UDim2.new(0,200,0,40)
-bill.StudsOffset = Vector3.new(0,2,0)
-bill.AlwaysOnTop = true
-bill.Parent = head
+local gui=Instance.new("BillboardGui")
+gui.Size=UDim2.new(0,200,0,40)
+gui.StudsOffset=Vector3.new(0,2,0)
+gui.AlwaysOnTop=true
+gui.Adornee=head
+gui.Parent=head
 
-local txt = Instance.new("TextLabel")
-txt.Parent = bill
-txt.Size = UDim2.new(1,0,1,0)
-txt.BackgroundTransparency = 1
-txt.TextColor3 = Color3.new(1,1,1)
-txt.TextStrokeTransparency = 0
-txt.Font = Enum.Font.SourceSansBold
-txt.TextScaled = true
+local txt=Instance.new("TextLabel")
+txt.Size=UDim2.new(1,0,1,0)
+txt.BackgroundTransparency=1
+txt.TextColor3=Color3.new(1,1,1)
+txt.TextStrokeTransparency=0
+txt.Font=Enum.Font.SourceSansBold
+txt.TextScaled=true
+txt.Parent=gui
 
-table.insert(espList,bill)
+table.insert(espList,gui)
 
 RunService.Heartbeat:Connect(function()
 
@@ -136,9 +297,9 @@ if not espEnabled then return end
 
 if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
 
-local dist = (root.Position - LP.Character.HumanoidRootPart.Position).Magnitude
+local dist=(root.Position-LP.Character.HumanoidRootPart.Position).Magnitude
 
-txt.Text = plr.Name.." ["..math.floor(dist).."m]"
+txt.Text=plr.Name.." ["..math.floor(dist).."m]"
 
 end
 
@@ -162,104 +323,7 @@ end
 
 end
 
---------------------------------------------------
--- FLY GUI
---------------------------------------------------
-
-local function createFlyGui()
-
-local root = getRoot()
-
-local speed = 50
-local flying = false
-
-local bv
-local bg
-
-local gui = Instance.new("ScreenGui",game.CoreGui)
-
-local frame = Instance.new("Frame",gui)
-frame.Size = UDim2.new(0,220,0,120)
-frame.Position = UDim2.new(0.4,0,0.7,0)
-frame.BackgroundColor3 = Color3.fromRGB(60,60,60)
-
-local flyBtn = Instance.new("TextButton",frame)
-flyBtn.Size = UDim2.new(0.4,0,0.3,0)
-flyBtn.Position = UDim2.new(0.3,0,0.1,0)
-flyBtn.Text = "FLY"
-
-flyBtn.MouseButton1Click:Connect(function()
-
-flying = not flying
-
-if flying then
-
-bv = Instance.new("BodyVelocity")
-bv.MaxForce = Vector3.new(9e9,9e9,9e9)
-bv.Parent = root
-
-bg = Instance.new("BodyGyro")
-bg.MaxTorque = Vector3.new(9e9,9e9,9e9)
-bg.Parent = root
-
-RunService.RenderStepped:Connect(function()
-
-if flying then
-
-local cam = Workspace.CurrentCamera
-local dir = cam.CFrame.LookVector
-
-bv.Velocity = dir * speed
-bg.CFrame = cam.CFrame
-
-end
-
-end)
-
-else
-
-if bv then bv:Destroy() end
-if bg then bg:Destroy() end
-
-end
-
-end)
-
-local up = Instance.new("TextButton",frame)
-up.Size = UDim2.new(0.4,0,0.2,0)
-up.Position = UDim2.new(0.1,0,0.6,0)
-up.Text = "UP"
-
-up.MouseButton1Click:Connect(function()
-root.Velocity = Vector3.new(0,speed,0)
-end)
-
-local down = Instance.new("TextButton",frame)
-down.Size = UDim2.new(0.4,0,0.2,0)
-down.Position = UDim2.new(0.5,0,0.6,0)
-down.Text = "DOWN"
-
-down.MouseButton1Click:Connect(function()
-root.Velocity = Vector3.new(0,-speed,0)
-end)
-
-end
-
---------------------------------------------------
--- FLY TAB
---------------------------------------------------
-
-local FlyPage = TabFly:Page("🚀 Fly","rocket")
-local FL = FlyPage:Section("Fly Mode","Left")
-local FR = FlyPage:Section("Extras","Right")
-
-FL:Button("🚀 Open Fly GUI","Panel Fly seperti gambar",function()
-
-createFlyGui()
-
-end)
-
-FR:Toggle("👁 ESP Player","esp",false,function(v)
+Left:Toggle("ESP Player","esp",false,function(v)
 
 espEnabled=v
 
@@ -272,61 +336,13 @@ end
 end)
 
 --------------------------------------------------
--- SPEED
---------------------------------------------------
-
-local SPage = TabSpd:Page("⚡ Speed","zap")
-local SL = SPage:Section("Speed","Left")
-local SR = SPage:Section("Jump","Right")
-
-local speed=16
-
-RunService.RenderStepped:Connect(function()
-
-local hum=getHum()
-
-if hum then
-hum.WalkSpeed=speed
-end
-
-end)
-
-SL:Slider("⚡ Speed","speed",16,80,16,function(v)
-speed=v
-end)
-
---------------------------------------------------
--- INFINITE JUMP
---------------------------------------------------
-
-local infJump=false
-
-UIS.JumpRequest:Connect(function()
-
-if infJump then
-
-local hum=getHum()
-
-if hum then
-hum:ChangeState(Enum.HumanoidStateType.Jumping)
-end
-
-end
-
-end)
-
-SR:Toggle("♾ Infinite Jump","infjump",false,function(v)
-infJump=v
-end)
-
---------------------------------------------------
 -- PROTECTION
 --------------------------------------------------
 
-local PPage = TabProt:Page("🛡 Protect","shield")
-local PL = PPage:Section("Protection","Left")
+local PPage=TabProt:Page("Protection","shield")
+local PL=PPage:Section("Safety","Left")
 
-PL:Toggle("⏰ Anti AFK","afk",false,function(v)
+PL:Toggle("Anti AFK","afk",false,function(v)
 
 if v then
 
@@ -341,30 +357,31 @@ end
 
 end)
 
-PL:Button("💀 Respawn","Respawn posisi terakhir",function()
+PL:Button("Respawn","Respawn posisi terakhir",function()
 
-local saved = lastPos
+local saved=lastPos
 
-local char = LP.Character
+local char=LP.Character
+
 if char then
 char:BreakJoints()
 end
 
 LP.CharacterAdded:Connect(function(newChar)
 
-task.wait(0.8)
+task.wait(1)
 
-local hrp = newChar:WaitForChild("HumanoidRootPart",5)
+local hrp=newChar:WaitForChild("HumanoidRootPart",5)
 
 if hrp and saved then
-hrp.CFrame = saved
+hrp.CFrame=saved
 end
 
 end)
 
 end)
 
-PL:Button("🔄 Rejoin Server","",function()
+PL:Button("Rejoin","Rejoin Server",function()
 
 TpService:Teleport(game.PlaceId,LP)
 
