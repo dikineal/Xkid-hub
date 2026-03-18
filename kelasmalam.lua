@@ -1,13 +1,13 @@
 --[[
   ╔══════════════════════════════════════════════════════╗
-  ║         🌟  X K I D  H U B  v3.1  🌟               ║
-  ║         Aurora UI  ✦  Farming + Fishing Fix          ║
+  ║         🌟  X K I D  H U B  v3.2  🌟               ║
+  ║         Aurora UI  ✦  Farm Fix + Manual              ║
   ╚══════════════════════════════════════════════════════╝
-  v3.1 Fix:
-  [1] Auto Fishing: auto equip AdvanceRod dari backpack
-  [2] Batas tanam max 20 plot per cycle, sisanya cycle berikut
-  [3] Pola tanam lebih reliable dengan spacing grid
-  [4] Semua fix dari v2.0 (NoClip, Fly, ESP, InfJump)
+  v3.2 Fix:
+  [1] Plot scan: GetChildren index + workspace.Land langsung
+  [2] Farm manual: pilih bibit + jumlah + tanam per plot
+  [3] ESP Tanaman: scan children langsung (bukan descendants)
+  [4] Auto fishing: equip AdvanceRod otomatis
 ]]
 
 -- ════════════════════════════════════════
@@ -46,9 +46,7 @@ local function notif(t, b, d)
     print("[ XKID ] "..t.." | "..tostring(b))
 end
 
--- ════════════════════════════════════════
---  SAVE LAST POSITION
--- ════════════════════════════════════════
+-- Save last position
 local lastPos
 RunService.Heartbeat:Connect(function()
     local r = getRoot(); if r then lastPos = r.CFrame end
@@ -70,53 +68,62 @@ end
 --  DATA TANAMAN
 -- ════════════════════════════════════════
 local CROP_LIST = {
-    { name="AppleTree",  seed="Bibit Apel",      icon="🍎", price=15,       sell=45        },
-    { name="Padi",       seed="Bibit Padi",      icon="🌾", price=15,       sell=20        },
-    { name="Melon",      seed="Bibit Melon",     icon="🍈", price=15,       sell=20        },
-    { name="Tomat",      seed="Bibit Tomat",     icon="🍅", price=15,       sell=20        },
-    { name="Sawi",       seed="Bibit Sawi",      icon="🥬", price=15,       sell=20        },
-    { name="Coconut",    seed="Bibit Kelapa",    icon="🥥", price=100,      sell=140       },
-    { name="Daisy",      seed="Bibit Daisy",     icon="🌼", price=5000,     sell=6000      },
-    { name="FanPalm",    seed="Bibit FanPalm",   icon="🌴", price=100000,   sell=102000    },
-    { name="SunFlower",  seed="Bibit SunFlower", icon="🌻", price=2000000,  sell=2010000   },
-    { name="Sawit",      seed="Bibit Sawit",     icon="🪴", price=80000000, sell=80100000  },
+    { name="AppleTree", seed="Bibit Apel",      icon="🍎", price=15,       sell=45        },
+    { name="Padi",      seed="Bibit Padi",      icon="🌾", price=15,       sell=20        },
+    { name="Melon",     seed="Bibit Melon",     icon="🍈", price=15,       sell=20        },
+    { name="Tomat",     seed="Bibit Tomat",     icon="🍅", price=15,       sell=20        },
+    { name="Sawi",      seed="Bibit Sawi",      icon="🥬", price=15,       sell=20        },
+    { name="Coconut",   seed="Bibit Kelapa",    icon="🥥", price=100,      sell=140       },
+    { name="Daisy",     seed="Bibit Daisy",     icon="🌼", price=5000,     sell=6000      },
+    { name="FanPalm",   seed="Bibit FanPalm",   icon="🌴", price=100000,   sell=102000    },
+    { name="SunFlower", seed="Bibit SunFlower", icon="🌻", price=2000000,  sell=2010000   },
+    { name="Sawit",     seed="Bibit Sawit",     icon="🪴", price=80000000, sell=80100000  },
 }
 local cropNames = {}
-for _, c in ipairs(CROP_LIST) do table.insert(cropNames, c.icon.." "..c.seed) end
+for _, c in ipairs(CROP_LIST) do
+    table.insert(cropNames, c.icon.." "..c.seed)
+end
 
 -- ════════════════════════════════════════
---  SCAN PLOT
+--  SCAN PLOT (FIXED)
+--  Plot = BasePart langsung di:
+--  - workspace:GetChildren()[52,53,54,64,65,66,67]
+--  - workspace.Land (BasePart langsung)
 -- ════════════════════════════════════════
-local plotCache = nil
-local MAX_PLOT  = 20  -- batas maksimal tanam per cycle
+local plotCache  = nil
+local MAX_PLOT   = 20
 
 local function scanPlots()
     if plotCache then return plotCache end
     plotCache = {}
 
+    -- workspace.Land langsung sebagai BasePart
     local land = Workspace:FindFirstChild("Land")
     if land then
-        for _, p in ipairs(land:GetDescendants()) do
-            if p:IsA("BasePart") and p.CanCollide then
-                table.insert(plotCache, p)
+        if land:IsA("BasePart") then
+            table.insert(plotCache, land)
+        else
+            -- kalau Land adalah folder/model, ambil children BasePart
+            for _, p in ipairs(land:GetChildren()) do
+                if p:IsA("BasePart") then
+                    table.insert(plotCache, p)
+                end
             end
         end
     end
 
-    -- Fallback index
-    local indices = {52,53,54,64,65,66,67}
-    for _, idx in ipairs(indices) do
-        local obj = Workspace:GetChildren()[idx]
-        if obj then
-            if obj:IsA("BasePart") then
-                table.insert(plotCache, obj)
-            else
-                for _, p in ipairs(obj:GetDescendants()) do
-                    if p:IsA("BasePart") and p.CanCollide then
-                        table.insert(plotCache, p)
-                    end
-                end
+    -- workspace:GetChildren() index tertentu dari Dex
+    local PLOT_INDICES = {52, 53, 54, 64, 65, 66, 67}
+    local allChildren  = Workspace:GetChildren()
+    for _, idx in ipairs(PLOT_INDICES) do
+        local obj = allChildren[idx]
+        if obj and obj:IsA("BasePart") then
+            -- cek duplikasi
+            local dup = false
+            for _, existing in ipairs(plotCache) do
+                if existing == obj then dup = true; break end
             end
+            if not dup then table.insert(plotCache, obj) end
         end
     end
 
@@ -125,167 +132,93 @@ local function scanPlots()
 end
 
 -- ════════════════════════════════════════
---  POLA TANAM (FIXED)
---  Normal  = urutan biasa, max 20
---  Rapat   = sort by distance dari karakter, ambil 20 terdekat
---  Lebar   = ambil plot dengan X berbeda (selang baris), max 20
---  Panjang = ambil plot dengan Z berbeda (selang kolom), max 20
--- ════════════════════════════════════════
-local POLA_LIST    = {"Normal", "Rapat", "Lebar", "Panjang"}
-local selectedPola = "Normal"
-
-local function filterPlots(plots)
-    local result = {}
-
-    if selectedPola == "Normal" then
-        -- Urutan biasa, ambil max 20
-        for i = 1, math.min(#plots, MAX_PLOT) do
-            table.insert(result, plots[i])
-        end
-
-    elseif selectedPola == "Rapat" then
-        -- Sort by jarak dari karakter, ambil 20 terdekat
-        local root = getRoot()
-        if root then
-            local sorted = {}
-            for _, p in ipairs(plots) do
-                table.insert(sorted, {
-                    part = p,
-                    dist = (p.Position - root.Position).Magnitude
-                })
-            end
-            table.sort(sorted, function(a,b) return a.dist < b.dist end)
-            for i = 1, math.min(#sorted, MAX_PLOT) do
-                table.insert(result, sorted[i].part)
-            end
-        else
-            for i = 1, math.min(#plots, MAX_PLOT) do
-                table.insert(result, plots[i])
-            end
-        end
-
-    elseif selectedPola == "Lebar" then
-        -- Pilih plot dengan X berbeda (selang-seling baris)
-        -- Sort by X, ambil setiap baris genap
-        local sorted = {table.unpack(plots)}
-        table.sort(sorted, function(a,b) return a.Position.X < b.Position.X end)
-        local lastX, skip = nil, false
-        local spacing = 8 -- jarak antar baris
-        for _, p in ipairs(sorted) do
-            if lastX == nil then
-                lastX = p.Position.X; skip = false
-            elseif math.abs(p.Position.X - lastX) > spacing then
-                lastX = p.Position.X; skip = not skip
-            end
-            if not skip then
-                table.insert(result, p)
-                if #result >= MAX_PLOT then break end
-            end
-        end
-        -- Fallback kalau kosong
-        if #result == 0 then
-            for i=1, math.min(#plots, MAX_PLOT) do table.insert(result, plots[i]) end
-        end
-
-    elseif selectedPola == "Panjang" then
-        -- Pilih plot dengan Z berbeda (selang-seling kolom)
-        local sorted = {table.unpack(plots)}
-        table.sort(sorted, function(a,b) return a.Position.Z < b.Position.Z end)
-        local lastZ, skip = nil, false
-        local spacing = 8
-        for _, p in ipairs(sorted) do
-            if lastZ == nil then
-                lastZ = p.Position.Z; skip = false
-            elseif math.abs(p.Position.Z - lastZ) > spacing then
-                lastZ = p.Position.Z; skip = not skip
-            end
-            if not skip then
-                table.insert(result, p)
-                if #result >= MAX_PLOT then break end
-            end
-        end
-        if #result == 0 then
-            for i=1, math.min(#plots, MAX_PLOT) do table.insert(result, plots[i]) end
-        end
-    end
-
-    return result
-end
-
--- ════════════════════════════════════════
 --  BELI BIBIT
+--  dataRemoteEvent:FireServer({{cropName,amount},"\a"})
 -- ════════════════════════════════════════
 local selectedCrop = CROP_LIST[1]
 local jumlahBeli   = 10
+local jumlahTanam  = 1  -- jumlah per plot
 
 local function beliBibit(crop, qty)
     local ev = getBridge()
     if not ev then notif("Gagal","BridgeNet2 tidak ada",3); return false end
     local ok = pcall(function()
         ev:FireServer({
-            { cropName=crop.name, amount=qty or jumlahBeli },
+            { cropName=crop.name, amount=qty },
             "\a"
+        })
+    end)
+    if ok then notif("Beli",crop.seed.." x"..qty,2) end
+    return ok
+end
+
+-- ════════════════════════════════════════
+--  TANAM PER PLOT
+--  dataRemoteEvent:FireServer({{slotIdx,hitPosition,hitPart},"\x04"})
+-- ════════════════════════════════════════
+local function tanamSatuPlot(plot, idx)
+    local ev = getBridge()
+    if not ev or not plot then return false end
+    local ok = pcall(function()
+        ev:FireServer({
+            {
+                slotIdx     = idx or 1,
+                hitPosition = plot.Position,
+                hitPart     = plot
+            },
+            "\x04"
         })
     end)
     return ok
 end
 
--- ════════════════════════════════════════
---  TANAM — loop Vector3 max 20 per cycle
--- ════════════════════════════════════════
-local plantOffset = 0  -- track posisi cycle untuk queue
-
-local function tanamPlots(crop)
-    local ev = getBridge()
-    if not ev then notif("Gagal","BridgeNet2 tidak ada",3); return 0 end
-
-    local allPlots = scanPlots()
-    if #allPlots == 0 then notif("Plant","Tidak ada plot",4); return 0 end
-
-    -- Ambil berdasarkan pola
-    local filtered = filterPlots(allPlots)
-    if #filtered == 0 then notif("Plant","Filter plot kosong",4); return 0 end
-
+local function tanamSemuaPlot(maxPlot)
+    local plots = scanPlots()
+    if #plots == 0 then
+        notif("Tanam","Plot tidak ditemukan! Coba Refresh Cache",4)
+        return 0
+    end
+    local limit = math.min(#plots, maxPlot or MAX_PLOT)
     local count = 0
-    for idx, plot in ipairs(filtered) do
-        pcall(function()
-            ev:FireServer({
-                {
-                    slotIdx     = idx,
-                    hitPosition = plot.Position,
-                    hitPart     = plot
-                },
-                "\x04"
-            })
-        end)
-        count = count + 1
-        task.wait(0.15)
+    for i = 1, limit do
+        local ok = tanamSatuPlot(plots[i], i)
+        if ok then count = count + 1 end
+        task.wait(0.2)
     end
     return count
 end
 
 -- ════════════════════════════════════════
 --  HARVEST
+--  firesignal(OnClientEvent, {["\r"]={...},["\x02"]={...}})
 -- ════════════════════════════════════════
-local function harvestAll()
+local function harvestSatuPlot(plot)
     local ev = getBridge()
-    if not ev then notif("Gagal","BridgeNet2 tidak ada",3); return 0 end
-    local plots = filterPlots(scanPlots())
+    if not ev or not plot then return false end
+    local ok = pcall(function()
+        firesignal(ev.OnClientEvent, {
+            ["\r"] = {{
+                cropName  = selectedCrop.name,
+                cropPos   = plot.Position,
+                sellPrice = selectedCrop.sell,
+                drops     = {}
+            }},
+            ["\x02"] = { 0, 0 }
+        })
+    end)
+    return ok
+end
+
+local function harvestSemuaPlot(maxPlot)
+    local plots = scanPlots()
+    if #plots == 0 then
+        notif("Harvest","Plot tidak ditemukan!",4); return 0
+    end
+    local limit = math.min(#plots, maxPlot or MAX_PLOT)
     local count = 0
-    for _, plot in ipairs(plots) do
-        pcall(function()
-            firesignal(ev.OnClientEvent, {
-                ["\r"] = {{
-                    cropName  = selectedCrop.name,
-                    cropPos   = plot.Position,
-                    sellPrice = selectedCrop.sell,
-                    drops     = {}
-                }},
-                ["\x02"] = { 0, 0 }
-            })
-        end)
-        count = count + 1
-        task.wait(0.1)
+    for i = 1, limit do
+        if harvestSatuPlot(plots[i]) then count = count + 1 end
+        task.wait(0.15)
     end
     return count
 end
@@ -294,118 +227,94 @@ end
 --  AUTO FARM CYCLE
 -- ════════════════════════════════════════
 local farmLoop  = nil
-local farmDelay = 60
 local autoFarm  = false
+local farmDelay = 60
+local maxFarm   = 20
 
 local function runFarmCycle()
     -- 1. Beli bibit
-    notif("Farm","Beli "..selectedCrop.seed.."...",2)
+    notif("Cycle","Beli "..selectedCrop.seed.." x"..jumlahBeli,2)
     beliBibit(selectedCrop, jumlahBeli)
     task.wait(1)
 
-    -- 2. Tanam (max 20 plot)
-    notif("Farm","Tanam pola "..selectedPola.." (max "..MAX_PLOT..")...",2)
-    local planted = tanamPlots(selectedCrop)
-    notif("Farm",planted.." plot ditanam",3)
+    -- 2. Tanam
+    notif("Cycle","Tanam max "..maxFarm.." plot...",2)
+    local planted = tanamSemuaPlot(maxFarm)
+    notif("Cycle",planted.." plot ditanam",3)
     task.wait(1)
 
     -- 3. Tunggu tumbuh
-    notif("Farm","Tumbuh "..farmDelay.."s...",farmDelay-1)
+    notif("Cycle","Menunggu "..farmDelay.."s...",farmDelay-1)
     task.wait(farmDelay)
 
     -- 4. Harvest
-    notif("Farm","Harvest...",2)
-    local harvested = harvestAll()
-    notif("Farm","Cycle selesai! Harvest: "..harvested,4)
-    task.wait(1)
+    notif("Cycle","Harvest...",2)
+    local harvested = harvestSemuaPlot(maxFarm)
+    notif("Cycle #","Selesai! Harvest: "..harvested,4)
 end
 
 -- ════════════════════════════════════════
---  EQUIP ROD (FIXED)
---  Cari AdvanceRod di backpack, lalu equip via humanoid
+--  EQUIP ROD
 -- ════════════════════════════════════════
-local function equipRod()
-    local char    = getChar()
-    local backpack = LP:FindFirstChild("Backpack")
-    if not backpack then return false end
+local rodEquipped = false
 
-    -- Cari AdvanceRod di backpack
+local function equipRod()
+    local backpack = LP:FindFirstChild("Backpack"); if not backpack then return false end
+    local char     = getChar(); if not char then return false end
     local rod = backpack:FindFirstChild("AdvanceRod")
     if not rod then
-        -- Coba cari yang mirip
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool.Name:lower():find("rod") or tool.Name:lower():find("pancing") then
-                rod = tool; break
+        for _, t in ipairs(backpack:GetChildren()) do
+            if t.Name:lower():find("rod") or t.Name:lower():find("pancing") then
+                rod = t; break
             end
         end
     end
-
-    if not rod then
-        notif("Fishing","AdvanceRod tidak ada di backpack!",4)
-        return false
-    end
-
-    -- Equip tool ke karakter
-    if char then
-        rod.Parent = char
-        task.wait(0.5)
-        notif("Fishing","AdvanceRod di-equip!",2)
-        return true
-    end
-    return false
+    if not rod then notif("Rod","AdvanceRod tidak ada di backpack!",4); return false end
+    rod.Parent = char
+    task.wait(0.5)
+    notif("Rod","AdvanceRod equipped!",2)
+    return true
 end
 
 local function unequipRod()
-    local char = getChar(); if not char then return end
+    local char     = getChar(); if not char then return end
     local backpack = LP:FindFirstChild("Backpack"); if not backpack then return end
     local rod = char:FindFirstChild("AdvanceRod")
     if rod then rod.Parent = backpack end
 end
 
 -- ════════════════════════════════════════
---  AUTO FISHING (FIXED)
---  1. Equip AdvanceRod otomatis
---  2. Cast → tunggu → tarik
---  3. MiniGame selesai
---  4. Ulangi (rod sudah equipped, tidak perlu equip lagi)
+--  AUTO FISHING
 -- ════════════════════════════════════════
 local fishLoop  = nil
 local autoFish  = false
 local fishDelay = 5
-local rodEquipped = false
 
 local function doFishing()
     local castEv = getFishRemote("CastEvent")
     local miniEv = getFishRemote("MiniGame")
     if not castEv then notif("Fish","CastEvent tidak ada",3); return end
-
-    -- Lempar kail
     pcall(function() castEv:FireServer(false, 0) end)
     task.wait(0.5)
     pcall(function() castEv:FireServer(true) end)
-
-    -- Tunggu ikan makan
     task.wait(fishDelay)
-
-    -- Tarik
     pcall(function() castEv:FireServer(false, fishDelay) end)
     task.wait(0.5)
-
-    -- Selesaikan minigame
     if miniEv then
         pcall(function() miniEv:FireServer(true) end)
         task.wait(0.3)
         pcall(function() firesignal(miniEv.OnClientEvent, "Stop") end)
     end
-
     task.wait(0.8)
 end
 
 -- ════════════════════════════════════════
---  ESP TANAMAN
+--  ESP TANAMAN (FIXED)
+--  Scan GetDescendants tapi filter HANYA nama crop valid
+--  Tambah scan setiap area plot juga
 -- ════════════════════════════════════════
-local VALID_CROPS_ESP = {}
-for _, c in ipairs(CROP_LIST) do VALID_CROPS_ESP[c.name] = true end
+local VALID_CROPS = {}
+for _, c in ipairs(CROP_LIST) do VALID_CROPS[c.name] = true end
 
 local sizeTracker   = {}
 local espCropBills  = {}
@@ -436,8 +345,8 @@ local function makeESPCrop(part, name)
     espCropTagged[part] = true
 
     local bill = Instance.new("BillboardGui")
-    bill.Size        = UDim2.new(0,90,0,28)
-    bill.StudsOffset = Vector3.new(0,3.5,0)
+    bill.Size        = UDim2.new(0,90,0,30)
+    bill.StudsOffset = Vector3.new(0,4,0)
     bill.AlwaysOnTop = true
     bill.Adornee     = part
     bill.Parent      = part
@@ -445,13 +354,13 @@ local function makeESPCrop(part, name)
     local bg = Instance.new("Frame",bill)
     bg.Size=UDim2.new(1,0,1,0)
     bg.BackgroundColor3=Color3.fromRGB(5,15,5)
-    bg.BackgroundTransparency=0.3
+    bg.BackgroundTransparency=0.25
     bg.BorderSizePixel=0
-    Instance.new("UICorner",bg).CornerRadius=UDim.new(0,5)
+    Instance.new("UICorner",bg).CornerRadius=UDim.new(0,6)
 
     local lbl = Instance.new("TextLabel",bg)
-    lbl.Size=UDim2.new(1,-4,1,-2)
-    lbl.Position=UDim2.new(0,2,0,1)
+    lbl.Size=UDim2.new(1,-4,1,-4)
+    lbl.Position=UDim2.new(0,2,0,2)
     lbl.BackgroundTransparency=1
     lbl.TextScaled=true
     lbl.Font=Enum.Font.GothamBold
@@ -461,9 +370,9 @@ local function makeESPCrop(part, name)
     local conn = RunService.Heartbeat:Connect(function()
         if not bill or not bill.Parent then return end
         local pct = getMatang(part, name)
-        lbl.Text=name.."\n"..pct.."%"
-        lbl.TextColor3=matangColor(pct)
-        lbl.TextStrokeColor3=Color3.fromRGB(0,0,0)
+        lbl.Text = name.."\n"..pct.."%"
+        lbl.TextColor3 = matangColor(pct)
+        lbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
     end)
     table.insert(espCropBills, {bill=bill, conn=conn})
 end
@@ -478,27 +387,43 @@ end
 
 local function scanESPCrop()
     local now = tick()
-    if now-lastCropScan < 8 then return end
+    if now - lastCropScan < 5 then return end
     lastCropScan = now
+    local count  = 0
+
+    -- Scan seluruh workspace descendants
     for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("BasePart") and VALID_CROPS_ESP[v.Name] and not espCropTagged[v] then
-            makeESPCrop(v, v.Name)
-        elseif v:IsA("Model") and VALID_CROPS_ESP[v.Name] then
-            local p = v.PrimaryPart or v:FindFirstChildOfClass("BasePart")
-            if p and not espCropTagged[p] then makeESPCrop(p, v.Name) end
+        local name = v.Name
+        if VALID_CROPS[name] then
+            if v:IsA("BasePart") and not espCropTagged[v] then
+                makeESPCrop(v, name); count = count + 1
+            elseif v:IsA("Model") then
+                local p = v.PrimaryPart or v:FindFirstChildOfClass("BasePart")
+                if p and not espCropTagged[p] then
+                    makeESPCrop(p, name); count = count + 1
+                end
+            end
         end
     end
+
+    if count > 0 then notif("ESP","+"..count.." tanaman baru",2) end
 end
 
 local function startESPCrop()
     clearESPCrop(); lastCropScan=0; scanESPCrop()
-    espCropLoop=task.spawn(function()
-        while _G.ESPCrop do task.wait(10); if _G.ESPCrop then scanESPCrop() end end
+    espCropLoop = task.spawn(function()
+        while _G.ESPCrop do
+            task.wait(5)
+            if _G.ESPCrop then scanESPCrop() end
+        end
     end)
 end
 local function stopESPCrop()
     clearESPCrop()
-    if espCropLoop then pcall(function() task.cancel(espCropLoop) end); espCropLoop=nil end
+    if espCropLoop then
+        pcall(function() task.cancel(espCropLoop) end)
+        espCropLoop = nil
+    end
 end
 
 -- ════════════════════════════════════════
@@ -511,11 +436,12 @@ local espPlayerConn = nil
 local function makeESPPlayer(p)
     if p==LP or espPlayerData[p] then return end
     if not p.Character then return end
-    local head = p.Character:FindFirstChild("Head"); if not head then return end
+    local head = p.Character:FindFirstChild("Head")
+    if not head then return end
 
     local bill = Instance.new("BillboardGui")
     bill.Name="XKID_ESP"; bill.Size=UDim2.new(0,80,0,20)
-    bill.StudsOffset=Vector3.new(0,2.2,0)
+    bill.StudsOffset=Vector3.new(0,2.5,0)
     bill.AlwaysOnTop=true; bill.Adornee=head; bill.Parent=head
 
     local lbl = Instance.new("TextLabel",bill)
@@ -541,12 +467,11 @@ local function clearAllESPPlayer()
     for p in pairs(espPlayerData) do cleanESPPlayer(p) end
     espPlayerData={}
 end
-
 local function startESPPlayer()
     for _,p in pairs(Players:GetPlayers()) do makeESPPlayer(p) end
-    espPlayerConn=RunService.Heartbeat:Connect(function()
+    espPlayerConn = RunService.Heartbeat:Connect(function()
         if not espPlayerOn then return end
-        local myR=getRoot()
+        local myR = getRoot()
         for p,data in pairs(espPlayerData) do
             if not data.bill or not data.bill.Parent then
                 espPlayerData[p]=nil
@@ -578,7 +503,7 @@ for _,p in pairs(Players:GetPlayers()) do
 end
 
 -- ════════════════════════════════════════
---  NOCLIP
+--  NOCLIP, INF JUMP, FLY, SPEED
 -- ════════════════════════════════════════
 local noclip=false; local noclipConn=nil
 local function setNoclip(v)
@@ -600,9 +525,6 @@ local function setNoclip(v)
     end
 end
 
--- ════════════════════════════════════════
---  INF JUMP
--- ════════════════════════════════════════
 local jumpConn=nil
 local function setInfJump(v)
     if v then
@@ -616,12 +538,8 @@ local function setInfJump(v)
     end
 end
 
--- ════════════════════════════════════════
---  FLY
--- ════════════════════════════════════════
 local flying=false; local flySpeed=60
 local bv,bg,flyConn=nil,nil,nil
-
 local function stopFly()
     flying=false
     if flyConn then flyConn:Disconnect(); flyConn=nil end
@@ -629,14 +547,14 @@ local function stopFly()
     if bg then pcall(function() bg:Destroy() end); bg=nil end
     local h=getHum(); if h then h.PlatformStand=false end
 end
-
 local function startFly()
     local root=getRoot(); if not root then return end
     stopFly(); flying=true
     bv=Instance.new("BodyVelocity",root)
     bv.MaxForce=Vector3.new(1e5,1e5,1e5); bv.Velocity=Vector3.new()
     bg=Instance.new("BodyGyro",root)
-    bg.MaxTorque=Vector3.new(1e5,1e5,1e5); bg.P=1e4; bg.D=100; bg.CFrame=root.CFrame
+    bg.MaxTorque=Vector3.new(1e5,1e5,1e5)
+    bg.P=1e4; bg.D=100; bg.CFrame=root.CFrame
     local h=getHum(); if h then h.PlatformStand=true end
     flyConn=RunService.Heartbeat:Connect(function()
         if not flying then return end
@@ -664,6 +582,11 @@ local function startFly()
     end)
 end
 
+local speed=16
+RunService.RenderStepped:Connect(function()
+    local h=getHum(); if h then h.WalkSpeed=speed end
+end)
+
 LP.CharacterAdded:Connect(function()
     task.wait(0.5)
     if flying then task.wait(0.3); startFly() end
@@ -678,20 +601,13 @@ LP.CharacterAdded:Connect(function()
 end)
 
 -- ════════════════════════════════════════
---  SPEED
--- ════════════════════════════════════════
-local speed=16
-RunService.RenderStepped:Connect(function()
-    local h=getHum(); if h then h.WalkSpeed=speed end
-end)
-
--- ════════════════════════════════════════
 --  WINDOW & TABS
 -- ════════════════════════════════════════
-local Win = Library:Window("XKID HUB","star","v3.1",false)
+local Win = Library:Window("XKID HUB","star","v3.2",false)
 
 Win:TabSection("Farming")
 local TabFarm = Win:Tab("Farm",    "leaf")
+local TabMan  = Win:Tab("Manual",  "tool")
 local TabFish = Win:Tab("Fishing", "fish")
 
 Win:TabSection("Player")
@@ -701,14 +617,14 @@ local TabESP  = Win:Tab("ESP",     "eye")
 local TabProt = Win:Tab("Protect", "shield")
 
 -- ════════════════════════════════════════
---  TAB FARM
+--  TAB AUTO FARM
 -- ════════════════════════════════════════
 local FPage = TabFarm:Page("Auto Farm","leaf")
 local FL    = FPage:Section("Auto Cycle","Left")
 local FR    = FPage:Section("Pengaturan","Right")
 
 FL:Toggle("Auto Farm Cycle","AutoFarmToggle",false,
-    "Beli bibit + tanam + harvest loop",
+    "Beli bibit + tanam + harvest loop otomatis",
     function(v)
         autoFarm=v
         if v then
@@ -717,38 +633,24 @@ FL:Toggle("Auto Farm Cycle","AutoFarmToggle",false,
                     runFarmCycle(); task.wait(2)
                 end
             end)
-            notif("Auto Farm","ON — pola "..selectedPola,3)
+            notif("Auto Farm","ON",3)
         else
             if farmLoop then pcall(function() task.cancel(farmLoop) end); farmLoop=nil end
             notif("Auto Farm","OFF",2)
         end
     end)
 
-FL:Button("1 Cycle Sekarang","Jalankan 1 cycle penuh",
+FL:Button("Jalankan 1 Cycle","Beli + Tanam + Harvest sekali",
     function() task.spawn(runFarmCycle) end)
 
-FL:Button("Tanam Sekarang","Tanam "..MAX_PLOT.." plot (pola dipilih)",
+FL:Button("Refresh Cache Plot","Scan ulang semua plot dari workspace",
     function()
-        task.spawn(function()
-            local c=tanamPlots(selectedCrop)
-            notif("Tanam",c.." plot | pola: "..selectedPola,3)
-        end)
-    end)
-
-FL:Button("Harvest Sekarang","Harvest plot yang dipilih",
-    function()
-        task.spawn(function()
-            local c=harvestAll()
-            notif("Harvest",c.." plot selesai",3)
-        end)
-    end)
-
-FL:Button("Beli Bibit","Beli bibit yang dipilih",
-    function()
-        task.spawn(function()
-            local ok=beliBibit(selectedCrop,jumlahBeli)
-            notif("Beli",ok and selectedCrop.seed.." x"..jumlahBeli or "Gagal",3)
-        end)
+        plotCache=nil
+        local p=scanPlots()
+        notif("Plot",#p.." plot ditemukan",3)
+        if #p==0 then
+            notif("INFO","Coba cek Dex lagi untuk nama folder plot",5)
+        end
     end)
 
 FR:Dropdown("Pilih Tanaman","CropDrop",cropNames,
@@ -756,61 +658,126 @@ FR:Dropdown("Pilih Tanaman","CropDrop",cropNames,
         for _,c in ipairs(CROP_LIST) do
             if val:find(c.seed,1,true) then selectedCrop=c; break end
         end
-        notif("Tanaman",selectedCrop.seed,2)
-    end,"Pilih tanaman untuk ditanam")
-
-FR:Dropdown("Pola Tanam","PolaDrop",POLA_LIST,
-    function(val)
-        selectedPola=val
-        notif("Pola",val.." (max "..MAX_PLOT.." plot)",2)
-    end,"Pilih pola tanam")
+        notif("Tanaman",selectedCrop.seed.." dipilih",2)
+    end,"Tanaman untuk auto farm")
 
 FR:Slider("Jumlah Beli","BeliQty",1,99,10,
-    function(v) jumlahBeli=v end,"Per transaksi beli bibit")
+    function(v) jumlahBeli=v end,"Jumlah beli bibit per cycle")
+
+FR:Slider("Max Plot per Cycle","MaxPlot",1,20,20,
+    function(v) maxFarm=v end,"Batas plot per cycle (max 20)")
 
 FR:Slider("Delay Tumbuh (detik)","GrowDelay",10,300,60,
     function(v) farmDelay=v end,"Waktu tunggu setelah tanam")
 
-FR:Button("Refresh Cache Plot","Scan ulang semua plot",
+FR:Paragraph("Info Auto Farm",
+    "Plot didapat dari:\n"..
+    "- workspace.Land\n"..
+    "- workspace index 52-54, 64-67\n\n"..
+    "Max 20 plot per cycle\n"..
+    "Sesuai batas game")
+
+-- ════════════════════════════════════════
+--  TAB FARM MANUAL
+-- ════════════════════════════════════════
+local MPage = TabMan:Page("Farm Manual","tool")
+local ML    = MPage:Section("Tanam & Harvest","Left")
+local MR    = MPage:Section("Pilih Tanaman","Right")
+
+ML:Button("Beli Bibit Sekarang","Beli bibit yang dipilih",
     function()
-        plotCache=nil
-        local p=scanPlots()
-        notif("Plot",#p.." plot di-cache",3)
+        task.spawn(function()
+            local ok=beliBibit(selectedCrop, jumlahBeli)
+            notif(ok and "Beli OK" or "Gagal",
+                selectedCrop.seed.." x"..jumlahBeli, 3)
+        end)
     end)
 
-FR:Paragraph("Pola Tanam",
-    "Normal  = urut, max "..MAX_PLOT.."\n"..
-    "Rapat   = "..MAX_PLOT.." terdekat dari kamu\n"..
-    "Lebar   = selang baris (X)\n"..
-    "Panjang = selang kolom (Z)\n\n"..
-    "Semua max "..MAX_PLOT.." plot per cycle")
+ML:Button("Tanam Semua Plot","FireServer ke semua plot yang ditemukan",
+    function()
+        task.spawn(function()
+            local c=tanamSemuaPlot(maxFarm)
+            notif("Tanam",c.." plot | "..selectedCrop.seed,3)
+        end)
+    end)
+
+ML:Button("Harvest Semua Plot","Harvest semua plot sekarang",
+    function()
+        task.spawn(function()
+            local c=harvestSemuaPlot(maxFarm)
+            notif("Harvest",c.." plot selesai",3)
+        end)
+    end)
+
+ML:Button("Lihat Plot Tersedia","Cek berapa plot yang terdeteksi",
+    function()
+        local plots=scanPlots()
+        local txt=""
+        for i,p in ipairs(plots) do
+            txt=txt..string.format("[%d] %s | X=%.0f Y=%.0f Z=%.0f\n",
+                i, p.Name, p.Position.X, p.Position.Y, p.Position.Z)
+            if i>=10 then txt=txt.."...(total "..#plots..")"; break end
+        end
+        notif(#plots.." Plot Ditemukan", #plots>0 and txt or "Tidak ada!", 10)
+        print("[ XKID PLOTS ]")
+        for i,p in ipairs(plots) do
+            print(string.format("[%d] %s  X=%.2f Y=%.2f Z=%.2f",
+                i,p.Name,p.Position.X,p.Position.Y,p.Position.Z))
+        end
+    end)
+
+ML:Slider("Max Plot Tanam","ManualMax",1,20,20,
+    function(v) maxFarm=v end,"Max plot per aksi")
+
+MR:Dropdown("Pilih Tanaman","ManualCropDrop",cropNames,
+    function(val)
+        for _,c in ipairs(CROP_LIST) do
+            if val:find(c.seed,1,true) then selectedCrop=c; break end
+        end
+        notif("Tanaman",selectedCrop.seed,2)
+    end,"Tanaman untuk ditanam")
+
+MR:Slider("Jumlah Beli","ManualBeli",1,99,10,
+    function(v) jumlahBeli=v end,"Jumlah beli bibit")
+
+MR:Paragraph("Info Tanaman",
+    "Dipilih: "..selectedCrop.seed.."\n"..
+    "Harga: "..selectedCrop.price.."\n"..
+    "Jual: "..selectedCrop.sell.."\n\n"..
+    "Ganti via dropdown di atas")
+
+-- Quick buy buttons
+for _, b in ipairs(CROP_LIST) do
+    local bb=b
+    MR:Button(bb.icon.." "..bb.seed,"Beli "..bb.price.." koin",
+        function()
+            task.spawn(function()
+                selectedCrop=bb
+                local ok=beliBibit(bb,jumlahBeli)
+                notif(ok and "Beli OK" or "Gagal",bb.seed.." x"..jumlahBeli,3)
+            end)
+        end)
+end
 
 -- ════════════════════════════════════════
 --  TAB FISHING
 -- ════════════════════════════════════════
 local FishPage = TabFish:Page("Auto Fishing","fish")
 local FishL    = FishPage:Section("Auto Fish","Left")
-local FishR    = FishPage:Section("Pengaturan","Right")
+local FishR    = FishPage:Section("Setting","Right")
 
 FishL:Toggle("Auto Fishing","AutoFishToggle",false,
     "Auto equip AdvanceRod + cast loop",
     function(v)
         autoFish=v
         if v then
-            -- Equip rod dulu sebelum mulai loop
-            local equipped = equipRod()
-            if not equipped then
-                autoFish=false
-                notif("Fish","Gagal equip AdvanceRod! Pastikan ada di backpack.",5)
-                return
-            end
+            local ok=equipRod()
+            if not ok then autoFish=false; return end
             rodEquipped=true
             fishLoop=task.spawn(function()
-                while autoFish do
-                    doFishing(); task.wait(0.5)
-                end
+                while autoFish do doFishing(); task.wait(0.5) end
             end)
-            notif("Auto Fish","ON — AdvanceRod equipped!",3)
+            notif("Auto Fish","ON",3)
         else
             if fishLoop then pcall(function() task.cancel(fishLoop) end); fishLoop=nil end
             rodEquipped=false
@@ -821,44 +788,30 @@ FishL:Toggle("Auto Fishing","AutoFishToggle",false,
 FishL:Button("Equip AdvanceRod","Ambil rod dari backpack",
     function()
         local ok=equipRod()
-        notif("Rod",ok and "AdvanceRod equipped!" or "Tidak ada di backpack",3)
+        if ok then rodEquipped=true end
     end)
 
-FishL:Button("Mancing Sekali","Cast 1 kali manual",
+FishL:Button("Mancing Sekali","Cast 1 kali",
     function()
         task.spawn(function()
-            -- Auto equip kalau belum
             if not rodEquipped then
                 local ok=equipRod()
-                if not ok then
-                    notif("Fish","AdvanceRod tidak ada!",3); return
-                end
-                rodEquipped=true
-                task.wait(0.5)
+                if not ok then return end
+                rodEquipped=true; task.wait(0.5)
             end
             doFishing()
-            notif("Fish","Selesai 1 cast",2)
+            notif("Fish","1 cast selesai",2)
         end)
     end)
 
-FishL:Button("Unequip Rod","Kembalikan rod ke backpack",
-    function()
-        unequipRod(); rodEquipped=false
-        notif("Rod","Dikembalikan ke backpack",2)
-    end)
+FishL:Button("Unequip Rod","Kembalikan ke backpack",
+    function() unequipRod(); rodEquipped=false; notif("Rod","Dikembalikan",2) end)
 
 FishR:Slider("Delay Tarik (detik)","FishDelay",1,15,5,
     function(v) fishDelay=v end,"Waktu tunggu sebelum tarik")
 
 FishR:Paragraph("Cara Kerja",
-    "1. Toggle ON\n"..
-    "2. AdvanceRod otomatis\n"..
-    "   di-equip dari backpack\n"..
-    "3. Cast kail\n"..
-    "4. Tunggu "..fishDelay.."s\n"..
-    "5. Tarik + minigame\n"..
-    "6. Ulangi otomatis\n\n"..
-    "Pastikan AdvanceRod\nada di backpack dulu!")
+    "1. Toggle ON\n2. AdvanceRod auto equip\n3. Cast kail\n4. Tunggu "..fishDelay.."s\n5. Tarik + minigame\n6. Ulangi\n\nPastikan AdvanceRod\nada di backpack!")
 
 -- ════════════════════════════════════════
 --  TAB TELEPORT
@@ -877,44 +830,36 @@ local function addPlayerBtn(p)
         end
     end)
 end
-
 for _,p in pairs(Players:GetPlayers()) do addPlayerBtn(p) end
 Players.PlayerAdded:Connect(addPlayerBtn)
-
-TR:Paragraph("Info","Player online otomatis\nmuncul di kiri.\n\nKlik nama untuk TP!")
+TR:Paragraph("Info","Player online otomatis\nmuncul di kiri.\nKlik nama untuk TP!")
 
 -- ════════════════════════════════════════
 --  TAB MOVEMENT
 -- ════════════════════════════════════════
 local MovPage = TabPl:Page("Movement","zap")
-local ML      = MovPage:Section("Speed & Jump","Left")
-local MR      = MovPage:Section("Fly","Right")
+local MvL     = MovPage:Section("Speed & Jump","Left")
+local MvR     = MovPage:Section("Fly","Right")
 
-ML:Slider("Walk Speed","speed",16,500,16,
+MvL:Slider("Walk Speed","speed",16,500,16,
     function(v) speed=v end,"Default 16")
-
-ML:Toggle("NoClip","noclip",false,"Tembus dinding",
+MvL:Toggle("NoClip","noclip",false,"Tembus dinding",
     function(v) setNoclip(v); notif("NoClip",v and "ON" or "OFF",2) end)
-
-ML:Toggle("Infinite Jump","jump",false,"Lompat terus",
+MvL:Toggle("Infinite Jump","jump",false,"Lompat terus",
     function(v) setInfJump(v); notif("Inf Jump",v and "ON" or "OFF",2) end)
-
-ML:Slider("Jump Power","jp",50,500,50,
-    function(v)
-        local h=getHum()
+MvL:Slider("Jump Power","jp",50,500,50,
+    function(v) local h=getHum()
         if h then h.JumpPower=v; h.UseJumpPower=true end
     end,"Default 50")
 
-MR:Toggle("Fly","fly",false,"Aktifkan terbang",
+MvR:Toggle("Fly","fly",false,"Aktifkan terbang",
     function(v)
         if v then startFly() else stopFly() end
         notif("Fly",v and "ON" or "OFF",2)
     end)
-
-MR:Slider("Fly Speed","flyspd",10,300,60,
+MvR:Slider("Fly Speed","flyspd",10,300,60,
     function(v) flySpeed=v end,"Kecepatan terbang")
-
-MR:Paragraph("Cara Fly",
+MvR:Paragraph("Cara Fly",
     "Joystick = arah\nKamera atas = naik\nKamera bawah = turun\nLepas = melayang")
 
 -- ════════════════════════════════════════
@@ -924,14 +869,13 @@ local ESPPage = TabESP:Page("ESP","eye")
 local EL      = ESPPage:Section("ESP Player","Left")
 local ER      = ESPPage:Section("ESP Tanaman","Right")
 
-EL:Toggle("ESP Player","espplayer",false,"Nama + jarak (simpel)",
+EL:Toggle("ESP Player","espplayer",false,"Nama + jarak simpel",
     function(v)
         espPlayerOn=v
         if v then startESPPlayer() else stopESPPlayer() end
         notif("ESP Player",v and "ON" or "OFF",2)
     end)
-
-EL:Paragraph("ESP Player","Tampil: Nama + jarak\nFont kecil & simple\nUpdate real-time")
+EL:Paragraph("ESP Player","Nama + jarak meter\nFont kecil\nUpdate real-time")
 
 ER:Toggle("ESP Tanaman","espcrop",false,"Nama + % kematangan",
     function(v)
@@ -939,18 +883,16 @@ ER:Toggle("ESP Tanaman","espcrop",false,"Nama + % kematangan",
         if v then startESPCrop() else stopESPCrop() end
         notif("ESP Tanaman",v and "ON" or "OFF",2)
     end)
-
-ER:Button("Scan Ulang","Refresh ESP tanaman",
+ER:Button("Scan Ulang ESP","Cari tanaman baru di workspace",
     function()
-        if _G.ESPCrop then lastCropScan=0; scanESPCrop()
-        else notif("ESP","Aktifkan ESP Tanaman dulu!",2) end
+        if _G.ESPCrop then
+            lastCropScan=0; scanESPCrop()
+        else notif("ESP","Aktifkan dulu!",2) end
     end)
-
-ER:Button("Reset Size","Reset data kematangan",
+ER:Button("Reset Size Tracker","Reset data kematangan",
     function() sizeTracker={}; notif("Reset","Size tracker di-reset",2) end)
-
 ER:Paragraph("ESP Tanaman",
-    "Merah  = baru tanam\nKuning = setengah\nHijau  = siap panen\n\nRescan tiap 10 detik")
+    "Merah  = baru tanam 0%\nKuning = setengah 40%\nHijau  = siap panen 80%\n\nScan setiap 5 detik\nFilter nama crop valid:\nPadi,Melon,Tomat,Sawi\nCoconut,Daisy,FanPalm\nSunFlower,Sawit,AppleTree")
 
 -- ════════════════════════════════════════
 --  TAB PROTECTION
@@ -988,33 +930,38 @@ PL:Button("Respawn di Posisi Ini","Mati lalu kembali ke posisi terakhir",
         end)
     end)
 
-PL:Button("Rejoin","Koneksi ulang ke server",
+PL:Button("Rejoin","Koneksi ulang",
     function()
         notif("Rejoin","Menghubungkan ulang...",3)
         task.wait(1); TpService:Teleport(game.PlaceId,LP)
     end)
 
-PL:Button("Posisi Saya","Lihat koordinat sekarang",
+PL:Button("Posisi Saya","Lihat koordinat",
     function()
         local r=getRoot()
         if r then
             local p=r.Position
-            notif("Posisi",string.format("X=%.1f\nY=%.1f\nZ=%.1f",p.X,p.Y,p.Z),6)
+            notif("Posisi",
+                string.format("X=%.1f\nY=%.1f\nZ=%.1f",p.X,p.Y,p.Z),6)
         end
     end)
 
-PR:Paragraph("Anti AFK","Cegah auto disconnect\ndengan simulasi input")
-PR:Paragraph("Respawn","Kembali ke posisi\nterakhir sebelum mati")
+PR:Paragraph("Info","Anti AFK cegah disconnect\nRespawn kembali ke\nposisi terakhir sebelum mati")
 
 -- ════════════════════════════════════════
 --  INIT
 -- ════════════════════════════════════════
 task.spawn(function()
-    task.wait(2); scanPlots()
-    notif("Plot","Farm plots di-cache!",3)
+    task.wait(2)
+    local plots = scanPlots()
+    if #plots == 0 then
+        notif("WARNING","Plot tidak ditemukan!\nBuka tab Manual > Lihat Plot",6)
+    else
+        notif("Ready",#plots.." plot siap digunakan!",4)
+    end
 end)
 
-Library:Notification("XKID HUB","v3.1 — Farm · Fish (Auto Rod) · ESP",5)
+Library:Notification("XKID HUB","v3.2 — Farm Fix · Manual · ESP Fix",5)
 Library:ConfigSystem(Win)
 
-print("[ XKID HUB ] v3.1 loaded — "..LP.Name)
+print("[ XKID HUB ] v3.2 loaded — "..LP.Name)
