@@ -1,11 +1,9 @@
 --[[
-🌟 XKID HUB v5 MOBILE
-Aurora UI
+🌟 XKID HUB FULL
+Mobile Aurora UI
 ]]
 
-local Library = loadstring(game:HttpGet(
-"https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
-))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"))()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -16,7 +14,10 @@ local Workspace = game:GetService("Workspace")
 
 local LP = Players.LocalPlayer
 
--- helpers
+--------------------------------------------------
+-- HELPERS
+--------------------------------------------------
+
 local function getChar()
     return LP.Character
 end
@@ -31,8 +32,27 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
+--------------------------------------------------
+-- SAVE LAST POSITION
+--------------------------------------------------
+
+local lastPos
+
+RunService.Heartbeat:Connect(function()
+
+local root = getRoot()
+
+if root then
+lastPos = root.CFrame
+end
+
+end)
+
+--------------------------------------------------
 -- WINDOW
-local Win = Library:Window("🌟 XKID HUB", "star", "v5 Mobile", false)
+--------------------------------------------------
+
+local Win = Library:Window("🌟 XKID HUB", "star", "Mobile", false)
 
 Win:TabSection("🛠 HUB")
 
@@ -50,35 +70,31 @@ local TL = TPage:Section("👥 Player List","Left")
 
 local function teleportToPlayer(plr)
 
-    if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
 
-        local root = getRoot()
+local root = getRoot()
 
-        if root then
-            root.CFrame = plr.Character.HumanoidRootPart.CFrame * CFrame.new(0,3,0)
-            Library:Notification("📍 Teleport","→ "..plr.Name,2)
-        end
-
-    end
+if root then
+root.CFrame = plr.Character.HumanoidRootPart.CFrame * CFrame.new(0,3,0)
+end
 
 end
 
+end
 
 local function buildPlayerList()
 
-    for _,p in pairs(Players:GetPlayers()) do
+for _,p in pairs(Players:GetPlayers()) do
 
-        if p ~= LP then
+if p ~= LP then
 
-            TL:Button("👤 "..p.Name,"Teleport ke "..p.Name,function()
+TL:Button("👤 "..p.Name,"Teleport",function()
+teleportToPlayer(p)
+end)
 
-                teleportToPlayer(p)
+end
 
-            end)
-
-        end
-
-    end
+end
 
 end
 
@@ -90,94 +106,65 @@ buildPlayerList()
 end)
 
 --------------------------------------------------
--- PLAYER ESP
+-- ESP NAME + DISTANCE
 --------------------------------------------------
 
-local espOn=false
-local espObjects={}
+local function createESP(player)
 
-local function clearESP()
+if player == LP then return end
 
-for _,v in pairs(espObjects) do
-pcall(function()
-v:Destroy()
-end)
-end
+local function setup(character)
 
-espObjects={}
+local head = character:WaitForChild("Head",5)
+local root = character:WaitForChild("HumanoidRootPart",5)
 
-end
+local bill = Instance.new("BillboardGui")
+bill.Adornee = head
+bill.Size = UDim2.new(0,200,0,40)
+bill.StudsOffset = Vector3.new(0,2,0)
+bill.AlwaysOnTop = true
+bill.Parent = head
 
-
-local function addESP(plr)
-
-if plr==LP then return end
-
-local function apply(char)
-
-local head=char:FindFirstChild("Head")
-if not head then return end
-
-local bill=Instance.new("BillboardGui")
-bill.Size=UDim2.new(0,150,0,40)
-bill.AlwaysOnTop=true
-bill.Adornee=head
-bill.Parent=char
-
-local txt=Instance.new("TextLabel",bill)
-txt.Size=UDim2.new(1,0,1,0)
-txt.BackgroundTransparency=1
-txt.TextColor3=Color3.fromRGB(255,230,80)
-txt.TextStrokeTransparency=0.3
-txt.TextScaled=true
-txt.Font=Enum.Font.GothamBold
+local txt = Instance.new("TextLabel")
+txt.Parent = bill
+txt.Size = UDim2.new(1,0,1,0)
+txt.BackgroundTransparency = 1
+txt.TextColor3 = Color3.fromRGB(255,255,255)
+txt.TextStrokeTransparency = 0
+txt.Font = Enum.Font.SourceSansBold
+txt.TextScaled = true
 
 RunService.Heartbeat:Connect(function()
 
-local root=getRoot()
+if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
 
-if root then
+local myRoot = LP.Character.HumanoidRootPart
+local dist = (root.Position - myRoot.Position).Magnitude
 
-local dist=(head.Position-root.Position).Magnitude
-
-txt.Text=plr.Name.." ["..math.floor(dist).."m]"
+txt.Text = player.Name.." ["..math.floor(dist).."m]"
 
 end
 
 end)
 
-table.insert(espObjects,bill)
-
 end
 
-if plr.Character then
-apply(plr.Character)
+if player.Character then
+setup(player.Character)
 end
 
-plr.CharacterAdded:Connect(apply)
+player.CharacterAdded:Connect(setup)
 
 end
-
-
-local function toggleESP(v)
-
-espOn=v
-clearESP()
-
-if v then
 
 for _,p in pairs(Players:GetPlayers()) do
-addESP(p)
+createESP(p)
 end
 
-Players.PlayerAdded:Connect(addESP)
-
-end
-
-end
+Players.PlayerAdded:Connect(createESP)
 
 --------------------------------------------------
--- FLY
+-- FLY SYSTEM
 --------------------------------------------------
 
 local FlyPage = TabFly:Page("🚀 Fly","rocket")
@@ -186,6 +173,8 @@ local FR = FlyPage:Section("Extras","Right")
 
 local fly=false
 local flySpeed=60
+local flyBV
+local flyBG
 local flyConn
 
 local function startFly()
@@ -193,19 +182,26 @@ local function startFly()
 local root=getRoot()
 if not root then return end
 
-flyConn=RunService.Heartbeat:Connect(function()
+flyBV=Instance.new("BodyVelocity")
+flyBV.MaxForce=Vector3.new(1e5,1e5,1e5)
+flyBV.Parent=root
 
-if not fly then return end
+flyBG=Instance.new("BodyGyro")
+flyBG.MaxTorque=Vector3.new(1e5,1e5,1e5)
+flyBG.P=1e4
+flyBG.Parent=root
+
+flyConn=RunService.Heartbeat:Connect(function()
 
 local cam=Workspace.CurrentCamera
 local dir=cam.CFrame.LookVector
 
-root.Velocity=dir*flySpeed
+flyBV.Velocity=dir*flySpeed
+flyBG.CFrame=cam.CFrame
 
 end)
 
 end
-
 
 local function stopFly()
 
@@ -213,16 +209,17 @@ if flyConn then
 flyConn:Disconnect()
 end
 
-local root=getRoot()
+if flyBV then
+flyBV:Destroy()
+end
 
-if root then
-root.Velocity=Vector3.new()
+if flyBG then
+flyBG:Destroy()
 end
 
 end
 
-
-FL:Toggle("🚀 Fly Smooth","fly",false,function(v)
+FL:Toggle("🚀 Fly","fly",false,function(v)
 
 fly=v
 
@@ -234,11 +231,8 @@ end
 
 end)
 
-
 FL:Slider("⚡ Fly Speed","flyspeed",5,200,60,function(v)
-
 flySpeed=v
-
 end)
 
 --------------------------------------------------
@@ -256,11 +250,9 @@ local char=getChar()
 if char then
 
 for _,p in pairs(char:GetDescendants()) do
-
 if p:IsA("BasePart") then
 p.CanCollide=false
 end
-
 end
 
 end
@@ -268,19 +260,9 @@ end
 end
 
 end)
-
 
 FR:Toggle("🚶 NoClip","noclip",false,function(v)
-
 noclip=v
-
-end)
-
-
-FR:Toggle("👁 Player ESP","esp",false,function(v)
-
-toggleESP(v)
-
 end)
 
 --------------------------------------------------
@@ -303,24 +285,19 @@ end
 
 end)
 
-
 SL:Slider("⚡ Speed","speed",16,80,16,function(v)
-
 speed=v
-
 end)
 
 --------------------------------------------------
 -- INFINITE JUMP
 --------------------------------------------------
 
-local infjump
+local infJump=false
 
-SR:Toggle("♾ Infinite Jump","infjump",false,function(v)
+UIS.JumpRequest:Connect(function()
 
-if v then
-
-infjump=UIS.JumpRequest:Connect(function()
+if infJump then
 
 local hum=getHum()
 
@@ -328,16 +305,12 @@ if hum then
 hum:ChangeState(Enum.HumanoidStateType.Jumping)
 end
 
+end
+
 end)
 
-else
-
-if infjump then
-infjump:Disconnect()
-end
-
-end
-
+SR:Toggle("♾ Infinite Jump","infjump",false,function(v)
+infJump=v
 end)
 
 --------------------------------------------------
@@ -352,33 +325,42 @@ PL:Toggle("⏰ Anti AFK","afk",false,function(v)
 if v then
 
 LP.Idled:Connect(function()
-
 VirtualUser:CaptureController()
 VirtualUser:ClickButton2(Vector2.new())
-
 end)
 
 end
 
 end)
 
--- RESPAWN
-PL:Button("💀 Respawn","Respawn karakter",function()
+PL:Button("💀 Respawn","Respawn posisi terakhir",function()
+
+local saved = lastPos
 
 local char = LP.Character
-
 if char then
 char:BreakJoints()
 end
 
+LP.CharacterAdded:Connect(function(newChar)
+
+task.wait(0.8)
+
+local hrp = newChar:WaitForChild("HumanoidRootPart",5)
+
+if hrp and saved then
+hrp.CFrame = saved
+end
+
 end)
 
--- REJOIN
+end)
+
 PL:Button("🔄 Rejoin Server","",function()
 
 TpService:Teleport(game.PlaceId,LP)
 
 end)
 
-Library:Notification("🌟 XKID HUB","Loaded Successfully",5)
+Library:Notification("XKID HUB","Loaded",5)
 Library:ConfigSystem(Win)
