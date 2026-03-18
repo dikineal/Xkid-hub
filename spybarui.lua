@@ -353,4 +353,3 @@ Library:Notification("XKID Spy v1.0",
 
 print("[ XKID SPY ] v1.0 loaded — " .. LP.Name)
 print("[ XKID SPY ] Siap hook: PlantCrop, HarvestCrop, GetBibit, SellCrop")
-
