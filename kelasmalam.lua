@@ -1,4 +1,4 @@
--- XKID HUB AURORA FIX (ANDROID)
+-- XKID HUB STABLE
 
 local Library = loadstring(game:HttpGet(
 "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
@@ -12,217 +12,309 @@ local TpService = game:GetService("TeleportService")
 
 local LP = Players.LocalPlayer
 
+--------------------------------------------------
+-- HELPERS
+--------------------------------------------------
+
+local function getChar()
+return LP.Character
+end
+
 local function getRoot()
-    return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+local c = getChar()
+return c and c:FindFirstChild("HumanoidRootPart")
 end
 
 local function getHum()
-    return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+local c = getChar()
+return c and c:FindFirstChildOfClass("Humanoid")
 end
+
+--------------------------------------------------
+-- SAVE LAST POSITION
+--------------------------------------------------
+
+local lastPos
+
+RunService.Heartbeat:Connect(function()
+
+local root = getRoot()
+
+if root then
+lastPos = root.CFrame
+end
+
+end)
 
 --------------------------------------------------
 -- WINDOW
 --------------------------------------------------
 
-local Win = Library:Window("🌟 XKID HUB", "star", "Fixed", false)
+local Win = Library:Window("🌟 XKID HUB", "star", "Stable", false)
 
-local Tab = Win:Tab("Main","user")
-local Sec = Tab:Section("Player","Left")
+Win:TabSection("🛠 HUB")
+
+local TabTP = Win:Tab("📍 Teleport","map-pin")
+local TabPl = Win:Tab("👤 Player","user")
+local TabProt = Win:Tab("🛡 Protect","shield")
+
+--------------------------------------------------
+-- TELEPORT PLAYER
+--------------------------------------------------
+
+local TPage = TabTP:Page("Teleport Player","map-pin")
+local TL = TPage:Section("Players","Left")
+
+for _,p in pairs(Players:GetPlayers()) do
+
+if p ~= LP then
+
+TL:Button(p.Name,"Teleport",function()
+
+if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+
+getRoot().CFrame =
+p.Character.HumanoidRootPart.CFrame * CFrame.new(0,3,0)
+
+end
+
+end)
+
+end
+
+end
+
+--------------------------------------------------
+-- ESP
+--------------------------------------------------
+
+local espEnabled=false
+local espObjects={}
+
+local function clearESP()
+
+for _,v in pairs(espObjects) do
+if v then v:Destroy() end
+end
+
+espObjects={}
+
+end
+
+local function createESP(plr)
+
+if plr==LP then return end
+
+local function setup(char)
+
+if not espEnabled then return end
+
+local head = char:WaitForChild("Head",5)
+local root = char:WaitForChild("HumanoidRootPart",5)
+
+local gui = Instance.new("BillboardGui")
+gui.Size = UDim2.new(0,200,0,40)
+gui.StudsOffset = Vector3.new(0,2,0)
+gui.AlwaysOnTop = true
+gui.Adornee = head
+gui.Parent = head
+
+local txt = Instance.new("TextLabel")
+txt.Size = UDim2.new(1,0,1,0)
+txt.BackgroundTransparency = 1
+txt.TextColor3 = Color3.new(1,1,1)
+txt.TextStrokeTransparency = 0
+txt.Font = Enum.Font.SourceSansBold
+txt.TextScaled = true
+txt.Parent = gui
+
+table.insert(espObjects,gui)
+
+RunService.Heartbeat:Connect(function()
+
+if not espEnabled then return end
+
+if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
+
+local dist =
+(root.Position - LP.Character.HumanoidRootPart.Position).Magnitude
+
+txt.Text =
+plr.Name.." ["..math.floor(dist).."m]"
+
+end
+
+end)
+
+end
+
+if plr.Character then
+setup(plr.Character)
+end
+
+plr.CharacterAdded:Connect(setup)
+
+end
+
+local function enableESP()
+
+for _,p in pairs(Players:GetPlayers()) do
+createESP(p)
+end
+
+end
+
+--------------------------------------------------
+-- PLAYER FEATURES
+--------------------------------------------------
+
+local Page = TabPl:Page("Player","user")
+
+local Left = Page:Section("Movement","Left")
 
 --------------------------------------------------
 -- SPEED
 --------------------------------------------------
 
-local speed = 16
+local speed=16
 
 RunService.RenderStepped:Connect(function()
-    local h = getHum()
-    if h then h.WalkSpeed = speed end
+
+local hum=getHum()
+
+if hum then
+hum.WalkSpeed=speed
+end
+
 end)
 
-Sec:Slider("Speed","spd",16,100,16,function(v)
-    speed = v
+Left:Slider("Speed","speed",16,80,16,function(v)
+speed=v
 end)
 
 --------------------------------------------------
 -- NOCLIP
 --------------------------------------------------
 
-local noclip = false
+local noclip=false
 
 RunService.Stepped:Connect(function()
-    if noclip then
-        local c = LP.Character
-        if c then
-            for _,p in pairs(c:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.CanCollide = false
-                end
-            end
-        end
-    end
+
+if noclip then
+
+local char=getChar()
+
+if char then
+
+for _,p in pairs(char:GetDescendants()) do
+
+if p:IsA("BasePart") then
+p.CanCollide=false
+end
+
+end
+
+end
+
+end
+
 end)
 
-Sec:Toggle("NoClip","noclip",false,function(v)
-    noclip = v
+Left:Toggle("NoClip","noclip",false,function(v)
+noclip=v
 end)
 
 --------------------------------------------------
 -- INFINITE JUMP
 --------------------------------------------------
 
-local infJump = false
+local infJump=false
 
 UIS.JumpRequest:Connect(function()
-    if infJump then
-        local h = getHum()
-        if h then
-            h:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end
-end)
 
-Sec:Toggle("Infinite Jump","jump",false,function(v)
-    infJump = v
-end)
+if infJump then
 
---------------------------------------------------
--- FLY (ANDROID FIX)
---------------------------------------------------
+local hum=getHum()
 
-local flying = false
-local flySpeed = 60
-local bv, bg
-
-local function stopFly()
-    if bv then bv:Destroy() end
-    if bg then bg:Destroy() end
+if hum then
+hum:ChangeState(Enum.HumanoidStateType.Jumping)
 end
 
-local function startFly()
-    local root = getRoot()
-    local hum = getHum()
-    if not root or not hum then return end
-
-    stopFly()
-
-    bv = Instance.new("BodyVelocity", root)
-    bv.MaxForce = Vector3.new(1e5,1e5,1e5)
-
-    bg = Instance.new("BodyGyro", root)
-    bg.MaxTorque = Vector3.new(1e5,1e5,1e5)
-    bg.P = 1e4
-
-    RunService.Heartbeat:Connect(function()
-        if not flying then return end
-
-        local cam = workspace.CurrentCamera
-        local move = hum.MoveDirection
-
-        local look = cam.CFrame.LookVector
-        local right = cam.CFrame.RightVector
-
-        local dir = (look * move.Z) + (right * move.X)
-        local y = look.Y
-
-        bv.Velocity = Vector3.new(
-            dir.X * flySpeed,
-            y * flySpeed,
-            dir.Z * flySpeed
-        )
-
-        bg.CFrame = cam.CFrame
-    end)
 end
 
-Sec:Toggle("Fly","fly",false,function(v)
-    flying = v
-    if v then startFly() else stopFly() end
 end)
 
-Sec:Slider("Fly Speed","fspd",10,200,60,function(v)
-    flySpeed = v
+Left:Toggle("Infinite Jump","jump",false,function(v)
+infJump=v
 end)
 
 --------------------------------------------------
--- ESP (TOGGLE FIX)
+-- ESP TOGGLE
 --------------------------------------------------
 
-local esp = false
+Left:Toggle("ESP Player","esp",false,function(v)
 
-RunService.Heartbeat:Connect(function()
-    if not esp then return end
+espEnabled=v
 
-    for _,p in pairs(Players:GetPlayers()) do
-        if p ~= LP and p.Character and p.Character:FindFirstChild("Head") then
-
-            if not p.Character.Head:FindFirstChild("ESP") then
-
-                local bill = Instance.new("BillboardGui")
-                bill.Name = "ESP"
-                bill.Size = UDim2.new(0,200,0,40)
-                bill.StudsOffset = Vector3.new(0,2,0)
-                bill.AlwaysOnTop = true
-                bill.Parent = p.Character.Head
-
-                local txt = Instance.new("TextLabel")
-                txt.Size = UDim2.new(1,0,1,0)
-                txt.BackgroundTransparency = 1
-                txt.TextColor3 = Color3.new(1,1,1)
-                txt.TextScaled = true
-                txt.Parent = bill
-            end
-
-            local txt = p.Character.Head.ESP.TextLabel
-            local myRoot = getRoot()
-
-            if myRoot then
-                local dist = (p.Character.HumanoidRootPart.Position - myRoot.Position).Magnitude
-                txt.Text = p.Name.." ["..math.floor(dist).."m]"
-            end
-
-        end
-    end
-end)
-
-Sec:Toggle("ESP Player","esp",false,function(v)
-    esp = v
-end)
-
---------------------------------------------------
--- TELEPORT (FIX TANPA CLEAR)
---------------------------------------------------
-
-local TPsec = Tab:Section("Teleport","Right")
-
-for _,p in pairs(Players:GetPlayers()) do
-    if p ~= LP then
-        TPsec:Button(p.Name,"TP",function()
-            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                getRoot().CFrame = p.Character.HumanoidRootPart.CFrame * CFrame.new(0,3,0)
-            end
-        end)
-    end
+if v then
+enableESP()
+else
+clearESP()
 end
 
---------------------------------------------------
--- PROTECT
---------------------------------------------------
-
-local Prot = Tab:Section("Protect","Right")
-
-Prot:Toggle("Anti AFK","afk",false,function(v)
-    if v then
-        LP.Idled:Connect(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end)
-    end
 end)
 
-Prot:Button("Rejoin","",function()
-    TpService:Teleport(game.PlaceId, LP)
+--------------------------------------------------
+-- PROTECTION
+--------------------------------------------------
+
+local PPage = TabProt:Page("Protection","shield")
+local PL = PPage:Section("Safety","Left")
+
+PL:Toggle("Anti AFK","afk",false,function(v)
+
+if v then
+
+LP.Idled:Connect(function()
+
+VirtualUser:CaptureController()
+VirtualUser:ClickButton2(Vector2.new())
+
 end)
 
-Library:Notification("XKID HUB","Loaded ✓",5)
+end
+
+end)
+
+PL:Button("Respawn","Respawn posisi terakhir",function()
+
+local saved=lastPos
+
+local char=LP.Character
+
+if char then
+char:BreakJoints()
+end
+
+LP.CharacterAdded:Connect(function(newChar)
+
+task.wait(1)
+
+local hrp=newChar:WaitForChild("HumanoidRootPart",5)
+
+if hrp and saved then
+hrp.CFrame=saved
+end
+
+end)
+
+end)
+
+PL:Button("Rejoin","Rejoin Server",function()
+
+TpService:Teleport(game.PlaceId,LP)
+
+end)
+
+Library:Notification("XKID HUB","Loaded",5)
 Library:ConfigSystem(Win)
