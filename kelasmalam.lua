@@ -1,8 +1,8 @@
--- XKID HUB UPGRADE - FIXED FOR ANDROID 2026
+-- XKID HUB UPGRADE (FIXED FINAL)
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/ActualVovabro/Aurora/main/Aurora.lua"))() 
--- Alternatif lain kalau masih error:
--- local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/roblox-aurora/zenui-core/main/init.lua"))()
+local Library = loadstring(game:HttpGet(
+"https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
+))()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -16,6 +16,7 @@ local LP = Players.LocalPlayer
 --------------------------------------------------
 -- HELPERS
 --------------------------------------------------
+
 local function getRoot()
 	return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
 end
@@ -27,6 +28,7 @@ end
 --------------------------------------------------
 -- SAVE LAST POSITION
 --------------------------------------------------
+
 local lastPos
 RunService.Heartbeat:Connect(function()
 	local root = getRoot()
@@ -36,7 +38,8 @@ end)
 --------------------------------------------------
 -- UI
 --------------------------------------------------
-local Win = Library:Window("🌟 XKID HUB", "star", "ANDROID FIX 2026", false)
+
+local Win = Library:Window("🌟 XKID HUB", "star", "UPGRADE FIX", false)
 
 Win:TabSection("🛠 HUB")
 
@@ -47,120 +50,125 @@ local TabProt = Win:Tab("🛡 Protect","shield")
 --------------------------------------------------
 -- TELEPORT
 --------------------------------------------------
+
 local TPage = TabTP:Page("Teleport Player","map-pin")
 local TL = TPage:Section("Players","Left")
 
 for _,p in pairs(Players:GetPlayers()) do
-	if p \~= LP then
+	if p ~= LP then
 		TL:Button(p.Name,"Teleport",function()
 			if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-				local root = getRoot()
-				if root then
-					root.CFrame = p.Character.HumanoidRootPart.CFrame * CFrame.new(0,3,0)
-				end
+				getRoot().CFrame = p.Character.HumanoidRootPart.CFrame * CFrame.new(0,3,0)
 			end
 		end)
 	end
 end
 
 --------------------------------------------------
--- PLAYER SECTION + FITUR YANG SUDAH DIPERBAIKI
+-- PLAYER
 --------------------------------------------------
+
 local Page = TabPl:Page("Player","user")
 local Left = Page:Section("Movement","Left")
 
--- Speed
-local speed = 16
+--------------------------------------------------
+-- SPEED
+--------------------------------------------------
+
+local speed=16
 RunService.RenderStepped:Connect(function()
-	local hum = getHum()
-	if hum then hum.WalkSpeed = speed end
+	local hum=getHum()
+	if hum then hum.WalkSpeed=speed end
 end)
 
 Left:Slider("Speed","speed",16,100,16,function(v)
-	speed = v
+	speed=v
 end)
 
--- NoClip (Android friendly)
-local noclip = false
-local noclipConn
+--------------------------------------------------
+-- NOCLIP (FIX HARD)
+--------------------------------------------------
 
-Left:Toggle("NoClip","noclip",false,function(v)
-	noclip = v
-	if noclipConn then noclipConn:Disconnect() end
-	if v then
-		noclipConn = RunService.Stepped:Connect(function()
-			if not noclip then return end
-			local char = LP.Character
-			if char then
-				for _, part in pairs(char:GetDescendants()) do
-					if part:IsA("BasePart") then
-						part.CanCollide = false
-					end
+local noclip=false
+
+RunService.Stepped:Connect(function()
+	if noclip then
+		local char = LP.Character
+		if char then
+			for _,v in pairs(char:GetDescendants()) do
+				if v:IsA("BasePart") then
+					v.CanCollide = false
+					v.Velocity = Vector3.new(0,0,0)
 				end
 			end
-		end)
+		end
 	end
 end)
 
--- Infinite Jump
-local infJump = false
+Left:Toggle("NoClip","noclip",false,function(v)
+	noclip=v
+end)
+
+--------------------------------------------------
+-- INFINITE JUMP (FIX)
+--------------------------------------------------
+
+local infJump=false
+
 UIS.JumpRequest:Connect(function()
 	if infJump then
-		local hum = getHum()
-		if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+		local hum=getHum()
+		if hum then
+			hum:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
 	end
 end)
 
 Left:Toggle("Infinite Jump","jump",false,function(v)
-	infJump = v
+	infJump=v
 end)
 
--- Fly (Stabil di Android)
-local flying = false
-local flySpeed = 60
-local alignPos, alignOri, flyConn
+--------------------------------------------------
+-- 🚀 FLY (FIX STABIL)
+--------------------------------------------------
+
+local flying=false
+local flySpeed=60
+local bv,bg,conn
 
 local function stopFly()
-	flying = false
-	if flyConn then flyConn:Disconnect() end
-	if alignPos then alignPos:Destroy() end
-	if alignOri then alignOri:Destroy() end
+	flying=false
+	if conn then conn:Disconnect() end
+	if bv then bv:Destroy() end
+	if bg then bg:Destroy() end
 end
 
 local function startFly()
-	local root = getRoot()
-	if not root then return end
+	local root=getRoot()
+	local hum=getHum()
+	if not root or not hum then return end
+
 	stopFly()
-	flying = true
+	flying=true
 
-	alignPos = Instance.new("AlignPosition")
-	alignPos.MaxForce = 999999999
-	alignPos.Responsiveness = 150
-	alignPos.Parent = root
-	local att = Instance.new("Attachment", root)
-	alignPos.Attachment0 = att
+	bv=Instance.new("BodyVelocity",root)
+	bv.MaxForce=Vector3.new(1e5,1e5,1e5)
 
-	alignOri = Instance.new("AlignOrientation")
-	alignOri.MaxTorque = 999999999
-	alignOri.Responsiveness = 150
-	alignOri.Parent = root
-	alignOri.Attachment0 = att
+	bg=Instance.new("BodyGyro",root)
+	bg.MaxTorque=Vector3.new(1e5,1e5,1e5)
+	bg.P=1e4
 
-	flyConn = RunService.Heartbeat:Connect(function()
+	conn=RunService.Heartbeat:Connect(function()
 		if not flying then return end
-		local cam = Workspace.CurrentCamera
-		local hum = getHum()
-		if not hum then return end
 
-		local move = hum.MoveDirection
-		local forward = cam.CFrame.LookVector
-		local right = cam.CFrame.RightVector
-		local dir = forward * move.Z + right * move.X
-		local yDir = forward.Y
+		local cam=Workspace.CurrentCamera
+		local move=hum.MoveDirection
 
-		local target = root.Position + dir * flySpeed * 0.15 + Vector3.new(0, yDir * flySpeed * 0.1, 0)
-		alignPos.Position = target
-		alignOri.CFrame = cam.CFrame
+		local dir = cam.LookVector*move.Z + cam.RightVector*move.X
+		local y = cam.LookVector.Y
+
+		bv.Velocity = Vector3.new(dir.X*flySpeed, y*flySpeed, dir.Z*flySpeed)
+		bg.CFrame = cam.CFrame
 	end)
 end
 
@@ -169,68 +177,62 @@ Left:Toggle("Fly","fly",false,function(v)
 end)
 
 Left:Slider("Fly Speed","flyspd",10,200,60,function(v)
-	flySpeed = v
+	flySpeed=v
 end)
 
--- ESP (Clean + Mobile friendly)
-local esp = false
-local espObjects = {}
+--------------------------------------------------
+-- 👁 ESP (FIX TOTAL)
+--------------------------------------------------
 
-local function removeAllESP()
-	for _, bill in pairs(espObjects) do
-		if bill and bill.Parent then bill:Destroy() end
-	end
-	espObjects = {}
-end
+local esp=false
 
 RunService.Heartbeat:Connect(function()
 	if not esp then return end
-	local myRoot = getRoot()
+
+	local myRoot=getRoot()
 	if not myRoot then return end
 
-	for _, p in pairs(Players:GetPlayers()) do
-		if p \~= LP and p.Character and p.Character:FindFirstChild("Head") then
-			if not espObjects[p] then
-				local head = p.Character.Head
-				if head:FindFirstChild("ESP") then head.ESP:Destroy() end
+	for _,p in pairs(Players:GetPlayers()) do
+		if p~=LP and p.Character and p.Character:FindFirstChild("Head") then
 
-				local bill = Instance.new("BillboardGui")
-				bill.Name = "ESP"
-				bill.Size = UDim2.new(0,180,0,40)
-				bill.StudsOffset = Vector3.new(0,3,0)
-				bill.AlwaysOnTop = true
-				bill.Parent = head
-				bill.Adornee = head
+			local head=p.Character.Head
 
-				local txt = Instance.new("TextLabel")
-				txt.Size = UDim2.new(1,0,1,0)
-				txt.BackgroundTransparency = 1
-				txt.TextColor3 = Color3.new(1,1,1)
-				txt.TextStrokeTransparency = 0
-				txt.TextScaled = true
-				txt.Font = Enum.Font.GothamBold
-				txt.Parent = bill
+			if not head:FindFirstChild("ESP") then
+				local bill=Instance.new("BillboardGui")
+				bill.Name="ESP"
+				bill.Size=UDim2.new(0,200,0,40)
+				bill.StudsOffset=Vector3.new(0,2,0)
+				bill.AlwaysOnTop=true
+				bill.Parent=head
 
-				espObjects[p] = bill
+				local txt=Instance.new("TextLabel")
+				txt.Name="TXT"
+				txt.Size=UDim2.new(1,0,1,0)
+				txt.BackgroundTransparency=1
+				txt.TextColor3=Color3.new(1,1,1)
+				txt.TextScaled=true
+				txt.Parent=bill
 			end
 
-			local bill = espObjects[p]
-			if bill and bill:FindFirstChild("TextLabel") then
-				local dist = (p.Character.HumanoidRootPart.Position - myRoot.Position).Magnitude
-				bill.TextLabel.Text = p.Name .. " [" .. math.floor(dist) .. "m]"
+			local txt=head.ESP:FindFirstChild("TXT")
+			local root=p.Character:FindFirstChild("HumanoidRootPart")
+
+			if txt and root then
+				local dist=(root.Position-myRoot.Position).Magnitude
+				txt.Text=p.Name.." ["..math.floor(dist).."m]"
 			end
 		end
 	end
 end)
 
 Left:Toggle("ESP Player","esp",false,function(v)
-	esp = v
-	if not v then removeAllESP() end
+	esp=v
 end)
 
 --------------------------------------------------
 -- PROTECT
 --------------------------------------------------
+
 local PPage = TabProt:Page("Protection","shield")
 local PL = PPage:Section("Safety","Left")
 
@@ -244,20 +246,22 @@ PL:Toggle("Anti AFK","afk",false,function(v)
 end)
 
 PL:Button("Respawn","Respawn posisi terakhir",function()
-	local saved = lastPos
-	if LP.Character then LP.Character:BreakJoints() end
-	local conn
-	conn = LP.CharacterAdded:Connect(function(newChar)
-		conn:Disconnect()
-		task.wait(1.5)
-		local hrp = newChar:WaitForChild("HumanoidRootPart",5)
-		if hrp and saved then hrp.CFrame = saved end
+	local saved=lastPos
+	local char=LP.Character
+	if char then char:BreakJoints() end
+
+	local c
+	c=LP.CharacterAdded:Connect(function(newChar)
+		c:Disconnect()
+		task.wait(1)
+		local hrp=newChar:WaitForChild("HumanoidRootPart",5)
+		if hrp and saved then hrp.CFrame=saved end
 	end)
 end)
 
 PL:Button("Rejoin","Rejoin Server",function()
-	TpService:Teleport(game.PlaceId, LP)
+	TpService:Teleport(game.PlaceId,LP)
 end)
 
-Library:Notification("XKID HUB","Loaded for Android ✓ Coba sekarang",5)
+Library:Notification("XKID HUB","FIXED ALL ✓",5)
 Library:ConfigSystem(Win)
