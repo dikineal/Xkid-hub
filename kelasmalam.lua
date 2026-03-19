@@ -649,43 +649,61 @@ function Fly:start()
         local cam = Workspace.CurrentCamera
         local cf  = cam.CFrame
 
+        -- Keep humanoid in physics state
         h2.PlatformStand = true
+        h2:ChangeState(Enum.HumanoidStateType.Physics)
 
-        local md  = h2.MoveDirection
-        local dir = Vector3.zero
+        local md = h2.MoveDirection
 
-        -- Horizontal: joystick ikut arah kamera (X/Z saja)
-        local flat = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+        -- ── Horizontal (XZ) from joystick ──────────────────
+        local flat = Vector3.new(cf.LookVector.X,  0, cf.LookVector.Z)
         local rgt  = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
         if flat.Magnitude > 0 then flat = flat.Unit end
         if rgt.Magnitude  > 0 then rgt  = rgt.Unit  end
 
+        local hDir = Vector3.zero
         if md.Magnitude > 0.01 then
-            dir = flat * (-md.Z) + rgt * md.X
+            hDir = flat * (-md.Z) + rgt * md.X
+            if hDir.Magnitude > 1 then hDir = hDir.Unit end
         end
 
-        -- Vertikal: dari pitch kamera (naik/turun)
-        local pitchY = cf.LookVector.Y
-        dir = dir + Vector3.new(0, pitchY, 0)
+        -- ── Vertical (Y) from camera pitch ─────────────────
+        local pitchY  = cf.LookVector.Y
+        local vDir    = 0
+        local GRAVITY = Workspace.Gravity  -- ~196.2
 
-        -- Normalize
-        if dir.Magnitude > 1 then dir = dir.Unit end
+        local THRESHOLD = 0.1   -- abaikan pitch kecil
+        local BOOST     = 2.5   -- penguat vertikal supaya tidak lemah
 
-        -- PC: WASD + E/Q
-        if keys.forward  then dir = dir + flat          end
-        if keys.backward then dir = dir - flat          end
-        if keys.right    then dir = dir + rgt           end
-        if keys.left     then dir = dir - rgt           end
-        if keys.up       then dir = dir + Vector3.new(0,1,0) end
-        if keys.down     then dir = dir - Vector3.new(0,1,0) end
+        if math.abs(pitchY) > THRESHOLD then
+            -- Boost pitch supaya naik/turun cukup kuat
+            local scaled = (math.abs(pitchY) - THRESHOLD) / (1 - THRESHOLD)
+            vDir = math.sign(pitchY) * scaled * BOOST
+        else
+            -- Tidak ada input vertikal → anti-gravity hover
+            -- Lawan gravity dengan velocity kecil ke atas
+            -- gravity / speed = proporsi yang dibutuhkan untuk hover
+            vDir = (GRAVITY / self.speed) * 0.15
+        end
 
-        if dir.Magnitude > 1 then dir = dir.Unit end
+        -- ── Gabung horizontal + vertikal ───────────────────
+        local targetVel = Vector3.new(
+            hDir.X * self.speed,
+            vDir  * self.speed,
+            hDir.Z * self.speed
+        )
 
-        -- Smooth velocity
-        bv.Velocity = bv.Velocity:Lerp(dir * self.speed, 0.25)
+        -- ── Smooth lerp ────────────────────────────────────
+        -- Lerp lebih cepat saat ada input, lambat saat hover
+        local lerpAlpha = md.Magnitude > 0.01 and 0.2 or 0.1
+        bv.Velocity = bv.Velocity:Lerp(targetVel, lerpAlpha)
 
-        -- Gyro ikut kamera
-        bg.CFrame = cf
+        -- ── BodyGyro: hadap arah kamera horizontal ─────────
+        -- Gunakan flat look bukan full camera CFrame
+        -- supaya tidak tilt aneh saat lihat atas/bawah
+        if flat.Magnitude > 0.01 then
+            bg.CFrame = CFrame.lookAt(r2.Position, r2.Position + flat)
+        end
     end))
 end
 
@@ -1210,8 +1228,8 @@ PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
         notify("ESP Player",v and "ON" or "OFF",2)
     end)
 PR:Paragraph("Cara Fly",
-    "Mobile:\nJoystick = maju/mundur/kiri/kanan\nKamera kiri/kanan = arah hadap\nKamera atas = naik\nKamera bawah = turun\n\n"..
-    "PC:\nW/S = maju/mundur\nA/D = kiri/kanan\nE/Space = naik  Q = turun")
+    "Mobile:\nJoystick = maju/mundur/kiri/kanan\nKamera atas  = naik\nKamera bawah = turun\nDiam = melayang stabil\n\n"..
+    "PC:\nW/S/A/D = gerak\nE/Space = naik  Q = turun")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                  TAB SECURITY                         ║
