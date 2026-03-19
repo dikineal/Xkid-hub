@@ -547,14 +547,7 @@ local function setInfJump(v)
     end
 end
 
---[[
-    FLY SYSTEM — ControlModule GetMoveVector
-    Baca input langsung dari sistem Roblox
-    Arah gerak ikut kamera (X/Z saja, tidak naik/turun)
-    PlatformStand = true supaya tidak jatuh
-]]
-
--- Load ControlModule sekali
+-- ControlModule untuk baca input joystick
 local ControlModule = nil
 pcall(function()
     ControlModule = require(
@@ -568,7 +561,7 @@ local function stopFly()
     Move.flying = false
     if Move.flyConn then Move.flyConn:Disconnect(); Move.flyConn=nil end
     if Move.bv then pcall(function() Move.bv:Destroy() end); Move.bv=nil end
-    if Move.bg then pcall(function() Move.bg:Destroy() end); Move.bg=nil end
+    Move.bg = nil
     local h = getHum()
     if h then
         h.PlatformStand = false
@@ -577,62 +570,52 @@ local function stopFly()
 end
 
 local function startFly()
+    -- Tunggu karakter siap
+    if not getChar() then LP.CharacterAdded:Wait() end
     local root = getRoot(); if not root then return end
     stopFly()
     Move.flying = true
 
     local h = getHum()
-    if h then
-        h.PlatformStand = true
-    end
+    if h then h.PlatformStand = true end
 
+    -- BodyVelocity langsung di HRP
     Move.bv = Instance.new("BodyVelocity", root)
     Move.bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    Move.bv.Velocity = Vector3.new(0, 0, 0)
+    Move.bv.Velocity = Vector3.new()
 
     Move.flyConn = RunService.RenderStepped:Connect(function()
         if not Move.flying then return end
-        local h2 = getHum()
-        local r2 = getRoot()
+        local h2 = getHum(); local r2 = getRoot()
         if not h2 or not r2 or not Move.bv then return end
 
-        -- Paksa PlatformStand tiap frame
         h2.PlatformStand = true
 
-        -- Reset velocity dulu
-        Move.bv.Velocity = Vector3.new(0, 0, 0)
+        -- Reset velocity
+        Move.bv.Velocity = Vector3.new()
 
-        -- Baca input dari ControlModule (lebih akurat dari MoveDirection)
-        local moveVec = Vector3.new()
+        -- Baca input dari ControlModule
+        local MoveDir = Vector3.new()
         if ControlModule then
-            pcall(function()
-                moveVec = ControlModule:GetMoveVector()
-            end)
+            pcall(function() MoveDir = ControlModule:GetMoveVector() end)
         else
-            -- Fallback: pakai MoveDirection
-            moveVec = h2.MoveDirection
+            MoveDir = h2.MoveDirection
         end
 
         local cam = Workspace.CurrentCamera
 
-        -- Kanan/kiri
-        if moveVec.X ~= 0 then
-            Move.bv.Velocity = Move.bv.Velocity
-                + cam.CFrame.RightVector * moveVec.X * Move.flySpeed
+        if MoveDir.X > 0 then
+            Move.bv.Velocity = Move.bv.Velocity + cam.CFrame.RightVector * MoveDir.X * Move.flySpeed
         end
-
-        -- Maju/mundur (Z negatif = maju di Roblox)
-        if moveVec.Z ~= 0 then
-            Move.bv.Velocity = Move.bv.Velocity
-                - cam.CFrame.LookVector * moveVec.Z * Move.flySpeed
+        if MoveDir.X < 0 then
+            Move.bv.Velocity = Move.bv.Velocity + cam.CFrame.RightVector * MoveDir.X * Move.flySpeed
         end
-
-        -- Pastikan Y = 0 (tidak naik/turun dari kamera)
-        Move.bv.Velocity = Vector3.new(
-            Move.bv.Velocity.X,
-            0,
-            Move.bv.Velocity.Z
-        )
+        if MoveDir.Z > 0 then
+            Move.bv.Velocity = Move.bv.Velocity - cam.CFrame.LookVector * MoveDir.Z * Move.flySpeed
+        end
+        if MoveDir.Z < 0 then
+            Move.bv.Velocity = Move.bv.Velocity - cam.CFrame.LookVector * MoveDir.Z * Move.flySpeed
+        end
     end)
 end
 
