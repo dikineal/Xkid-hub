@@ -547,13 +547,11 @@ local function setInfJump(v)
     end
 end
 
--- ControlModule untuk baca input joystick
+-- ControlModule
 local ControlModule = nil
 pcall(function()
     ControlModule = require(
-        LP:WaitForChild("PlayerScripts")
-          :WaitForChild("PlayerModule")
-          :WaitForChild("ControlModule")
+        LP.PlayerScripts.PlayerModule.ControlModule
     )
 end)
 
@@ -561,7 +559,7 @@ local function stopFly()
     Move.flying = false
     if Move.flyConn then Move.flyConn:Disconnect(); Move.flyConn=nil end
     if Move.bv then pcall(function() Move.bv:Destroy() end); Move.bv=nil end
-    Move.bg = nil
+    if Move.bg then pcall(function() Move.bg:Destroy() end); Move.bg=nil end
     local h = getHum()
     if h then
         h.PlatformStand = false
@@ -570,52 +568,44 @@ local function stopFly()
 end
 
 local function startFly()
-    -- Tunggu karakter siap
     if not getChar() then LP.CharacterAdded:Wait() end
     local root = getRoot(); if not root then return end
     stopFly()
     Move.flying = true
 
-    local h = getHum()
-    if h then h.PlatformStand = true end
-
-    -- BodyVelocity langsung di HRP
+    -- BodyVelocity
     Move.bv = Instance.new("BodyVelocity", root)
     Move.bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    Move.bv.Velocity = Vector3.new()
+    Move.bv.Velocity = Vector3.zero
+
+    -- BodyGyro
+    Move.bg = Instance.new("BodyGyro", root)
+    Move.bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    Move.bg.CFrame    = root.CFrame
 
     Move.flyConn = RunService.RenderStepped:Connect(function()
         if not Move.flying then return end
-        local h2 = getHum(); local r2 = getRoot()
-        if not h2 or not r2 or not Move.bv then return end
+        local r2 = getRoot(); if not r2 or not Move.bv then return end
 
-        h2.PlatformStand = true
-
-        -- Reset velocity
-        Move.bv.Velocity = Vector3.new()
-
-        -- Baca input dari ControlModule
-        local MoveDir = Vector3.new()
+        local MoveDir = Vector3.zero
         if ControlModule then
             pcall(function() MoveDir = ControlModule:GetMoveVector() end)
-        else
-            MoveDir = h2.MoveDirection
         end
 
         local cam = Workspace.CurrentCamera
 
-        if MoveDir.X > 0 then
-            Move.bv.Velocity = Move.bv.Velocity + cam.CFrame.RightVector * MoveDir.X * Move.flySpeed
-        end
-        if MoveDir.X < 0 then
-            Move.bv.Velocity = Move.bv.Velocity + cam.CFrame.RightVector * MoveDir.X * Move.flySpeed
-        end
-        if MoveDir.Z > 0 then
-            Move.bv.Velocity = Move.bv.Velocity - cam.CFrame.LookVector * MoveDir.Z * Move.flySpeed
-        end
-        if MoveDir.Z < 0 then
-            Move.bv.Velocity = Move.bv.Velocity - cam.CFrame.LookVector * MoveDir.Z * Move.flySpeed
-        end
+        local dir =
+            cam.CFrame.RightVector  *  MoveDir.X +
+            -cam.CFrame.LookVector  *  MoveDir.Z
+
+        local Y = cam.CFrame.LookVector.Y
+
+        local Velocity =
+            (dir * Move.flySpeed) +
+            Vector3.new(0, Y * Move.flySpeed, 0)
+
+        Move.bv.Velocity = Move.bv.Velocity:Lerp(Velocity, 0.2)
+        Move.bg.CFrame   = cam.CFrame
     end)
 end
 
@@ -1120,12 +1110,11 @@ PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
         notify("ESP Player",v and "ON" or "OFF",2)
     end)
 PR:Paragraph("Cara Fly",
-    "Joystick atas  = Maju\n"..
-    "Joystick bawah = Mundur\n"..
-    "Joystick kiri  = Geser kiri\n"..
-    "Joystick kanan = Geser kanan\n"..
-    "Lepas joystick = Hover diam\n\n"..
-    "Kamera tidak mempengaruhi\narah gerak")
+    "Joystick/WASD = arah gerak\n"..
+    "Kamera atas   = naik\n"..
+    "Kamera bawah  = turun\n"..
+    "Lepas joystick = melayang\n\n"..
+    "Smooth Lerp 0.2")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                  TAB SECURITY                         ║
