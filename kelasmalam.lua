@@ -548,10 +548,10 @@ local function setInfJump(v)
 end
 
 --[[
-    FLY SYSTEM — Simpel
-    Joystick = gerak seperti jalan biasa (maju/mundur/kiri/kanan)
-    Melayang di ketinggian tetap, tidak ada naik/turun
-    Tidak ada rotasi paksa — karakter ikut normal
+    FLY SYSTEM — Simple BodyVelocity
+    Tidak pakai PlatformStand (penyebab rotasi)
+    Joystick = maju/mundur/kiri/kanan
+    Melayang di ketinggian tetap
 ]]
 local function stopFly()
     Move.flying = false
@@ -560,15 +560,13 @@ local function stopFly()
         Move.flyConn = nil
     end
     if Move.bv then
-        pcall(function()
-            if Move.bv.Attachment0 then
-                Move.bv.Attachment0:Destroy()
-            end
-            Move.bv:Destroy()
-        end)
+        pcall(function() Move.bv:Destroy() end)
         Move.bv = nil
     end
-    Move.bg = nil
+    if Move.bg then
+        pcall(function() Move.bg:Destroy() end)
+        Move.bg = nil
+    end
     local h = getHum()
     if h then
         h.PlatformStand = false
@@ -581,44 +579,48 @@ local function startFly()
     stopFly()
     Move.flying = true
 
+    -- TIDAK set PlatformStand — itu penyebab rotasi!
     local h = getHum()
     if h then
-        h.PlatformStand = true
-        h.AutoRotate    = true  -- biarkan auto rotate normal
+        h.AutoRotate = true  -- biarkan normal
     end
 
-    -- Attachment
-    local att    = Instance.new("Attachment", root)
-    att.Name     = "XKID_FlyAtt"
-    att.Position = Vector3.new()
+    -- BodyVelocity simpel
+    Move.bv = Instance.new("BodyVelocity", root)
+    Move.bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    Move.bv.Velocity = Vector3.new(0, 0, 0)
 
-    -- LinearVelocity
-    Move.bv = Instance.new("LinearVelocity", root)
-    Move.bv.Attachment0            = att
-    Move.bv.MaxForce               = 1e5
-    Move.bv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
-    Move.bv.VectorVelocity         = Vector3.new()
-    Move.bv.RelativeTo             = Enum.ActuatorRelativeTo.World
+    -- BodyPosition untuk lock ketinggian (anti jatuh/naik sendiri)
+    Move.bg = Instance.new("BodyPosition", root)
+    Move.bg.MaxForce  = Vector3.new(0, 1e5, 0)  -- hanya Y
+    Move.bg.P         = 1e4
+    Move.bg.D         = 500
+    Move.bg.Position  = root.Position  -- lock di posisi Y sekarang
 
     Move.flyConn = RunService.Heartbeat:Connect(function()
-        if not Move.flying or not Move.bv then return end
+        if not Move.flying or not Move.bv or not Move.bg then return end
 
-        local h2 = getHum()
-        local r2 = getRoot()
+        local h2   = getHum()
+        local r2   = getRoot()
         if not h2 or not r2 then return end
 
-        -- MoveDirection sudah berisi arah gerak dari joystick
-        -- Langsung pakai untuk X dan Z, Y = 0 (tidak naik/turun)
+        -- Input dari joystick/WASD langsung
         local md = h2.MoveDirection
 
-        Move.bv.VectorVelocity = Vector3.new(
+        -- Set velocity X dan Z dari joystick
+        -- Y = 0 karena BodyPosition yang handle ketinggian
+        Move.bv.Velocity = Vector3.new(
             md.X * Move.flySpeed,
             0,
             md.Z * Move.flySpeed
         )
 
-        -- Paksa Y tetap (tidak jatuh)
-        h2.PlatformStand = true
+        -- Update lock posisi Y terus (supaya tidak jatuh)
+        Move.bg.Position = Vector3.new(
+            Move.bg.Position.X,
+            r2.Position.Y,  -- ikuti posisi Y saat ini
+            Move.bg.Position.Z
+        )
     end)
 end
 
