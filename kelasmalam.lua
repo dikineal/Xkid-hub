@@ -606,8 +606,10 @@ local function startFly()
 
         local pitch = cf.LookVector.Y
         local vVel  = 0
-        if math.abs(pitch) > 0.05 then
-            vVel = pitch * Move.flySpeed * 2.5
+        if math.abs(pitch) > 0.15 then  -- threshold lebih tinggi (0.05 → 0.15)
+            -- Kurangi multiplier (2.5 → 1.2) supaya tidak terlalu responsif
+            local t = (math.abs(pitch) - 0.15) / (1 - 0.15)
+            vVel = math.sign(pitch) * t * Move.flySpeed * 1.2
         end
 
         local target = Vector3.new(
