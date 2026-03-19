@@ -551,7 +551,7 @@ local function setInfJump(v)
 end
 
 -- ════════════════════════════════════════
---  FLY SYSTEM — AlignPosition + AlignOrientation
+--  FLY SYSTEM — BodyVelocity + BodyGyro
 -- ════════════════════════════════════════
 local ControlModule = nil
 pcall(function()
@@ -564,6 +564,8 @@ end)
 
 local flyFlying = false
 local flyConn   = nil
+local flyBV     = nil
+local flyBG     = nil
 
 local function startFly()
     if flyFlying then return end
@@ -573,24 +575,14 @@ local function startFly()
 
     hum.PlatformStand = true
 
-    local att = Instance.new("Attachment", root)
+    flyBV = Instance.new("BodyVelocity", root)
+    flyBV.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+    flyBV.Velocity = Vector3.zero
 
-    local ap = Instance.new("AlignPosition")
-    ap.Attachment0     = att
-    ap.Mode            = Enum.PositionAlignmentMode.OneAttachment
-    ap.MaxForce        = math.huge
-    ap.Responsiveness  = 200
-    ap.RigidityEnabled = true
-    ap.Parent          = root
-
-    local ao = Instance.new("AlignOrientation")
-    ao.Attachment0     = att
-    ao.MaxTorque       = math.huge
-    ao.Responsiveness  = 200
-    ao.RigidityEnabled = true
-    ao.Parent          = root
-
-    local targetPos = root.Position
+    flyBG = Instance.new("BodyGyro", root)
+    flyBG.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+    flyBG.P = 1e5
+    flyBG.D = 1e3
 
     flyConn = RunService.RenderStepped:Connect(function(dt)
         local r2  = getRoot(); if not r2 then return end
@@ -612,19 +604,25 @@ local function startFly()
         local move = right * md.X + look * md.Z
         if move.Magnitude > 1 then move = move.Unit end
 
-        local pitch    = cf.LookVector.Y
-        local vertical = math.abs(pitch) > 0.05 and pitch or 0
+        local pitch = cf.LookVector.Y
+        local vVel  = 0
+        if math.abs(pitch) > 0.05 then
+            vVel = pitch * Move.flySpeed * 2.5
+        end
 
-        local dir = Vector3.new(move.X, vertical, move.Z)
-        if dir.Magnitude > 1 then dir = dir.Unit end
+        local target = Vector3.new(
+            move.X * Move.flySpeed,
+            vVel,
+            move.Z * Move.flySpeed
+        )
 
-        -- Speed dari slider UI
-        targetPos = targetPos + dir * Move.flySpeed * dt
-        ap.Position = targetPos
+        -- Anti gravity stabil
+        target = target + Vector3.new(0, Workspace.Gravity * dt, 0)
 
-        local flatLook = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
-        if flatLook.Magnitude > 0 then
-            ao.CFrame = CFrame.lookAt(r2.Position, r2.Position + flatLook)
+        flyBV.Velocity = target
+
+        if look.Magnitude > 0.01 then
+            flyBG.CFrame = CFrame.lookAt(r2.Position, r2.Position + look)
         end
     end)
 end
@@ -632,21 +630,12 @@ end
 local function stopFly()
     flyFlying = false
     if flyConn then flyConn:Disconnect(); flyConn = nil end
-
-    local char = getChar()
-    if char then
-        for _, v in pairs(char:GetDescendants()) do
-            if v:IsA("AlignPosition")
-            or v:IsA("AlignOrientation")
-            or v:IsA("Attachment") then
-                v:Destroy()
-            end
-        end
-        local hum = getHum()
-        if hum then
-            hum.PlatformStand = false
-            hum.AutoRotate    = true
-        end
+    if flyBV   then pcall(function() flyBV:Destroy() end); flyBV = nil end
+    if flyBG   then pcall(function() flyBG:Destroy() end); flyBG = nil end
+    local hum = getHum()
+    if hum then
+        hum.PlatformStand = false
+        hum.AutoRotate    = true
     end
 end
 
