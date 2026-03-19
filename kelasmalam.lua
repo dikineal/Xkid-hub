@@ -548,11 +548,22 @@ local function setInfJump(v)
 end
 
 --[[
-    FLY SYSTEM — Hover + Joystick
-    Joystick atas/bawah/kiri/kanan = gerak
-    Kamera tidak mempengaruhi gerak
-    Tidak ada rotasi, tidak jatuh
+    FLY SYSTEM — ControlModule GetMoveVector
+    Baca input langsung dari sistem Roblox
+    Arah gerak ikut kamera (X/Z saja, tidak naik/turun)
+    PlatformStand = true supaya tidak jatuh
 ]]
+
+-- Load ControlModule sekali
+local ControlModule = nil
+pcall(function()
+    ControlModule = require(
+        LP:WaitForChild("PlayerScripts")
+          :WaitForChild("PlayerModule")
+          :WaitForChild("ControlModule")
+    )
+end)
+
 local function stopFly()
     Move.flying = false
     if Move.flyConn then Move.flyConn:Disconnect(); Move.flyConn=nil end
@@ -570,39 +581,58 @@ local function startFly()
     stopFly()
     Move.flying = true
 
-    -- BodyVelocity: handle gerak X/Z
+    local h = getHum()
+    if h then
+        h.PlatformStand = true
+    end
+
     Move.bv = Instance.new("BodyVelocity", root)
     Move.bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
     Move.bv.Velocity = Vector3.new(0, 0, 0)
 
-    -- BodyGyro: lock rotasi supaya tidak berputar
-    Move.bg = Instance.new("BodyGyro", root)
-    Move.bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-    Move.bg.P         = 1e5
-    Move.bg.D         = 1e3
-    Move.bg.CFrame    = CFrame.new(root.Position)  -- lock tegak lurus
-
-    Move.flyConn = RunService.Heartbeat:Connect(function()
+    Move.flyConn = RunService.RenderStepped:Connect(function()
         if not Move.flying then return end
-        local h2 = getHum(); local r2 = getRoot()
+        local h2 = getHum()
+        local r2 = getRoot()
         if not h2 or not r2 or not Move.bv then return end
 
-        local md = h2.MoveDirection
+        -- Paksa PlatformStand tiap frame
+        h2.PlatformStand = true
 
-        -- Gerak X/Z dari joystick, Y = 0 (hover)
-        if md.Magnitude > 0.05 then
-            Move.bv.Velocity = Vector3.new(
-                md.X * Move.flySpeed,
-                0,
-                md.Z * Move.flySpeed
-            )
+        -- Reset velocity dulu
+        Move.bv.Velocity = Vector3.new(0, 0, 0)
+
+        -- Baca input dari ControlModule (lebih akurat dari MoveDirection)
+        local moveVec = Vector3.new()
+        if ControlModule then
+            pcall(function()
+                moveVec = ControlModule:GetMoveVector()
+            end)
         else
-            -- Diam = hover di tempat (Y tetap override gravity)
-            Move.bv.Velocity = Vector3.new(0, 0, 0)
+            -- Fallback: pakai MoveDirection
+            moveVec = h2.MoveDirection
         end
 
-        -- Lock rotasi karakter tetap tegak
-        Move.bg.CFrame = CFrame.new(r2.Position)
+        local cam = Workspace.CurrentCamera
+
+        -- Kanan/kiri
+        if moveVec.X ~= 0 then
+            Move.bv.Velocity = Move.bv.Velocity
+                + cam.CFrame.RightVector * moveVec.X * Move.flySpeed
+        end
+
+        -- Maju/mundur (Z negatif = maju di Roblox)
+        if moveVec.Z ~= 0 then
+            Move.bv.Velocity = Move.bv.Velocity
+                - cam.CFrame.LookVector * moveVec.Z * Move.flySpeed
+        end
+
+        -- Pastikan Y = 0 (tidak naik/turun dari kamera)
+        Move.bv.Velocity = Vector3.new(
+            Move.bv.Velocity.X,
+            0,
+            Move.bv.Velocity.Z
+        )
     end)
 end
 
@@ -1107,7 +1137,12 @@ PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
         notify("ESP Player",v and "ON" or "OFF",2)
     end)
 PR:Paragraph("Cara Fly",
-    "Joystick = gerak seperti jalan\nTapi melayang di udara\n\nTidak ada rotasi paksa\nTidak ada naik/turun\nLepas joystick = diam")
+    "Joystick atas  = Maju\n"..
+    "Joystick bawah = Mundur\n"..
+    "Joystick kiri  = Geser kiri\n"..
+    "Joystick kanan = Geser kanan\n"..
+    "Lepas joystick = Hover diam\n\n"..
+    "Kamera tidak mempengaruhi\narah gerak")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                  TAB SECURITY                         ║
