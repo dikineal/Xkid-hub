@@ -685,9 +685,29 @@ local function castOnce()
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
+-- │      SCAN AREA SEBELUM UI DIBUAT (PENTING!)             │
+-- └─────────────────────────────────────────────────────────┘
+-- Tunggu workspace siap
+local _t = tick()
+repeat task.wait(0.1)
+until Workspace:FindFirstChild("Land") ~= nil
+    or #Workspace:GetChildren() >= 50
+    or (tick()-_t) > 8
+
+-- Scan sekarang sebelum dropdown dibuat
+buildAreaData()
+if #AREA_NAMES > 0 then
+    Farm.selectedArea = AREA_NAMES[1]
+    print("[XKID] Default area: "..Farm.selectedArea)
+end
+local _tp = 0
+for _,v in pairs(AREA_PARTS) do _tp=_tp+#v end
+print(string.format("[XKID] Scan: %d area, %d plot", #AREA_NAMES, _tp))
+
+-- ┌─────────────────────────────────────────────────────────┐
 -- │                  WINDOW & TABS                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB","sprout","v5.0",false)
+local Win = Library:Window("XKID HUB","sprout","v5.1",false)
 
 Win:TabSection("MAIN")
 local T_Farm = Win:Tab("Farming",  "leaf")
@@ -1199,26 +1219,19 @@ SetR:Paragraph("Farming Info",
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                      INIT                               │
 -- └─────────────────────────────────────────────────────────┘
-task.spawn(function()
-    task.wait(2)
-    buildAreaData()
-    -- Set default area ke yang pertama
-    if #AREA_NAMES > 0 then
-        Farm.selectedArea = AREA_NAMES[1]
-    end
-    local totalPlots = 0
-    for _,parts in pairs(AREA_PARTS) do totalPlots=totalPlots+#parts end
-    if totalPlots > 0 then
-        notify("✅ XKID HUB Ready",
-            #AREA_NAMES.." area | "..totalPlots.." plot total",4)
-    else
-        notify("⚠ Warning",
-            "Plot tidak ditemukan!\nBuka Farming → Scan Ulang Area",6)
-    end
-end)
+-- Notif hasil scan yang sudah dilakukan sebelum UI
+local _totalPl = 0
+for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
+if _totalPl > 0 then
+    notify("✅ XKID HUB v5.1 Ready",
+        #AREA_NAMES.." area | ".._totalPl.." plot\nDropdown area sudah terisi!",5)
+else
+    notify("⚠ Warning",
+        "Plot tidak ditemukan!\nBuka Farming → Scan Ulang Area",6)
+end
 
-Library:Notification("XKID HUB v5.0",
+Library:Notification("XKID HUB v5.1",
     "Farming · Shop · Teleport · Player · Security", 6)
 Library:ConfigSystem(Win)
 
-print("[XKID HUB] v5.0 loaded — "..LP.Name)
+print("[XKID HUB] v5.1 loaded — "..LP.Name)
