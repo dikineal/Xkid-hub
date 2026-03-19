@@ -197,7 +197,9 @@ local function filterByPola(plots, pola, jumlah)
                 table.insert(sorted, {part=p, dist=(p.Position-root.Position).Magnitude})
             end
             table.sort(sorted, function(a,b) return a.dist < b.dist end)
-            for i = 1, max do table.insert(result, sorted[i].part) end
+            -- Bug 5 fix: clamp ke jumlah sorted yang tersedia
+            local limit = math.min(max, #sorted)
+            for i = 1, limit do table.insert(result, sorted[i].part) end
         else
             for i = 1, max do table.insert(result, plots[i]) end
         end
@@ -473,9 +475,12 @@ local function startESPPlayer()
 end
 
 local function stopESPPlayer()
-    if ESPPl.conn then ESPPl.conn:Disconnect(); ESPPl.conn=nil end
+    if ESPPl.conn then
+        ESPPl.conn:Disconnect()  -- disconnect beneran, bukan cuma skip
+        ESPPl.conn = nil
+    end
     for p in pairs(ESPPl.data) do _rmPlBill(p) end
-    ESPPl.data={}
+    ESPPl.data = {}
 end
 
 Players.PlayerRemoving:Connect(_rmPlBill)
@@ -609,7 +614,9 @@ local Move = {
     jumpConn   = nil,
 }
 
+-- Speed loop — tidak aktif saat fly ON
 RunService.RenderStepped:Connect(function()
+    if flyFlying then return end  -- Bug 2 fix: jangan override saat fly
     local h=getHum(); if h then h.WalkSpeed=Move.speed end
 end)
 
@@ -727,13 +734,27 @@ end
 
 local function stopFly()
     flyFlying = false
+    -- Disconnect loop DULU sebelum apapun
     if flyConn then flyConn:Disconnect(); flyConn = nil end
-    if flyBV   then pcall(function() flyBV:Destroy() end); flyBV = nil end
-    if flyBG   then pcall(function() flyBG:Destroy() end); flyBG = nil end
+    -- Hapus physics instances
+    if flyBV then pcall(function() flyBV:Destroy() end); flyBV = nil end
+    if flyBG then pcall(function() flyBG:Destroy() end); flyBG = nil end
+    -- Kembalikan Humanoid ke normal
     local hum = getHum()
     if hum then
         hum.PlatformStand = false
         hum.AutoRotate    = true
+        hum.WalkSpeed     = Move.speed  -- Bug 6 fix: restore speed
+        -- Paksa keluar dari Physics state
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        task.defer(function()
+            local h = getHum()
+            if h then
+                h.PlatformStand = false
+                h.WalkSpeed     = Move.speed
+                h:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end)
     end
 end
 
@@ -743,7 +764,8 @@ LP.CharacterAdded:Connect(function()
     if flyFlying then
         flyFlying = false
         if flyConn then flyConn:Disconnect(); flyConn=nil end
-        flyAtt=nil; flyAP=nil; flyAO=nil
+        if flyBV then pcall(function() flyBV:Destroy() end); flyBV=nil end
+        if flyBG then pcall(function() flyBG:Destroy() end); flyBG=nil end
         task.wait(0.3)
         startFly()
     end
@@ -1237,9 +1259,21 @@ local PL   = PP:Section("⚡ Speed & Jump","Left")
 local PR   = PP:Section("🚀 Fly & ESP","Right")
 
 PL:Slider("Walk Speed","ws",16,500,16,
-    function(v) Move.speed=v end,"Default 16")
+    function(v)
+        Move.speed=v
+        -- Langsung apply kalau tidak fly
+        if not flyFlying then
+            local h=getHum(); if h then h.WalkSpeed=v end
+        end
+    end,"Default 16")
 PL:Button("Reset Speed","Ke 16",
-    function() Move.speed=16; notify("Speed","Reset 16",2) end)
+    function()
+        Move.speed=16
+        if not flyFlying then
+            local h=getHum(); if h then h.WalkSpeed=16 end
+        end
+        notify("Speed","Reset 16",2)
+    end)
 PL:Slider("Jump Power","jp",50,500,50,
     function(v) local h=getHum()
         if h then h.JumpPower=v; h.UseJumpPower=true end
@@ -1256,11 +1290,15 @@ PR:Toggle("Fly","fly",false,"Terbang bebas",
         notify("Fly",v and "ON" or "OFF",2)
     end)
 PR:Slider("Fly Speed","flySpd",10,300,60,
-    function(v) Move.flySpeed=v; Fly.speed=v end,"Kecepatan terbang")
+    function(v) Move.flySpeed=v end,"Kecepatan terbang")
 PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
     function(v)
         ESPPl.active=v
-        if v then startESPPlayer() else stopESPPlayer() end
+        if v then
+            startESPPlayer()
+        else
+            stopESPPlayer()  -- disconnect + cleanup, bukan cuma flag
+        end
         notify("ESP Player",v and "ON" or "OFF",2)
     end)
 PR:Paragraph("Cara Fly",
@@ -1378,7 +1416,15 @@ SetL:Toggle("Auto Fishing","autoFish",false,"Auto equip rod + cast loop",
                 if not ok then Fish.autoOn=false; return end
             end
             Fish.fishTask=task.spawn(function()
-                while Fish.autoOn do castOnce() end
+                while Fish.autoOn do
+                    local ok, err = pcall(castOnce)
+                    if not ok then
+                        xlog("Fishing","castOnce error: "..tostring(err):sub(1,60), true)
+                        task.wait(3)  -- backoff kalau error
+                    else
+                        task.wait(0.5)  -- safety gap antar cast
+                    end
+                end
             end)
             notify("Fishing","ON",3)
         else
@@ -1437,4 +1483,3 @@ Library:Notification("XKID HUB v5.1",
 Library:ConfigSystem(Win)
 
 print("[XKID HUB] v5.1 loaded — "..LP.Name)
-
