@@ -3,7 +3,7 @@
 ║              🌟  X K I D   H U B  v5.0  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
-║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
+║  Farming  ·  Shop  ·  Teleport  ·  Player
 ║  Security  ·  Setting                                    ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
@@ -579,7 +579,9 @@ function Maid:Clean()
 end
 
 -- ════════════════════════════════════════
---  FLY SYSTEM — LinearVelocity + Maid
+--  FLY SYSTEM — Admin Style
+--  Kamera kontrol penuh arah terbang
+--  Smooth lerp velocity
 -- ════════════════════════════════════════
 local Fly = {
     on    = false,
@@ -592,30 +594,106 @@ function Fly:start()
     local root = getRoot(); if not root then return end
     self.on = true
 
-    local att = Instance.new("Attachment", root)
-    local lv  = Instance.new("LinearVelocity")
-    lv.Attachment0            = att
-    lv.MaxForce               = math.huge
-    lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
-    lv.VectorVelocity         = Vector3.zero
-    lv.Parent                 = root
+    local hum = getHum()
+    if hum then
+        hum.PlatformStand = true
+    end
 
-    self.maid:Give(att)
-    self.maid:Give(lv)
+    local bv = Instance.new("BodyVelocity", root)
+    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    bv.Velocity = Vector3.zero
+
+    local bg = Instance.new("BodyGyro", root)
+    bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    bg.P         = 9e4
+    bg.D         = 1e3
+    bg.CFrame    = root.CFrame
+
+    self.maid:Give(bv)
+    self.maid:Give(bg)
+
+    -- Keys untuk PC
+    local keys = {
+        forward  = false,
+        backward = false,
+        left     = false,
+        right    = false,
+        up       = false,
+        down     = false,
+    }
+
+    self.maid:Give(UIS.InputBegan:Connect(function(i, gpe)
+        if gpe then return end
+        if i.KeyCode == Enum.KeyCode.W then keys.forward  = true end
+        if i.KeyCode == Enum.KeyCode.S then keys.backward = true end
+        if i.KeyCode == Enum.KeyCode.A then keys.left     = true end
+        if i.KeyCode == Enum.KeyCode.D then keys.right    = true end
+        if i.KeyCode == Enum.KeyCode.E then keys.up       = true end
+        if i.KeyCode == Enum.KeyCode.Q then keys.down     = true end
+        if i.KeyCode == Enum.KeyCode.Space then keys.up   = true end
+    end))
+
+    self.maid:Give(UIS.InputEnded:Connect(function(i)
+        if i.KeyCode == Enum.KeyCode.W then keys.forward  = false end
+        if i.KeyCode == Enum.KeyCode.S then keys.backward = false end
+        if i.KeyCode == Enum.KeyCode.A then keys.left     = false end
+        if i.KeyCode == Enum.KeyCode.D then keys.right    = false end
+        if i.KeyCode == Enum.KeyCode.E then keys.up       = false end
+        if i.KeyCode == Enum.KeyCode.Q then keys.down     = false end
+        if i.KeyCode == Enum.KeyCode.Space then keys.up   = false end
+    end))
 
     self.maid:Give(RunService.RenderStepped:Connect(function()
+        local r2  = getRoot(); if not r2 then return end
+        local h2  = getHum();  if not h2 then return end
         local cam = Workspace.CurrentCamera
-        local dir = cam.CFrame.LookVector
-        lv.VectorVelocity = dir * self.speed
+        local cf  = cam.CFrame
+
+        h2.PlatformStand = true
+
+        -- Baca input joystick (mobile)
+        local md  = h2.MoveDirection
+        local dir = Vector3.zero
+
+        -- Mobile: joystick
+        if md.Magnitude > 0.01 then
+            local flat = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+            local rgt  = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
+            if flat.Magnitude > 0 then flat = flat.Unit end
+            if rgt.Magnitude  > 0 then rgt  = rgt.Unit  end
+            dir = flat * md:Dot(flat) + rgt * md:Dot(rgt)
+        end
+
+        -- PC: WASD + E/Q
+        if keys.forward  then dir = dir + cf.LookVector  end
+        if keys.backward then dir = dir - cf.LookVector  end
+        if keys.right    then dir = dir + cf.RightVector end
+        if keys.left     then dir = dir - cf.RightVector end
+        if keys.up       then dir = dir + Vector3.new(0,1,0) end
+        if keys.down     then dir = dir - Vector3.new(0,1,0) end
+
+        -- Normalize
+        if dir.Magnitude > 1 then dir = dir.Unit end
+
+        -- Smooth velocity
+        local target = dir * self.speed
+        bv.Velocity  = bv.Velocity:Lerp(target, 0.25)
+
+        -- Gyro ikut kamera
+        bg.CFrame = cf
     end))
 end
 
 function Fly:stop()
     self.on = false
     self.maid:Clean()
+    local h = getHum()
+    if h then
+        h.PlatformStand = false
+        h.AutoRotate    = true
+    end
 end
 
--- Wrapper untuk toggle UI
 local function startFly() Fly.speed = Move.flySpeed; Fly:start() end
 local function stopFly()  Fly:stop() end
 
@@ -1127,10 +1205,9 @@ PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
         notify("ESP Player",v and "ON" or "OFF",2)
     end)
 PR:Paragraph("Cara Fly",
-    "Kamera = arah gerak\n"..
-    "Kamera atas = naik\n"..
-    "Kamera bawah = turun\n"..
-    "LinearVelocity + Maid")
+    "Mobile:\nJoystick = maju/mundur/kiri/kanan\nKamera = arah hadap\n\n"..
+    "PC:\nW/S = maju/mundur\nA/D = kiri/kanan\nE/Space = naik\nQ = turun\n\n"..
+    "Smooth lerp · Admin style")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                  TAB SECURITY                         ║
