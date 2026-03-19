@@ -548,25 +548,16 @@ local function setInfJump(v)
 end
 
 --[[
-    FLY SYSTEM — Simple BodyVelocity
-    Tidak pakai PlatformStand (penyebab rotasi)
-    Joystick = maju/mundur/kiri/kanan
-    Melayang di ketinggian tetap
+    FLY SYSTEM — Hover + Joystick
+    Joystick atas/bawah/kiri/kanan = gerak
+    Kamera tidak mempengaruhi gerak
+    Tidak ada rotasi, tidak jatuh
 ]]
 local function stopFly()
     Move.flying = false
-    if Move.flyConn then
-        Move.flyConn:Disconnect()
-        Move.flyConn = nil
-    end
-    if Move.bv then
-        pcall(function() Move.bv:Destroy() end)
-        Move.bv = nil
-    end
-    if Move.bg then
-        pcall(function() Move.bg:Destroy() end)
-        Move.bg = nil
-    end
+    if Move.flyConn then Move.flyConn:Disconnect(); Move.flyConn=nil end
+    if Move.bv then pcall(function() Move.bv:Destroy() end); Move.bv=nil end
+    if Move.bg then pcall(function() Move.bg:Destroy() end); Move.bg=nil end
     local h = getHum()
     if h then
         h.PlatformStand = false
@@ -579,48 +570,39 @@ local function startFly()
     stopFly()
     Move.flying = true
 
-    -- TIDAK set PlatformStand — itu penyebab rotasi!
-    local h = getHum()
-    if h then
-        h.AutoRotate = true  -- biarkan normal
-    end
-
-    -- BodyVelocity simpel
+    -- BodyVelocity: handle gerak X/Z
     Move.bv = Instance.new("BodyVelocity", root)
     Move.bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
     Move.bv.Velocity = Vector3.new(0, 0, 0)
 
-    -- BodyPosition untuk lock ketinggian (anti jatuh/naik sendiri)
-    Move.bg = Instance.new("BodyPosition", root)
-    Move.bg.MaxForce  = Vector3.new(0, 1e5, 0)  -- hanya Y
-    Move.bg.P         = 1e4
-    Move.bg.D         = 500
-    Move.bg.Position  = root.Position  -- lock di posisi Y sekarang
+    -- BodyGyro: lock rotasi supaya tidak berputar
+    Move.bg = Instance.new("BodyGyro", root)
+    Move.bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    Move.bg.P         = 1e5
+    Move.bg.D         = 1e3
+    Move.bg.CFrame    = CFrame.new(root.Position)  -- lock tegak lurus
 
     Move.flyConn = RunService.Heartbeat:Connect(function()
-        if not Move.flying or not Move.bv or not Move.bg then return end
+        if not Move.flying then return end
+        local h2 = getHum(); local r2 = getRoot()
+        if not h2 or not r2 or not Move.bv then return end
 
-        local h2   = getHum()
-        local r2   = getRoot()
-        if not h2 or not r2 then return end
-
-        -- Input dari joystick/WASD langsung
         local md = h2.MoveDirection
 
-        -- Set velocity X dan Z dari joystick
-        -- Y = 0 karena BodyPosition yang handle ketinggian
-        Move.bv.Velocity = Vector3.new(
-            md.X * Move.flySpeed,
-            0,
-            md.Z * Move.flySpeed
-        )
+        -- Gerak X/Z dari joystick, Y = 0 (hover)
+        if md.Magnitude > 0.05 then
+            Move.bv.Velocity = Vector3.new(
+                md.X * Move.flySpeed,
+                0,
+                md.Z * Move.flySpeed
+            )
+        else
+            -- Diam = hover di tempat (Y tetap override gravity)
+            Move.bv.Velocity = Vector3.new(0, 0, 0)
+        end
 
-        -- Update lock posisi Y terus (supaya tidak jatuh)
-        Move.bg.Position = Vector3.new(
-            Move.bg.Position.X,
-            r2.Position.Y,  -- ikuti posisi Y saat ini
-            Move.bg.Position.Z
-        )
+        -- Lock rotasi karakter tetap tegak
+        Move.bg.CFrame = CFrame.new(r2.Position)
     end)
 end
 
