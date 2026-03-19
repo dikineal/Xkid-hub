@@ -551,175 +551,112 @@ local function setInfJump(v)
 end
 
 -- ════════════════════════════════════════
---  MAID CLASS
+--  FLY SYSTEM — AlignPosition + AlignOrientation
 -- ════════════════════════════════════════
-local Maid = {}
-Maid.__index = Maid
+local ControlModule = nil
+pcall(function()
+    ControlModule = require(
+        LP:WaitForChild("PlayerScripts")
+          :WaitForChild("PlayerModule")
+          :WaitForChild("ControlModule")
+    )
+end)
 
-function Maid.new()
-    return setmetatable({ _tasks = {} }, Maid)
-end
+local flyFlying = false
+local flyConn   = nil
 
-function Maid:Give(task)
-    table.insert(self._tasks, task)
-    return task
-end
-
-function Maid:Clean()
-    for _, task in ipairs(self._tasks) do
-        if typeof(task) == "RBXScriptConnection" then
-            task:Disconnect()
-        elseif typeof(task) == "Instance" then
-            task:Destroy()
-        elseif type(task) == "function" then
-            task()
-        end
-    end
-    self._tasks = {}
-end
-
--- ════════════════════════════════════════
---  FLY SYSTEM — Admin Style
---  Kamera kontrol penuh arah terbang
---  Smooth lerp velocity
--- ════════════════════════════════════════
-local Fly = {
-    on    = false,
-    speed = 60,
-    maid  = Maid.new()
-}
-
-function Fly:start()
-    if self.on then return end
+local function startFly()
+    if flyFlying then return end
     local root = getRoot(); if not root then return end
-    self.on = true
+    local hum  = getHum();  if not hum  then return end
+    flyFlying = true
 
-    local hum = getHum()
-    if hum then
-        hum.PlatformStand = true
-    end
+    hum.PlatformStand = true
 
-    local bv = Instance.new("BodyVelocity", root)
-    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    bv.Velocity = Vector3.zero
+    local att = Instance.new("Attachment", root)
 
-    local bg = Instance.new("BodyGyro", root)
-    bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-    bg.P         = 9e4
-    bg.D         = 1e3
-    bg.CFrame    = root.CFrame
+    local ap = Instance.new("AlignPosition")
+    ap.Attachment0     = att
+    ap.Mode            = Enum.PositionAlignmentMode.OneAttachment
+    ap.MaxForce        = math.huge
+    ap.Responsiveness  = 200
+    ap.RigidityEnabled = true
+    ap.Parent          = root
 
-    self.maid:Give(bv)
-    self.maid:Give(bg)
+    local ao = Instance.new("AlignOrientation")
+    ao.Attachment0     = att
+    ao.MaxTorque       = math.huge
+    ao.Responsiveness  = 200
+    ao.RigidityEnabled = true
+    ao.Parent          = root
 
-    -- Keys untuk PC
-    local keys = {
-        forward  = false,
-        backward = false,
-        left     = false,
-        right    = false,
-        up       = false,
-        down     = false,
-    }
+    local targetPos = root.Position
 
-    self.maid:Give(UIS.InputBegan:Connect(function(i, gpe)
-        if gpe then return end
-        if i.KeyCode == Enum.KeyCode.W then keys.forward  = true end
-        if i.KeyCode == Enum.KeyCode.S then keys.backward = true end
-        if i.KeyCode == Enum.KeyCode.A then keys.left     = true end
-        if i.KeyCode == Enum.KeyCode.D then keys.right    = true end
-        if i.KeyCode == Enum.KeyCode.E then keys.up       = true end
-        if i.KeyCode == Enum.KeyCode.Q then keys.down     = true end
-        if i.KeyCode == Enum.KeyCode.Space then keys.up   = true end
-    end))
-
-    self.maid:Give(UIS.InputEnded:Connect(function(i)
-        if i.KeyCode == Enum.KeyCode.W then keys.forward  = false end
-        if i.KeyCode == Enum.KeyCode.S then keys.backward = false end
-        if i.KeyCode == Enum.KeyCode.A then keys.left     = false end
-        if i.KeyCode == Enum.KeyCode.D then keys.right    = false end
-        if i.KeyCode == Enum.KeyCode.E then keys.up       = false end
-        if i.KeyCode == Enum.KeyCode.Q then keys.down     = false end
-        if i.KeyCode == Enum.KeyCode.Space then keys.up   = false end
-    end))
-
-    self.maid:Give(RunService.RenderStepped:Connect(function(dt)
+    flyConn = RunService.RenderStepped:Connect(function(dt)
         local r2  = getRoot(); if not r2 then return end
         local h2  = getHum();  if not h2 then return end
         local cam = Workspace.CurrentCamera
         local cf  = cam.CFrame
 
-        -- Humanoid stability
         h2.PlatformStand = true
         h2:ChangeState(Enum.HumanoidStateType.Physics)
 
-        local md = h2.MoveDirection
+        local md = Vector3.zero
+        pcall(function() md = ControlModule:GetMoveVector() end)
 
-        -- ── Horizontal: RightVector * X + LookVector * Z ───
-        local look = Vector3.new(cf.LookVector.X,  0, cf.LookVector.Z)
-        local rgt  = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
-        if look.Magnitude > 0 then look = look.Unit end
-        if rgt.Magnitude  > 0 then rgt  = rgt.Unit  end
+        local look  = Vector3.new(cf.LookVector.X,  0, cf.LookVector.Z)
+        local right = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
+        if look.Magnitude  > 0 then look  = look.Unit  end
+        if right.Magnitude > 0 then right = right.Unit end
 
-        local hVel = Vector3.zero
-        if md.Magnitude > 0.01 then
-            hVel = rgt * md.X + look * md.Z
-            if hVel.Magnitude > 1 then hVel = hVel.Unit end
+        local move = right * md.X + look * md.Z
+        if move.Magnitude > 1 then move = move.Unit end
+
+        local pitch    = cf.LookVector.Y
+        local vertical = math.abs(pitch) > 0.05 and pitch or 0
+
+        local dir = Vector3.new(move.X, vertical, move.Z)
+        if dir.Magnitude > 1 then dir = dir.Unit end
+
+        -- Speed dari slider UI
+        targetPos = targetPos + dir * Move.flySpeed * dt
+        ap.Position = targetPos
+
+        local flatLook = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+        if flatLook.Magnitude > 0 then
+            ao.CFrame = CFrame.lookAt(r2.Position, r2.Position + flatLook)
         end
-
-        -- ── Vertical: camera pitch + dt gravity cancel ─────
-        local GRAVITY   = Workspace.Gravity
-        local THRESHOLD = 0.08
-        local pitchY    = cf.LookVector.Y
-        local vVel      = 0
-
-        if math.abs(pitchY) > THRESHOLD then
-            -- Naik/turun dari pitch kamera
-            vVel = pitchY * self.speed * (1 + math.abs(pitchY))
-        else
-            -- Hover stabil: cancel gravity persis dengan dt
-            -- gravity * dt = kecepatan jatuh per frame → kompensasi tepat
-            vVel = bv.Velocity.Y + GRAVITY * dt
-        end
-
-        -- ── Compose final velocity ──────────────────────────
-        local target = Vector3.new(
-            hVel.X * self.speed,
-            vVel,
-            hVel.Z * self.speed
-        )
-
-        -- ── Smooth lerp ────────────────────────────────────
-        local moving = md.Magnitude > 0 or math.abs(pitchY) > THRESHOLD
-        local alpha  = moving and 0.22 or 0.12
-        bv.Velocity  = bv.Velocity:Lerp(target, alpha)
-
-        -- ── BodyGyro: flat look, no vertical tilt ──────────
-        if look.Magnitude > 0.01 then
-            bg.CFrame = CFrame.lookAt(r2.Position, r2.Position + look)
-        end
-    end))
+    end)
 end
 
-function Fly:stop()
-    self.on = false
-    self.maid:Clean()
-    local h = getHum()
-    if h then
-        h.PlatformStand = false
-        h.AutoRotate    = true
+local function stopFly()
+    flyFlying = false
+    if flyConn then flyConn:Disconnect(); flyConn = nil end
+
+    local char = getChar()
+    if char then
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("AlignPosition")
+            or v:IsA("AlignOrientation")
+            or v:IsA("Attachment") then
+                v:Destroy()
+            end
+        end
+        local hum = getHum()
+        if hum then
+            hum.PlatformStand = false
+            hum.AutoRotate    = true
+        end
     end
 end
-
-local function startFly() Fly.speed = Move.flySpeed; Fly:start() end
-local function stopFly()  Fly:stop() end
 
 LP.CharacterAdded:Connect(function()
     task.wait(0.6)
     -- Restart fly jika masih aktif
-    if Fly.on then
-        Fly.on = false
-        Fly.maid:Clean()
+    if flyFlying then
+        flyFlying = false
+        if flyConn then flyConn:Disconnect(); flyConn=nil end
+        flyAtt=nil; flyAP=nil; flyAO=nil
         task.wait(0.3)
         startFly()
     end
@@ -1210,6 +1147,7 @@ PL:Toggle("NoClip","noclip",false,"Tembus dinding",
 
 PR:Toggle("Fly","fly",false,"Terbang bebas",
     function(v)
+        Move.flySpeed = Move.flySpeed  -- sync
         if v then startFly() else stopFly() end
         notify("Fly",v and "ON" or "OFF",2)
     end)
