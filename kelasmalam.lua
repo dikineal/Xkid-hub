@@ -601,7 +601,7 @@ local function startFly()
         if look.Magnitude  > 0 then look  = look.Unit  end
         if right.Magnitude > 0 then right = right.Unit end
 
-        local move = right * md.X + look * md.Z
+        local move = right * md.X + look * (-md.Z)  -- fix: negate Z
         if move.Magnitude > 1 then move = move.Unit end
 
         local pitch = cf.LookVector.Y
@@ -621,8 +621,10 @@ local function startFly()
 
         flyBV.Velocity = target
 
-        if look.Magnitude > 0.01 then
-            flyBG.CFrame = CFrame.lookAt(r2.Position, r2.Position + look)
+        -- Fix: flat look only, tidak ikut tilt kamera atas/bawah
+        local flatLook = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+        if flatLook.Magnitude > 0.01 then
+            flyBG.CFrame = CFrame.lookAt(r2.Position, r2.Position + flatLook)
         end
     end)
 end
