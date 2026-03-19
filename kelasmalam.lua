@@ -3,8 +3,8 @@
 ║              🌟  X K I D   H U B  v5.0  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
-║  Farming  ·  Shop  ·  Teleport  ·  Player
-║  Security  ·  Setting                                    ║
+║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
+║  Security  ·  Setting
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -655,13 +655,12 @@ function Fly:start()
         local md  = h2.MoveDirection
         local dir = Vector3.zero
 
-        -- Mobile: joystick
+        -- Mobile: joystick + kamera Y untuk naik/turun
         if md.Magnitude > 0.01 then
-            local flat = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
-            local rgt  = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
-            if flat.Magnitude > 0 then flat = flat.Unit end
-            if rgt.Magnitude  > 0 then rgt  = rgt.Unit  end
-            dir = flat * md:Dot(flat) + rgt * md:Dot(rgt)
+            -- Arah gerak ikut LookVector kamera PENUH (termasuk Y)
+            local look = cf.LookVector
+            local rgt  = cf.RightVector
+            dir = look * (-md.Z) + rgt * md.X
         end
 
         -- PC: WASD + E/Q
