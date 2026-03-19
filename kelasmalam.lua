@@ -509,7 +509,7 @@ end
 local Move = {
     speed=16, flySpeed=60, flying=false, noclip=false,
     bv=nil, bg=nil, flyConn=nil, noclipConn=nil, jumpConn=nil,
-    PITCH_UP=0.3, PITCH_DOWN=-0.3
+    -- PITCH tidak dipakai lagi di LinearVelocity fly
 }
 
 RunService.RenderStepped:Connect(function()
@@ -547,49 +547,129 @@ local function setInfJump(v)
     end
 end
 
+--[[
+    FLY SYSTEM — LinearVelocity (Roblox terbaru, paling stabil)
+
+    Cara kerja:
+    • Joystick       = input gerak (maju/mundur/kiri/kanan)
+    • Kamera         = nentuin arah PENUH termasuk naik/turun
+    • Joystick maju  + kamera lurus  = maju
+    • Joystick maju  + kamera ke atas = maju + naik
+    • Joystick diam  = melayang diam di tempat
+    • Karakter       = selalu menghadap arah kamera
+
+    Rumus arah:
+    dir = (camLookVector * joystickY) + (camRightVector * joystickX)
+    → ini sudah include Y dari kamera otomatis
+]]
 local function stopFly()
-    Move.flying=false
+    Move.flying = false
     if Move.flyConn then Move.flyConn:Disconnect(); Move.flyConn=nil end
-    if Move.bv then pcall(function() Move.bv:Destroy() end); Move.bv=nil end
-    if Move.bg then pcall(function() Move.bg:Destroy() end); Move.bg=nil end
-    local h=getHum(); if h then h.PlatformStand=false end
+    -- Hapus LinearVelocity
+    if Move.bv then
+        pcall(function() Move.bv:Destroy() end)
+        Move.bv = nil
+    end
+    -- Hapus AlignOrientation
+    if Move.bg then
+        pcall(function() Move.bg:Destroy() end)
+        Move.bg = nil
+    end
+    -- Kembalikan karakter normal
+    local h = getHum()
+    if h then
+        h.PlatformStand = false
+        h.AutoRotate    = true
+    end
 end
 
 local function startFly()
-    local root=getRoot(); if not root then return end
-    stopFly(); Move.flying=true
-    Move.bv=Instance.new("BodyVelocity",root)
-    Move.bv.MaxForce=Vector3.new(1e5,1e5,1e5); Move.bv.Velocity=Vector3.new()
-    Move.bg=Instance.new("BodyGyro",root)
-    Move.bg.MaxTorque=Vector3.new(1e5,1e5,1e5)
-    Move.bg.P=1e4; Move.bg.D=100; Move.bg.CFrame=root.CFrame
-    local h=getHum(); if h then h.PlatformStand=true end
-    Move.flyConn=RunService.Heartbeat:Connect(function()
+    local root = getRoot(); if not root then return end
+    stopFly()
+    Move.flying = true
+
+    -- Matikan gravity & auto rotate
+    local h = getHum()
+    if h then
+        h.PlatformStand = true
+        h.AutoRotate    = false
+    end
+
+    -- LinearVelocity — gantikan BodyVelocity
+    -- MaxForce = VectorForce besar supaya override gravity
+    local att = Instance.new("Attachment", root)
+    att.Name  = "XKID_FlyAtt"
+
+    Move.bv = Instance.new("LinearVelocity", root)
+    Move.bv.Attachment0       = att
+    Move.bv.MaxForce          = 1e5
+    Move.bv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+    Move.bv.VectorVelocity    = Vector3.new()
+    Move.bv.RelativeTo        = Enum.ActuatorRelativeTo.World
+
+    -- AlignOrientation — gantikan BodyGyro
+    -- Karakter menghadap arah kamera
+    local att2 = Instance.new("Attachment", root)
+    att2.Name = "XKID_FlyAtt2"
+
+    Move.bg = Instance.new("AlignOrientation", root)
+    Move.bg.Attachment0       = att
+    Move.bg.Attachment1       = att2
+    Move.bg.MaxTorque         = 1e5
+    Move.bg.MaxAngularVelocity= 1e5
+    Move.bg.Responsiveness    = 200
+    Move.bg.RigidityEnabled   = true
+
+    Move.flyConn = RunService.Heartbeat:Connect(function()
         if not Move.flying then return end
-        local h2=getHum(); local r2=getRoot()
+
+        local h2   = getHum()
+        local r2   = getRoot()
         if not h2 or not r2 or not Move.bv then return end
-        local cf=Workspace.CurrentCamera.CFrame
-        local lv=cf.LookVector; local rv=cf.RightVector
-        local md=h2.MoveDirection; local hoz=Vector3.new()
-        if md.Magnitude>0.05 then
-            local f=Vector3.new(lv.X,0,lv.Z); local r=Vector3.new(rv.X,0,rv.Z)
-            if f.Magnitude>0 then f=f.Unit end
-            if r.Magnitude>0 then r=r.Unit end
-            hoz=f*md:Dot(f)+r*md:Dot(r)
-            if hoz.Magnitude>1 then hoz=hoz.Unit end
+
+        local cam  = Workspace.CurrentCamera
+        local cf   = cam.CFrame
+        local look = cf.LookVector   -- arah kamera (sudah include naik/turun)
+        local rgt  = cf.RightVector  -- kanan kamera
+
+        local md   = h2.MoveDirection  -- input joystick (-1 sampai 1)
+
+        -- Hitung arah gerak:
+        -- joystick Y (maju/mundur) × arah kamera
+        -- joystick X (kiri/kanan)  × kanan kamera
+        local dir = Vector3.new()
+
+        if md.Magnitude > 0.05 then
+            -- Proyeksikan MoveDirection ke arah kamera
+            -- md.Z = maju/mundur dari joystick
+            -- md.X = kiri/kanan dari joystick
+            local fwdAmt   = -md.Z  -- negatif karena Z mundur = positif
+            local rightAmt =  md.X
+
+            -- Gabung: maju ikut look kamera, samping ikut right kamera
+            dir = (look * fwdAmt) + (rgt * rightAmt)
+
+            -- Normalize supaya speed konsisten
+            if dir.Magnitude > 1 then
+                dir = dir.Unit
+            end
         end
-        local py=lv.Y; local vrt=Vector3.new()
-        if py>Move.PITCH_UP then
-            vrt=Vector3.new(0,math.min((py-Move.PITCH_UP)/(1-Move.PITCH_UP),1),0)
-        elseif py<Move.PITCH_DOWN then
-            vrt=Vector3.new(0,-math.min((-py+Move.PITCH_DOWN)/(1+Move.PITCH_DOWN),1),0)
+
+        -- Set kecepatan
+        Move.bv.VectorVelocity = dir * Move.flySpeed
+
+        -- Karakter menghadap arah kamera (hanya sumbu Y / horizontal)
+        local flatLook = Vector3.new(look.X, 0, look.Z)
+        if flatLook.Magnitude > 0.01 then
+            -- Buat CFrame yang menghadap arah kamera tapi karakter tetap tegak
+            local targetCF = CFrame.lookAt(r2.Position, r2.Position + flatLook)
+            -- Gerakkan attachment2 ke arah yang diinginkan
+            att2.WorldCFrame = targetCF
         end
-        local dir=hoz+vrt
-        if dir.Magnitude>0 then
-            Move.bv.Velocity=(dir.Magnitude>1 and dir.Unit or dir)*Move.flySpeed
-            if hoz.Magnitude>0.05 then Move.bg.CFrame=CFrame.new(Vector3.new(),hoz) end
-        else Move.bv.Velocity=Vector3.new() end
-        h2.PlatformStand=true
+
+        -- Pastikan PlatformStand tetap aktif
+        h2.PlatformStand = true
+        h2.AutoRotate    = false
     end)
 end
 
@@ -1094,7 +1174,12 @@ PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
         notify("ESP Player",v and "ON" or "OFF",2)
     end)
 PR:Paragraph("Cara Fly",
-    "Joystick = arah\nKamera atas = naik\nKamera bawah = turun\nLepas = melayang")
+    "Joystick = arah gerak\n"..
+    "Kamera atas = gerak naik\n"..
+    "Kamera bawah = gerak turun\n"..
+    "Kamera kiri/kanan = putar arah\n"..
+    "Lepas joystick = melayang diam\n\n"..
+    "Karakter selalu menghadap\narah kamera")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                  TAB SECURITY                         ║
