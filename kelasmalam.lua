@@ -4,7 +4,7 @@
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
-║  Security  ·  Setting
+║  Security  ·  Setting                                    ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -651,32 +651,38 @@ function Fly:start()
 
         h2.PlatformStand = true
 
-        -- Baca input joystick (mobile)
         local md  = h2.MoveDirection
         local dir = Vector3.zero
 
-        -- Mobile: joystick + kamera Y untuk naik/turun
+        -- Horizontal: joystick ikut arah kamera (X/Z saja)
+        local flat = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+        local rgt  = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
+        if flat.Magnitude > 0 then flat = flat.Unit end
+        if rgt.Magnitude  > 0 then rgt  = rgt.Unit  end
+
         if md.Magnitude > 0.01 then
-            -- Arah gerak ikut LookVector kamera PENUH (termasuk Y)
-            local look = cf.LookVector
-            local rgt  = cf.RightVector
-            dir = look * (-md.Z) + rgt * md.X
+            dir = flat * (-md.Z) + rgt * md.X
         end
 
-        -- PC: WASD + E/Q
-        if keys.forward  then dir = dir + cf.LookVector  end
-        if keys.backward then dir = dir - cf.LookVector  end
-        if keys.right    then dir = dir + cf.RightVector end
-        if keys.left     then dir = dir - cf.RightVector end
-        if keys.up       then dir = dir + Vector3.new(0,1,0) end
-        if keys.down     then dir = dir - Vector3.new(0,1,0) end
+        -- Vertikal: dari pitch kamera (naik/turun)
+        local pitchY = cf.LookVector.Y
+        dir = dir + Vector3.new(0, pitchY, 0)
 
         -- Normalize
         if dir.Magnitude > 1 then dir = dir.Unit end
 
+        -- PC: WASD + E/Q
+        if keys.forward  then dir = dir + flat          end
+        if keys.backward then dir = dir - flat          end
+        if keys.right    then dir = dir + rgt           end
+        if keys.left     then dir = dir - rgt           end
+        if keys.up       then dir = dir + Vector3.new(0,1,0) end
+        if keys.down     then dir = dir - Vector3.new(0,1,0) end
+
+        if dir.Magnitude > 1 then dir = dir.Unit end
+
         -- Smooth velocity
-        local target = dir * self.speed
-        bv.Velocity  = bv.Velocity:Lerp(target, 0.25)
+        bv.Velocity = bv.Velocity:Lerp(dir * self.speed, 0.25)
 
         -- Gyro ikut kamera
         bg.CFrame = cf
@@ -1204,9 +1210,8 @@ PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
         notify("ESP Player",v and "ON" or "OFF",2)
     end)
 PR:Paragraph("Cara Fly",
-    "Mobile:\nJoystick = maju/mundur/kiri/kanan\nKamera = arah hadap\n\n"..
-    "PC:\nW/S = maju/mundur\nA/D = kiri/kanan\nE/Space = naik\nQ = turun\n\n"..
-    "Smooth lerp · Admin style")
+    "Mobile:\nJoystick = maju/mundur/kiri/kanan\nKamera kiri/kanan = arah hadap\nKamera atas = naik\nKamera bawah = turun\n\n"..
+    "PC:\nW/S = maju/mundur\nA/D = kiri/kanan\nE/Space = naik  Q = turun")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                  TAB SECURITY                         ║
