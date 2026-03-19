@@ -62,6 +62,23 @@ local function getFishEv(name)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
+-- │         IN-GAME LOG (Android friendly)                  │
+-- │  Tidak ada F9 — error tampil di notif + executor log   │
+-- └─────────────────────────────────────────────────────────┘
+local LOG_MAX  = 30
+local logLines = {}
+
+local function xlog(tag, msg, isError)
+    local entry = string.format("[%s][%s] %s", os.date("%H:%M:%S"), tag, msg)
+    table.insert(logLines, 1, entry)
+    if #logLines > LOG_MAX then table.remove(logLines) end
+    print(entry)  -- executor log (Delta/Arceus ada log viewer)
+    if isError then
+        pcall(function() Library:Notification("❌ "..tag, msg:sub(1,80), 5) end)
+    end
+end
+
+-- ┌─────────────────────────────────────────────────────────┐
 -- │                   CROP DATA                             │
 -- └─────────────────────────────────────────────────────────┘
 local CROPS = {
@@ -246,38 +263,69 @@ local Farm = {
 -- Remote: Beli Bibit
 local function beliBibit(crop, qty)
     local ev = getBridge()
-    if not ev then notify("Farm","BridgeNet2 tidak ada!",4); return false end
-    local ok = pcall(function()
+    if not ev then
+        notify("Farm ❌","BridgeNet2 tidak ada! Remote hilang/berubah",5)
+        xlog("BeliBibit","BridgeNet2 nil / remote hilang",true)
+        return false
+    end
+    local ok, err = pcall(function()
         ev:FireServer({{ cropName=crop.name, amount=qty }, "\a"})
     end)
+    if not ok then
+        notify("Farm ❌","Beli gagal: "..tostring(err):sub(1,60),5)
+        xlog("BeliBibit","FireServer error: "..tostring(err):sub(1,60),true)
+    end
     return ok
 end
 
 -- Remote: Tanam
 local function tanamPlots()
     local ev = getBridge()
-    if not ev then notify("Farm","BridgeNet2 tidak ada!",4); return 0 end
+    if not ev then
+        notify("Farm ❌","BridgeNet2 tidak ada!",5)
+        xlog("Tanam","BridgeNet2 nil / remote hilang",true)
+        return 0
+    end
 
     local plots = AREA_PARTS[Farm.selectedArea]
     if not plots or #plots == 0 then
-        notify("Farm","Area '"..Farm.selectedArea.."' tidak ada plot!",5)
+        notify("Farm ❌","Area '"..Farm.selectedArea.."' tidak ada plot!\nCoba Scan Ulang Area",5)
+        xlog("Tanam","Area kosong: "..tostring(Farm.selectedArea),true)
         return 0
     end
 
     local filtered = filterByPola(plots, Farm.selectedPola, Farm.jumlahTanam)
-    if #filtered == 0 then notify("Farm","Tidak ada plot setelah filter!",4); return 0 end
+    if #filtered == 0 then
+        notify("Farm ❌","Plot kosong setelah filter pola: "..Farm.selectedPola,4)
+        xlog("Tanam","Filter 0 plot, pola: "..Farm.selectedPola,true)
+        return 0
+    end
 
     local count = 0
+    local failed = 0
     for i, plot in ipairs(filtered) do
-        pcall(function()
+        local ok, err = pcall(function()
             ev:FireServer({{
                 slotIdx     = i,
                 hitPosition = plot.Position,
                 hitPart     = plot
             }, "\x04"})
         end)
-        count = count + 1
-        task.wait(0.2)
+        if ok then
+            count = count + 1
+        else
+            failed = failed + 1
+            xlog("Tanam","FireServer["..i.."] error: "..tostring(err):sub(1,50), failed>=3)
+            if failed >= 3 then
+                notify("Farm ⚠","3+ error berturut, tanam dihentikan",5)
+                xlog("Tanam","3 error berturut, loop dibatalkan",true)
+                break
+            end
+        end
+        task.wait(0.25)
+    end
+    if failed > 0 then
+        notify("Farm","Tanam: "..count.." OK, "..failed.." gagal",4)
     end
     return count
 end
@@ -285,19 +333,27 @@ end
 -- Remote: Harvest semua
 local function harvestAll()
     local ev = getBridge()
-    if not ev then notify("Farm","BridgeNet2 tidak ada!",4); return 0 end
+    if not ev then
+        notify("Farm ❌","BridgeNet2 tidak ada!",5)
+        xlog("Harvest","BridgeNet2 nil / remote hilang",true)
+        return 0
+    end
 
-    -- Harvest semua area yang ada
     local allPlots = {}
     for _, parts in pairs(AREA_PARTS) do
         for _, p in ipairs(parts) do table.insert(allPlots, p) end
     end
 
-    if #allPlots == 0 then notify("Farm","Tidak ada plot!",4); return 0 end
+    if #allPlots == 0 then
+        notify("Farm ❌","Tidak ada plot! Scan ulang area dulu",5)
+        xlog("Harvest","Tidak ada plot terscan",true)
+        return 0
+    end
 
-    local count = 0
+    local count  = 0
+    local failed = 0
     for _, plot in ipairs(allPlots) do
-        pcall(function()
+        local ok, err = pcall(function()
             firesignal(ev.OnClientEvent, {
                 ["\r"] = {{
                     cropName  = Farm.selectedCrop.name,
@@ -308,35 +364,53 @@ local function harvestAll()
                 ["\x02"] = {0, 0}
             })
         end)
-        count = count + 1
+        if ok then
+            count = count + 1
+        else
+            failed = failed + 1
+            xlog("Harvest","firesignal error: "..tostring(err):sub(1,50), false)
+        end
         task.wait(0.15)
+    end
+    if failed > 0 then
+        notify("Farm","Harvest: "..count.." OK, "..failed.." gagal",4)
+        xlog("Harvest","Selesai: ok="..count.." fail="..failed, false)
     end
     return count
 end
 
--- Auto Cycle
+-- Auto Cycle (Fix 3: double cycle guard)
 local function runCycle()
-    -- 1. Beli bibit (kalau autoBeli aktif atau stok mau habis)
+    -- 1. Beli bibit
     if Farm.autoBeli then
         notify("Cycle [1/4]","Beli "..Farm.selectedCrop.seed.." x"..Farm.jumlahAutoBeli,2)
-        beliBibit(Farm.selectedCrop, Farm.jumlahAutoBeli)
+        local bOk = beliBibit(Farm.selectedCrop, Farm.jumlahAutoBeli)
+        if not bOk then
+            xlog("Cycle","Beli bibit gagal, lanjut tanam",false)
+        end
         task.wait(1.5)
     end
 
     -- 2. Tanam
     notify("Cycle [2/4]","Tanam "..Farm.jumlahTanam.." plot ("..Farm.selectedPola..")...",2)
     local planted = tanamPlots()
-    notify("Cycle [2/4]",planted.." plot berhasil ditanam",3)
+    if planted == 0 then
+        notify("Cycle ⚠","Tidak ada plot ditanam! Cycle dibatalkan.",5)
+        xlog("Cycle","Planted=0, cycle dibatalkan",true)
+        return
+    end
+    notify("Cycle [2/4]",planted.." plot ditanam",3)
     task.wait(1)
 
     -- 3. Tunggu tumbuh
-    notify("Cycle [3/4]","Menunggu "..Farm.growDelay.."s tumbuh...",3)
+    notify("Cycle [3/4]","Menunggu "..Farm.growDelay.."s...",3)
     task.wait(Farm.growDelay)
 
     -- 4. Harvest
     notify("Cycle [4/4]","Panen semua...",2)
     local harvested = harvestAll()
-    notify("✅ Cycle Selesai","Panen: "..harvested.." plot",4)
+    notify("✅ Cycle Selesai","Tanam: "..planted.." | Panen: "..harvested,4)
+    xlog("Cycle","Selesai: planted="..planted.." harvested="..harvested, false)
     task.wait(1)
 end
 
@@ -436,7 +510,7 @@ end
 
 local function _mkCropBill(part, name)
     if ESPCr.tagged[part] then return end
-    ESPCr.tagged[part]=true
+    ESPCr.tagged[part] = true
 
     local bill = Instance.new("BillboardGui")
     bill.Name="XKID_CESP"; bill.Size=UDim2.new(0,100,0,28)
@@ -455,20 +529,39 @@ local function _mkCropBill(part, name)
     lbl.TextStrokeTransparency=0.3; lbl.Text=name.."\n0%"
     lbl.TextColor3=Color3.fromRGB(255,80,80)
 
-    local conn = RunService.Heartbeat:Connect(function()
-        if not bill or not bill.Parent then return end
-        local pct = _pct(part,name)
-        lbl.Text=name.."\n"..pct.."%"
-        lbl.TextColor3=_pctCol(pct)
-        lbl.TextStrokeColor3=Color3.fromRGB(0,0,0)
+    -- TIDAK ada per-bill connection — master loop yang update semua
+    table.insert(ESPCr.bills, {bill=bill, lbl=lbl, part=part, name=name})
+end
+
+-- Master connection: 1 Heartbeat untuk semua tanaman, throttle 0.5s
+local _espCropMaster    = nil
+local _espCropLastUpd   = 0
+
+local function _startESPMaster()
+    if _espCropMaster then return end
+    _espCropMaster = RunService.Heartbeat:Connect(function()
+        local now = tick()
+        if now - _espCropLastUpd < 0.5 then return end  -- update tiap 0.5s, bukan tiap frame
+        _espCropLastUpd = now
+        for _, e in ipairs(ESPCr.bills) do
+            if e.bill and e.bill.Parent and e.part and e.part.Parent then
+                local pct = _pct(e.part, e.name)
+                e.lbl.Text       = e.name.."\n"..pct.."%"
+                e.lbl.TextColor3 = _pctCol(pct)
+                e.lbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+            end
+        end
     end)
-    table.insert(ESPCr.bills,{bill=bill,conn=conn})
+end
+
+local function _stopESPMaster()
+    if _espCropMaster then _espCropMaster:Disconnect(); _espCropMaster=nil end
 end
 
 local function clearESPCrop()
+    _stopESPMaster()
     for _,e in ipairs(ESPCr.bills) do
-        pcall(function() e.conn:Disconnect() end)
-        pcall(function() e.bill:Destroy()    end)
+        pcall(function() e.bill:Destroy() end)
     end
     ESPCr.bills={}; ESPCr.tagged={}
 end
@@ -493,13 +586,14 @@ end
 
 local function startESPCrop()
     clearESPCrop(); ESPCr.lastScan=0; scanESPCrop()
+    _startESPMaster()  -- 1 master connection, bukan per-bill
     ESPCr.loopTask=task.spawn(function()
         while ESPCr.active do task.wait(5); if ESPCr.active then scanESPCrop() end end
     end)
 end
 
 local function stopESPCrop()
-    clearESPCrop()
+    clearESPCrop()  -- sudah include _stopESPMaster
     if ESPCr.loopTask then pcall(function() task.cancel(ESPCr.loopTask) end); ESPCr.loopTask=nil end
 end
 
@@ -834,22 +928,35 @@ FR:Label("🔄 Auto Cycle")
 FR:Toggle("Auto Farm (Full Cycle)","autoCycle",false,
     "Beli → Tanam → Tunggu → Panen → Ulangi",
     function(v)
-        Farm.autoCycleOn=v
+        Farm.autoCycleOn = v
         if v then
-            if Farm.selectedArea=="" then
-                notify("Farm","Pilih area tanam dulu!",3)
-                Farm.autoCycleOn=false; return
+            if Farm.selectedArea == "" then
+                notify("Farm ❌","Pilih area tanam dulu!",3)
+                Farm.autoCycleOn = false; return
             end
-            Farm.autoCycleTask=task.spawn(function()
+            -- Guard: cancel task lama dulu sebelum spawn baru
+            if Farm.autoCycleTask then
+                pcall(function() task.cancel(Farm.autoCycleTask) end)
+                Farm.autoCycleTask = nil
+                task.wait(0.3)  -- tunggu task lama benar-benar mati
+            end
+            Farm.autoCycleTask = task.spawn(function()
                 while Farm.autoCycleOn do
-                    runCycle(); task.wait(2)
+                    local ok, err = pcall(runCycle)
+                    if not ok then
+                        notify("Cycle ❌","Error: "..tostring(err):sub(1,60),5)
+                        xlog("Cycle","CRASH: "..tostring(err):sub(1,80), true)
+                        task.wait(5)  -- backoff sebelum retry
+                    else
+                        task.wait(2)
+                    end
                 end
             end)
-            notify("Auto Farm","ON",3)
+            notify("Auto Farm","ON — "..Farm.selectedCrop.seed,3)
         else
             if Farm.autoCycleTask then
                 pcall(function() task.cancel(Farm.autoCycleTask) end)
-                Farm.autoCycleTask=nil
+                Farm.autoCycleTask = nil
             end
             notify("Auto Farm","OFF",2)
         end
@@ -961,20 +1068,23 @@ SL:Button("🔄 Refresh Isi Tas","Lihat semua item di backpack",
     end)
 
 -- Auto refresh inventory display
-local invDisplay = ""
-local invConn    = nil
+local invDisplay  = ""
+local invConn     = nil
+local _invRunning = false  -- external flag, bukan capture v
 
 SL:Toggle("Auto Refresh Tas","autoInv",false,
     "Update isi tas setiap 3 detik",
     function(v)
+        _invRunning = v  -- set external flag
         if v then
+            if invConn then pcall(function() task.cancel(invConn) end); invConn=nil end
             invConn = task.spawn(function()
-                while v do
+                while _invRunning do  -- pakai external flag, bukan v yang ter-capture
                     local bp = LP:FindFirstChild("Backpack")
                     if bp then
                         local items = bp:GetChildren()
                         invDisplay = ""
-                        for _,item in ipairs(items) do
+                        for _, item in ipairs(items) do
                             invDisplay = invDisplay.."• "..item.Name.."\n"
                         end
                         if #items == 0 then invDisplay = "Tas kosong" end
@@ -983,6 +1093,7 @@ SL:Toggle("Auto Refresh Tas","autoInv",false,
                 end
             end)
         else
+            _invRunning = false
             if invConn then pcall(function() task.cancel(invConn) end); invConn=nil end
         end
         notify("Auto Refresh Tas", v and "ON" or "OFF", 2)
@@ -1224,7 +1335,38 @@ SecR:Paragraph("Respawn","Posisi disimpan tiap frame\nMati → kembali ke posisi
 -- ╚═══════════════════════════════════════════════════════╝
 local SetP  = T_Set:Page("Setting","settings")
 local SetL  = SetP:Section("🎣 Fishing","Left")
-local SetR  = SetP:Section("ℹ Script Info","Right")
+local SetR  = SetP:Section("ℹ Log & Info","Right")
+
+-- Tombol lihat log — Android friendly, tidak butuh F9
+SetR:Button("📋 Lihat Log Terbaru","Tampilkan 5 log error terakhir di notif",
+    function()
+        if #logLines == 0 then
+            notify("Log","Belum ada log error",3); return
+        end
+        local txt = ""
+        for i = 1, math.min(5, #logLines) do
+            txt = txt..logLines[i].."\n"
+        end
+        notify("Log ("..#logLines.." total)", txt, 12)
+    end)
+
+SetR:Button("📋 Lihat Semua Log","Tampilkan semua log (maks 10)",
+    function()
+        if #logLines == 0 then
+            notify("Log","Belum ada log",3); return
+        end
+        local txt = ""
+        for i = 1, math.min(10, #logLines) do
+            txt = txt..logLines[i].."\n"
+        end
+        notify("Log Lengkap", txt, 15)
+    end)
+
+SetR:Button("🗑 Bersihkan Log","Hapus semua riwayat log",
+    function()
+        logLines = {}
+        notify("Log","Log dibersihkan",2)
+    end)
 
 -- Fishing di setting
 SetL:Toggle("Auto Fishing","autoFish",false,"Auto equip rod + cast loop",
