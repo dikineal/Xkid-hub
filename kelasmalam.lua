@@ -507,9 +507,12 @@ end
 -- │               MOVEMENT SYSTEM                           │
 -- └─────────────────────────────────────────────────────────┘
 local Move = {
-    speed=16, flySpeed=60, flying=false, noclip=false,
-    bv=nil, bg=nil, flyConn=nil, noclipConn=nil, jumpConn=nil,
-    -- PITCH tidak dipakai lagi di LinearVelocity fly
+    speed    = 16,
+    flySpeed = 60,
+    noclip   = false,
+    -- fly dihandle oleh Fly object
+    noclipConn = nil,
+    jumpConn   = nil,
 }
 
 RunService.RenderStepped:Connect(function()
@@ -547,76 +550,90 @@ local function setInfJump(v)
     end
 end
 
--- ControlModule
-local ControlModule = nil
-pcall(function()
-    ControlModule = require(
-        LP.PlayerScripts.PlayerModule.ControlModule
-    )
-end)
+-- ════════════════════════════════════════
+--  MAID CLASS
+-- ════════════════════════════════════════
+local Maid = {}
+Maid.__index = Maid
 
-local function stopFly()
-    Move.flying = false
-    if Move.flyConn then Move.flyConn:Disconnect(); Move.flyConn=nil end
-    if Move.bv then pcall(function() Move.bv:Destroy() end); Move.bv=nil end
-    if Move.bg then pcall(function() Move.bg:Destroy() end); Move.bg=nil end
-    local h = getHum()
-    if h then
-        h.PlatformStand = false
-        h.AutoRotate    = true
-    end
+function Maid.new()
+    return setmetatable({ _tasks = {} }, Maid)
 end
 
-local function startFly()
-    if not getChar() then LP.CharacterAdded:Wait() end
-    local root = getRoot(); if not root then return end
-    stopFly()
-    Move.flying = true
+function Maid:Give(task)
+    table.insert(self._tasks, task)
+    return task
+end
 
-    -- BodyVelocity
-    Move.bv = Instance.new("BodyVelocity", root)
-    Move.bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    Move.bv.Velocity = Vector3.zero
-
-    -- BodyGyro
-    Move.bg = Instance.new("BodyGyro", root)
-    Move.bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-    Move.bg.CFrame    = root.CFrame
-
-    Move.flyConn = RunService.RenderStepped:Connect(function()
-        if not Move.flying then return end
-        local r2 = getRoot(); if not r2 or not Move.bv then return end
-
-        local MoveDir = Vector3.zero
-        if ControlModule then
-            pcall(function() MoveDir = ControlModule:GetMoveVector() end)
+function Maid:Clean()
+    for _, task in ipairs(self._tasks) do
+        if typeof(task) == "RBXScriptConnection" then
+            task:Disconnect()
+        elseif typeof(task) == "Instance" then
+            task:Destroy()
+        elseif type(task) == "function" then
+            task()
         end
-
-        local cam = Workspace.CurrentCamera
-
-        local dir =
-            cam.CFrame.RightVector  *  MoveDir.X +
-            -cam.CFrame.LookVector  *  MoveDir.Z
-
-        local Y = cam.CFrame.LookVector.Y
-
-        local Velocity =
-            (dir * Move.flySpeed) +
-            Vector3.new(0, Y * Move.flySpeed, 0)
-
-        Move.bv.Velocity = Move.bv.Velocity:Lerp(Velocity, 0.2)
-        Move.bg.CFrame   = cam.CFrame
-    end)
+    end
+    self._tasks = {}
 end
+
+-- ════════════════════════════════════════
+--  FLY SYSTEM — LinearVelocity + Maid
+-- ════════════════════════════════════════
+local Fly = {
+    on    = false,
+    speed = 60,
+    maid  = Maid.new()
+}
+
+function Fly:start()
+    if self.on then return end
+    local root = getRoot(); if not root then return end
+    self.on = true
+
+    local att = Instance.new("Attachment", root)
+    local lv  = Instance.new("LinearVelocity")
+    lv.Attachment0            = att
+    lv.MaxForce               = math.huge
+    lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+    lv.VectorVelocity         = Vector3.zero
+    lv.Parent                 = root
+
+    self.maid:Give(att)
+    self.maid:Give(lv)
+
+    self.maid:Give(RunService.RenderStepped:Connect(function()
+        local cam = Workspace.CurrentCamera
+        local dir = cam.CFrame.LookVector
+        lv.VectorVelocity = dir * self.speed
+    end))
+end
+
+function Fly:stop()
+    self.on = false
+    self.maid:Clean()
+end
+
+-- Wrapper untuk toggle UI
+local function startFly() Fly.speed = Move.flySpeed; Fly:start() end
+local function stopFly()  Fly:stop() end
 
 LP.CharacterAdded:Connect(function()
     task.wait(0.6)
-    if Move.flying then task.wait(0.3); startFly() end
+    -- Restart fly jika masih aktif
+    if Fly.on then
+        Fly.on = false
+        Fly.maid:Clean()
+        task.wait(0.3)
+        startFly()
+    end
+    -- Restart noclip jika masih aktif
     if Move.noclip and not Move.noclipConn then
-        Move.noclipConn=RunService.Stepped:Connect(function()
-            local c=getChar(); if not c then return end
-            for _,p in pairs(c:GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide=false end
+        Move.noclipConn = RunService.Stepped:Connect(function()
+            local c = getChar(); if not c then return end
+            for _, p in pairs(c:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = false end
             end
         end)
     end
@@ -1102,7 +1119,7 @@ PR:Toggle("Fly","fly",false,"Terbang bebas",
         notify("Fly",v and "ON" or "OFF",2)
     end)
 PR:Slider("Fly Speed","flySpd",10,300,60,
-    function(v) Move.flySpeed=v end,"Kecepatan terbang")
+    function(v) Move.flySpeed=v; Fly.speed=v end,"Kecepatan terbang")
 PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
     function(v)
         ESPPl.active=v
@@ -1110,11 +1127,10 @@ PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
         notify("ESP Player",v and "ON" or "OFF",2)
     end)
 PR:Paragraph("Cara Fly",
-    "Joystick/WASD = arah gerak\n"..
-    "Kamera atas   = naik\n"..
-    "Kamera bawah  = turun\n"..
-    "Lepas joystick = melayang\n\n"..
-    "Smooth Lerp 0.2")
+    "Kamera = arah gerak\n"..
+    "Kamera atas = naik\n"..
+    "Kamera bawah = turun\n"..
+    "LinearVelocity + Maid")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                  TAB SECURITY                         ║
