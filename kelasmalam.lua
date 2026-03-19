@@ -643,66 +643,60 @@ function Fly:start()
         if i.KeyCode == Enum.KeyCode.Space then keys.up   = false end
     end))
 
-    self.maid:Give(RunService.RenderStepped:Connect(function()
+    self.maid:Give(RunService.RenderStepped:Connect(function(dt)
         local r2  = getRoot(); if not r2 then return end
         local h2  = getHum();  if not h2 then return end
         local cam = Workspace.CurrentCamera
         local cf  = cam.CFrame
 
-        -- Keep humanoid in physics state
+        -- Humanoid stability
         h2.PlatformStand = true
         h2:ChangeState(Enum.HumanoidStateType.Physics)
 
         local md = h2.MoveDirection
 
-        -- ── Horizontal (XZ) from joystick ──────────────────
-        local flat = Vector3.new(cf.LookVector.X,  0, cf.LookVector.Z)
+        -- ── Horizontal: RightVector * X + LookVector * Z ───
+        local look = Vector3.new(cf.LookVector.X,  0, cf.LookVector.Z)
         local rgt  = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
-        if flat.Magnitude > 0 then flat = flat.Unit end
+        if look.Magnitude > 0 then look = look.Unit end
         if rgt.Magnitude  > 0 then rgt  = rgt.Unit  end
 
-        local hDir = Vector3.zero
+        local hVel = Vector3.zero
         if md.Magnitude > 0.01 then
-            hDir = flat * (-md.Z) + rgt * md.X
-            if hDir.Magnitude > 1 then hDir = hDir.Unit end
+            hVel = rgt * md.X + look * md.Z
+            if hVel.Magnitude > 1 then hVel = hVel.Unit end
         end
 
-        -- ── Vertical (Y) from camera pitch ─────────────────
-        local pitchY  = cf.LookVector.Y
-        local vDir    = 0
-        local GRAVITY = Workspace.Gravity  -- ~196.2
-
-        local THRESHOLD = 0.1   -- abaikan pitch kecil
-        local BOOST     = 2.5   -- penguat vertikal supaya tidak lemah
+        -- ── Vertical: camera pitch + dt gravity cancel ─────
+        local GRAVITY   = Workspace.Gravity
+        local THRESHOLD = 0.08
+        local pitchY    = cf.LookVector.Y
+        local vVel      = 0
 
         if math.abs(pitchY) > THRESHOLD then
-            -- Boost pitch supaya naik/turun cukup kuat
-            local scaled = (math.abs(pitchY) - THRESHOLD) / (1 - THRESHOLD)
-            vDir = math.sign(pitchY) * scaled * BOOST
+            -- Naik/turun dari pitch kamera
+            vVel = pitchY * self.speed * (1 + math.abs(pitchY))
         else
-            -- Tidak ada input vertikal → anti-gravity hover
-            -- Lawan gravity dengan velocity kecil ke atas
-            -- gravity / speed = proporsi yang dibutuhkan untuk hover
-            vDir = (GRAVITY / self.speed) * 0.15
+            -- Hover stabil: cancel gravity persis dengan dt
+            -- gravity * dt = kecepatan jatuh per frame → kompensasi tepat
+            vVel = bv.Velocity.Y + GRAVITY * dt
         end
 
-        -- ── Gabung horizontal + vertikal ───────────────────
-        local targetVel = Vector3.new(
-            hDir.X * self.speed,
-            vDir  * self.speed,
-            hDir.Z * self.speed
+        -- ── Compose final velocity ──────────────────────────
+        local target = Vector3.new(
+            hVel.X * self.speed,
+            vVel,
+            hVel.Z * self.speed
         )
 
         -- ── Smooth lerp ────────────────────────────────────
-        -- Lerp lebih cepat saat ada input, lambat saat hover
-        local lerpAlpha = md.Magnitude > 0.01 and 0.2 or 0.1
-        bv.Velocity = bv.Velocity:Lerp(targetVel, lerpAlpha)
+        local moving = md.Magnitude > 0 or math.abs(pitchY) > THRESHOLD
+        local alpha  = moving and 0.22 or 0.12
+        bv.Velocity  = bv.Velocity:Lerp(target, alpha)
 
-        -- ── BodyGyro: hadap arah kamera horizontal ─────────
-        -- Gunakan flat look bukan full camera CFrame
-        -- supaya tidak tilt aneh saat lihat atas/bawah
-        if flat.Magnitude > 0.01 then
-            bg.CFrame = CFrame.lookAt(r2.Position, r2.Position + flat)
+        -- ── BodyGyro: flat look, no vertical tilt ──────────
+        if look.Magnitude > 0.01 then
+            bg.CFrame = CFrame.lookAt(r2.Position, r2.Position + look)
         end
     end))
 end
