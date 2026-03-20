@@ -101,73 +101,25 @@ for _, c in ipairs(CROPS) do table.insert(cropDropNames, c.icon.." "..c.seed) en
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                  AREA / PLOT DATA                       │
 -- └─────────────────────────────────────────────────────────┘
--- Area tanam dari workspace (sesuai data Dex)
--- ┌─────────────────────────────────────────────────────────┐
--- │           MULTI-AREA + 5x5 GRID SYSTEM                 │
--- │  Data dari cropPos spy (confirmed)                      │
--- └─────────────────────────────────────────────────────────┘
-
--- Generate 5x5 grid (25 titik = max server)
-local function gen5x5(cx, y, cz, spacing)
-    local pts = {}
-    for dx = -2, 2 do
-        for dz = -2, 2 do
-            table.insert(pts, Vector3.new(
-                cx + dx * spacing,
-                y,
-                cz + dz * spacing))
-        end
-    end
-    return pts
-end
-
--- Area definitions dari data spy
-local GRID_AREAS = {
-    {
-        name    = "Map2 · AppleTree 5x5",
-        center  = Vector3.new(108.88, 70.50, -16.03),
-        spacing = 1.4,
-    },
-    {
-        name    = "Map2 · Sawi A 5x5",
-        center  = Vector3.new(96.70, 68.00, 96.94),
-        spacing = 5.0,
-    },
-    {
-        name    = "Map2 · Sawi B 5x5",
-        center  = Vector3.new(80.61, 69.50, -18.88),
-        spacing = 3.0,
-    },
-    {
-        name    = "Map2 · Sawi C 5x5",
-        center  = Vector3.new(58.67, 70.00, -10.45),
-        spacing = 3.5,
-    },
-}
-
--- Inject grid areas ke AREA_PARTS sebelum buildAreaData
-local function injectGridAreas()
-    for _, g in ipairs(GRID_AREAS) do
-        local pts = gen5x5(g.center.X, g.center.Y, g.center.Z, g.spacing)
-        -- Buat fake BasePart proxy agar kompatibel dengan filterByPola
-        local parts = {}
-        for _, pos in ipairs(pts) do
-            -- Proxy object: hanya punya .Position
-            table.insert(parts, { Position = pos, _isGridPt = true })
-        end
-        table.insert(AREA_NAMES, g.name)
-        AREA_PARTS[g.name] = parts
-        print(string.format("[XKID] Grid area injected: %s → %d titik", g.name, #parts))
-    end
-end
-
 local AREA_INDICES = {52, 53, 54, 64, 65, 66, 67}
-local AREA_NAMES   = {}  -- nama dropdown
-local AREA_PARTS   = {}  -- nama → list BasePart
+local AREA_NAMES   = {}
+-- Simpan: { part=BasePart, obj=parentObject }
+-- hitPart di spy log = object workspace langsung (index/Land)
+local AREA_PLOTS   = {}  -- nama → list { part, obj }
 
 local function buildAreaData()
     AREA_NAMES = {}
-    AREA_PARTS = {}
+    AREA_PLOTS = {}
+
+    local function addArea(label, obj, parts)
+        if #parts == 0 then return end
+        local plotList = {}
+        for _, p in ipairs(parts) do
+            table.insert(plotList, { part=p, obj=obj })
+        end
+        table.insert(AREA_NAMES, label)
+        AREA_PLOTS[label] = plotList
+    end
 
     -- workspace.Land
     local land = Workspace:FindFirstChild("Land")
@@ -180,10 +132,7 @@ local function buildAreaData()
                 if p:IsA("BasePart") then table.insert(parts, p) end
             end
         end
-        if #parts > 0 then
-            table.insert(AREA_NAMES, "Land ("..#parts.." plot)")
-            AREA_PARTS["Land ("..#parts.." plot)"] = parts
-        end
+        addArea("Land ("..#parts.." plot)", land, parts)
     end
 
     -- workspace:GetChildren() index
@@ -206,38 +155,42 @@ local function buildAreaData()
                     end
                 end
             end
-            if #parts > 0 then
-                local label = obj.Name.." ["..idx.."] ("..#parts.." plot)"
-                table.insert(AREA_NAMES, label)
-                AREA_PARTS[label] = parts
-            end
+            addArea(obj.Name.." ["..idx.."] ("..#parts.." plot)", obj, parts)
         end
     end
 
-    -- Fallback kalau kosong
+    -- Fallback
     if #AREA_NAMES == 0 then
-        table.insert(AREA_NAMES, "Auto Scan")
         local fallback = {}
         for _, obj in ipairs(Workspace:GetChildren()) do
-            if obj.Name:lower():find("land") or obj.Name:lower():find("farm")
-            or obj.Name:lower():find("area") or obj.Name:lower():find("plot") then
+            local n = obj.Name:lower()
+            if n:find("land") or n:find("farm") or n:find("area") or n:find("plot") then
+                local parts = {}
                 if obj:IsA("BasePart") then
-                    table.insert(fallback, obj)
+                    table.insert(parts, obj)
                 else
                     for _, p in ipairs(obj:GetDescendants()) do
                         if p:IsA("BasePart") and p.CanCollide then
-                            table.insert(fallback, p)
+                            table.insert(parts, p)
                         end
                     end
                 end
+                for _, p in ipairs(parts) do
+                    table.insert(fallback, { part=p, obj=obj })
+                end
             end
         end
-        AREA_PARTS["Auto Scan"] = fallback
+        table.insert(AREA_NAMES, "Auto Scan ("..#fallback.." plot)")
+        AREA_PLOTS["Auto Scan ("..#fallback.." plot)"] = fallback
     end
 
-    -- Selalu inject grid areas setelah scan workspace
-    -- (dipanggil di sini agar Scan Ulang Area juga dapat grid)
-    injectGridAreas()
+    -- Compat: AREA_PARTS untuk harvestAll (pakai part saja)
+    AREA_PARTS = {}
+    for name, plotList in pairs(AREA_PLOTS) do
+        local parts = {}
+        for _, pl in ipairs(plotList) do table.insert(parts, pl.part) end
+        AREA_PARTS[name] = parts
+    end
 
     print("[XKID] Area data built: "..#AREA_NAMES.." area")
 end
@@ -245,59 +198,62 @@ end
 -- Pola tanam
 local POLA_NAMES = {"Normal", "Rapat (terdekat)", "Selang-seling Lebar", "Selang-seling Panjang"}
 
-local function filterByPola(plots, pola, jumlah)
-    local max = math.min(jumlah, #plots, 25)
+local function filterByPola(plotList, pola, jumlah)
+    -- plotList = list of { part=BasePart, obj=parentObj }
+    local max    = math.min(jumlah, #plotList, 20)
     local result = {}
 
     if pola == "Normal" then
-        for i = 1, max do table.insert(result, plots[i]) end
+        for i = 1, max do table.insert(result, plotList[i]) end
 
     elseif pola == "Rapat (terdekat)" then
         local root = getRoot()
         if root then
             local sorted = {}
-            for _, p in ipairs(plots) do
-                table.insert(sorted, {part=p, dist=(p.Position-root.Position).Magnitude})
+            for _, pl in ipairs(plotList) do
+                table.insert(sorted, {
+                    pl   = pl,
+                    dist = (pl.part.Position - root.Position).Magnitude
+                })
             end
             table.sort(sorted, function(a,b) return a.dist < b.dist end)
-            -- Bug 5 fix: clamp ke jumlah sorted yang tersedia
             local limit = math.min(max, #sorted)
-            for i = 1, limit do table.insert(result, sorted[i].part) end
+            for i = 1, limit do table.insert(result, sorted[i].pl) end
         else
-            for i = 1, max do table.insert(result, plots[i]) end
+            for i = 1, max do table.insert(result, plotList[i]) end
         end
 
     elseif pola == "Selang-seling Lebar" then
-        local sorted = {table.unpack(plots)}
-        table.sort(sorted, function(a,b) return a.Position.X < b.Position.X end)
+        local sorted = {table.unpack(plotList)}
+        table.sort(sorted, function(a,b) return a.part.Position.X < b.part.Position.X end)
         local lastX, skip = nil, false
-        for _, p in ipairs(sorted) do
-            if lastX == nil then lastX = p.Position.X; skip = false
-            elseif math.abs(p.Position.X - lastX) > 6 then
-                lastX = p.Position.X; skip = not skip
+        for _, pl in ipairs(sorted) do
+            if lastX == nil then lastX = pl.part.Position.X; skip = false
+            elseif math.abs(pl.part.Position.X - lastX) > 6 then
+                lastX = pl.part.Position.X; skip = not skip
             end
             if not skip then
-                table.insert(result, p)
+                table.insert(result, pl)
                 if #result >= max then break end
             end
         end
-        if #result == 0 then for i=1,max do table.insert(result, plots[i]) end end
+        if #result == 0 then for i=1,max do table.insert(result, plotList[i]) end end
 
     elseif pola == "Selang-seling Panjang" then
-        local sorted = {table.unpack(plots)}
-        table.sort(sorted, function(a,b) return a.Position.Z < b.Position.Z end)
+        local sorted = {table.unpack(plotList)}
+        table.sort(sorted, function(a,b) return a.part.Position.Z < b.part.Position.Z end)
         local lastZ, skip = nil, false
-        for _, p in ipairs(sorted) do
-            if lastZ == nil then lastZ = p.Position.Z; skip = false
-            elseif math.abs(p.Position.Z - lastZ) > 6 then
-                lastZ = p.Position.Z; skip = not skip
+        for _, pl in ipairs(sorted) do
+            if lastZ == nil then lastZ = pl.part.Position.Z; skip = false
+            elseif math.abs(pl.part.Position.Z - lastZ) > 6 then
+                lastZ = pl.part.Position.Z; skip = not skip
             end
             if not skip then
-                table.insert(result, p)
+                table.insert(result, pl)
                 if #result >= max then break end
             end
         end
-        if #result == 0 then for i=1,max do table.insert(result, plots[i]) end end
+        if #result == 0 then for i=1,max do table.insert(result, plotList[i]) end end
     end
 
     return result
@@ -348,122 +304,111 @@ local function tanamPlots()
     local ev = getBridge()
     if not ev then
         notify("Farm ❌","BridgeNet2 tidak ada!",5)
-        xlog("Tanam","BridgeNet2 nil / remote hilang",true)
-        return 0
+        xlog("Tanam","BridgeNet2 nil",true); return 0
     end
 
-    local plots = AREA_PARTS[Farm.selectedArea]
-    if not plots or #plots == 0 then
-        notify("Farm ❌","Area '"..Farm.selectedArea.."' tidak ada plot!\nCoba Scan Ulang Area",5)
-        xlog("Tanam","Area kosong: "..tostring(Farm.selectedArea),true)
-        return 0
+    local plotList = AREA_PLOTS[Farm.selectedArea]
+    if not plotList or #plotList == 0 then
+        notify("Farm ❌","Area tidak ada plot! Scan ulang.",5)
+        xlog("Tanam","Area kosong: "..tostring(Farm.selectedArea),true); return 0
     end
 
-    local filtered = filterByPola(plots, Farm.selectedPola, Farm.jumlahTanam)
+    local filtered = filterByPola(plotList, Farm.selectedPola, Farm.jumlahTanam)
     if #filtered == 0 then
-        notify("Farm ❌","Plot kosong setelah filter pola: "..Farm.selectedPola,4)
-        xlog("Tanam","Filter 0 plot, pola: "..Farm.selectedPola,true)
-        return 0
+        notify("Farm ❌","Tidak ada plot setelah filter",4)
+        xlog("Tanam","Filter 0",true); return 0
     end
 
-    local count = 0
-    local failed = 0
-    for i, plot in ipairs(filtered) do
-        local hitPos  = plot.Position
-        -- hitPart: nil kalau grid proxy (tidak ada Part asli)
-        local hitPart = (not plot._isGridPt) and plot or nil
-        local ok, err = pcall(function()
-            ev:FireServer({{
-                slotIdx     = i,
-                hitPosition = hitPos,
-                hitPart     = hitPart
-            }, "\x04"})
-        end)
-        if ok then
-            count = count + 1
-        else
-            failed = failed + 1
-            xlog("Tanam","FireServer["..i.."] error: "..tostring(err):sub(1,50), failed>=3)
-            if failed >= 3 then
-                notify("Farm ⚠","3+ error berturut, tanam dihentikan",5)
-                xlog("Tanam","3 error berturut, loop dibatalkan",true)
-                break
-            end
-        end
-        task.wait(0.25)
-    end
-    if failed > 0 then
-        notify("Farm","Tanam: "..count.." OK, "..failed.." gagal",4)
-    end
-    return count
-end
-
--- Remote: Harvest semua
-local function harvestAll()
-    local ev = getBridge()
-    if not ev then
-        notify("Farm ❌","BridgeNet2 tidak ada!",5)
-        xlog("Harvest","BridgeNet2 nil / remote hilang",true)
-        return 0
-    end
-
-    local allPlots = {}
-    for _, parts in pairs(AREA_PARTS) do
-        for _, p in ipairs(parts) do table.insert(allPlots, p) end
-    end
-
-    if #allPlots == 0 then
-        notify("Farm ❌","Tidak ada plot! Scan ulang area dulu",5)
-        xlog("Harvest","Tidak ada plot terscan",true)
-        return 0
-    end
+    xlog("Tanam", string.format("Mulai %d plot, pola=%s", #filtered, Farm.selectedPola), false)
 
     local count  = 0
     local failed = 0
-
-    -- Metode 1: firesignal simulate incoming harvest per plot
-    for _, plot in ipairs(allPlots) do
-        local pos = plot.Position
+    for _, pl in ipairs(filtered) do
+        -- hitPart = object parent (workspace index/Land) sesuai spy log
+        -- hitPosition = posisi BasePart di dalamnya
         local ok, err = pcall(function()
-            firesignal(ev.OnClientEvent, {
-                ["\r"] = {{
-                    cropName  = Farm.selectedCrop.name,
-                    cropPos   = pos,
-                    sellPrice = Farm.selectedCrop.sell,
-                    drops     = {}
-                }},
-                ["\x02"] = {0, 0}
+            ev:FireServer({
+                {
+                    slotIdx     = 1,
+                    hitPosition = pl.part.Position,
+                    hitPart     = pl.obj   -- parent object, bukan BasePart
+                },
+                "\x04"
             })
         end)
         if ok then
             count = count + 1
         else
             failed = failed + 1
-            xlog("Harvest","firesignal error: "..tostring(err):sub(1,50), false)
+            xlog("Tanam","Error: "..tostring(err):sub(1,50), failed>=3)
+            if failed >= 3 then
+                notify("Farm ⚠","3+ error, tanam dihentikan",5)
+                break
+            end
+        end
+        task.wait(0.3)
+    end
+
+    if count > 0 then
+        notify("Tanam","✅ "..count.." plot berhasil ditanam",3)
+    end
+    if failed > 0 then
+        notify("Farm","❌ "..failed.." plot gagal",4)
+    end
+    return count
+end
+
+-- Remote: Harvest semua
+-- Key "\13" (=\r) dari spy log SimpleSpy
+local function harvestAll()
+    local ev = getBridge()
+    if not ev then
+        notify("Farm ❌","BridgeNet2 tidak ada!",5)
+        xlog("Harvest","BridgeNet2 nil",true); return 0
+    end
+
+    local allPlots = {}
+    for _, plotList in pairs(AREA_PLOTS) do
+        for _, pl in ipairs(plotList) do
+            table.insert(allPlots, pl)
+        end
+    end
+
+    if #allPlots == 0 then
+        notify("Farm ❌","Tidak ada plot! Scan ulang.",5)
+        xlog("Harvest","allPlots=0",true); return 0
+    end
+
+    local count  = 0
+    local failed = 0
+    local crop   = Farm.selectedCrop
+
+    for _, pl in ipairs(allPlots) do
+        local ok, err = pcall(function()
+            -- Format BENAR dari SimpleSpy: key "\13" bukan "\r"
+            -- \13 = ASCII 13 = \r, tapi SimpleSpy tulis sebagai \13
+            ev:FireServer({
+                ["\13"] = {{
+                    cropName  = crop.name,
+                    cropPos   = pl.part.Position,
+                    sellPrice = crop.sell,
+                    drops     = {}
+                }},
+                ["\2"] = { 0, 0 }
+            })
+        end)
+        if ok then
+            count = count + 1
+        else
+            failed = failed + 1
+            xlog("Harvest","Error: "..tostring(err):sub(1,50), false)
         end
         task.wait(0.15)
     end
 
-    -- Metode 2: ProximityPrompt — filter username kita
-    local myName = LP.Name:lower()
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then
-            local obj = (v.ObjectText or ""):lower()
-            local act = (v.ActionText or ""):lower()
-            if obj:find(myName) or act:find("panen") or act:find("harvest") then
-                local parent = v.Parent
-                if parent and not (act:find("sit") or act:find("door")) then
-                    pcall(function() fireproximityprompt(v) end)
-                    pcall(function() v:InputHoldBegin(); task.wait(0.1); v:InputHoldEnd() end)
-                    task.wait(0.1)
-                end
-            end
-        end
-    end
-
     if failed > 0 then
-        notify("Farm","Harvest: "..count.." OK, "..failed.." gagal",4)
-        xlog("Harvest","Selesai: ok="..count.." fail="..failed, false)
+        notify("Farm","Harvest: "..count.." OK "..failed.." gagal",4)
+        xlog("Harvest","ok="..count.." fail="..failed, false)
     end
     return count
 end
@@ -932,16 +877,28 @@ local function unequipRod()
 end
 
 local function castOnce()
-    local castEv=getFishEv("CastEvent"); local miniEv=getFishEv("MiniGame")
+    local castEv = getFishEv("CastEvent")
+    local miniEv = getFishEv("MiniGame")
     if not castEv then notify("Fishing","CastEvent tidak ada!",4); return end
-    pcall(function() castEv:FireServer(false,0) end); task.wait(0.8)
-    pcall(function() castEv:FireServer(true) end); task.wait(Fish.waitDelay)
-    pcall(function() castEv:FireServer(false,Fish.waitDelay) end); task.wait(0.8)
+
+    -- Cast kail
+    pcall(function() castEv:FireServer(false, 0) end)
+    task.wait(0.8)
+    pcall(function() castEv:FireServer(true) end)
+    task.wait(Fish.waitDelay)
+
+    -- Tarik
+    pcall(function() castEv:FireServer(false, Fish.waitDelay) end)
+    task.wait(0.8)
+
+    -- MiniGame: FireServer("Start") lalu FireServer("Stop")
+    -- dari spy log: bukan firesignal tapi FireServer langsung
     if miniEv then
-        pcall(function() miniEv:FireServer(true) end); task.wait(0.5)
-        pcall(function() firesignal(miniEv.OnClientEvent,"Start") end); task.wait(0.3)
-        pcall(function() firesignal(miniEv.OnClientEvent,"Stop") end)
+        pcall(function() miniEv:FireServer("Start") end)
+        task.wait(0.3)
+        pcall(function() miniEv:FireServer("Stop") end)
     end
+
     task.wait(1)
 end
 
@@ -968,7 +925,7 @@ print(string.format("[XKID] Scan: %d area, %d plot", #AREA_NAMES, _tp))
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                  WINDOW & TABS                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB","sprout","v5.2",false)
+local Win = Library:Window("XKID HUB","sprout","v5.1",false)
 
 Win:TabSection("MAIN")
 local T_Farm = Win:Tab("Farming",  "leaf")
@@ -1016,9 +973,9 @@ FL:Dropdown("Pola Tanam","polaSel",POLA_NAMES,
 -- ── Eksekusi Tanam ───────────────────────────────────────
 FL:Label("🌱 Eksekusi Tanam")
 
-FL:Slider("Jumlah Bibit (plot)","plantQty",1,25,5,
+FL:Slider("Jumlah Bibit (plot)","plantQty",1,20,5,
     function(v) Farm.jumlahTanam=v end,
-    "Berapa plot yang akan ditanam (max 25)")
+    "Berapa plot yang akan ditanam (max 20)")
 
 FL:Button("🌱 Mulai Tanam","Tanam sesuai area & pola yang dipilih",
     function()
@@ -1541,16 +1498,15 @@ SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
 SetL:Slider("Delay Tunggu Ikan","fishWait",2,20,6,
     function(v) Fish.waitDelay=v end,"Detik tunggu sebelum tarik")
 
-SetR:Paragraph("XKID HUB v5.2",
+SetR:Paragraph("XKID HUB v5.0",
     "Struktur:\n"..
     "Farming  · Shop\n"..
     "Teleport · Player\n"..
     "Security · Setting\n\n"..
-    "Remote: BridgeNet2\nFishing: FishRemotes\n\n"..
-    "Multi-Area 5x5 Grid\n4 area Map2 tersedia")
+    "Remote: BridgeNet2\nFishing: FishRemotes")
 
 SetR:Paragraph("Farming Info",
-    "Pilih area → pola → jumlah\nlalu Mulai Tanam\n\nAuto Cycle:\nBeli→Tanam→Tunggu→Panen\n\nMax 25 plot per cycle\n(server limit)\n\nGrid area tersedia:\nAppleTree, Sawi A/B/C")
+    "Pilih area → pola → jumlah\nlalu Mulai Tanam\n\nAuto Cycle:\nBeli→Tanam→Tunggu→Panen\n\nMax 20 plot per cycle")
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                      INIT                               │
@@ -1559,15 +1515,15 @@ SetR:Paragraph("Farming Info",
 local _totalPl = 0
 for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 if _totalPl > 0 then
-    notify("✅ XKID HUB v5.2 Ready",
+    notify("✅ XKID HUB v5.1 Ready",
         #AREA_NAMES.." area | ".._totalPl.." plot\nDropdown area sudah terisi!",5)
 else
     notify("⚠ Warning",
         "Plot tidak ditemukan!\nBuka Farming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.2",
-    "Farming · Shop · Teleport · Player · Security\n5x5 Grid · Max 25 tanaman", 6)
+Library:Notification("XKID HUB v5.1",
+    "Farming · Shop · Teleport · Player · Security", 6)
 Library:ConfigSystem(Win)
 
-print("[XKID HUB] v5.2 loaded — "..LP.Name)
+print("[XKID HUB] v5.1 loaded — "..LP.Name)
