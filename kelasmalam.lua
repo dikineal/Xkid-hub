@@ -1,10 +1,10 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              🌟  X K I D   H U B  v5.2  🌟              ║
-║             Aurora UI  ·  Pro Edition UPDATED            ║
+║              🌟  X K I D   H U B  v5.0  🌟              ║
+║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
-║  Farming v2  ·  Shop  ·  Teleport  ·  Player             ║
-║  Security +FastRespawn  ·  Fishing v2  ·  New Features   ║
+║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
+║  Security  ·  Setting                                    ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -63,6 +63,7 @@ end
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │         IN-GAME LOG (Android friendly)                  │
+-- │  Tidak ada F9 — error tampil di notif + executor log   │
 -- └─────────────────────────────────────────────────────────┘
 local LOG_MAX  = 30
 local logLines = {}
@@ -71,7 +72,7 @@ local function xlog(tag, msg, isError)
     local entry = string.format("[%s][%s] %s", os.date("%H:%M:%S"), tag, msg)
     table.insert(logLines, 1, entry)
     if #logLines > LOG_MAX then table.remove(logLines) end
-    print(entry)
+    print(entry)  -- executor log (Delta/Arceus ada log viewer)
     if isError then
         pcall(function() Library:Notification("❌ "..tag, msg:sub(1,80), 5) end)
     end
@@ -81,11 +82,11 @@ end
 -- │                   CROP DATA                             │
 -- └─────────────────────────────────────────────────────────┘
 local CROPS = {
-    { name="AppleTree", seed="Bibit Apel",      icon="🍎", price=15,       sell=45        },
+    { name="AppleTree", seed="Bibit Apel",      icon="🍎", price=15,       sell=45,       harvest=40  },
+    { name="Sawi",      seed="Bibit Sawi",      icon="🥬", price=15,       sell=20,       harvest=92  },
     { name="Padi",      seed="Bibit Padi",      icon="🌾", price=15,       sell=20        },
     { name="Melon",     seed="Bibit Melon",     icon="🍈", price=15,       sell=20        },
     { name="Tomat",     seed="Bibit Tomat",     icon="🍅", price=15,       sell=20        },
-    { name="Sawi",      seed="Bibit Sawi",      icon="🥬", price=15,       sell=20        },
     { name="Coconut",   seed="Bibit Kelapa",    icon="🥥", price=100,      sell=140       },
     { name="Daisy",     seed="Bibit Daisy",     icon="🌼", price=5000,     sell=6000      },
     { name="FanPalm",   seed="Bibit FanPalm",   icon="🌴", price=100000,   sell=102000    },
@@ -100,9 +101,20 @@ for _, c in ipairs(CROPS) do table.insert(cropDropNames, c.icon.." "..c.seed) en
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                  AREA / PLOT DATA                       │
 -- └─────────────────────────────────────────────────────────┘
+-- Land positions dari event data terbaru
+local LAND_DATA = {
+    { name="Land1", pos=Vector3.new(23.97, 9.00, 0.18)   },
+    { name="Land2", pos=Vector3.new(23.85, 9.36, 0.18)   },
+    { name="Land3", pos=Vector3.new(23.86, 9.71, 0.18)   },
+    { name="Land4", pos=Vector3.new(24.32, 9.71, 0.18)   },
+    { name="Land5", pos=Vector3.new(33.31, 15.82, 40.51) },
+    { name="Land6", pos=Vector3.new(23.88, 9.28, 0.18)   },
+}
 local AREA_INDICES = {52, 53, 54, 64, 65, 66, 67}
 local AREA_NAMES   = {}
-local AREA_PLOTS   = {}
+-- Simpan: { part=BasePart, obj=parentObject }
+-- hitPart di spy log = object workspace langsung (index/Land)
+local AREA_PLOTS   = {}  -- nama → list { part, obj }
 
 local function buildAreaData()
     AREA_NAMES = {}
@@ -181,6 +193,7 @@ local function buildAreaData()
         AREA_PLOTS["Auto Scan ("..#fallback.." plot)"] = fallback
     end
 
+    -- Compat: AREA_PARTS untuk harvestAll (pakai part saja)
     AREA_PARTS = {}
     for name, plotList in pairs(AREA_PLOTS) do
         local parts = {}
@@ -191,12 +204,11 @@ local function buildAreaData()
     print("[XKID] Area data built: "..#AREA_NAMES.." area")
 end
 
--- ┌─────────────────────────────────────────────────────────┐
--- │         FARMING SYSTEM - OPTIMIZED (v2)                 │
--- └─────────────────────────────────────────────────────────┘
+-- Pola tanam
 local POLA_NAMES = {"Normal", "Rapat (terdekat)", "Selang-seling Lebar", "Selang-seling Panjang"}
 
 local function filterByPola(plotList, pola, jumlah)
+    -- plotList = list of { part=BasePart, obj=parentObj }
     local max    = math.min(jumlah, #plotList, 20)
     local result = {}
 
@@ -240,145 +252,97 @@ local function filterByPola(plotList, pola, jumlah)
     return result
 end
 
--- Remote: Beli Bibit (Updated v2)
-local function beliBibit(crop, qty)
-    local ev = getBridge()
-    if not ev then
-        notify("Farm ❌","BridgeNet2 error",5)
-        return false
+-- ┌─────────────────────────────────────────────────────────┐
+-- │                    FARMING LOGIC                        │
+-- └─────────────────────────────────────────────────────────┘
+local Farm = {
+    active = false, task = nil,
+    selectedArea = nil, selectedCrop = nil,
+    selectedPola = "Normal", selectedQty = 5
+}
+
+local function teleportToPart(part)
+    if not part then return false end
+    local r = getRoot()
+    if r then
+        r.CFrame = part.CFrame + Vector3.new(0, 3, 0)
+        return true
     end
-    
-    local ok, err = pcall(function()
-        ev:FireServer({
-            {
-                cropName = crop.name,
-                amount = qty
-            },
-            "\a"
-        })
+    return false
+end
+
+local function harvest(part)
+    local bridge = getBridge()
+    if not bridge then xlog("Harvest", "Bridge not found", true); return false end
+    local ok, res = pcall(function()
+        bridge:FireServer("Harvest", {part})
     end)
-    
-    if not ok then
-        xlog("BeliBibit", "Error: "..tostring(err):sub(1,60), true)
-        return false
-    end
+    if not ok then xlog("Harvest", "Error: "..tostring(res):sub(1,60), true); return false end
     return true
 end
 
--- Remote: Tanam dengan slotIdx dinamis (v2)
-local function tanamPlots(area, crop, pola, qty)
-    local ev = getBridge()
-    if not ev then return 0 end
-    
-    local plotList = AREA_PLOTS[area]
-    if not plotList or #plotList == 0 then return 0 end
-    
-    local filtered = filterByPola(plotList, pola, qty)
-    if #filtered == 0 then return 0 end
-    
+local function plant(part, cropName, seedName)
+    local bridge = getBridge()
+    if not bridge then xlog("Plant", "Bridge not found", true); return false end
+    local ok, res = pcall(function()
+        bridge:FireServer("Plant", {part, cropName, seedName})
+    end)
+    if not ok then xlog("Plant", "Error: "..tostring(res):sub(1,60), true); return false end
+    return true
+end
+
+local function buySeed(seedName)
+    local bridge = getBridge()
+    if not bridge then xlog("Shop", "Bridge not found", true); return false end
+    local ok, res = pcall(function()
+        bridge:FireServer("BuySeed", {seedName})
+    end)
+    if not ok then xlog("Shop", "Error: "..tostring(res):sub(1,60), true); return false end
+    return true
+end
+
+local function sellCrop(cropName)
+    local bridge = getBridge()
+    if not bridge then xlog("Sell", "Bridge not found", true); return false end
+    local ok, res = pcall(function()
+        bridge:FireServer("Sell", {cropName})
+    end)
+    if not ok then xlog("Sell", "Error: "..tostring(res):sub(1,60), true); return false end
+    return true
+end
+
+local function harvestAll(parts)
+    if not parts or #parts == 0 then return 0 end
     local count = 0
-    for idx, pl in ipairs(filtered) do
-        local ok, err = pcall(function()
-            ev:FireServer({
-                {
-                    slotIdx = idx,
-                    hitPosition = pl.part.Position,
-                    hitPart = pl.obj
-                },
-                "\x04"
-            })
-        end)
-        
-        if ok then count = count + 1 end
-        task.wait(0.2)
-    end
-    
-    if count > 0 then
-        notify("Tanam", "✅ "..count.." plot ditanam", 3)
+    for _, p in ipairs(parts) do
+        if harvest(p) then count = count + 1 end
+        task.wait(0.3)
     end
     return count
 end
 
--- Remote: Harvest dengan seedColor dan drops (v2)
-local function harvestAll(crop)
-    local ev = getBridge()
-    if not ev then return 0 end
-    
-    local allPlots = {}
-    for _, plotList in pairs(AREA_PLOTS) do
-        for _, pl in ipairs(plotList) do
-            table.insert(allPlots, pl)
+local function getBalanceInfo()
+    local bridge = getBridge()
+    if not bridge then return nil end
+    local ok, info = pcall(function()
+        local ev = RS:FindFirstChild("MoneyValue") or RS:FindFirstChild("Cash")
+        if ev and ev:IsA("IntValue") then
+            return { cash = ev.Value }
         end
-    end
-    
-    if #allPlots == 0 then return 0 end
-    
-    local count = 0
-    for _, pl in ipairs(allPlots) do
-        local ok, err = pcall(function()
-            ev:FireServer({
-                ["\r"] = {{
-                    cropName = crop.name,
-                    cropPos = pl.part.Position,
-                    sellPrice = crop.sell,
-                    seedColor = {0.29803922772408, 0.60000002384186, 0},
-                    drops = {
-                        {
-                            name = "Biji "..crop.seed,
-                            coinReward = math.floor(crop.sell * 0.15),
-                            icon = crop.icon,
-                            rarity = "Rare"
-                        }
-                    }
-                }},
-                ["\x02"] = {math.floor(os.clock() * 1000), math.floor(os.clock() * 1000) + 50}
-            })
-        end)
-        
-        if ok then count = count + 1 end
-        task.wait(0.1)
-    end
-    
-    return count
+        return { cash = 0 }
+    end)
+    if ok then return info end
+    return nil
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │         FISHING SYSTEM - OPTIMIZED (v2)                 │
+-- │                  FISHING LOGIC                          │
 -- └─────────────────────────────────────────────────────────┘
 local Fish = {
-    autoOn = false,
-    fishTask = nil,
-    waitDelay = 31.6,
-    rodEquipped = false,
-    totalFished = 0
+    autoOn = false, fishTask = nil,
+    rodEquipped = false, waitDelay = 31.6,  -- Updated: 31.6s sesuai spy log
+    totalFished = 0  -- NEW: Counter
 }
-
-local function castOnce()
-    local castEv = getFishEv("CastEvent")
-    if not castEv then return false end
-    
-    pcall(function() castEv:FireServer(false, 0) end)
-    task.wait(0.8)
-    
-    pcall(function() castEv:FireServer(true) end)
-    task.wait(0.5)
-    
-    task.wait(Fish.waitDelay)
-    
-    pcall(function() castEv:FireServer(false, Fish.waitDelay) end)
-    task.wait(0.8)
-    
-    local miniEv = getFishEv("MiniGame")
-    if miniEv then
-        pcall(function() miniEv:FireServer(true) end)
-        task.wait(0.2)
-        pcall(function() miniEv:FireServer(true) end)
-    end
-    
-    Fish.totalFished = Fish.totalFished + 1
-    task.wait(0.5)
-    return true
-end
 
 local function equipRod()
     local bp = LP:FindFirstChildOfClass("Backpack")
@@ -403,95 +367,36 @@ local function unequipRod()
     return true
 end
 
--- ┌─────────────────────────────────────────────────────────┐
--- │         SEND LIKE SYSTEM (NEW)                          │
--- └─────────────────────────────────────────────────────────┘
-local function sendLike(targetPlayer)
-    if not targetPlayer or not targetPlayer.Character then
-        notify("Like", "Player tidak valid", 2)
+local function castOnce()
+    local castEv = getFishEv("CastEvent")
+    if not castEv then
+        xlog("Fishing", "Cast event not found", true)
         return false
     end
     
-    local likeEvent = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
-    if not likeEvent then
-        notify("Like", "Events folder tidak ditemukan", 3)
-        return false
+    -- Cast dengan timing sesuai spy log (v2 optimized)
+    pcall(function() castEv:FireServer(false, 0) end)
+    task.wait(0.8)
+    
+    pcall(function() castEv:FireServer(true) end)
+    task.wait(0.5)
+    
+    task.wait(Fish.waitDelay)  -- 31.6s wait
+    
+    pcall(function() castEv:FireServer(false, Fish.waitDelay) end)
+    task.wait(0.8)
+    
+    -- MiniGame auto-complete
+    local miniEv = getFishEv("MiniGame")
+    if miniEv then
+        pcall(function() miniEv:FireServer(true) end)
+        task.wait(0.2)
+        pcall(function() miniEv:FireServer(true) end)
     end
     
-    local sendLikeEv = likeEvent:FindFirstChild("SendLike")
-    if not sendLikeEv then
-        notify("Like", "SendLike event tidak ditemukan", 3)
-        return false
-    end
-    
-    local ok, err = pcall(function()
-        sendLikeEv:FireServer(targetPlayer)
-    end)
-    
-    if ok then
-        notify("❤ Like", "Sent to "..targetPlayer.Name, 2)
-        return true
-    else
-        xlog("SendLike", "Error: "..tostring(err):sub(1,60), true)
-        return false
-    end
-end
-
--- ┌─────────────────────────────────────────────────────────┐
--- │         FAST RESPAWN SYSTEM (NEW)                       │
--- └─────────────────────────────────────────────────────────┘
-local Respawn = {
-    savedPosition = nil,
-    autoRespawn = false,
-    respawnTask = nil
-}
-
-RunService.Heartbeat:Connect(function()
-    local root = getRoot()
-    if root then
-        Respawn.savedPosition = root.CFrame
-    end
-end)
-
-local function fastRespawn()
-    if not Respawn.savedPosition then 
-        notify("Respawn","Posisi belum tersimpan!",2); return 
-    end
-    
-    local root = getRoot()
-    if root then
-        root.CFrame = Respawn.savedPosition
-        notify("✅ Respawn","Kembali ke posisi",1)
-    end
-end
-
-local function startAutoRespawn()
-    if Respawn.respawnTask then return end
-    
-    Respawn.respawnTask = task.spawn(function()
-        while Respawn.autoRespawn do
-            local h = getHum()
-            if h and h.Health <= 0 then
-                task.wait(0.5)
-                LP.CharacterAdded:Wait()
-                task.wait(0.3)
-                
-                local newRoot = getRoot()
-                if newRoot and Respawn.savedPosition then
-                    newRoot.CFrame = Respawn.savedPosition
-                    notify("↩ Auto Respawn","Kembali ke posisi",2)
-                end
-            end
-            task.wait(0.1)
-        end
-    end)
-end
-
-local function stopAutoRespawn()
-    if Respawn.respawnTask then
-        pcall(function() task.cancel(Respawn.respawnTask) end)
-        Respawn.respawnTask = nil
-    end
+    Fish.totalFished = Fish.totalFished + 1
+    task.wait(0.5)
+    return true
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
@@ -527,13 +432,13 @@ local function startFly()
         if UIS:IsKeyDown(Enum.KeyCode.Space) then vel = vel + Vector3.new(0, Move.flySpeed, 0) end
         if UIS:IsKeyDown(Enum.KeyCode.Q) then vel = vel - Vector3.new(0, Move.flySpeed, 0) end
         
-        -- Better vertical control (v2 optimized)
+        -- Better vertical control (v2 optimized - threshold 0.25, multiplier 0.6x)
         local cf = r.CFrame
         local pitch = cf.LookVector.Y
         local vVel = 0
-        if math.abs(pitch) > 0.25 then  -- threshold LEBIH TINGGI
+        if math.abs(pitch) > 0.25 then  -- threshold LEBIH TINGGI (dead zone lebih besar)
             local t = math.clamp((math.abs(pitch) - 0.25) / (1 - 0.25), 0, 1)
-            vVel = math.sign(pitch) * t * Move.flySpeed * 0.6  -- multiplier LEBIH RENDAH
+            vVel = math.sign(pitch) * t * Move.flySpeed * 0.6  -- multiplier LEBIH RENDAH (50% lebih halus)
         end
         
         bd.Velocity = vel + Vector3.new(0, vVel, 0)
@@ -601,6 +506,7 @@ local function startESPPlayer()
                     ESPPl.uis[p.UserId] = label
                 end
                 
+                local scrPos = (game:GetService("Workspace").CurrentCamera.CFrame.p - pos).Magnitude
                 local label = ESPPl.uis[p.UserId]
                 if label then
                     label.Text = txt
@@ -624,7 +530,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   BUILD UI                              │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:CreateWindow("XKID HUB v5.2", false, 3)
+local Win = Library:CreateWindow("XKID HUB v5.1", false, 3)
 local T_Farm = Win:Tab("Farming","leaf")
 local T_Shop = Win:Tab("Shop","shopping-cart")
 local T_Tele = Win:Tab("Teleport","map-pin")
@@ -640,15 +546,6 @@ buildAreaData()
 local FarmP = T_Farm:Page("Farming","leaf")
 local FarmL = FarmP:Section("🚜 Control","Left")
 local FarmR = FarmP:Section("ℹ Info","Right")
-
-local Farm = {
-    selectedArea = nil,
-    selectedCrop = nil,
-    selectedPola = "Normal",
-    jumlahTanam = 5,
-    active = false,
-    task = nil
-}
 
 FarmL:Button("🔍 Scan Ulang Area","Cari plot lagi dari workspace",
     function()
@@ -672,83 +569,119 @@ FarmL:Dropdown("Pola Tanam","farmPola",POLA_NAMES,
     function(v) Farm.selectedPola = v end)
 
 FarmL:Slider("Jumlah Plot","farmQty",1,20,5,
-    function(v) Farm.jumlahTanam = v end,"Plot per tanam")
+    function(v) Farm.selectedQty = v end,"Plot per cycle")
 
-FarmL:Button("🌱 Mulai Tanam","Tanam sekarang",
+FarmL:Button("▶ Mulai Tanam","Auto cycle: Beli → Tanam → Panen",
     function()
         if not Farm.selectedArea or not Farm.selectedCrop then
-            notify("Error","Pilih area & tanaman!",3); return
+            notify("Error","Pilih area & tanaman dulu!",3); return
+        end
+        if Farm.active then
+            notify("Info","Farming sudah running",2); return
         end
         
-        local planted = tanamPlots(Farm.selectedArea, Farm.selectedCrop, Farm.selectedPola, Farm.jumlahTanam)
-        if planted > 0 then
-            notify("Farm","Tanam berhasil!",2)
-        end
+        Farm.active = true
+        Farm.task = task.spawn(function()
+            local plots = filterByPola(AREA_PLOTS[Farm.selectedArea], Farm.selectedPola, Farm.selectedQty)
+            notify("Farm","Dimulai! "..#plots.." plot",2)
+            
+            while Farm.active do
+                -- Beli benih
+                local ok = buySeed(Farm.selectedCrop.seed)
+                if not ok then
+                    notify("Farm","Gagal beli benih, stop",3)
+                    Farm.active = false; break
+                end
+                task.wait(0.5)
+                
+                -- Tanam
+                local planted = 0
+                for _, pl in ipairs(plots) do
+                    if not Farm.active then break end
+                    if teleportToPart(pl.part) then
+                        if plant(pl.part, Farm.selectedCrop.name, Farm.selectedCrop.seed) then
+                            planted = planted + 1
+                        end
+                        task.wait(0.5)
+                    end
+                end
+                notify("Farm","Ditanam: "..planted.."/"..#plots,2)
+                
+                -- Tunggu tumbuh (simulasi 30 detik)
+                task.wait(30)
+                
+                -- Panen
+                local harvested = 0
+                for _, pl in ipairs(plots) do
+                    if not Farm.active then break end
+                    if teleportToPart(pl.part) then
+                        if harvest(pl.part) then
+                            harvested = harvested + 1
+                        end
+                        task.wait(0.3)
+                    end
+                end
+                notify("Farm","Dipanen: "..harvested.."/"..#plots,2)
+                task.wait(2)
+            end
+        end)
     end)
 
-FarmL:Button("💰 Panen Semua","Panen dari semua area",
+FarmL:Button("⏸ Hentikan","Stop farming cycle",
     function()
-        if not Farm.selectedCrop then
-            notify("Error","Pilih tanaman!",3); return
-        end
-        
-        local harvested = harvestAll(Farm.selectedCrop)
-        if harvested > 0 then
-            notify("Panen","✅ "..harvested.." plot dipanen",3)
-        end
+        Farm.active = false
+        if Farm.task then pcall(function() task.cancel(Farm.task) end); Farm.task = nil end
+        notify("Farm","Dihentikan",2)
     end)
 
-FarmR:Paragraph("Cara Cepat",
-    "1. Scan Area\n"..
-    "2. Pilih Area, Crop, Pola\n"..
-    "3. Atur Jumlah\n"..
-    "4. Tanam!\n\n"..
-    "Panen otomatis dari semua")
+FarmR:Paragraph("Cara Tanam",
+    "1. Pilih area (Scan otomatis)\n"..
+    "2. Pilih tanaman (AppleTree, Padi, dll)\n"..
+    "3. Pilih pola (Normal/Rapat/etc)\n"..
+    "4. Atur jumlah plot (max 20)\n"..
+    "5. Klik Mulai Tanam\n\n"..
+    "✓ Auto beli benih\n"..
+    "✓ Auto tanam\n"..
+    "✓ Auto panen")
+
+FarmR:Paragraph("Pola Tanam",
+    "Normal: Urut biasa\n"..
+    "Rapat: Terdekat dulu\n"..
+    "Selang-seling Lebar: Ganjil-genap\n"..
+    "Selang-seling Panjang: Baris atas dulu")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                    TAB SHOP                           ║
 -- ╚═══════════════════════════════════════════════════════╝
 local ShopP = T_Shop:Page("Shop","shopping-cart")
-local ShopL = ShopP:Section("🏪 Beli Bibit","Left")
-local ShopR = ShopP:Section("📦 Jual Hasil","Right")
-
-local shopQty = 1
-ShopL:Dropdown("Pilih Bibit","shopSeed",cropDropNames,
-    function(v)
-        for _, c in ipairs(CROPS) do
-            if (c.icon.." "..c.seed) == v then
-                Farm.selectedCrop = c; break
-            end
-        end
-    end)
-
-ShopL:Slider("Jumlah Beli","buyQty",1,99,5,
-    function(v) shopQty = v end,"Berapa banyak")
-
-ShopL:Button("🛒 Beli Bibit","Execute beli sekarang",
-    function()
-        if not Farm.selectedCrop then
-            notify("Error","Pilih bibit!",3); return
-        end
-        if beliBibit(Farm.selectedCrop, shopQty) then
-            notify("Beli","✅ "..shopQty.." bibit dibeli",2)
-        end
-    end)
+local ShopL = ShopP:Section("🏪 Beli","Left")
+local ShopR = ShopP:Section("💰 Jual","Right")
 
 for _, c in ipairs(CROPS) do
-    ShopL:Button(c.icon.." Beli "..c.seed,"Harga: "..c.price,
+    ShopL:Button(c.icon.." Beli "..c.seed,"Harga: 💵 "..c.price,
         function()
-            if beliBibit(c, 1) then
-                notify("Beli","✅ Bibit "..c.seed.." dibeli",1)
-            end
+            task.spawn(function()
+                for i = 1, 5 do  -- beli 5x
+                    if buySeed(c.seed) then
+                        notify("Shop","Beli "..c.seed.." ("..i.."/"..5..")",1)
+                    else
+                        notify("Shop","Gagal beli "..c.seed,2)
+                        break
+                    end
+                    task.wait(0.3)
+                end
+            end)
         end)
 end
 
-FarmR = ShopR
 for _, c in ipairs(CROPS) do
-    FarmR:Button(c.icon.." Jual "..c.name,"Harga: "..c.sell,
+    ShopR:Button(c.icon.." Jual "..c.name,"Harga: 💵 "..c.sell,
         function()
-            notify("Jual","💰 "..c.name.." dijual",2)
+            if sellCrop(c.name) then
+                notify("Shop","Dijual: "..c.name,2)
+            else
+                notify("Shop","Gagal jual",2)
+            end
         end)
 end
 
@@ -756,19 +689,18 @@ end
 -- ║                  TAB TELEPORT                         ║
 -- ╚═══════════════════════════════════════════════════════╝
 local TeleP = T_Tele:Page("Teleport","map-pin")
-local TeleL = TeleP:Section("🗺 Ke Area","Left")
-local TeleR = TeleP:Section("🧑 Ke Player","Right")
+local TeleL = TeleP:Section("🗺 Teleport","Left")
+local TeleR = TeleP:Section("ℹ Info","Right")
 
 for _, areaName in ipairs(AREA_NAMES) do
-    TeleL:Button("📍 "..areaName,"Teleport ke sini",
+    TeleL:Button("➡️ "..areaName,"Ke area ini",
         function()
             local plots = AREA_PLOTS[areaName]
             if plots and #plots > 0 then
-                local r = getRoot()
-                if r then
-                    r.CFrame = plots[1].part.CFrame + Vector3.new(0, 3, 0)
-                    notify("Teleport","Ke "..areaName,2)
-                end
+                teleportToPart(plots[1].part)
+                notify("Teleport","Ke "..areaName,2)
+            else
+                notify("Error","Area tidak ada plot",2)
             end
         end)
 end
@@ -782,60 +714,64 @@ TeleR:Button("📍 Spawn","Kembali ke spawn",
         end
     end)
 
-for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= LP then
-        TeleR:Button("👤 "..p.Name,"TP ke "..p.Name,
-            function()
-                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local r = getRoot()
-                    if r then
-                        r.CFrame = p.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-                        notify("Teleport","Ke "..p.Name,1)
-                    end
-                end
-            end)
-    end
-end
+TeleR:Paragraph("Tips Teleport",
+    "Semua area di-scan otomatis\n"..
+    "dari Workspace.Land & index\n"..
+    "52-67 di Workspace\n\n"..
+    "Teleport = CFrame lerp\n"..
+    "Tidak ada delay")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                   TAB PLAYER                          ║
 -- ╚═══════════════════════════════════════════════════════╝
 local PlayP = T_Play:Page("Player","user")
-local PlayL = PlayP:Section("⚡ Stats","Left")
-local PlayR = PlayP:Section("💨 Special","Right")
+local PlayL = PlayP:Section("⚡ Kemampuan","Left")
+local PlayR = PlayP:Section("💨 Movement","Right")
 
 PlayL:Slider("Walk Speed","walkSpd",10,50,16,
-    function(v) local h=getHum(); if h then h.WalkSpeed=v end end,"Default 16")
+    function(v) local h=getHum()
+        if h then h.WalkSpeed=v end
+    end,"Default 16")
 PlayL:Slider("Jump Power","jp",50,500,50,
-    function(v) local h=getHum(); if h then h.JumpPower=v; h.UseJumpPower=true end end,"Default 50")
+    function(v) local h=getHum()
+        if h then h.JumpPower=v; h.UseJumpPower=true end
+    end,"Default 50")
 PlayL:Toggle("Infinite Jump","infJump",false,"Lompat terus",
     function(v) setInfJump(v); notify("Inf Jump",v and "ON" or "OFF",2) end)
 PlayL:Toggle("NoClip","noclip",false,"Tembus dinding",
     function(v) setNoclip(v); notify("NoClip",v and "ON" or "OFF",2) end)
 
-PlayR:Toggle("Fly","fly",false,"Terbang (W/S/A/D + Space/Q)",
+PlayR:Toggle("Fly","fly",false,"Terbang bebas",
     function(v)
+        Move.flySpeed = Move.flySpeed  -- sync
         if v then startFly() else stopFly() end
         notify("Fly",v and "ON" or "OFF",2)
     end)
 PlayR:Slider("Fly Speed","flySpd",10,300,60,
     function(v) Move.flySpeed=v end,"Kecepatan terbang")
-PlayR:Toggle("ESP Player","espPl",false,"Lihat player lain",
+PlayR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
     function(v)
         ESPPl.active=v
-        if v then startESPPlayer() else stopESPPlayer() end
-        notify("ESP",v and "ON" or "OFF",2)
+        if v then
+            startESPPlayer()
+        else
+            stopESPPlayer()  -- disconnect + cleanup, bukan cuma flag
+        end
+        notify("ESP Player",v and "ON" or "OFF",2)
     end)
+PlayR:Paragraph("Cara Fly",
+    "Mobile:\nJoystick = maju/mundur/kiri/kanan\nKamera atas  = naik\nKamera bawah = turun\nDiam = melayang stabil\n\n"..
+    "PC:\nW/S/A/D = gerak\nE/Space = naik  Q = turun")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                  TAB SECURITY                         ║
 -- ╚═══════════════════════════════════════════════════════╝
 local SecP  = T_Sec:Page("Security","shield")
-local SecL  = SecP:Section("🛡 Protection","Left")
-local SecR  = SecP:Section("ℹ Fast Respawn","Right")
+local SecL  = SecP:Section("🛡 Perlindungan","Left")
+local SecR  = SecP:Section("ℹ Info","Right")
 
 local afkConn=nil
-SecL:Toggle("Anti AFK","antiAfk",false,"Cegah idle kick",
+SecL:Toggle("Anti AFK","antiAfk",false,"Cegah auto disconnect saat idle",
     function(v)
         if v then
             if afkConn then afkConn:Disconnect() end
@@ -850,7 +786,7 @@ SecL:Toggle("Anti AFK","antiAfk",false,"Cegah idle kick",
     end)
 
 local antiKickConn=nil
-SecL:Toggle("Anti Kick","antiKick",false,"HP terlindungi",
+SecL:Toggle("Anti Kick","antiKick",false,"HP dikunci saat hampir mati",
     function(v)
         if v then
             if antiKickConn then antiKickConn:Disconnect() end
@@ -863,59 +799,88 @@ SecL:Toggle("Anti Kick","antiKick",false,"HP terlindungi",
         else
             if antiKickConn then antiKickConn:Disconnect(); antiKickConn=nil end
         end
-        notify("Anti Kick",v and "ON" or "OFF",2)
+        notify("Anti Kick",v and "ON — HP terkunci" or "OFF",2)
     end)
 
-SecL:Button("🔄 Rejoin","Reconnect ke server",
+SecL:Button("💀 Respawn di Sini","Mati & kembali ke posisi terakhir",
     function()
-        notify("Rejoin","Loading...",3)
+        local saved=lastCFrame
+        local char=LP.Character
+        if char then char:BreakJoints() end
+        local conn
+        conn=LP.CharacterAdded:Connect(function(nc)
+            conn:Disconnect(); task.wait(1)
+            local hrp=nc:WaitForChild("HumanoidRootPart",5)
+            if hrp and saved then hrp.CFrame=saved end
+            notify("Respawn","Kembali ke posisi!",3)
+        end)
+    end)
+
+SecL:Button("🔄 Rejoin","Koneksi ulang ke server",
+    function()
+        notify("Rejoin","Menghubungkan ulang...",3)
         task.wait(1); TpService:Teleport(game.PlaceId,LP)
     end)
 
-SecR:Button("⏪ Respawn Instant","TP ke posisi terakhir",
-    function() fastRespawn() end)
-
-SecR:Toggle("Auto Respawn","autoResp",false,"Otomatis setelah mati",
-    function(v)
-        Respawn.autoRespawn = v
-        if v then
-            startAutoRespawn()
-            notify("Auto Respawn","ON",2)
-        else
-            stopAutoRespawn()
-            notify("Auto Respawn","OFF",2)
-        end
-    end)
+SecR:Paragraph("Anti AFK","Simulasi input saat idle\nCegah auto disconnect")
+SecR:Paragraph("Anti Kick","HP dipantau real-time\nHP < 15% = penuh lagi")
+SecR:Paragraph("Respawn","Posisi disimpan tiap frame\nMati → kembali ke posisi\nterakhir sebelum mati")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                   TAB SETTING                         ║
 -- ╚═══════════════════════════════════════════════════════╝
 local SetP  = T_Set:Page("Setting","settings")
 local SetL  = SetP:Section("🎣 Fishing","Left")
-local SetR  = SetP:Section("📋 Log","Right")
+local SetR  = SetP:Section("ℹ Log & Info","Right")
 
-SetL:Toggle("Auto Fishing","autoFish",false,"Auto cast loop",
+-- Tombol lihat log — Android friendly, tidak butuh F9
+SetR:Button("📋 Lihat Log Terbaru","Tampilkan 5 log error terakhir di notif",
+    function()
+        if #logLines == 0 then
+            notify("Log","Belum ada log error",3); return
+        end
+        local txt = ""
+        for i = 1, math.min(5, #logLines) do
+            txt = txt..logLines[i].."\n"
+        end
+        notify("Log ("..#logLines.." total)", txt, 12)
+    end)
+
+SetR:Button("📋 Lihat Semua Log","Tampilkan semua log (maks 10)",
+    function()
+        if #logLines == 0 then
+            notify("Log","Belum ada log",3); return
+        end
+        local txt = ""
+        for i = 1, math.min(10, #logLines) do
+            txt = txt..logLines[i].."\n"
+        end
+        notify("Log Lengkap", txt, 15)
+    end)
+
+SetR:Button("🗑 Bersihkan Log","Hapus semua riwayat log",
+    function()
+        logLines = {}
+        notify("Log","Log dibersihkan",2)
+    end)
+
+-- Fishing di setting
+SetL:Toggle("Auto Fishing","autoFish",false,"Auto equip rod + cast loop",
     function(v)
         Fish.autoOn=v
         if v then
             if not Fish.rodEquipped then
-                if not equipRod() then Fish.autoOn=false; return end
+                local ok=equipRod()
+                if not ok then Fish.autoOn=false; return end
             end
             Fish.fishTask=task.spawn(function()
-                local attempts = 0
                 while Fish.autoOn do
                     local ok, err = pcall(castOnce)
-                    if ok then
-                        attempts = 0
-                        task.wait(1)
+                    if not ok then
+                        xlog("Fishing","castOnce error: "..tostring(err):sub(1,60), true)
+                        task.wait(3)  -- backoff kalau error
                     else
-                        attempts = attempts + 1
-                        if attempts >= 3 then
-                            notify("Fishing","Auto stopped - errors",5)
-                            Fish.autoOn = false
-                            break
-                        end
-                        task.wait(5)
+                        task.wait(0.5)  -- safety gap antar cast
                     end
                 end
             end)
@@ -929,64 +894,50 @@ SetL:Toggle("Auto Fishing","autoFish",false,"Auto cast loop",
         end
     end)
 
-SetL:Button("🎣 Cast 1x","Lempar kail sekali",
+SetL:Button("🎣 Cast Sekali","Lempar kail 1 kali",
     function()
-        if not Fish.rodEquipped then
-            if not equipRod() then return end
-        end
-        if castOnce() then
-            notify("Fish","Cast OK!",1)
-        end
+        task.spawn(function()
+            if not Fish.rodEquipped then
+                local ok=equipRod(); if not ok then return end
+                task.wait(0.5)
+            end
+            castOnce(); notify("Fishing","1 cast selesai",2)
+        end)
     end)
 
-SetL:Button("📦 Equip Rod","Ambil rod dari backpack",
-    function() if equipRod() then notify("Rod","Equipped",1) end end)
-SetL:Button("📤 Unequip Rod","Kembalikan rod",
-    function() unequipRod(); notify("Rod","Unequipped",1) end)
-SetL:Slider("Fish Wait","fishWait",2,60,31,
-    function(v) Fish.waitDelay=v end,"Detik tunggu ikan")
+SetL:Button("📦 Equip Rod","Ambil AdvanceRod dari backpack",
+    function() equipRod() end)
+SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
+    function() unequipRod(); notify("Rod","Dikembalikan",2) end)
+SetL:Slider("Delay Tunggu Ikan","fishWait",2,20,6,
+    function(v) Fish.waitDelay=v end,"Detik tunggu sebelum tarik")
 
-SetR:Button("📋 Lihat Log","5 log terakhir",
-    function()
-        if #logLines == 0 then
-            notify("Log","Kosong",2); return
-        end
-        local txt = ""
-        for i = 1, math.min(5, #logLines) do
-            txt = txt..logLines[i].."\n"
-        end
-        notify("Log ("..#logLines.." total)", txt, 10)
-    end)
+SetR:Paragraph("XKID HUB v5.0",
+    "Struktur:\n"..
+    "Farming  · Shop\n"..
+    "Teleport · Player\n"..
+    "Security · Setting\n\n"..
+    "Remote: BridgeNet2\nFishing: FishRemotes")
 
-SetR:Button("🗑 Clear Log","Hapus semua log",
-    function()
-        logLines = {}
-        notify("Log","Dihapus",1)
-    end)
-
-SetR:Paragraph("XKID HUB v5.2",
-    "Update Besar-Besaran:\n"..
-    "✅ Fishing v2 (31.6s timing)\n"..
-    "✅ Farming v2 (slotIdx dinamis)\n"..
-    "✅ Fast Respawn System\n"..
-    "✅ Send Like (NEW)\n"..
-    "✅ Better Fly Control\n"..
-    "✅ Error Handling v2")
+SetR:Paragraph("Farming Info",
+    "Pilih area → pola → jumlah\nlalu Mulai Tanam\n\nAuto Cycle:\nBeli→Tanam→Tunggu→Panen\n\nMax 20 plot per cycle")
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                      INIT                               │
 -- └─────────────────────────────────────────────────────────┘
+-- Notif hasil scan yang sudah dilakukan sebelum UI
 local _totalPl = 0
-for _,v in pairs(AREA_PARTS or {}) do _totalPl=_totalPl+#v end
+for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 if _totalPl > 0 then
-    notify("✅ XKID HUB v5.2 Ready",
-        #AREA_NAMES.." area | ".._totalPl.." plot",5)
+    notify("✅ XKID HUB v5.1 Ready",
+        #AREA_NAMES.." area | ".._totalPl.." plot\nDropdown area sudah terisi!",5)
 else
-    notify("⚠ Warning","Plot tidak ditemukan!",6)
+    notify("⚠ Warning",
+        "Plot tidak ditemukan!\nBuka Farming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.2 - BIG UPDATE",
-    "Fishing v2 · Farming v2 · Fast Respawn · Send Like", 6)
+Library:Notification("XKID HUB v5.1",
+    "Farming · Shop · Teleport · Player · Security", 6)
 Library:ConfigSystem(Win)
 
-print("[XKID HUB v5.2] loaded — "..LP.Name)
+print("[XKID HUB] v5.1 loaded — "..LP.Name)
