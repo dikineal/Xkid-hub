@@ -235,6 +235,10 @@ local function buildAreaData()
         AREA_PARTS["Auto Scan"] = fallback
     end
 
+    -- Selalu inject grid areas setelah scan workspace
+    -- (dipanggil di sini agar Scan Ulang Area juga dapat grid)
+    injectGridAreas()
+
     print("[XKID] Area data built: "..#AREA_NAMES.." area")
 end
 
@@ -953,8 +957,6 @@ until Workspace:FindFirstChild("Land") ~= nil
 
 -- Scan sekarang sebelum dropdown dibuat
 buildAreaData()
--- Inject 5x5 grid areas dari data spy
-injectGridAreas()
 if #AREA_NAMES > 0 then
     Farm.selectedArea = AREA_NAMES[1]
     print("[XKID] Default area: "..Farm.selectedArea)
@@ -966,7 +968,7 @@ print(string.format("[XKID] Scan: %d area, %d plot", #AREA_NAMES, _tp))
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                  WINDOW & TABS                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB","sprout","v5.1",false)
+local Win = Library:Window("XKID HUB","sprout","v5.2",false)
 
 Win:TabSection("MAIN")
 local T_Farm = Win:Tab("Farming",  "leaf")
@@ -1557,7 +1559,7 @@ SetR:Paragraph("Farming Info",
 local _totalPl = 0
 for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 if _totalPl > 0 then
-    notify("✅ XKID HUB v5.1 Ready",
+    notify("✅ XKID HUB v5.2 Ready",
         #AREA_NAMES.." area | ".._totalPl.." plot\nDropdown area sudah terisi!",5)
 else
     notify("⚠ Warning",
