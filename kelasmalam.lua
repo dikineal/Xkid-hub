@@ -102,6 +102,65 @@ for _, c in ipairs(CROPS) do table.insert(cropDropNames, c.icon.." "..c.seed) en
 -- │                  AREA / PLOT DATA                       │
 -- └─────────────────────────────────────────────────────────┘
 -- Area tanam dari workspace (sesuai data Dex)
+-- ┌─────────────────────────────────────────────────────────┐
+-- │           MULTI-AREA + 5x5 GRID SYSTEM                 │
+-- │  Data dari cropPos spy (confirmed)                      │
+-- └─────────────────────────────────────────────────────────┘
+
+-- Generate 5x5 grid (25 titik = max server)
+local function gen5x5(cx, y, cz, spacing)
+    local pts = {}
+    for dx = -2, 2 do
+        for dz = -2, 2 do
+            table.insert(pts, Vector3.new(
+                cx + dx * spacing,
+                y,
+                cz + dz * spacing))
+        end
+    end
+    return pts
+end
+
+-- Area definitions dari data spy
+local GRID_AREAS = {
+    {
+        name    = "Map2 · AppleTree 5x5",
+        center  = Vector3.new(108.88, 70.50, -16.03),
+        spacing = 1.4,
+    },
+    {
+        name    = "Map2 · Sawi A 5x5",
+        center  = Vector3.new(96.70, 68.00, 96.94),
+        spacing = 5.0,
+    },
+    {
+        name    = "Map2 · Sawi B 5x5",
+        center  = Vector3.new(80.61, 69.50, -18.88),
+        spacing = 3.0,
+    },
+    {
+        name    = "Map2 · Sawi C 5x5",
+        center  = Vector3.new(58.67, 70.00, -10.45),
+        spacing = 3.5,
+    },
+}
+
+-- Inject grid areas ke AREA_PARTS sebelum buildAreaData
+local function injectGridAreas()
+    for _, g in ipairs(GRID_AREAS) do
+        local pts = gen5x5(g.center.X, g.center.Y, g.center.Z, g.spacing)
+        -- Buat fake BasePart proxy agar kompatibel dengan filterByPola
+        local parts = {}
+        for _, pos in ipairs(pts) do
+            -- Proxy object: hanya punya .Position
+            table.insert(parts, { Position = pos, _isGridPt = true })
+        end
+        table.insert(AREA_NAMES, g.name)
+        AREA_PARTS[g.name] = parts
+        print(string.format("[XKID] Grid area injected: %s → %d titik", g.name, #parts))
+    end
+end
+
 local AREA_INDICES = {52, 53, 54, 64, 65, 66, 67}
 local AREA_NAMES   = {}  -- nama dropdown
 local AREA_PARTS   = {}  -- nama → list BasePart
@@ -183,7 +242,7 @@ end
 local POLA_NAMES = {"Normal", "Rapat (terdekat)", "Selang-seling Lebar", "Selang-seling Panjang"}
 
 local function filterByPola(plots, pola, jumlah)
-    local max = math.min(jumlah, #plots, 20)
+    local max = math.min(jumlah, #plots, 25)
     local result = {}
 
     if pola == "Normal" then
@@ -306,11 +365,14 @@ local function tanamPlots()
     local count = 0
     local failed = 0
     for i, plot in ipairs(filtered) do
+        local hitPos  = plot.Position
+        -- hitPart: nil kalau grid proxy (tidak ada Part asli)
+        local hitPart = (not plot._isGridPt) and plot or nil
         local ok, err = pcall(function()
             ev:FireServer({{
                 slotIdx     = i,
-                hitPosition = plot.Position,
-                hitPart     = plot
+                hitPosition = hitPos,
+                hitPart     = hitPart
             }, "\x04"})
         end)
         if ok then
@@ -354,12 +416,15 @@ local function harvestAll()
 
     local count  = 0
     local failed = 0
+
+    -- Metode 1: firesignal simulate incoming harvest per plot
     for _, plot in ipairs(allPlots) do
+        local pos = plot.Position
         local ok, err = pcall(function()
             firesignal(ev.OnClientEvent, {
                 ["\r"] = {{
                     cropName  = Farm.selectedCrop.name,
-                    cropPos   = plot.Position,
+                    cropPos   = pos,
                     sellPrice = Farm.selectedCrop.sell,
                     drops     = {}
                 }},
@@ -374,6 +439,24 @@ local function harvestAll()
         end
         task.wait(0.15)
     end
+
+    -- Metode 2: ProximityPrompt — filter username kita
+    local myName = LP.Name:lower()
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            local obj = (v.ObjectText or ""):lower()
+            local act = (v.ActionText or ""):lower()
+            if obj:find(myName) or act:find("panen") or act:find("harvest") then
+                local parent = v.Parent
+                if parent and not (act:find("sit") or act:find("door")) then
+                    pcall(function() fireproximityprompt(v) end)
+                    pcall(function() v:InputHoldBegin(); task.wait(0.1); v:InputHoldEnd() end)
+                    task.wait(0.1)
+                end
+            end
+        end
+    end
+
     if failed > 0 then
         notify("Farm","Harvest: "..count.." OK, "..failed.." gagal",4)
         xlog("Harvest","Selesai: ok="..count.." fail="..failed, false)
@@ -870,6 +953,8 @@ until Workspace:FindFirstChild("Land") ~= nil
 
 -- Scan sekarang sebelum dropdown dibuat
 buildAreaData()
+-- Inject 5x5 grid areas dari data spy
+injectGridAreas()
 if #AREA_NAMES > 0 then
     Farm.selectedArea = AREA_NAMES[1]
     print("[XKID] Default area: "..Farm.selectedArea)
@@ -929,9 +1014,9 @@ FL:Dropdown("Pola Tanam","polaSel",POLA_NAMES,
 -- ── Eksekusi Tanam ───────────────────────────────────────
 FL:Label("🌱 Eksekusi Tanam")
 
-FL:Slider("Jumlah Bibit (plot)","plantQty",1,20,5,
+FL:Slider("Jumlah Bibit (plot)","plantQty",1,25,5,
     function(v) Farm.jumlahTanam=v end,
-    "Berapa plot yang akan ditanam (max 20)")
+    "Berapa plot yang akan ditanam (max 25)")
 
 FL:Button("🌱 Mulai Tanam","Tanam sesuai area & pola yang dipilih",
     function()
@@ -1454,15 +1539,16 @@ SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
 SetL:Slider("Delay Tunggu Ikan","fishWait",2,20,6,
     function(v) Fish.waitDelay=v end,"Detik tunggu sebelum tarik")
 
-SetR:Paragraph("XKID HUB v5.0",
+SetR:Paragraph("XKID HUB v5.2",
     "Struktur:\n"..
     "Farming  · Shop\n"..
     "Teleport · Player\n"..
     "Security · Setting\n\n"..
-    "Remote: BridgeNet2\nFishing: FishRemotes")
+    "Remote: BridgeNet2\nFishing: FishRemotes\n\n"..
+    "Multi-Area 5x5 Grid\n4 area Map2 tersedia")
 
 SetR:Paragraph("Farming Info",
-    "Pilih area → pola → jumlah\nlalu Mulai Tanam\n\nAuto Cycle:\nBeli→Tanam→Tunggu→Panen\n\nMax 20 plot per cycle")
+    "Pilih area → pola → jumlah\nlalu Mulai Tanam\n\nAuto Cycle:\nBeli→Tanam→Tunggu→Panen\n\nMax 25 plot per cycle\n(server limit)\n\nGrid area tersedia:\nAppleTree, Sawi A/B/C")
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                      INIT                               │
@@ -1478,8 +1564,8 @@ else
         "Plot tidak ditemukan!\nBuka Farming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.1",
-    "Farming · Shop · Teleport · Player · Security", 6)
+Library:Notification("XKID HUB v5.2",
+    "Farming · Shop · Teleport · Player · Security\n5x5 Grid · Max 25 tanaman", 6)
 Library:ConfigSystem(Win)
 
-print("[XKID HUB] v5.1 loaded — "..LP.Name)
+print("[XKID HUB] v5.2 loaded — "..LP.Name)
