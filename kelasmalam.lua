@@ -1,61 +1,102 @@
--- Complete Script for Kelas Malam with all specified features
+--[[
 -- Fast Respawn System
--- Manual Farming with 20 plot grid
+-- Features: 
+-- 1. Instant respawn
+-- 2. Auto respawn
+--]]
+function fastRespawn()
+    -- Implementation code...
+end
+
+--[[
+-- Manual Farming
+-- Features: 20 plot grid
+--]]
+function manualFarming()
+    -- Implementation code...
+end
+
+--[[
 -- Auto Farming
--- Auto Fishing with 31.6s timing
--- Aurora UI with all tabs (Farming, Shop, Teleport, Player, Security, Setting)
--- Fly System optimized for mobile
--- Teleport with Save/Load
+-- Features: Beli-Tanam-Panen loop
+--]]
+function autoFarming()
+    -- Implementation code...
+end
+
+--[[
+-- Auto Fishing
+-- Features: 31.6s timing
+--]]
+function autoFishing()
+    -- Implementation code...
+end
+
+--[[
+-- Aurora UI
+-- Features: All tabs including Farming, Shop, Teleport, Player, Security, Setting
+--]]
+function createAuroraUI()
+    -- Implementation code...
+end
+
+--[[
+-- Mobile-optimized Fly System
+--]]
+function mobileFly()
+    -- Implementation code...
+end
+
+--[[
+-- Teleport System
+-- Features: Save/Load 5 locations
+--]]
+function teleportSystem()
+    -- Implementation code...
+end
+
+--[[
 -- Shop System
+-- Features: Manual and quick buy
+--]]
+function shopSystem()
+    -- Implementation code...
+end
+
+--[[
 -- ESP Player and Crops
+--]]
+function espSystem()
+    -- Implementation code...
+end
+
+--[[
 -- Anti-AFK
+--]]
+function antiAFK()
+    -- Implementation code...
+end
+
+--[[
 -- Anti-Kick
--- All other features
-
--- Add your Lua script code here...
-
-function FastRespawn()
-    -- code for fast respawn
+--]]
+function antiKick()
+    -- Implementation code...
 end
 
-function ManualFarming()
-    -- code for manual farming
+-- Entry point to initialize the script
+function main()
+    fastRespawn()
+    manualFarming()
+    autoFarming()
+    autoFishing()
+    createAuroraUI()
+    mobileFly()
+    teleportSystem()
+    shopSystem()
+    espSystem()
+    antiAFK()
+    antiKick()
 end
 
-function AutoFarming()
-    -- code for auto farming
-end
-
-function AutoFishing()
-    -- code for auto fishing
-end
-
-function AuroraUI()
-    -- code for UI
-end
-
-function FlySystem()
-    -- code for fly system
-end
-
-function Teleport()
-    -- code for teleporting
-end
-
-function ShopSystem()
-    -- code for shop
-end
-
-function ESP()
-    -- code for ESP
-end
-
-function AntiAFK()
-    -- code for anti-AFK
-end
-
-function AntiKick()
-    -- code for anti-kick
-end
-
--- invoke functions as needed
+main()
