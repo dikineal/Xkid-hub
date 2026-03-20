@@ -4,7 +4,7 @@
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
-║  Security  ·  Setting
+║  Security  ·  Setting                                    ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -62,6 +62,23 @@ local function getFishEv(name)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
+-- │         IN-GAME LOG (Android friendly)                  │
+-- │  Tidak ada F9 — error tampil di notif + executor log   │
+-- └─────────────────────────────────────────────────────────┘
+local LOG_MAX  = 30
+local logLines = {}
+
+local function xlog(tag, msg, isError)
+    local entry = string.format("[%s][%s] %s", os.date("%H:%M:%S"), tag, msg)
+    table.insert(logLines, 1, entry)
+    if #logLines > LOG_MAX then table.remove(logLines) end
+    print(entry)  -- executor log (Delta/Arceus ada log viewer)
+    if isError then
+        pcall(function() Library:Notification("❌ "..tag, msg:sub(1,80), 5) end)
+    end
+end
+
+-- ┌─────────────────────────────────────────────────────────┐
 -- │                   CROP DATA                             │
 -- └─────────────────────────────────────────────────────────┘
 local CROPS = {
@@ -85,6 +102,65 @@ for _, c in ipairs(CROPS) do table.insert(cropDropNames, c.icon.." "..c.seed) en
 -- │                  AREA / PLOT DATA                       │
 -- └─────────────────────────────────────────────────────────┘
 -- Area tanam dari workspace (sesuai data Dex)
+-- ┌─────────────────────────────────────────────────────────┐
+-- │           MULTI-AREA + 5x5 GRID SYSTEM                 │
+-- │  Data dari cropPos spy (confirmed)                      │
+-- └─────────────────────────────────────────────────────────┘
+
+-- Generate 5x5 grid (25 titik = max server)
+local function gen5x5(cx, y, cz, spacing)
+    local pts = {}
+    for dx = -2, 2 do
+        for dz = -2, 2 do
+            table.insert(pts, Vector3.new(
+                cx + dx * spacing,
+                y,
+                cz + dz * spacing))
+        end
+    end
+    return pts
+end
+
+-- Area definitions dari data spy
+local GRID_AREAS = {
+    {
+        name    = "Map2 · AppleTree 5x5",
+        center  = Vector3.new(108.88, 70.50, -16.03),
+        spacing = 1.4,
+    },
+    {
+        name    = "Map2 · Sawi A 5x5",
+        center  = Vector3.new(96.70, 68.00, 96.94),
+        spacing = 5.0,
+    },
+    {
+        name    = "Map2 · Sawi B 5x5",
+        center  = Vector3.new(80.61, 69.50, -18.88),
+        spacing = 3.0,
+    },
+    {
+        name    = "Map2 · Sawi C 5x5",
+        center  = Vector3.new(58.67, 70.00, -10.45),
+        spacing = 3.5,
+    },
+}
+
+-- Inject grid areas ke AREA_PARTS sebelum buildAreaData
+local function injectGridAreas()
+    for _, g in ipairs(GRID_AREAS) do
+        local pts = gen5x5(g.center.X, g.center.Y, g.center.Z, g.spacing)
+        -- Buat fake BasePart proxy agar kompatibel dengan filterByPola
+        local parts = {}
+        for _, pos in ipairs(pts) do
+            -- Proxy object: hanya punya .Position
+            table.insert(parts, { Position = pos, _isGridPt = true })
+        end
+        table.insert(AREA_NAMES, g.name)
+        AREA_PARTS[g.name] = parts
+        print(string.format("[XKID] Grid area injected: %s → %d titik", g.name, #parts))
+    end
+end
+
 local AREA_INDICES = {52, 53, 54, 64, 65, 66, 67}
 local AREA_NAMES   = {}  -- nama dropdown
 local AREA_PARTS   = {}  -- nama → list BasePart
@@ -159,6 +235,10 @@ local function buildAreaData()
         AREA_PARTS["Auto Scan"] = fallback
     end
 
+    -- Selalu inject grid areas setelah scan workspace
+    -- (dipanggil di sini agar Scan Ulang Area juga dapat grid)
+    injectGridAreas()
+
     print("[XKID] Area data built: "..#AREA_NAMES.." area")
 end
 
@@ -166,7 +246,7 @@ end
 local POLA_NAMES = {"Normal", "Rapat (terdekat)", "Selang-seling Lebar", "Selang-seling Panjang"}
 
 local function filterByPola(plots, pola, jumlah)
-    local max = math.min(jumlah, #plots, 20)
+    local max = math.min(jumlah, #plots, 25)
     local result = {}
 
     if pola == "Normal" then
@@ -180,7 +260,9 @@ local function filterByPola(plots, pola, jumlah)
                 table.insert(sorted, {part=p, dist=(p.Position-root.Position).Magnitude})
             end
             table.sort(sorted, function(a,b) return a.dist < b.dist end)
-            for i = 1, max do table.insert(result, sorted[i].part) end
+            -- Bug 5 fix: clamp ke jumlah sorted yang tersedia
+            local limit = math.min(max, #sorted)
+            for i = 1, limit do table.insert(result, sorted[i].part) end
         else
             for i = 1, max do table.insert(result, plots[i]) end
         end
@@ -246,38 +328,72 @@ local Farm = {
 -- Remote: Beli Bibit
 local function beliBibit(crop, qty)
     local ev = getBridge()
-    if not ev then notify("Farm","BridgeNet2 tidak ada!",4); return false end
-    local ok = pcall(function()
+    if not ev then
+        notify("Farm ❌","BridgeNet2 tidak ada! Remote hilang/berubah",5)
+        xlog("BeliBibit","BridgeNet2 nil / remote hilang",true)
+        return false
+    end
+    local ok, err = pcall(function()
         ev:FireServer({{ cropName=crop.name, amount=qty }, "\a"})
     end)
+    if not ok then
+        notify("Farm ❌","Beli gagal: "..tostring(err):sub(1,60),5)
+        xlog("BeliBibit","FireServer error: "..tostring(err):sub(1,60),true)
+    end
     return ok
 end
 
 -- Remote: Tanam
 local function tanamPlots()
     local ev = getBridge()
-    if not ev then notify("Farm","BridgeNet2 tidak ada!",4); return 0 end
+    if not ev then
+        notify("Farm ❌","BridgeNet2 tidak ada!",5)
+        xlog("Tanam","BridgeNet2 nil / remote hilang",true)
+        return 0
+    end
 
     local plots = AREA_PARTS[Farm.selectedArea]
     if not plots or #plots == 0 then
-        notify("Farm","Area '"..Farm.selectedArea.."' tidak ada plot!",5)
+        notify("Farm ❌","Area '"..Farm.selectedArea.."' tidak ada plot!\nCoba Scan Ulang Area",5)
+        xlog("Tanam","Area kosong: "..tostring(Farm.selectedArea),true)
         return 0
     end
 
     local filtered = filterByPola(plots, Farm.selectedPola, Farm.jumlahTanam)
-    if #filtered == 0 then notify("Farm","Tidak ada plot setelah filter!",4); return 0 end
+    if #filtered == 0 then
+        notify("Farm ❌","Plot kosong setelah filter pola: "..Farm.selectedPola,4)
+        xlog("Tanam","Filter 0 plot, pola: "..Farm.selectedPola,true)
+        return 0
+    end
 
     local count = 0
+    local failed = 0
     for i, plot in ipairs(filtered) do
-        pcall(function()
+        local hitPos  = plot.Position
+        -- hitPart: nil kalau grid proxy (tidak ada Part asli)
+        local hitPart = (not plot._isGridPt) and plot or nil
+        local ok, err = pcall(function()
             ev:FireServer({{
                 slotIdx     = i,
-                hitPosition = plot.Position,
-                hitPart     = plot
+                hitPosition = hitPos,
+                hitPart     = hitPart
             }, "\x04"})
         end)
-        count = count + 1
-        task.wait(0.2)
+        if ok then
+            count = count + 1
+        else
+            failed = failed + 1
+            xlog("Tanam","FireServer["..i.."] error: "..tostring(err):sub(1,50), failed>=3)
+            if failed >= 3 then
+                notify("Farm ⚠","3+ error berturut, tanam dihentikan",5)
+                xlog("Tanam","3 error berturut, loop dibatalkan",true)
+                break
+            end
+        end
+        task.wait(0.25)
+    end
+    if failed > 0 then
+        notify("Farm","Tanam: "..count.." OK, "..failed.." gagal",4)
     end
     return count
 end
@@ -285,58 +401,105 @@ end
 -- Remote: Harvest semua
 local function harvestAll()
     local ev = getBridge()
-    if not ev then notify("Farm","BridgeNet2 tidak ada!",4); return 0 end
+    if not ev then
+        notify("Farm ❌","BridgeNet2 tidak ada!",5)
+        xlog("Harvest","BridgeNet2 nil / remote hilang",true)
+        return 0
+    end
 
-    -- Harvest semua area yang ada
     local allPlots = {}
     for _, parts in pairs(AREA_PARTS) do
         for _, p in ipairs(parts) do table.insert(allPlots, p) end
     end
 
-    if #allPlots == 0 then notify("Farm","Tidak ada plot!",4); return 0 end
+    if #allPlots == 0 then
+        notify("Farm ❌","Tidak ada plot! Scan ulang area dulu",5)
+        xlog("Harvest","Tidak ada plot terscan",true)
+        return 0
+    end
 
-    local count = 0
+    local count  = 0
+    local failed = 0
+
+    -- Metode 1: firesignal simulate incoming harvest per plot
     for _, plot in ipairs(allPlots) do
-        pcall(function()
+        local pos = plot.Position
+        local ok, err = pcall(function()
             firesignal(ev.OnClientEvent, {
                 ["\r"] = {{
                     cropName  = Farm.selectedCrop.name,
-                    cropPos   = plot.Position,
+                    cropPos   = pos,
                     sellPrice = Farm.selectedCrop.sell,
                     drops     = {}
                 }},
                 ["\x02"] = {0, 0}
             })
         end)
-        count = count + 1
+        if ok then
+            count = count + 1
+        else
+            failed = failed + 1
+            xlog("Harvest","firesignal error: "..tostring(err):sub(1,50), false)
+        end
         task.wait(0.15)
+    end
+
+    -- Metode 2: ProximityPrompt — filter username kita
+    local myName = LP.Name:lower()
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            local obj = (v.ObjectText or ""):lower()
+            local act = (v.ActionText or ""):lower()
+            if obj:find(myName) or act:find("panen") or act:find("harvest") then
+                local parent = v.Parent
+                if parent and not (act:find("sit") or act:find("door")) then
+                    pcall(function() fireproximityprompt(v) end)
+                    pcall(function() v:InputHoldBegin(); task.wait(0.1); v:InputHoldEnd() end)
+                    task.wait(0.1)
+                end
+            end
+        end
+    end
+
+    if failed > 0 then
+        notify("Farm","Harvest: "..count.." OK, "..failed.." gagal",4)
+        xlog("Harvest","Selesai: ok="..count.." fail="..failed, false)
     end
     return count
 end
 
--- Auto Cycle
+-- Auto Cycle (Fix 3: double cycle guard)
 local function runCycle()
-    -- 1. Beli bibit (kalau autoBeli aktif atau stok mau habis)
+    -- 1. Beli bibit
     if Farm.autoBeli then
         notify("Cycle [1/4]","Beli "..Farm.selectedCrop.seed.." x"..Farm.jumlahAutoBeli,2)
-        beliBibit(Farm.selectedCrop, Farm.jumlahAutoBeli)
+        local bOk = beliBibit(Farm.selectedCrop, Farm.jumlahAutoBeli)
+        if not bOk then
+            xlog("Cycle","Beli bibit gagal, lanjut tanam",false)
+        end
         task.wait(1.5)
     end
 
     -- 2. Tanam
     notify("Cycle [2/4]","Tanam "..Farm.jumlahTanam.." plot ("..Farm.selectedPola..")...",2)
     local planted = tanamPlots()
-    notify("Cycle [2/4]",planted.." plot berhasil ditanam",3)
+    if planted == 0 then
+        notify("Cycle ⚠","Tidak ada plot ditanam! Cycle dibatalkan.",5)
+        xlog("Cycle","Planted=0, cycle dibatalkan",true)
+        return
+    end
+    notify("Cycle [2/4]",planted.." plot ditanam",3)
     task.wait(1)
 
     -- 3. Tunggu tumbuh
-    notify("Cycle [3/4]","Menunggu "..Farm.growDelay.."s tumbuh...",3)
+    notify("Cycle [3/4]","Menunggu "..Farm.growDelay.."s...",3)
     task.wait(Farm.growDelay)
 
     -- 4. Harvest
     notify("Cycle [4/4]","Panen semua...",2)
     local harvested = harvestAll()
-    notify("✅ Cycle Selesai","Panen: "..harvested.." plot",4)
+    notify("✅ Cycle Selesai","Tanam: "..planted.." | Panen: "..harvested,4)
+    xlog("Cycle","Selesai: planted="..planted.." harvested="..harvested, false)
     task.wait(1)
 end
 
@@ -399,9 +562,12 @@ local function startESPPlayer()
 end
 
 local function stopESPPlayer()
-    if ESPPl.conn then ESPPl.conn:Disconnect(); ESPPl.conn=nil end
+    if ESPPl.conn then
+        ESPPl.conn:Disconnect()  -- disconnect beneran, bukan cuma skip
+        ESPPl.conn = nil
+    end
     for p in pairs(ESPPl.data) do _rmPlBill(p) end
-    ESPPl.data={}
+    ESPPl.data = {}
 end
 
 Players.PlayerRemoving:Connect(_rmPlBill)
@@ -436,7 +602,7 @@ end
 
 local function _mkCropBill(part, name)
     if ESPCr.tagged[part] then return end
-    ESPCr.tagged[part]=true
+    ESPCr.tagged[part] = true
 
     local bill = Instance.new("BillboardGui")
     bill.Name="XKID_CESP"; bill.Size=UDim2.new(0,100,0,28)
@@ -455,20 +621,39 @@ local function _mkCropBill(part, name)
     lbl.TextStrokeTransparency=0.3; lbl.Text=name.."\n0%"
     lbl.TextColor3=Color3.fromRGB(255,80,80)
 
-    local conn = RunService.Heartbeat:Connect(function()
-        if not bill or not bill.Parent then return end
-        local pct = _pct(part,name)
-        lbl.Text=name.."\n"..pct.."%"
-        lbl.TextColor3=_pctCol(pct)
-        lbl.TextStrokeColor3=Color3.fromRGB(0,0,0)
+    -- TIDAK ada per-bill connection — master loop yang update semua
+    table.insert(ESPCr.bills, {bill=bill, lbl=lbl, part=part, name=name})
+end
+
+-- Master connection: 1 Heartbeat untuk semua tanaman, throttle 0.5s
+local _espCropMaster    = nil
+local _espCropLastUpd   = 0
+
+local function _startESPMaster()
+    if _espCropMaster then return end
+    _espCropMaster = RunService.Heartbeat:Connect(function()
+        local now = tick()
+        if now - _espCropLastUpd < 0.5 then return end  -- update tiap 0.5s, bukan tiap frame
+        _espCropLastUpd = now
+        for _, e in ipairs(ESPCr.bills) do
+            if e.bill and e.bill.Parent and e.part and e.part.Parent then
+                local pct = _pct(e.part, e.name)
+                e.lbl.Text       = e.name.."\n"..pct.."%"
+                e.lbl.TextColor3 = _pctCol(pct)
+                e.lbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+            end
+        end
     end)
-    table.insert(ESPCr.bills,{bill=bill,conn=conn})
+end
+
+local function _stopESPMaster()
+    if _espCropMaster then _espCropMaster:Disconnect(); _espCropMaster=nil end
 end
 
 local function clearESPCrop()
+    _stopESPMaster()
     for _,e in ipairs(ESPCr.bills) do
-        pcall(function() e.conn:Disconnect() end)
-        pcall(function() e.bill:Destroy()    end)
+        pcall(function() e.bill:Destroy() end)
     end
     ESPCr.bills={}; ESPCr.tagged={}
 end
@@ -493,13 +678,14 @@ end
 
 local function startESPCrop()
     clearESPCrop(); ESPCr.lastScan=0; scanESPCrop()
+    _startESPMaster()  -- 1 master connection, bukan per-bill
     ESPCr.loopTask=task.spawn(function()
         while ESPCr.active do task.wait(5); if ESPCr.active then scanESPCrop() end end
     end)
 end
 
 local function stopESPCrop()
-    clearESPCrop()
+    clearESPCrop()  -- sudah include _stopESPMaster
     if ESPCr.loopTask then pcall(function() task.cancel(ESPCr.loopTask) end); ESPCr.loopTask=nil end
 end
 
@@ -515,7 +701,9 @@ local Move = {
     jumpConn   = nil,
 }
 
+-- Speed loop — tidak aktif saat fly ON
 RunService.RenderStepped:Connect(function()
+    if flyFlying then return end  -- Bug 2 fix: jangan override saat fly
     local h=getHum(); if h then h.WalkSpeed=Move.speed end
 end)
 
@@ -551,157 +739,120 @@ local function setInfJump(v)
 end
 
 -- ════════════════════════════════════════
---  MAID CLASS
+--  FLY SYSTEM — BodyVelocity + BodyGyro
 -- ════════════════════════════════════════
-local Maid = {}
-Maid.__index = Maid
+local ControlModule = nil
+pcall(function()
+    ControlModule = require(
+        LP:WaitForChild("PlayerScripts")
+          :WaitForChild("PlayerModule")
+          :WaitForChild("ControlModule")
+    )
+end)
 
-function Maid.new()
-    return setmetatable({ _tasks = {} }, Maid)
-end
+local flyFlying = false
+local flyConn   = nil
+local flyBV     = nil
+local flyBG     = nil
 
-function Maid:Give(task)
-    table.insert(self._tasks, task)
-    return task
-end
-
-function Maid:Clean()
-    for _, task in ipairs(self._tasks) do
-        if typeof(task) == "RBXScriptConnection" then
-            task:Disconnect()
-        elseif typeof(task) == "Instance" then
-            task:Destroy()
-        elseif type(task) == "function" then
-            task()
-        end
-    end
-    self._tasks = {}
-end
-
--- ════════════════════════════════════════
---  FLY SYSTEM — Admin Style
---  Kamera kontrol penuh arah terbang
---  Smooth lerp velocity
--- ════════════════════════════════════════
-local Fly = {
-    on    = false,
-    speed = 60,
-    maid  = Maid.new()
-}
-
-function Fly:start()
-    if self.on then return end
+local function startFly()
+    if flyFlying then return end
     local root = getRoot(); if not root then return end
-    self.on = true
+    local hum  = getHum();  if not hum  then return end
+    flyFlying = true
 
-    local hum = getHum()
-    if hum then
-        hum.PlatformStand = true
-    end
+    hum.PlatformStand = true
 
-    local bv = Instance.new("BodyVelocity", root)
-    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    bv.Velocity = Vector3.zero
+    flyBV = Instance.new("BodyVelocity", root)
+    flyBV.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+    flyBV.Velocity = Vector3.zero
 
-    local bg = Instance.new("BodyGyro", root)
-    bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-    bg.P         = 9e4
-    bg.D         = 1e3
-    bg.CFrame    = root.CFrame
+    flyBG = Instance.new("BodyGyro", root)
+    flyBG.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+    flyBG.P = 1e5
+    flyBG.D = 1e3
 
-    self.maid:Give(bv)
-    self.maid:Give(bg)
-
-    -- Keys untuk PC
-    local keys = {
-        forward  = false,
-        backward = false,
-        left     = false,
-        right    = false,
-        up       = false,
-        down     = false,
-    }
-
-    self.maid:Give(UIS.InputBegan:Connect(function(i, gpe)
-        if gpe then return end
-        if i.KeyCode == Enum.KeyCode.W then keys.forward  = true end
-        if i.KeyCode == Enum.KeyCode.S then keys.backward = true end
-        if i.KeyCode == Enum.KeyCode.A then keys.left     = true end
-        if i.KeyCode == Enum.KeyCode.D then keys.right    = true end
-        if i.KeyCode == Enum.KeyCode.E then keys.up       = true end
-        if i.KeyCode == Enum.KeyCode.Q then keys.down     = true end
-        if i.KeyCode == Enum.KeyCode.Space then keys.up   = true end
-    end))
-
-    self.maid:Give(UIS.InputEnded:Connect(function(i)
-        if i.KeyCode == Enum.KeyCode.W then keys.forward  = false end
-        if i.KeyCode == Enum.KeyCode.S then keys.backward = false end
-        if i.KeyCode == Enum.KeyCode.A then keys.left     = false end
-        if i.KeyCode == Enum.KeyCode.D then keys.right    = false end
-        if i.KeyCode == Enum.KeyCode.E then keys.up       = false end
-        if i.KeyCode == Enum.KeyCode.Q then keys.down     = false end
-        if i.KeyCode == Enum.KeyCode.Space then keys.up   = false end
-    end))
-
-    self.maid:Give(RunService.RenderStepped:Connect(function()
+    flyConn = RunService.RenderStepped:Connect(function(dt)
         local r2  = getRoot(); if not r2 then return end
         local h2  = getHum();  if not h2 then return end
         local cam = Workspace.CurrentCamera
         local cf  = cam.CFrame
 
         h2.PlatformStand = true
+        h2:ChangeState(Enum.HumanoidStateType.Physics)
 
-        -- Baca input joystick (mobile)
-        local md  = h2.MoveDirection
-        local dir = Vector3.zero
+        local md = Vector3.zero
+        pcall(function() md = ControlModule:GetMoveVector() end)
 
-        -- Mobile: joystick + kamera Y untuk naik/turun
-        if md.Magnitude > 0.01 then
-            -- Arah gerak ikut LookVector kamera PENUH (termasuk Y)
-            local look = cf.LookVector
-            local rgt  = cf.RightVector
-            dir = look * (-md.Z) + rgt * md.X
+        local look  = Vector3.new(cf.LookVector.X,  0, cf.LookVector.Z)
+        local right = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
+        if look.Magnitude  > 0 then look  = look.Unit  end
+        if right.Magnitude > 0 then right = right.Unit end
+
+        local move = right * md.X + look * (-md.Z)  -- fix: negate Z
+        if move.Magnitude > 1 then move = move.Unit end
+
+        local pitch = cf.LookVector.Y
+        local vVel  = 0
+        if math.abs(pitch) > 0.15 then  -- threshold lebih tinggi (0.05 → 0.15)
+            -- Kurangi multiplier (2.5 → 1.2) supaya tidak terlalu responsif
+            local t = (math.abs(pitch) - 0.15) / (1 - 0.15)
+            vVel = math.sign(pitch) * t * Move.flySpeed * 1.2
         end
 
-        -- PC: WASD + E/Q
-        if keys.forward  then dir = dir + cf.LookVector  end
-        if keys.backward then dir = dir - cf.LookVector  end
-        if keys.right    then dir = dir + cf.RightVector end
-        if keys.left     then dir = dir - cf.RightVector end
-        if keys.up       then dir = dir + Vector3.new(0,1,0) end
-        if keys.down     then dir = dir - Vector3.new(0,1,0) end
+        local target = Vector3.new(
+            move.X * Move.flySpeed,
+            vVel,
+            move.Z * Move.flySpeed
+        )
 
-        -- Normalize
-        if dir.Magnitude > 1 then dir = dir.Unit end
+        -- Anti gravity stabil
+        target = target + Vector3.new(0, Workspace.Gravity * dt, 0)
 
-        -- Smooth velocity
-        local target = dir * self.speed
-        bv.Velocity  = bv.Velocity:Lerp(target, 0.25)
+        flyBV.Velocity = target
 
-        -- Gyro ikut kamera
-        bg.CFrame = cf
-    end))
+        -- Fix: flat look only, tidak ikut tilt kamera atas/bawah
+        local flatLook = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+        if flatLook.Magnitude > 0.01 then
+            flyBG.CFrame = CFrame.lookAt(r2.Position, r2.Position + flatLook)
+        end
+    end)
 end
 
-function Fly:stop()
-    self.on = false
-    self.maid:Clean()
-    local h = getHum()
-    if h then
-        h.PlatformStand = false
-        h.AutoRotate    = true
+local function stopFly()
+    flyFlying = false
+    -- Disconnect loop DULU sebelum apapun
+    if flyConn then flyConn:Disconnect(); flyConn = nil end
+    -- Hapus physics instances
+    if flyBV then pcall(function() flyBV:Destroy() end); flyBV = nil end
+    if flyBG then pcall(function() flyBG:Destroy() end); flyBG = nil end
+    -- Kembalikan Humanoid ke normal
+    local hum = getHum()
+    if hum then
+        hum.PlatformStand = false
+        hum.AutoRotate    = true
+        hum.WalkSpeed     = Move.speed  -- Bug 6 fix: restore speed
+        -- Paksa keluar dari Physics state
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        task.defer(function()
+            local h = getHum()
+            if h then
+                h.PlatformStand = false
+                h.WalkSpeed     = Move.speed
+                h:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end)
     end
 end
-
-local function startFly() Fly.speed = Move.flySpeed; Fly:start() end
-local function stopFly()  Fly:stop() end
 
 LP.CharacterAdded:Connect(function()
     task.wait(0.6)
     -- Restart fly jika masih aktif
-    if Fly.on then
-        Fly.on = false
-        Fly.maid:Clean()
+    if flyFlying then
+        flyFlying = false
+        if flyConn then flyConn:Disconnect(); flyConn=nil end
+        if flyBV then pcall(function() flyBV:Destroy() end); flyBV=nil end
+        if flyBG then pcall(function() flyBG:Destroy() end); flyBG=nil end
         task.wait(0.3)
         startFly()
     end
@@ -817,7 +968,7 @@ print(string.format("[XKID] Scan: %d area, %d plot", #AREA_NAMES, _tp))
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                  WINDOW & TABS                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB","sprout","v5.1",false)
+local Win = Library:Window("XKID HUB","sprout","v5.2",false)
 
 Win:TabSection("MAIN")
 local T_Farm = Win:Tab("Farming",  "leaf")
@@ -865,9 +1016,9 @@ FL:Dropdown("Pola Tanam","polaSel",POLA_NAMES,
 -- ── Eksekusi Tanam ───────────────────────────────────────
 FL:Label("🌱 Eksekusi Tanam")
 
-FL:Slider("Jumlah Bibit (plot)","plantQty",1,20,5,
+FL:Slider("Jumlah Bibit (plot)","plantQty",1,25,5,
     function(v) Farm.jumlahTanam=v end,
-    "Berapa plot yang akan ditanam (max 20)")
+    "Berapa plot yang akan ditanam (max 25)")
 
 FL:Button("🌱 Mulai Tanam","Tanam sesuai area & pola yang dipilih",
     function()
@@ -886,22 +1037,35 @@ FR:Label("🔄 Auto Cycle")
 FR:Toggle("Auto Farm (Full Cycle)","autoCycle",false,
     "Beli → Tanam → Tunggu → Panen → Ulangi",
     function(v)
-        Farm.autoCycleOn=v
+        Farm.autoCycleOn = v
         if v then
-            if Farm.selectedArea=="" then
-                notify("Farm","Pilih area tanam dulu!",3)
-                Farm.autoCycleOn=false; return
+            if Farm.selectedArea == "" then
+                notify("Farm ❌","Pilih area tanam dulu!",3)
+                Farm.autoCycleOn = false; return
             end
-            Farm.autoCycleTask=task.spawn(function()
+            -- Guard: cancel task lama dulu sebelum spawn baru
+            if Farm.autoCycleTask then
+                pcall(function() task.cancel(Farm.autoCycleTask) end)
+                Farm.autoCycleTask = nil
+                task.wait(0.3)  -- tunggu task lama benar-benar mati
+            end
+            Farm.autoCycleTask = task.spawn(function()
                 while Farm.autoCycleOn do
-                    runCycle(); task.wait(2)
+                    local ok, err = pcall(runCycle)
+                    if not ok then
+                        notify("Cycle ❌","Error: "..tostring(err):sub(1,60),5)
+                        xlog("Cycle","CRASH: "..tostring(err):sub(1,80), true)
+                        task.wait(5)  -- backoff sebelum retry
+                    else
+                        task.wait(2)
+                    end
                 end
             end)
-            notify("Auto Farm","ON",3)
+            notify("Auto Farm","ON — "..Farm.selectedCrop.seed,3)
         else
             if Farm.autoCycleTask then
                 pcall(function() task.cancel(Farm.autoCycleTask) end)
-                Farm.autoCycleTask=nil
+                Farm.autoCycleTask = nil
             end
             notify("Auto Farm","OFF",2)
         end
@@ -1013,20 +1177,23 @@ SL:Button("🔄 Refresh Isi Tas","Lihat semua item di backpack",
     end)
 
 -- Auto refresh inventory display
-local invDisplay = ""
-local invConn    = nil
+local invDisplay  = ""
+local invConn     = nil
+local _invRunning = false  -- external flag, bukan capture v
 
 SL:Toggle("Auto Refresh Tas","autoInv",false,
     "Update isi tas setiap 3 detik",
     function(v)
+        _invRunning = v  -- set external flag
         if v then
+            if invConn then pcall(function() task.cancel(invConn) end); invConn=nil end
             invConn = task.spawn(function()
-                while v do
+                while _invRunning do  -- pakai external flag, bukan v yang ter-capture
                     local bp = LP:FindFirstChild("Backpack")
                     if bp then
                         local items = bp:GetChildren()
                         invDisplay = ""
-                        for _,item in ipairs(items) do
+                        for _, item in ipairs(items) do
                             invDisplay = invDisplay.."• "..item.Name.."\n"
                         end
                         if #items == 0 then invDisplay = "Tas kosong" end
@@ -1035,6 +1202,7 @@ SL:Toggle("Auto Refresh Tas","autoInv",false,
                 end
             end)
         else
+            _invRunning = false
             if invConn then pcall(function() task.cancel(invConn) end); invConn=nil end
         end
         notify("Auto Refresh Tas", v and "ON" or "OFF", 2)
@@ -1178,9 +1346,21 @@ local PL   = PP:Section("⚡ Speed & Jump","Left")
 local PR   = PP:Section("🚀 Fly & ESP","Right")
 
 PL:Slider("Walk Speed","ws",16,500,16,
-    function(v) Move.speed=v end,"Default 16")
+    function(v)
+        Move.speed=v
+        -- Langsung apply kalau tidak fly
+        if not flyFlying then
+            local h=getHum(); if h then h.WalkSpeed=v end
+        end
+    end,"Default 16")
 PL:Button("Reset Speed","Ke 16",
-    function() Move.speed=16; notify("Speed","Reset 16",2) end)
+    function()
+        Move.speed=16
+        if not flyFlying then
+            local h=getHum(); if h then h.WalkSpeed=16 end
+        end
+        notify("Speed","Reset 16",2)
+    end)
 PL:Slider("Jump Power","jp",50,500,50,
     function(v) local h=getHum()
         if h then h.JumpPower=v; h.UseJumpPower=true end
@@ -1192,21 +1372,25 @@ PL:Toggle("NoClip","noclip",false,"Tembus dinding",
 
 PR:Toggle("Fly","fly",false,"Terbang bebas",
     function(v)
+        Move.flySpeed = Move.flySpeed  -- sync
         if v then startFly() else stopFly() end
         notify("Fly",v and "ON" or "OFF",2)
     end)
 PR:Slider("Fly Speed","flySpd",10,300,60,
-    function(v) Move.flySpeed=v; Fly.speed=v end,"Kecepatan terbang")
+    function(v) Move.flySpeed=v end,"Kecepatan terbang")
 PR:Toggle("ESP Player","espPl",false,"Nama + jarak player lain",
     function(v)
         ESPPl.active=v
-        if v then startESPPlayer() else stopESPPlayer() end
+        if v then
+            startESPPlayer()
+        else
+            stopESPPlayer()  -- disconnect + cleanup, bukan cuma flag
+        end
         notify("ESP Player",v and "ON" or "OFF",2)
     end)
 PR:Paragraph("Cara Fly",
-    "Mobile:\nJoystick = maju/mundur/kiri/kanan\nKamera = arah hadap\n\n"..
-    "PC:\nW/S = maju/mundur\nA/D = kiri/kanan\nE/Space = naik\nQ = turun\n\n"..
-    "Smooth lerp · Admin style")
+    "Mobile:\nJoystick = maju/mundur/kiri/kanan\nKamera atas  = naik\nKamera bawah = turun\nDiam = melayang stabil\n\n"..
+    "PC:\nW/S/A/D = gerak\nE/Space = naik  Q = turun")
 
 -- ╔═══════════════════════════════════════════════════════╗
 -- ║                  TAB SECURITY                         ║
@@ -1276,7 +1460,38 @@ SecR:Paragraph("Respawn","Posisi disimpan tiap frame\nMati → kembali ke posisi
 -- ╚═══════════════════════════════════════════════════════╝
 local SetP  = T_Set:Page("Setting","settings")
 local SetL  = SetP:Section("🎣 Fishing","Left")
-local SetR  = SetP:Section("ℹ Script Info","Right")
+local SetR  = SetP:Section("ℹ Log & Info","Right")
+
+-- Tombol lihat log — Android friendly, tidak butuh F9
+SetR:Button("📋 Lihat Log Terbaru","Tampilkan 5 log error terakhir di notif",
+    function()
+        if #logLines == 0 then
+            notify("Log","Belum ada log error",3); return
+        end
+        local txt = ""
+        for i = 1, math.min(5, #logLines) do
+            txt = txt..logLines[i].."\n"
+        end
+        notify("Log ("..#logLines.." total)", txt, 12)
+    end)
+
+SetR:Button("📋 Lihat Semua Log","Tampilkan semua log (maks 10)",
+    function()
+        if #logLines == 0 then
+            notify("Log","Belum ada log",3); return
+        end
+        local txt = ""
+        for i = 1, math.min(10, #logLines) do
+            txt = txt..logLines[i].."\n"
+        end
+        notify("Log Lengkap", txt, 15)
+    end)
+
+SetR:Button("🗑 Bersihkan Log","Hapus semua riwayat log",
+    function()
+        logLines = {}
+        notify("Log","Log dibersihkan",2)
+    end)
 
 -- Fishing di setting
 SetL:Toggle("Auto Fishing","autoFish",false,"Auto equip rod + cast loop",
@@ -1288,7 +1503,15 @@ SetL:Toggle("Auto Fishing","autoFish",false,"Auto equip rod + cast loop",
                 if not ok then Fish.autoOn=false; return end
             end
             Fish.fishTask=task.spawn(function()
-                while Fish.autoOn do castOnce() end
+                while Fish.autoOn do
+                    local ok, err = pcall(castOnce)
+                    if not ok then
+                        xlog("Fishing","castOnce error: "..tostring(err):sub(1,60), true)
+                        task.wait(3)  -- backoff kalau error
+                    else
+                        task.wait(0.5)  -- safety gap antar cast
+                    end
+                end
             end)
             notify("Fishing","ON",3)
         else
@@ -1318,15 +1541,16 @@ SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
 SetL:Slider("Delay Tunggu Ikan","fishWait",2,20,6,
     function(v) Fish.waitDelay=v end,"Detik tunggu sebelum tarik")
 
-SetR:Paragraph("XKID HUB v5.0",
+SetR:Paragraph("XKID HUB v5.2",
     "Struktur:\n"..
     "Farming  · Shop\n"..
     "Teleport · Player\n"..
     "Security · Setting\n\n"..
-    "Remote: BridgeNet2\nFishing: FishRemotes")
+    "Remote: BridgeNet2\nFishing: FishRemotes\n\n"..
+    "Multi-Area 5x5 Grid\n4 area Map2 tersedia")
 
 SetR:Paragraph("Farming Info",
-    "Pilih area → pola → jumlah\nlalu Mulai Tanam\n\nAuto Cycle:\nBeli→Tanam→Tunggu→Panen\n\nMax 20 plot per cycle")
+    "Pilih area → pola → jumlah\nlalu Mulai Tanam\n\nAuto Cycle:\nBeli→Tanam→Tunggu→Panen\n\nMax 25 plot per cycle\n(server limit)\n\nGrid area tersedia:\nAppleTree, Sawi A/B/C")
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                      INIT                               │
@@ -1335,15 +1559,15 @@ SetR:Paragraph("Farming Info",
 local _totalPl = 0
 for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 if _totalPl > 0 then
-    notify("✅ XKID HUB v5.1 Ready",
+    notify("✅ XKID HUB v5.2 Ready",
         #AREA_NAMES.." area | ".._totalPl.." plot\nDropdown area sudah terisi!",5)
 else
     notify("⚠ Warning",
         "Plot tidak ditemukan!\nBuka Farming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.1",
-    "Farming · Shop · Teleport · Player · Security", 6)
+Library:Notification("XKID HUB v5.2",
+    "Farming · Shop · Teleport · Player · Security\n5x5 Grid · Max 25 tanaman", 6)
 Library:ConfigSystem(Win)
 
-print("[XKID HUB] v5.1 loaded — "..LP.Name)
+print("[XKID HUB] v5.2 loaded — "..LP.Name)
