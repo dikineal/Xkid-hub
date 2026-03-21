@@ -154,18 +154,20 @@ local ShopDropdown = {}
 
 local function fetchShopSeeds()
     ShopSeeds={}; ShopDropdown={}
-    local ok,data = pcall(function() return invokeRF("RequestShop","GET_LIST") end)
-    local res = ok and select(2, pcall(function() return data end)) or nil
-    if type(res)=="table" then
-        local seeds = res.Seeds or res.seeds or res.Items or res.items or res
-        if type(seeds)=="table" then
-            for i,seed in ipairs(seeds) do
-                if type(seed)=="table" then
-                    local name  = seed.Name or seed.name or tostring(i)
-                    local price = seed.Price or seed.price or "?"
-                    local label = string.format("[%d] %s — %s koin",i,tostring(name),tostring(price))
-                    table.insert(ShopSeeds,{index=i,name=name,price=price,label=label})
-                    table.insert(ShopDropdown,label)
+    local ok, res = invokeRF("RequestShop","GET_LIST")
+    if ok and type(res)=="table" then
+        local data = unwrap(res) or res
+        if type(data)=="table" then
+            local seeds = data.Seeds or data.seeds or data.Items or data.items or data
+            if type(seeds)=="table" then
+                for i,seed in ipairs(seeds) do
+                    if type(seed)=="table" then
+                        local name  = seed.Name or seed.name or tostring(i)
+                        local price = seed.Price or seed.price or "?"
+                        local label = string.format("[%d] %s — %s koin",i,tostring(name),tostring(price))
+                        table.insert(ShopSeeds,{index=i,name=name,price=price,label=label})
+                        table.insert(ShopDropdown,label)
+                    end
                 end
             end
         end
