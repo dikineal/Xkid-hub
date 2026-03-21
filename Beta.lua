@@ -754,42 +754,117 @@ HL:Toggle("🌾 Harvest Monitor","harvestMon",false,
         if v then startHarvestMonitor() else stopHarvestMonitor() end
     end)
 
-HL:Button("🔥 Test FireServer Harvest","Kirim harvest test ke server",
+-- Cache crop data dari monitor untuk dipakai test
+local lastCropData = nil
+
+-- Override monitor untuk simpan data
+local _origStart = startHarvestMonitor
+startHarvestMonitor = function()
+    if harvestConn then harvestConn:Disconnect() end
+    local bn = RS:FindFirstChild("BridgeNet2")
+    local ev = bn and bn:FindFirstChild("dataRemoteEvent")
+    if not ev then notif("Harvest ❌","dataRemoteEvent tidak ada!",4); return false end
+
+    log("=== HARVEST MONITOR START ===")
+    log("Tunggu tanaman siap lalu panen manual 1x")
+    log("")
+
+    harvestConn = ev.OnClientEvent:Connect(function(data)
+        if type(data) ~= "table" then return end
+
+        local keys = {}
+        for k in pairs(data) do
+            if type(k) == "string" then
+                local hex = ""
+                for i = 1, math.min(#k,4) do hex=hex..string.format("%02x",k:byte(i)) end
+                table.insert(keys, "str["..hex.."]")
+            elseif type(k) == "number" then
+                table.insert(keys, "int["..k.."]")
+            end
+        end
+        log("Keys: "..table.concat(keys," | "))
+
+        local cropData = data["\r"] or data["\13"]
+                      or data[string.char(13)] or data[13]
+        local timerRaw = data["\2"] or data["\x02"]
+                      or data[string.char(2)] or data[2]
+
+        if cropData then
+            local tStart = (type(timerRaw)=="table" and timerRaw[1]) or 0
+            local tEnd   = (type(timerRaw)=="table" and timerRaw[2]) or (tStart+50)
+
+            log("✅ CROP DATA FOUND!")
+            for i, crop in ipairs(cropData) do
+                if type(crop)=="table" and crop.cropName then
+                    local posStr = crop.cropPos and
+                        string.format("(%.2f,%.2f,%.2f)",
+                            crop.cropPos.X,crop.cropPos.Y,crop.cropPos.Z) or "nil"
+                    log(string.format("  [%d] %s pos=%s",i,crop.cropName,posStr))
+                    if crop.seedColor then
+                        log(string.format("  [%d] color=(%.4f,%.4f,%.4f)",
+                            i,crop.seedColor[1] or 0,
+                            crop.seedColor[2] or 0,crop.seedColor[3] or 0))
+                    end
+                    -- Simpan untuk test
+                    lastCropData = {
+                        crop=crop, tStart=tStart, tEnd=tEnd
+                    }
+                end
+            end
+            log(string.format("  timer: %s → %s (diff=%s)",
+                tostring(tStart),tostring(tEnd),tostring(tEnd-tStart)))
+            log("  ← Siap untuk TEST FIRESERVER!")
+        end
+        log("")
+    end)
+
+    notif("🌾 Harvest Monitor","ON! Panen manual 1x",4)
+    return true
+end
+
+HL:Button("🔥 Test FireServer (pakai data real)","Harvest pakai data dari monitor",
     function()
         local bn = RS:FindFirstChild("BridgeNet2")
         local ev = bn and bn:FindFirstChild("dataRemoteEvent")
         if not ev then notif("Err","Remote tidak ada!",3); return end
 
-        clearLog()
-        log("=== TEST FIRESERVER HARVEST ===")
+        if not lastCropData then
+            notif("Test ❌","Belum ada data!\nON Monitor dulu,\nlalu panen manual 1x",4)
+            return
+        end
 
-        local now = math.floor(tick() * 1000)
+        local crop   = lastCropData.crop
+        local tStart = lastCropData.tStart
+        local tEnd   = lastCropData.tEnd
+
+        log("=== TEST FIRESERVER (DATA REAL) ===")
+        log(string.format("Crop: %s pos=(%.2f,%.2f,%.2f)",
+            crop.cropName,
+            crop.cropPos and crop.cropPos.X or 0,
+            crop.cropPos and crop.cropPos.Y or 0,
+            crop.cropPos and crop.cropPos.Z or 0))
+        log(string.format("Timer: %d → %d", tStart, tEnd))
+
         local ok, err = pcall(function()
             ev:FireServer({
                 ["\13"] = {{
-                    seedColor = {0.2980392277240753, 0.6000000238418579, 0},
-                    cropName  = "Sawi",
-                    cropPos   = Vector3.new(93.745, 69.729, -4.237),
-                    sellPrice = 20,
-                    drops     = {{
-                        name="Biji Sawi Emas",
-                        coinReward=50,
-                        icon="✨",
-                        rarity="Rare"
-                    }},
+                    seedColor = crop.seedColor or {0.298,0.600,0},
+                    cropName  = crop.cropName,
+                    cropPos   = crop.cropPos,
+                    sellPrice = crop.sellPrice or 20,
+                    drops     = crop.drops or {},
                 }},
-                ["\2"] = { now, now + 50 }
+                ["\2"] = { tStart, tEnd }
             })
         end)
 
         if ok then
-            log("✅ FireServer SENT!")
-            log("Cek: inventory Sawi bertambah?")
-            log("Cek: tanaman hilang dari lahan?")
-            notif("Test Harvest","✅ Sent!\nCek inventory & lahan",4)
+            log("✅ FireServer SENT dengan data real!")
+            log("Cek: inventory bertambah? Tanaman hilang?")
+            notif("Test ✅","Sent dengan timer real!\nCek inventory & lahan",4)
         else
-            log("❌ FireServer ERROR: "..tostring(err))
-            notif("Test Harvest","❌ Error!\n"..tostring(err):sub(1,50),4)
+            log("❌ ERROR: "..tostring(err))
+            notif("Test ❌",tostring(err):sub(1,60),4)
         end
     end)
 
