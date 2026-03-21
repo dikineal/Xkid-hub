@@ -1,19 +1,18 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              🌟  X K I D   H U B  v5.6  🌟              ║
+║              🌟  X K I D   H U B  v5.7  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
 ║  Security  ·  Setting                                    ║
 ╠═══════════════════════════════════════════════════════════╣
-║  CHANGELOG v5.6:                                         ║
-║  [FIX] equipRod cari di karakter dulu baru backpack      ║
-║  [FIX] castOnce flow persis spy log terbaru:             ║
-║        cast(true) → tunggu NotifyClient                  ║
-║        → cast(false,depth) → MiniGame(true) 1x           ║
-║  [FIX] Tidak ada cast(false,0) di awal (spy log baru)   ║
-║  [FIX] Timeout fishing default 60s (lebih aman)         ║
-║  [KEEP] Semua fix v5.5 tetap ada                        ║
+║  CHANGELOG v5.7:                                         ║
+║  [FIX] SeedInventory auto force refresh saat nil        ║
+║  [FIX] Fallback baca slot dari SeedPlanter UI           ║
+║  [NEW] Tombol Refresh Inventory di Farming tab          ║
+║  [FIX] Auto Fishing: auto equip + langsung cast         ║
+║  [KEEP] Dual mode: Instant + Normal                     ║
+║  [KEEP] Semua fix v5.6 tetap ada                        ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -125,6 +124,95 @@ local function startInventoryListener()
     xlog("INV", "Listener aktif", false)
 end
 startInventoryListener()
+
+-- [FIX v5.7] Fallback: baca slot langsung dari SeedPlanter UI
+-- SeedPlanter punya frame/slots yang bisa dibaca namanya
+-- Dipakai kalau cache dari OnClientEvent belum terisi
+local function readSeedPlanterUI()
+    local char = getChar()
+    local bp   = LP:FindFirstChild("Backpack")
+
+    local sp = nil
+    if char then sp = char:FindFirstChild("SeedPlanter") end
+    if not sp and bp then sp = bp:FindFirstChild("SeedPlanter") end
+    if not sp then return false end
+
+    -- Cari semua TextLabel dalam SeedPlanter yang isinya nama crop
+    local found = 0
+    for _, desc in ipairs(sp:GetDescendants()) do
+        if desc:IsA("TextLabel") and desc.Text ~= "" then
+            local txt = desc.Text
+            -- Cek apakah text cocok dengan nama seed kita
+            for _, crop in ipairs(CROPS) do
+                if txt == crop.seed or txt == crop.name or
+                   txt:lower():find(crop.name:lower(), 1, true) then
+                    -- Ambil slot index dari posisi parent frame
+                    local slotNum = nil
+                    -- Coba baca dari nama parent (Slot1, Slot2, dll)
+                    local parent = desc.Parent
+                    while parent and parent ~= sp do
+                        local num = parent.Name:match("%d+")
+                        if num then slotNum = tonumber(num); break end
+                        parent = parent.Parent
+                    end
+                    if slotNum and not SeedInventory[crop.name] then
+                        SeedInventory[crop.name] = { slot=slotNum, count=99 }
+                        xlog("INV","UI fallback: "..crop.name.." slot="..slotNum,false)
+                        found = found + 1
+                    end
+                end
+            end
+        end
+    end
+
+    -- Fallback ke-2: kalau UI tidak terbaca, paksa request dari server
+    -- dengan "beli 0" untuk trigger server kirim ["\3"]
+    if found == 0 then
+        local ev = getBridge()
+        if ev then
+            -- Kirim request dummy untuk trigger server update inventory
+            pcall(function()
+                ev:FireServer({{ cropName="AppleTree", amount=0 }, "\x07"})
+            end)
+            xlog("INV","Request dummy dikirim untuk trigger server update",false)
+        end
+    end
+
+    return found > 0
+end
+
+-- [FIX v5.7] Force refresh inventory — panggil ini kalau cache kosong
+local function forceRefreshInventory()
+    -- Coba baca dari UI SeedPlanter dulu
+    local uiOk = readSeedPlanterUI()
+
+    -- Kalau UI tidak berhasil, trigger server dengan beli dummy
+    if not uiOk then
+        local ev = getBridge()
+        if ev then
+            pcall(function()
+                ev:FireServer({{ cropName="Sawi", amount=0 }, "\x07"})
+            end)
+            xlog("INV","Force request ke server...",false)
+            -- Tunggu sebentar lalu cek lagi
+            task.delay(2, function()
+                if next(SeedInventory) ~= nil then
+                    local txt=""
+                    for k,v in pairs(SeedInventory) do
+                        txt=txt..string.format("[%d]%s ",v.slot,k)
+                    end
+                    notify("✅ Inventory",txt,5)
+                else
+                    notify("⚠ Inventory","Server belum kirim data!\nCoba beli 1 bibit dulu.",5)
+                end
+            end)
+        end
+    else
+        local txt=""
+        for k,v in pairs(SeedInventory) do txt=txt..string.format("[%d]%s ",v.slot,k) end
+        notify("✅ Inventory (UI)","Slot terdeteksi:\n"..txt,5)
+    end
+end
 
 local function getSlotIdx(crop)
     local entry = SeedInventory[crop.name]
@@ -298,11 +386,21 @@ local function tanamPlots()
 
     local slotIdx, stockCount = getSlotIdx(Farm.selectedCrop)
 
+    -- [FIX v5.7] Auto force refresh kalau cache kosong
+    if not slotIdx then
+        xlog("Tanam","SlotIdx nil, coba force refresh...",false)
+        notify("Farm ⏳","Cek inventory...",2)
+        forceRefreshInventory()
+        task.wait(2.5)
+        -- Coba lagi setelah refresh
+        slotIdx, stockCount = getSlotIdx(Farm.selectedCrop)
+    end
+
     if not slotIdx then
         notify("Farm ⚠",
-            Farm.selectedCrop.seed.." belum ada di SeedPlanter!\n"..
-            "Beli bibit dulu agar slot terdeteksi.", 6)
-        xlog("Tanam","SlotIdx nil: "..Farm.selectedCrop.name,true)
+            Farm.selectedCrop.seed.." tidak terdeteksi!\n"..
+            "Klik 🔄 Refresh Inventory di Farming tab.", 6)
+        xlog("Tanam","SlotIdx nil setelah refresh: "..Farm.selectedCrop.name,true)
         return 0
     end
 
@@ -909,7 +1007,7 @@ if #AREA_NAMES>0 then Farm.selectedArea=AREA_NAMES[1] end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │  WINDOW & TABS                                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win=Library:Window("XKID HUB","sprout","v5.6",false)
+local Win=Library:Window("XKID HUB","sprout","v5.7",false)
 Win:TabSection("MAIN")
 local T_Farm=Win:Tab("Farming","leaf")
 local T_Shop=Win:Tab("Shop","shopping-cart")
@@ -973,6 +1071,16 @@ FL:Button("🔍 Cek Slot & Stok","Lihat semua slot inventory",
         for _ in pairs(SeedInventory) do invCount = invCount + 1 end
         notify("🌱 SeedPlanter ("..invCount.." slot)", txt, 12)
         print("[XKID SLOT]\n"..txt)
+    end)
+
+-- [FIX v5.7] Tombol force refresh inventory
+FL:Button("🔄 Refresh Inventory","Paksa server kirim data slot bibit",
+    function()
+        task.spawn(function()
+            notify("Inventory","Mengambil data slot...",2)
+            SeedInventory = {}  -- reset dulu
+            forceRefreshInventory()
+        end)
     end)
 
 FL:Button("🔄 Scan Ulang Area","Refresh lahan",
@@ -1324,31 +1432,42 @@ SetL:Slider("Depth Instant","fishInstantDepth",10,999,999,
     "Nilai depth dikirim ke server (instant mode)\nDefault 999 = maksimal")
 
 SetL:Label("🎣 Auto Fishing")
-SetL:Toggle("Auto Fishing","autoFish",false,"Auto cast loop (pakai mode yang aktif)",
+SetL:Toggle("Auto Fishing","autoFish",false,"Auto equip rod + langsung cast loop",
     function(v)
         Fish.autoOn=v
         if v then
-            if not Fish.rodEquipped then
-                local ok=equipRod(); if not ok then Fish.autoOn=false; return end
-            end
-            local attempts=0
-            Fish.fishTask=task.spawn(function()
-                local modeStr = Fish.instantMode and "⚡ INSTANT" or "🎣 NORMAL"
-                notify("Fishing","ON — "..modeStr,3)
-                while Fish.autoOn do
-                    local ok,err=pcall(castOnce)
-                    if ok then
-                        attempts=0
-                    else
-                        attempts=attempts+1
-                        xlog("Fish","Error: "..tostring(err):sub(1,60),true)
-                        if attempts>=3 then
-                            notify("Fishing","Auto stop — 3x error",5)
-                            Fish.autoOn=false; break
-                        end
-                        task.wait(5)
+            -- [FIX v5.7] Auto equip rod dulu, lalu langsung mulai cast
+            task.spawn(function()
+                -- 1. Auto equip rod (cari di karakter + backpack)
+                if not Fish.rodEquipped then
+                    local ok = equipRod()
+                    if not ok then
+                        Fish.autoOn=false; return
                     end
+                    task.wait(0.3)  -- sedikit jeda setelah equip
                 end
+
+                -- 2. Langsung mulai cast loop tanpa nunggu konfirmasi
+                local attempts=0
+                local modeStr = Fish.instantMode and "⚡ INSTANT" or "🎣 NORMAL"
+                notify("Fishing 🎣","ON — "..modeStr.."\nLangsung casting!",3)
+
+                Fish.fishTask=task.spawn(function()
+                    while Fish.autoOn do
+                        local ok,err=pcall(castOnce)
+                        if ok then
+                            attempts=0
+                        else
+                            attempts=attempts+1
+                            xlog("Fish","Error: "..tostring(err):sub(1,60),true)
+                            if attempts>=3 then
+                                notify("Fishing","Auto stop — 3x error",5)
+                                Fish.autoOn=false; break
+                            end
+                            task.wait(3)
+                        end
+                    end
+                end)
             end)
         else
             if Fish.fishTask then pcall(function() task.cancel(Fish.fishTask) end); Fish.fishTask=nil end
@@ -1376,7 +1495,7 @@ SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
 SetL:Slider("Timeout Normal (detik)","fishWait",10,120,60,
     function(v) Fish.waitDelay=v end,"Maks tunggu ikan — mode NORMAL saja")
 
-SetR:Paragraph("XKID HUB v5.6",
+SetR:Paragraph("XKID HUB v5.7",
     "CHANGELOG:\n"..
     "✅ Instant Mode fishing\n"..
     "✅ Normal Mode (NotifyClient)\n"..
@@ -1409,15 +1528,15 @@ local _totalPl=0
 for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 
 if _totalPl>0 then
-    notify("✅ XKID HUB v5.6 Ready",
+    notify("✅ XKID HUB v5.7 Ready",
         #AREA_NAMES.." area | ".._totalPl.." plot\nBeli bibit dulu agar slot terdeteksi!",6)
 else
-    notify("⚠ XKID HUB v5.6",
+    notify("⚠ XKID HUB v5.7",
         "Plot belum ditemukan!\nFarming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.6",
+Library:Notification("XKID HUB v5.7",
     "Farming · Shop · Teleport · Player · Security · Setting",6)
 Library:ConfigSystem(Win)
-print("[XKID HUB] v5.6 loaded — "..LP.Name)
-print("[v5.6] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
+print("[XKID HUB] v5.7 loaded — "..LP.Name)
+print("[v5.7] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
