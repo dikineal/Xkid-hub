@@ -980,3 +980,4 @@ Library:Notification("XKID | SAWAH INDO V.2",
     "Farm · Harvest · Shop · NPC · Fly · Security", 6)
 Library:ConfigSystem(Win)
 print("[XKID SAWAH INDO] V.2 loaded — "..LP.Name)
+
