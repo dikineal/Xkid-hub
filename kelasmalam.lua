@@ -1,12 +1,12 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              🌟  X K I D   H U B  v5.13  🌟              ║
+║              🌟  X K I D   H U B  v5.15  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
 ║  Security  ·  Setting                                    ║
 ╠═══════════════════════════════════════════════════════════╣
-║  CHANGELOG v5.13:                                         ║
+║  CHANGELOG v5.15:                                         ║
 ║  [FIX] Scan plot: scan semua BasePart + cluster          ║
 ║  [FIX] ALL_PLOTS global untuk harvest reliable           ║
 ║  [FIX] Area tidak match → auto fallback ALL_PLOTS        ║
@@ -98,7 +98,7 @@ for _, c in ipairs(CROPS) do table.insert(cropDropNames, c.icon.." "..c.seed) en
 local SeedInventory = {}
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [NEW v5.13] HARVEST CACHE                              │
+-- │  [NEW v5.15] HARVEST CACHE                              │
 -- │  Listen OnClientEvent key "\r" (\x0d)                  │
 -- │  Server kirim data crop ready:                         │
 -- │  cropName, cropPos, sellPrice, seedColor, drops, timer │
@@ -110,41 +110,48 @@ local HarvestCache = {}
 local function updateHarvestCache(data)
     if type(data) ~= "table" then return end
 
-    -- Coba semua kemungkinan key \x0d (ASCII 13)
-    -- BridgeNet2 mungkin encode berbeda
-    local cropData = data["\r"]           -- carriage return
-                  or data["\13"]          -- octal escape
-                  or data[string.char(13)] -- explicit char
+    -- [FIX v5.15] Key yang benar dari SimpleSpy = "\13" (string octal escape)
+    -- Bukan "\r", bukan integer 13, tapi string "\13"
+    local cropData = data["\13"]
 
-    if not cropData then
-        -- Debug: log semua key yang ada
-        local keys = {}
-        for k in pairs(data) do
-            if type(k) == "string" then
-                local hex = ""
-                for i = 1, math.min(#k, 4) do
-                    hex = hex .. string.format("%02x", k:byte(i))
-                end
-                table.insert(keys, hex)
+    -- Debug: log semua key setiap kali data masuk
+    local keyDebug = ""
+    for k in pairs(data) do
+        if type(k) == "number" then
+            keyDebug = keyDebug .. "int("..k..") "
+        elseif type(k) == "string" then
+            local hex = ""
+            for i = 1, math.min(#k, 4) do
+                hex = hex .. string.format("%02x", k:byte(i))
             end
+            keyDebug = keyDebug .. "str(0x"..hex..") "
         end
-        if #keys > 0 then
-            xlog("HARVEST_DBG", "Keys received: "..table.concat(keys, " "), false)
-        end
-        return
+    end
+    if keyDebug ~= "" then
+        xlog("BRIDGE_KEYS", keyDebug, false)
     end
 
-    local timer = data["\2"] or data[string.char(2)]
-    local timerStart = timer and timer[1] or 0
-    local timerEnd   = timer and timer[2] or (timerStart + 50)
+    if not cropData then return end
+
+    -- Timer key "\2"
+    local timerRaw   = data["\2"]
+    local timerStart = 0
+    local timerEnd   = 50
+    if type(timerRaw) == "table" then
+        timerStart = timerRaw[1] or 0
+        timerEnd   = timerRaw[2] or (timerStart + 50)
+    end
 
     for _, crop in ipairs(cropData) do
         if type(crop) == "table" and crop.cropName and crop.cropPos then
+            -- seedColor = array {r, g, b} sesuai SimpleSpy
+            local sc = crop.seedColor or {0.298, 0.600, 0}
+
             table.insert(HarvestCache, {
                 cropName  = crop.cropName,
                 cropPos   = crop.cropPos,
                 sellPrice = crop.sellPrice or 20,
-                seedColor = crop.seedColor or {0.298, 0.600, 0},
+                seedColor = sc,
                 drops     = crop.drops or {},
                 timerStart= timerStart,
                 timerEnd  = timerEnd,
@@ -157,7 +164,7 @@ local function updateHarvestCache(data)
     end
 
     if #HarvestCache > 0 then
-        xlog("HARVEST", "Total cache: "..#HarvestCache.." crop ready", false)
+        notify("🌿 Crop Ready", #HarvestCache.." tanaman siap!\nKlik Panen Sekarang", 3)
     end
 end
 
@@ -191,7 +198,7 @@ local function startInventoryListener()
 end
 startInventoryListener()
 
--- [FIX v5.13] Fallback: baca slot langsung dari SeedPlanter UI
+-- [FIX v5.15] Fallback: baca slot langsung dari SeedPlanter UI
 -- SeedPlanter punya frame/slots yang bisa dibaca namanya
 -- Dipakai kalau cache dari OnClientEvent belum terisi
 local function readSeedPlanterUI()
@@ -247,7 +254,7 @@ local function readSeedPlanterUI()
     return found > 0
 end
 
--- [FIX v5.13] Force refresh inventory — panggil ini kalau cache kosong
+-- [FIX v5.15] Force refresh inventory — panggil ini kalau cache kosong
 local function forceRefreshInventory()
     -- Coba baca dari UI SeedPlanter dulu
     local uiOk = readSeedPlanterUI()
@@ -287,7 +294,7 @@ local function getSlotIdx(crop)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [FIX v5.13] AREA / PLOT DATA                          │
+-- │  [FIX v5.15] AREA / PLOT DATA                          │
 -- │  Dari full scan:                                        │
 -- │  - 8 Land Part di index 51,52,53,54,64,65,66,67        │
 -- │  - Setiap Land = 1 hitPart                             │
@@ -435,7 +442,7 @@ local function tanamPlots()
 
     local slotIdx, stockCount = getSlotIdx(Farm.selectedCrop)
 
-    -- [FIX v5.13] Auto force refresh kalau cache kosong
+    -- [FIX v5.15] Auto force refresh kalau cache kosong
     if not slotIdx then
         xlog("Tanam","SlotIdx nil, coba force refresh...",false)
         notify("Farm ⏳","Cek inventory...",2)
@@ -460,7 +467,7 @@ local function tanamPlots()
     end
 
     local plotList = AREA_PLOTS[Farm.selectedArea]
-    -- [FIX v5.13] Fallback ke ALL_PLOTS kalau area tidak match
+    -- [FIX v5.15] Fallback ke ALL_PLOTS kalau area tidak match
     if not plotList or #plotList == 0 then
         if #ALL_PLOTS > 0 then
             notify("Farm ⚠","Area tidak match → pakai semua ("..#ALL_PLOTS.." plot)",3)
@@ -475,7 +482,7 @@ local function tanamPlots()
         notify("Farm ⚠","Stok "..stockCount.." → tanam disesuaikan ke "..maxTanam,3)
     end
 
-    -- [FIX v5.13] Grid sort — tanam urut row by row (kiri→kanan, atas→bawah)
+    -- [FIX v5.15] Grid sort — tanam urut row by row (kiri→kanan, atas→bawah)
     local filtered = filterPlots(plotList, maxTanam)
     if #filtered == 0 then notify("Farm ❌","0 plot setelah filter",4); return 0 end
 
@@ -510,49 +517,46 @@ local function harvestAll()
     local ev = getBridge()
     if not ev then notify("Farm ❌","BridgeNet2 tidak ada!",5); return 0 end
 
-    -- [FIX v5.13] Pakai HarvestCache dari OnClientEvent \x0d
-    -- Server kirim cropPos, timer, drops yang valid
-    -- Kita kirim balik persis format yang server minta
+    -- [FIX v5.15] Format PERSIS dari SimpleSpy:
+    -- ["\13"] = {{ seedColor={r,g,b}, cropName, cropPos, sellPrice, drops }}
+    -- ["\2"]  = { timerStart, timerEnd }
     if #HarvestCache > 0 then
         local count, failed = 0, 0
         local toHarvest = {table.unpack(HarvestCache)}
-        HarvestCache = {}  -- clear cache setelah diambil
+        HarvestCache = {}
 
-        xlog("Harvest", "Pakai cache: "..#toHarvest.." crop ready", false)
+        xlog("Harvest", "Harvest "..#toHarvest.." tanaman...", false)
 
         for _, entry in ipairs(toHarvest) do
             local ok, err = pcall(function()
-                -- Pakai string.char(13) untuk key \x0d yang pasti benar
-                local payload = {}
-                payload[string.char(13)] = {{
-                    cropName  = entry.cropName,
-                    cropPos   = entry.cropPos,
-                    sellPrice = entry.sellPrice,
-                    seedColor = entry.seedColor,
-                    drops     = entry.drops,
-                }}
-                payload[string.char(2)] = { entry.timerStart, entry.timerEnd }
-                ev:FireServer(payload)
+                ev:FireServer({
+                    ["\13"] = {{
+                        seedColor = entry.seedColor,
+                        cropName  = entry.cropName,
+                        cropPos   = entry.cropPos,
+                        sellPrice = entry.sellPrice,
+                        drops     = entry.drops,
+                    }},
+                    ["\2"] = { entry.timerStart, entry.timerEnd }
+                })
             end)
-            if ok then count=count+1
+            if ok then
+                count = count + 1
+                xlog("Harvest","✅ "..entry.cropName,false)
             else
-                failed=failed+1
-                xlog("Harvest","Error: "..tostring(err):sub(1,50),false)
+                failed = failed + 1
+                xlog("Harvest","❌ "..tostring(err):sub(1,50),false)
             end
             task.wait(0.05)
         end
 
-        if count>0 then notify("Panen","✅ "..count.." berhasil",3) end
-        if failed>0 then notify("Farm","❌ "..failed.." gagal",3) end
+        if count > 0 then notify("Panen","✅ "..count.." tanaman dipanen!",3) end
+        if failed > 0 then notify("Farm","❌ "..failed.." gagal",3) end
         return count
     end
 
-    -- Fallback: tidak ada cache = belum ada tanaman siap panen
-    notify("Panen ⚠",
-        "Belum ada tanaman siap panen!\n"..
-        "Tunggu tanaman tumbuh besar\n"..
-        "lalu coba lagi.", 5)
-    xlog("Harvest","HarvestCache kosong — belum ada crop ready",false)
+    notify("Panen ⚠","Belum ada tanaman siap!\nTunggu tanaman tumbuh besar.",5)
+    xlog("Harvest","Cache kosong — belum ada crop ready",false)
     return 0
 end
 
@@ -909,7 +913,7 @@ local function stopAutoRespawn()
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [FIX v5.13] FISHING SYSTEM                            │
+-- │  [FIX v5.15] FISHING SYSTEM                            │
 -- │  Dari debug log, urutan event server:                  │
 -- │  ← MiniGame: Start  (bar muncul = saatnya complete!)  │
 -- │  ← MiniGame: Start  (kadang 2x)                       │
@@ -1056,7 +1060,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │  WINDOW & TABS                                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win=Library:Window("XKID HUB","sprout","v5.13",false)
+local Win=Library:Window("XKID HUB","sprout","v5.15",false)
 Win:TabSection("MAIN")
 local T_Farm=Win:Tab("Farming","leaf")
 local T_Shop=Win:Tab("Shop","shopping-cart")
@@ -1103,7 +1107,7 @@ FL:Slider("Jumlah Plot","plantQty",1,20,5,
 FL:Button("🌱 Mulai Tanam","Tanam sesuai setting",
     function()
         task.spawn(function()
-            -- [FIX v5.13] Auto pakai area pertama kalau belum pilih
+            -- [FIX v5.15] Auto pakai area pertama kalau belum pilih
             if Farm.selectedArea=="" or not AREA_PLOTS[Farm.selectedArea] then
                 if #AREA_NAMES > 0 then
                     Farm.selectedArea = AREA_NAMES[1]
@@ -1132,7 +1136,7 @@ FL:Button("🔍 Cek Slot & Stok","Lihat semua slot inventory",
         print("[XKID SLOT]\n"..txt)
     end)
 
--- [FIX v5.13] Tombol force refresh inventory
+-- [FIX v5.15] Tombol force refresh inventory
 FL:Button("🔄 Refresh Inventory","Paksa server kirim data slot bibit",
     function()
         task.spawn(function()
@@ -1559,7 +1563,7 @@ SetL:Button("📦 Equip Rod","Cari & equip AdvanceRod",function() equipRod() end
 SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
     function() unequipRod(); notify("Rod","Dikembalikan",2) end)
 
-SetR:Paragraph("XKID HUB v5.13",
+SetR:Paragraph("XKID HUB v5.15",
     "CHANGELOG:\n"..
     "✅ Scan: cari Part name=Land\n"..
     "✅ 8 lahan terdeteksi (51-67)\n"..
@@ -1592,15 +1596,15 @@ local _totalPl=0
 for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 
 if _totalPl>0 then
-    notify("✅ XKID HUB v5.13 Ready",
+    notify("✅ XKID HUB v5.15 Ready",
         #AREA_NAMES.." area | ".._totalPl.." plot\nBeli bibit dulu agar slot terdeteksi!",6)
 else
-    notify("⚠ XKID HUB v5.13",
+    notify("⚠ XKID HUB v5.15",
         "Plot belum ditemukan!\nFarming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.13",
+Library:Notification("XKID HUB v5.15",
     "Farming · Shop · Teleport · Player · Security · Setting",6)
 Library:ConfigSystem(Win)
-print("[XKID HUB] v5.13 loaded — "..LP.Name)
-print("[v5.13] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
+print("[XKID HUB] v5.15 loaded — "..LP.Name)
+print("[v5.15] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
