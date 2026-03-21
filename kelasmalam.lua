@@ -1,18 +1,19 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              🌟  X K I D   H U B  v5.4  🌟              ║
+║              🌟  X K I D   H U B  v5.6  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
 ║  Security  ·  Setting                                    ║
 ╠═══════════════════════════════════════════════════════════╣
-║  CHANGELOG v5.4:                                         ║
-║  [FIX] slotIdx dari OnClientEvent key "\3"               ║
-║        Cache realtime, support 9 slot                    ║
-║  [FIX] Cek stok sebelum tanam (count > 0)               ║
-║  [FIX] Auto batasi jumlah tanam sesuai stok             ║
-║  [NEW] Fast Respawn System (instant + auto)              ║
-║  [KEEP] Semua fix v5.3 tetap ada                        ║
+║  CHANGELOG v5.6:                                         ║
+║  [FIX] equipRod cari di karakter dulu baru backpack      ║
+║  [FIX] castOnce flow persis spy log terbaru:             ║
+║        cast(true) → tunggu NotifyClient                  ║
+║        → cast(false,depth) → MiniGame(true) 1x           ║
+║  [FIX] Tidak ada cast(false,0) di awal (spy log baru)   ║
+║  [FIX] Timeout fishing default 60s (lebih aman)         ║
+║  [KEEP] Semua fix v5.5 tetap ada                        ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -745,42 +746,155 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │  FISHING                                                │
 -- └─────────────────────────────────────────────────────────┘
-local Fish={autoOn=false,fishTask=nil,waitDelay=31.6,rodEquipped=false,totalFished=0}
+-- ┌─────────────────────────────────────────────────────────┐
+-- │  FISHING SYSTEM                                         │
+-- │  Mode 1: INSTANT — bypass timer, cast→tarik langsung   │
+-- │  Mode 2: NORMAL  — tunggu NotifyClient dari server     │
+-- └─────────────────────────────────────────────────────────┘
+local Fish = {
+    autoOn       = false,
+    fishTask     = nil,
+    waitDelay    = 60,     -- timeout mode normal (detik)
+    instantDelay = 1,      -- delay sebelum tarik mode instant (detik)
+    instantDepth = 999,    -- depth dikirim saat instant mode
+    rodEquipped  = false,
+    totalFished  = 0,
+    instantMode  = false,  -- toggle: true=instant, false=normal
+}
 
+-- Listen NotifyClient — dipakai mode NORMAL
+local Fish_notifyConn = nil
+local Fish_fishReady  = false
+
+local function startNotifyListener()
+    local notifyEv = getFishEv("NotifyClient")
+    if not notifyEv then task.delay(2, startNotifyListener); return end
+    if Fish_notifyConn then Fish_notifyConn:Disconnect() end
+    Fish_notifyConn = notifyEv.OnClientEvent:Connect(function(item)
+        Fish_fishReady = true
+        local itemName = "unknown"
+        pcall(function()
+            itemName = (type(item)=="userdata") and item.Name or tostring(item)
+        end)
+        xlog("Fish","NotifyClient: "..itemName,false)
+    end)
+    xlog("Fish","NotifyClient listener aktif",false)
+end
+startNotifyListener()
+
+-- equipRod — cari di karakter dulu, baru backpack
 local function equipRod()
-    local bp=LP:FindFirstChild("Backpack"); if not bp then return false end
-    local char=getChar(); if not char then return false end
-    local rod=bp:FindFirstChild("AdvanceRod")
-    if not rod then
-        for _,t in ipairs(bp:GetChildren()) do
-            if t.Name:lower():find("rod") or t.Name:lower():find("pancing") then rod=t; break end
+    local char = getChar()
+    local bp   = LP:FindFirstChild("Backpack")
+    if char then
+        local rod = char:FindFirstChild("AdvanceRod")
+        if not rod then
+            for _,t in ipairs(char:GetChildren()) do
+                if t:IsA("Tool") and (t.Name:lower():find("rod") or t.Name:lower():find("pancing")) then
+                    rod=t; break
+                end
+            end
+        end
+        if rod then Fish.rodEquipped=true; notify("Fishing","AdvanceRod ready!",2); return true end
+    end
+    if bp then
+        local rod = bp:FindFirstChild("AdvanceRod")
+        if not rod then
+            for _,t in ipairs(bp:GetChildren()) do
+                if t:IsA("Tool") and (t.Name:lower():find("rod") or t.Name:lower():find("pancing")) then
+                    rod=t; break
+                end
+            end
+        end
+        if rod then
+            rod.Parent=char; task.wait(0.5)
+            Fish.rodEquipped=true; notify("Fishing","AdvanceRod equipped!",2); return true
         end
     end
-    if not rod then notify("Fishing","AdvanceRod tidak ada!",4); return false end
-    rod.Parent=char; task.wait(0.5); Fish.rodEquipped=true
-    notify("Fishing","AdvanceRod equipped!",2); return true
+    notify("Fishing","AdvanceRod tidak ditemukan!",4); return false
 end
+
 local function unequipRod()
     local char=getChar(); if not char then return end
     local bp=LP:FindFirstChild("Backpack"); if not bp then return end
     local rod=char:FindFirstChild("AdvanceRod")
     if rod then rod.Parent=bp end; Fish.rodEquipped=false
 end
-local function castOnce()
-    local castEv=getFishEv("CastEvent")
+
+-- ── MODE INSTANT ─────────────────────────────────────────
+-- cast(true) → delay singkat → cast(false, depth besar) → MiniGame(true)
+-- Power bar = clientside only, server tidak validasi
+-- Server mungkin validasi waktu minimal → gunakan instantDelay
+local function castInstant()
+    local castEv = getFishEv("CastEvent")
+    local miniEv = getFishEv("MiniGame")
     if not castEv then notify("Fishing","CastEvent tidak ada!",4); return false end
-    pcall(function() castEv:FireServer(true) end); task.wait(0.8)
-    pcall(function() castEv:FireServer(false, 0) end)
-    task.wait(Fish.waitDelay)
-    pcall(function() castEv:FireServer(false, Fish.waitDelay) end); task.wait(0.8)
-    local miniEv=getFishEv("MiniGame")
+
+    -- 1. Lempar kail
+    pcall(function() castEv:FireServer(true) end)
+
+    -- 2. Tunggu minimal delay (test: 1s, naikkan kalau server reject)
+    task.wait(Fish.instantDelay)
+
+    -- 3. Tarik paksa dengan depth besar
+    pcall(function() castEv:FireServer(false, Fish.instantDepth) end)
+    task.wait(0.3)
+
+    -- 4. Complete minigame (power bar = clientside, server terima langsung)
     if miniEv then
-        pcall(function() miniEv:FireServer(true) end); task.wait(0.3)
         pcall(function() miniEv:FireServer(true) end)
     end
-    Fish.totalFished=Fish.totalFished+1
-    xlog("Fish","Cast #"..Fish.totalFished,false)
-    task.wait(0.5); return true
+
+    Fish.totalFished = Fish.totalFished + 1
+    xlog("Fish","[INSTANT] Cast #"..Fish.totalFished,false)
+    task.wait(0.5)
+    return true
+end
+
+-- ── MODE NORMAL ──────────────────────────────────────────
+-- cast(true) → tunggu NotifyClient → cast(false, depth) → MiniGame(true)
+local function castNormal()
+    local castEv = getFishEv("CastEvent")
+    local miniEv = getFishEv("MiniGame")
+    if not castEv then notify("Fishing","CastEvent tidak ada!",4); return false end
+
+    Fish_fishReady = false
+
+    -- 1. Lempar kail
+    pcall(function() castEv:FireServer(true) end)
+
+    -- 2. Tunggu NotifyClient (server signal ikan kena)
+    local waited  = 0
+    local timeout = Fish.waitDelay
+    while not Fish_fishReady and waited < timeout and Fish.autoOn do
+        task.wait(0.1); waited = waited + 0.1
+    end
+
+    if not Fish.autoOn then return false end
+
+    -- 3. Tarik dengan depth = waktu tunggu aktual
+    pcall(function() castEv:FireServer(false, waited) end)
+    task.wait(0.3)
+
+    -- 4. Complete minigame
+    if miniEv then
+        pcall(function() miniEv:FireServer(true) end)
+    end
+
+    Fish_fishReady = false
+    Fish.totalFished = Fish.totalFished + 1
+    xlog("Fish","[NORMAL] Cast #"..Fish.totalFished.." waited="..string.format("%.1f",waited).."s",false)
+    task.wait(1)
+    return true
+end
+
+-- castOnce — router ke mode yang aktif
+local function castOnce()
+    if Fish.instantMode then
+        return castInstant()
+    else
+        return castNormal()
+    end
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
@@ -795,7 +909,7 @@ if #AREA_NAMES>0 then Farm.selectedArea=AREA_NAMES[1] end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │  WINDOW & TABS                                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win=Library:Window("XKID HUB","sprout","v5.4",false)
+local Win=Library:Window("XKID HUB","sprout","v5.6",false)
 Win:TabSection("MAIN")
 local T_Farm=Win:Tab("Farming","leaf")
 local T_Shop=Win:Tab("Shop","shopping-cart")
@@ -865,7 +979,14 @@ FL:Button("🔄 Scan Ulang Area","Refresh lahan",
     function()
         buildAreaData()
         local total=0; for _,v in pairs(AREA_PARTS) do total=total+#v end
-        notify("Scan","Area:"..#AREA_NAMES.." | Plot:"..total,4)
+        -- [FIX v5.5] Auto-set selectedArea ke area pertama setelah scan
+        if #AREA_NAMES > 0 then
+            Farm.selectedArea = AREA_NAMES[1]
+            notify("✅ Scan","Area:"..#AREA_NAMES.." | Plot:"..total.."\nArea aktif: "..AREA_NAMES[1],5)
+        else
+            Farm.selectedArea = ""
+            notify("⚠ Scan","Tidak ada area ditemukan!\nCoba pindah ke dekat lahan.",5)
+        end
     end)
 
 FR:Label("🔄 Auto Cycle")
@@ -1182,7 +1303,28 @@ SetR:Button("📋 Semua Log","10 log terakhir",
 SetR:Button("🗑 Bersihkan Log","Hapus semua",
     function() logLines={}; notify("Log","Dibersihkan",2) end)
 
-SetL:Toggle("Auto Fishing","autoFish",false,"Auto cast loop",
+SetL:Label("🎣 Mode Fishing")
+SetL:Toggle("⚡ Instant Mode","fishInstant",false,
+    "Bypass timer server — tarik langsung tanpa tunggu ikan\nOFF = normal tunggu NotifyClient",
+    function(v)
+        Fish.instantMode = v
+        if v then
+            notify("Fishing ⚡","INSTANT MODE ON\ncast→tarik dalam "..Fish.instantDelay.."s",3)
+        else
+            notify("Fishing 🎣","NORMAL MODE ON\nTunggu NotifyClient server",3)
+        end
+    end)
+
+SetL:Slider("Delay Instant (detik)","fishInstantDelay",1,10,1,
+    function(v) Fish.instantDelay=v end,
+    "Jeda sebelum tarik (instant mode)\nNaikkan kalau server reject/tidak dapat ikan")
+
+SetL:Slider("Depth Instant","fishInstantDepth",10,999,999,
+    function(v) Fish.instantDepth=v end,
+    "Nilai depth dikirim ke server (instant mode)\nDefault 999 = maksimal")
+
+SetL:Label("🎣 Auto Fishing")
+SetL:Toggle("Auto Fishing","autoFish",false,"Auto cast loop (pakai mode yang aktif)",
     function(v)
         Fish.autoOn=v
         if v then
@@ -1191,47 +1333,66 @@ SetL:Toggle("Auto Fishing","autoFish",false,"Auto cast loop",
             end
             local attempts=0
             Fish.fishTask=task.spawn(function()
+                local modeStr = Fish.instantMode and "⚡ INSTANT" or "🎣 NORMAL"
+                notify("Fishing","ON — "..modeStr,3)
                 while Fish.autoOn do
                     local ok,err=pcall(castOnce)
-                    if ok then attempts=0; task.wait(0.5)
+                    if ok then
+                        attempts=0
                     else
                         attempts=attempts+1
                         xlog("Fish","Error: "..tostring(err):sub(1,60),true)
                         if attempts>=3 then
-                            notify("Fishing","Auto stop — 3x error",5); Fish.autoOn=false; break
+                            notify("Fishing","Auto stop — 3x error",5)
+                            Fish.autoOn=false; break
                         end
                         task.wait(5)
                     end
                 end
             end)
-            notify("Fishing","ON",3)
         else
             if Fish.fishTask then pcall(function() task.cancel(Fish.fishTask) end); Fish.fishTask=nil end
             notify("Fishing","OFF | Total: "..Fish.totalFished,2)
         end
     end)
-SetL:Button("🎣 Cast Sekali","1x cast",
+
+SetL:Button("🎣 Cast Sekali","1x cast (pakai mode aktif)",
     function()
         task.spawn(function()
             if not Fish.rodEquipped then
                 local ok=equipRod(); if not ok then return end; task.wait(0.5)
             end
-            castOnce(); notify("Fishing","Cast selesai",2)
+            -- Untuk cast sekali, set autoOn sementara
+            local wasAuto = Fish.autoOn
+            Fish.autoOn = true
+            castOnce()
+            Fish.autoOn = wasAuto
+            notify("Fishing","Cast selesai | Total: "..Fish.totalFished,2)
         end)
     end)
-SetL:Button("📦 Equip Rod","Ambil AdvanceRod",function() equipRod() end)
-SetL:Button("📤 Unequip Rod","Kembalikan rod",
+SetL:Button("📦 Equip Rod","Cari & equip AdvanceRod",function() equipRod() end)
+SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
     function() unequipRod(); notify("Rod","Dikembalikan",2) end)
-SetL:Slider("Delay Tunggu Ikan","fishWait",5,60,31,
-    function(v) Fish.waitDelay=v end,"Default 31.6s (spy log)")
+SetL:Slider("Timeout Normal (detik)","fishWait",10,120,60,
+    function(v) Fish.waitDelay=v end,"Maks tunggu ikan — mode NORMAL saja")
 
-SetR:Paragraph("XKID HUB v5.4",
+SetR:Paragraph("XKID HUB v5.6",
     "CHANGELOG:\n"..
-    "✅ slotIdx dari OnClientEvent \\3\n"..
-    "✅ Cache 9 slot realtime\n"..
-    "✅ Cek stok sebelum tanam\n"..
-    "✅ Fast Respawn (instant+auto)\n"..
-    "✅ Semua fix v5.3 tetap ada")
+    "✅ Instant Mode fishing\n"..
+    "✅ Normal Mode (NotifyClient)\n"..
+    "✅ equipRod cari char+bp\n"..
+    "✅ Area fix + slotIdx cache\n"..
+    "✅ Fast Respawn system")
+
+SetR:Paragraph("Fishing Guide",
+    "⚡ INSTANT MODE:\n"..
+    "cast → delay 1s → tarik paksa\n"..
+    "Power bar skip otomatis\n"..
+    "Kalau tidak dapat ikan:\n"..
+    "→ Naikkan Delay Instant\n\n"..
+    "🎣 NORMAL MODE:\n"..
+    "Tunggu server kirim NotifyClient\n"..
+    "→ Tarik otomatis saat ikan kena")
 
 SetR:Paragraph("Cara Tanam",
     "1. Shop → Beli bibit dulu\n"..
@@ -1248,15 +1409,15 @@ local _totalPl=0
 for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 
 if _totalPl>0 then
-    notify("✅ XKID HUB v5.4 Ready",
+    notify("✅ XKID HUB v5.6 Ready",
         #AREA_NAMES.." area | ".._totalPl.." plot\nBeli bibit dulu agar slot terdeteksi!",6)
 else
-    notify("⚠ XKID HUB v5.4",
+    notify("⚠ XKID HUB v5.6",
         "Plot belum ditemukan!\nFarming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.4",
+Library:Notification("XKID HUB v5.6",
     "Farming · Shop · Teleport · Player · Security · Setting",6)
 Library:ConfigSystem(Win)
-print("[XKID HUB] v5.4 loaded — "..LP.Name)
-print("[v5.4] slotIdx=OnClientEvent cache | FastRespawn | 9slot | seedColor")
+print("[XKID HUB] v5.6 loaded — "..LP.Name)
+print("[v5.6] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
