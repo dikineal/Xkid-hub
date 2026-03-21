@@ -1,12 +1,12 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              🌟  X K I D   H U B  v5.15  🌟              ║
+║              🌟  X K I D   H U B  v5.18  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
 ║  Security  ·  Setting                                    ║
 ╠═══════════════════════════════════════════════════════════╣
-║  CHANGELOG v5.15:                                         ║
+║  CHANGELOG v5.18:                                         ║
 ║  [FIX] Scan plot: scan semua BasePart + cluster          ║
 ║  [FIX] ALL_PLOTS global untuk harvest reliable           ║
 ║  [FIX] Area tidak match → auto fallback ALL_PLOTS        ║
@@ -98,7 +98,7 @@ for _, c in ipairs(CROPS) do table.insert(cropDropNames, c.icon.." "..c.seed) en
 local SeedInventory = {}
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [NEW v5.15] HARVEST CACHE                              │
+-- │  [NEW v5.18] HARVEST CACHE                              │
 -- │  Listen OnClientEvent key "\r" (\x0d)                  │
 -- │  Server kirim data crop ready:                         │
 -- │  cropName, cropPos, sellPrice, seedColor, drops, timer │
@@ -110,31 +110,30 @@ local HarvestCache = {}
 local function updateHarvestCache(data)
     if type(data) ~= "table" then return end
 
-    -- [FIX v5.15] Key yang benar dari SimpleSpy = "\13" (string octal escape)
-    -- Bukan "\r", bukan integer 13, tapi string "\13"
-    local cropData = data["\13"]
+    -- [FIX v5.18] KONFIRMASI dari SimpleSpy:
+    -- OnClientEvent pakai key "\r" (carriage return = \x0d)
+    -- FireServer pakai key "\13" (octal escape)
+    -- Keduanya sama secara byte (ASCII 13) tapi Lua bedakan!
+    local cropData = data["\r"]   -- OnClientEvent key
 
-    -- Debug: log semua key setiap kali data masuk
+    -- Debug: log semua key
     local keyDebug = ""
     for k in pairs(data) do
-        if type(k) == "number" then
-            keyDebug = keyDebug .. "int("..k..") "
-        elseif type(k) == "string" then
+        if type(k) == "string" then
             local hex = ""
             for i = 1, math.min(#k, 4) do
                 hex = hex .. string.format("%02x", k:byte(i))
             end
-            keyDebug = keyDebug .. "str(0x"..hex..") "
+            keyDebug = keyDebug .. "0x"..hex.." "
+        elseif type(k) == "number" then
+            keyDebug = keyDebug .. "int"..k.." "
         end
     end
-    if keyDebug ~= "" then
-        xlog("BRIDGE_KEYS", keyDebug, false)
-    end
+    xlog("BRIDGE_KEYS", keyDebug, false)
 
     if not cropData then return end
 
-    -- Timer key "\2"
-    local timerRaw   = data["\2"]
+    local timerRaw   = data["\2"] or data["\x02"]
     local timerStart = 0
     local timerEnd   = 50
     if type(timerRaw) == "table" then
@@ -144,27 +143,24 @@ local function updateHarvestCache(data)
 
     for _, crop in ipairs(cropData) do
         if type(crop) == "table" and crop.cropName and crop.cropPos then
-            -- seedColor = array {r, g, b} sesuai SimpleSpy
-            local sc = crop.seedColor or {0.298, 0.600, 0}
-
             table.insert(HarvestCache, {
                 cropName  = crop.cropName,
                 cropPos   = crop.cropPos,
                 sellPrice = crop.sellPrice or 20,
-                seedColor = sc,
+                seedColor = crop.seedColor or {0.298, 0.600, 0},
                 drops     = crop.drops or {},
                 timerStart= timerStart,
                 timerEnd  = timerEnd,
             })
             xlog("HARVEST", string.format(
-                "✅ Cache: %s pos=(%.1f,%.1f,%.1f) timer=%d-%d",
+                "✅ %s pos=(%.1f,%.1f,%.1f) t=%d-%d",
                 crop.cropName, crop.cropPos.X, crop.cropPos.Y, crop.cropPos.Z,
                 timerStart, timerEnd), false)
         end
     end
 
     if #HarvestCache > 0 then
-        notify("🌿 Crop Ready", #HarvestCache.." tanaman siap!\nKlik Panen Sekarang", 3)
+        notify("🌿 Crop Ready!", #HarvestCache.." tanaman siap panen!", 3)
     end
 end
 
@@ -198,7 +194,7 @@ local function startInventoryListener()
 end
 startInventoryListener()
 
--- [FIX v5.15] Fallback: baca slot langsung dari SeedPlanter UI
+-- [FIX v5.18] Fallback: baca slot langsung dari SeedPlanter UI
 -- SeedPlanter punya frame/slots yang bisa dibaca namanya
 -- Dipakai kalau cache dari OnClientEvent belum terisi
 local function readSeedPlanterUI()
@@ -254,7 +250,7 @@ local function readSeedPlanterUI()
     return found > 0
 end
 
--- [FIX v5.15] Force refresh inventory — panggil ini kalau cache kosong
+-- [FIX v5.18] Force refresh inventory — panggil ini kalau cache kosong
 local function forceRefreshInventory()
     -- Coba baca dari UI SeedPlanter dulu
     local uiOk = readSeedPlanterUI()
@@ -294,7 +290,7 @@ local function getSlotIdx(crop)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [FIX v5.15] AREA / PLOT DATA                          │
+-- │  [FIX v5.18] AREA / PLOT DATA                          │
 -- │  Dari full scan:                                        │
 -- │  - 8 Land Part di index 51,52,53,54,64,65,66,67        │
 -- │  - Setiap Land = 1 hitPart                             │
@@ -310,100 +306,182 @@ local AREA_PLOTS = {}
 local AREA_PARTS = {}
 local ALL_PLOTS  = {}
 
+-- ┌─────────────────────────────────────────────────────────┐
+-- │  [v5.18] AREA / PLOT DATA                              │
+-- │  Per Land individual + group areas                     │
+-- │  Grid aesthetic: zigzag / spiral dari tengah           │
+-- └─────────────────────────────────────────────────────────┘
+local AREA_NAMES  = {}
+local AREA_PLOTS  = {}
+local AREA_PARTS  = {}
+local ALL_PLOTS   = {}
+local LAND_LIST   = {}  -- list Land objects untuk dropdown individual
+
+-- Generate grid positions dalam 1 Land (aesthetic zigzag)
+local function generateLandSlots(obj, idx)
+    local center = obj.Position
+    local sW = math.max(obj.Size.X, obj.Size.Z)  -- lebar (dimensi besar)
+    local sD = math.min(obj.Size.X, obj.Size.Z)  -- dalam (dimensi kecil)
+
+    -- Hitung grid 5x4 = 20 slot dengan padding 15%
+    local COLS   = 5
+    local ROWS   = 4
+    local padW   = sW * 0.15
+    local padD   = sD * 0.15
+    local useW   = sW - padW * 2
+    local useD   = sD - padD * 2
+    local spaceW = COLS > 1 and useW / (COLS - 1) or 0
+    local spaceD = ROWS > 1 and useD / (ROWS - 1) or 0
+    if spaceW < 1.5 then spaceW = 2 end
+    if spaceD < 1.5 then spaceD = 2 end
+
+    local startW = center.X - useW / 2
+    local startD = center.Z - useD / 2
+    local hitY   = center.Y + 0.5
+
+    -- Aesthetic: zigzag (baris genap = kanan ke kiri)
+    local slots = {}
+    for row = 0, ROWS - 1 do
+        local cols = {}
+        for col = 0, COLS - 1 do
+            table.insert(cols, col)
+        end
+        -- Balik kolom di baris genap (zigzag)
+        if row % 2 == 1 then
+            local reversed = {}
+            for i = #cols, 1, -1 do table.insert(reversed, cols[i]) end
+            cols = reversed
+        end
+        for _, col in ipairs(cols) do
+            local slotNum = row * COLS + col + 1
+            local hitPos = Vector3.new(
+                startW + col * spaceW,
+                hitY,
+                startD + row * spaceD
+            )
+            table.insert(slots, {
+                part    = obj,
+                obj     = obj,
+                pos     = hitPos,
+                idx     = idx,
+                slot    = slotNum,
+                name    = string.format("Land[%d]s[%d]", idx, slotNum),
+                landIdx = idx,
+            })
+        end
+    end
+    return slots
+end
+
 local function buildAreaData()
     AREA_NAMES = {}
     AREA_PLOTS = {}
     AREA_PARTS = {}
     ALL_PLOTS  = {}
+    LAND_LIST  = {}
 
     local allCh = Workspace:GetChildren()
-    local plots  = {}
+    local lands  = {}
 
-    -- Scan semua workspace, cari Part bernama "Land"
+    -- Cari semua Part bernama "Land"
     for i, obj in ipairs(allCh) do
         if obj.Name == "Land" and obj:IsA("BasePart") then
-            -- hitPosition = posisi Land + Y offset ke atas
-            -- (simulasi player menyentuh permukaan dari atas)
-            local hitPos = Vector3.new(
-                obj.Position.X,
-                obj.Position.Y + 0.5,  -- sedikit di atas permukaan
-                obj.Position.Z
-            )
-            table.insert(plots, {
-                part = obj,
-                obj  = obj,
-                pos  = hitPos,     -- hitPosition yang dikirim ke server
-                idx  = i,
-                name = "Land["..i.."]"
-            })
+            table.insert(lands, {idx=i, obj=obj})
         end
     end
 
-    -- Sort: Area Utama (Z negatif) dulu, lalu Area Jauh (Z positif)
-    -- Dalam area yang sama, sort by X
-    table.sort(plots, function(a, b)
-        local az = a.obj.Position.Z
-        local bz = b.obj.Position.Z
+    -- Sort: Z negatif (Area Utama) dulu, dalam area sort by X
+    table.sort(lands, function(a, b)
+        local az, bz = a.obj.Position.Z, b.obj.Position.Z
         if math.abs(az - bz) > 20 then return az < bz end
         return a.obj.Position.X < b.obj.Position.X
     end)
 
-    if #plots > 0 then
-        -- Bagi jadi 2 area: Area Utama (Z < 50) dan Area Jauh (Z > 50)
-        local areaUtama = {}
-        local areaJauh  = {}
-        for _, pl in ipairs(plots) do
-            if pl.obj.Position.Z < 50 then
-                table.insert(areaUtama, pl)
-            else
-                table.insert(areaJauh, pl)
-            end
+    -- Nomori ulang secara berurutan (Land 1, Land 2, ...)
+    local allUtama = {}
+    local allJauh  = {}
+
+    for num, land in ipairs(lands) do
+        local obj  = land.obj
+        local idx  = land.idx
+        local slots = generateLandSlots(obj, idx)
+        local area  = obj.Position.Z < 50 and "Utama" or "Jauh"
+        local label = string.format("🌱 Land %d (%s)", num, area)
+
+        table.insert(LAND_LIST, {
+            num   = num,
+            label = label,
+            obj   = obj,
+            idx   = idx,
+            slots = slots,
+            area  = area,
+        })
+
+        -- Add ke AREA_PLOTS per Land
+        table.insert(AREA_NAMES, label)
+        AREA_PLOTS[label] = slots
+        AREA_PARTS[label] = {obj}
+
+        -- Kumpulkan per area
+        if area == "Utama" then
+            for _, s in ipairs(slots) do table.insert(allUtama, s) end
+        else
+            for _, s in ipairs(slots) do table.insert(allJauh, s) end
         end
 
-        if #areaUtama > 0 then
-            local label = "Area Utama ("..#areaUtama.." plot)"
-            table.insert(AREA_NAMES, label)
-            AREA_PLOTS[label] = areaUtama
-            local parts = {}
-            for _, pl in ipairs(areaUtama) do
-                table.insert(parts, pl.part)
-                table.insert(ALL_PLOTS, pl)
-            end
-            AREA_PARTS[label] = parts
-        end
+        -- ALL_PLOTS
+        for _, s in ipairs(slots) do table.insert(ALL_PLOTS, s) end
 
-        if #areaJauh > 0 then
-            local label = "Area Jauh ("..#areaJauh.." plot)"
-            table.insert(AREA_NAMES, label)
-            AREA_PLOTS[label] = areaJauh
-            local parts = {}
-            for _, pl in ipairs(areaJauh) do
-                table.insert(parts, pl.part)
-                table.insert(ALL_PLOTS, pl)
-            end
-            AREA_PARTS[label] = parts
-        end
+        xlog("Scan", string.format(
+            "%s idx=%d pos=(%.0f,%.0f,%.0f) %d slots",
+            label, idx, obj.Position.X, obj.Position.Y, obj.Position.Z, #slots), false)
+    end
 
-        -- Juga buat 1 area gabungan
-        local labelAll = "Semua Lahan ("..#plots.." plot)"
-        table.insert(AREA_NAMES, labelAll)
-        AREA_PLOTS[labelAll] = plots
-        AREA_PARTS[labelAll] = {}
-        for _, pl in ipairs(plots) do
-            table.insert(AREA_PARTS[labelAll], pl.part)
+    -- Group areas
+    if #allUtama > 0 then
+        local lbl = "🏡 Semua Utama ("..#lands.." Land)"
+        -- hitung hanya land utama
+        local countUtama = 0
+        for _, l in ipairs(LAND_LIST) do if l.area=="Utama" then countUtama=countUtama+1 end end
+        lbl = "🏡 Semua Utama ("..countUtama.." Land)"
+        table.insert(AREA_NAMES, lbl)
+        AREA_PLOTS[lbl] = allUtama
+        AREA_PARTS[lbl] = {}
+        for _, l in ipairs(LAND_LIST) do
+            if l.area=="Utama" then table.insert(AREA_PARTS[lbl], l.obj) end
         end
     end
 
-    -- Log hasil (tidak akses Farm di sini)
-    xlog("Scan", string.format("%d Land Part ditemukan", #ALL_PLOTS), false)
-    for _, pl in ipairs(ALL_PLOTS) do
-        xlog("Scan", string.format("%s idx=%d pos=(%.0f,%.0f,%.0f)",
-            pl.name, pl.idx,
-            pl.obj.Position.X, pl.obj.Position.Y, pl.obj.Position.Z), false)
+    if #allJauh > 0 then
+        local countJauh = 0
+        for _, l in ipairs(LAND_LIST) do if l.area=="Jauh" then countJauh=countJauh+1 end end
+        local lbl = "🌿 Semua Jauh ("..countJauh.." Land)"
+        table.insert(AREA_NAMES, lbl)
+        AREA_PLOTS[lbl] = allJauh
+        AREA_PARTS[lbl] = {}
+        for _, l in ipairs(LAND_LIST) do
+            if l.area=="Jauh" then table.insert(AREA_PARTS[lbl], l.obj) end
+        end
     end
+
+    if #ALL_PLOTS > 0 then
+        local lbl = "🌍 Semua Lahan ("..#lands.." Land)"
+        table.insert(AREA_NAMES, lbl)
+        AREA_PLOTS[lbl] = ALL_PLOTS
+        AREA_PARTS[lbl] = {}
+        for _, l in ipairs(LAND_LIST) do table.insert(AREA_PARTS[lbl], l.obj) end
+    end
+
+    xlog("Scan", string.format(
+        "Total: %d Land → %d slot (Utama:%d Jauh:%d)",
+        #lands, #ALL_PLOTS, #allUtama, #allJauh), false)
 end
 
-local function filterPlots(plotList, jumlah)
+local function filterPlots(plotList, jumlah, fullMode)
+    if fullMode then
+        -- Full: pakai semua slot
+        return {table.unpack(plotList)}
+    end
     local max = math.min(jumlah, #plotList, 20)
     local result = {}
     for i = 1, max do table.insert(result, plotList[i]) end
@@ -415,7 +493,8 @@ end
 -- └─────────────────────────────────────────────────────────┘
 local Farm = {
     selectedCrop=CROPS[1], selectedArea="", selectedPola="Normal",
-    jumlahTanam=5, autoCycleOn=false, autoCycleTask=nil,
+    jumlahTanam=5, fullMode=false,
+    autoCycleOn=false, autoCycleTask=nil,
     autoBeli=false, jumlahAutoBeli=10, growDelay=60,
     autoPanen=false, autoPanenTask=nil, espKematangan=false,
 }
@@ -442,7 +521,7 @@ local function tanamPlots()
 
     local slotIdx, stockCount = getSlotIdx(Farm.selectedCrop)
 
-    -- [FIX v5.15] Auto force refresh kalau cache kosong
+    -- [FIX v5.18] Auto force refresh kalau cache kosong
     if not slotIdx then
         xlog("Tanam","SlotIdx nil, coba force refresh...",false)
         notify("Farm ⏳","Cek inventory...",2)
@@ -467,7 +546,7 @@ local function tanamPlots()
     end
 
     local plotList = AREA_PLOTS[Farm.selectedArea]
-    -- [FIX v5.15] Fallback ke ALL_PLOTS kalau area tidak match
+    -- [FIX v5.18] Fallback ke ALL_PLOTS kalau area tidak match
     if not plotList or #plotList == 0 then
         if #ALL_PLOTS > 0 then
             notify("Farm ⚠","Area tidak match → pakai semua ("..#ALL_PLOTS.." plot)",3)
@@ -477,17 +556,25 @@ local function tanamPlots()
         end
     end
 
-    local maxTanam = math.min(Farm.jumlahTanam, stockCount)
-    if maxTanam < Farm.jumlahTanam then
-        notify("Farm ⚠","Stok "..stockCount.." → tanam disesuaikan ke "..maxTanam,3)
+    local maxTanam = Farm.fullMode and stockCount or math.min(Farm.jumlahTanam, stockCount)
+    if not Farm.fullMode and maxTanam < Farm.jumlahTanam then
+        notify("Farm ⚠","Stok "..stockCount.." → tanam "..maxTanam,3)
     end
 
-    -- [FIX v5.15] Grid sort — tanam urut row by row (kiri→kanan, atas→bawah)
-    local filtered = filterPlots(plotList, maxTanam)
+    -- [v5.18] Grid zigzag aesthetic + fullMode support
+    local filtered = filterPlots(plotList, maxTanam, Farm.fullMode)
     if #filtered == 0 then notify("Farm ❌","0 plot setelah filter",4); return 0 end
 
-    xlog("Tanam",string.format("crop=%s slot=%d stok=%d plot=%d",
-        Farm.selectedCrop.name, slotIdx, stockCount, #filtered), false)
+    -- Batasi juga oleh stok
+    if #filtered > stockCount then
+        local tmp = {}
+        for i=1,stockCount do table.insert(tmp, filtered[i]) end
+        filtered = tmp
+    end
+
+    xlog("Tanam",string.format("crop=%s slot=%d stok=%d plot=%d full=%s",
+        Farm.selectedCrop.name, slotIdx, stockCount, #filtered,
+        tostring(Farm.fullMode)), false)
 
     local count, failed = 0, 0
     for _, pl in ipairs(filtered) do
@@ -517,7 +604,7 @@ local function harvestAll()
     local ev = getBridge()
     if not ev then notify("Farm ❌","BridgeNet2 tidak ada!",5); return 0 end
 
-    -- [FIX v5.15] Format PERSIS dari SimpleSpy:
+    -- [FIX v5.18] Format PERSIS dari SimpleSpy:
     -- ["\13"] = {{ seedColor={r,g,b}, cropName, cropPos, sellPrice, drops }}
     -- ["\2"]  = { timerStart, timerEnd }
     if #HarvestCache > 0 then
@@ -875,45 +962,62 @@ end
 local SavedLoc={nil,nil,nil,nil,nil}
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [NEW v5.4] FAST RESPAWN SYSTEM                        │
+-- │  FAST RESPAWN SYSTEM                                    │
 -- └─────────────────────────────────────────────────────────┘
 local Respawn={savedPosition=nil, autoRespawn=false, respawnTask=nil}
 
+-- Simpan posisi tiap frame
 RunService.Heartbeat:Connect(function()
-    local root=getRoot(); if root then Respawn.savedPosition=root.CFrame end
+    local root=getRoot()
+    if root then Respawn.savedPosition=root.CFrame end
 end)
 
 local function fastRespawn()
-    if not Respawn.savedPosition then notify("Respawn","Posisi belum tersimpan!",2); return end
+    -- Instant TP ke posisi terakhir (tanpa mati)
+    if not Respawn.savedPosition then
+        notify("Respawn","Posisi belum tersimpan!",2); return
+    end
     local root=getRoot()
-    if root then root.CFrame=Respawn.savedPosition; notify("✅ Respawn","Kembali ke posisi",1) end
+    if root then
+        root.CFrame=Respawn.savedPosition
+        notify("✅ Respawn","Kembali ke posisi!",1)
+    else
+        notify("Respawn","Karakter tidak ada!",2)
+    end
 end
 
 local function startAutoRespawn()
     if Respawn.respawnTask then return end
     Respawn.respawnTask=task.spawn(function()
         while Respawn.autoRespawn do
-            local h=getHum()
-            if h and h.Health<=0 then
-                task.wait(0.5); LP.CharacterAdded:Wait(); task.wait(0.3)
-                local newRoot=getRoot()
-                if newRoot and Respawn.savedPosition then
-                    newRoot.CFrame=Respawn.savedPosition
-                    notify("↩ Auto Respawn","Kembali ke posisi",2)
+            -- Tunggu karakter mati
+            local hum=getHum()
+            if hum and hum.Health <= 0 then
+                local saved = Respawn.savedPosition
+                -- Tunggu karakter baru spawn
+                local newChar = LP.CharacterAdded:Wait()
+                task.wait(0.5)
+                -- Cari HRP di karakter baru
+                local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+                if hrp and saved then
+                    hrp.CFrame = saved
+                    notify("↩ Auto Respawn","Kembali ke posisi!",2)
                 end
             end
             task.wait(0.1)
         end
     end)
 end
+
 local function stopAutoRespawn()
     if Respawn.respawnTask then
-        pcall(function() task.cancel(Respawn.respawnTask) end); Respawn.respawnTask=nil
+        pcall(function() task.cancel(Respawn.respawnTask) end)
+        Respawn.respawnTask=nil
     end
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [FIX v5.15] FISHING SYSTEM                            │
+-- │  [FIX v5.18] FISHING SYSTEM                            │
 -- │  Dari debug log, urutan event server:                  │
 -- │  ← MiniGame: Start  (bar muncul = saatnya complete!)  │
 -- │  ← MiniGame: Start  (kadang 2x)                       │
@@ -1060,7 +1164,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │  WINDOW & TABS                                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win=Library:Window("XKID HUB","sprout","v5.15",false)
+local Win=Library:Window("XKID HUB","sprout","v5.18",false)
 Win:TabSection("MAIN")
 local T_Farm=Win:Tab("Farming","leaf")
 local T_Shop=Win:Tab("Shop","shopping-cart")
@@ -1076,7 +1180,7 @@ local FP=T_Farm:Page("Farming","leaf")
 local FL=FP:Section("🌱 Farming","Left")
 local FR=FP:Section("🔄 Auto & Fitur","Right")
 
-FL:Label("📍 Penempatan Lahan")
+FL:Label("📍 Pilih Tanaman & Lahan")
 FL:Dropdown("Pilih Tanaman","cropSel",cropDropNames,
     function(val)
         for _,c in ipairs(CROPS) do
@@ -1084,38 +1188,55 @@ FL:Dropdown("Pilih Tanaman","cropSel",cropDropNames,
                 Farm.selectedCrop=c
                 local slot,stok=getSlotIdx(c)
                 if slot then notify("Tanaman",c.seed.." | Slot "..slot.." | Stok "..stok,3)
-                else notify("Tanaman",c.seed.."\n⚠ Belum di SeedPlanter! Beli dulu.",4) end
+                else notify("Tanaman ⚠",c.seed.."\nBeli dulu agar slot terdeteksi",4) end
                 break
             end
         end
     end,"Pilih jenis tanaman")
 
-FL:Dropdown("Pilih Area","areaSel",
+FL:Dropdown("Pilih Lahan","areaSel",
     #AREA_NAMES>0 and AREA_NAMES or {"(Scan dulu)"},
     function(val)
         Farm.selectedArea=val
         local plots = AREA_PLOTS[val]
         local count = plots and #plots or 0
-        notify("Area",val.."\n"..count.." plot tersedia",2)
-    end,"Pilih area lahan")
+        notify("Lahan",val.."\n"..count.." slot tersedia",2)
+    end,"Land 1-8 / Semua Utama / Semua Jauh / Semua")
 
-FL:Label("🌱 Eksekusi")
+FL:Label("🌱 Jumlah & Mode")
+FL:Toggle("🔥 Full Lahan","fullMode",false,
+    "ON = tanam semua slot lahan yang dipilih\nOFF = pakai slider jumlah",
+    function(v)
+        Farm.fullMode=v
+        local plots = AREA_PLOTS[Farm.selectedArea]
+        local total = plots and #plots or 0
+        if v then
+            notify("Full Mode","ON — semua "..total.." slot akan ditanam!",3)
+        else
+            notify("Full Mode","OFF — pakai slider jumlah",2)
+        end
+    end)
+
 FL:Slider("Jumlah Plot","plantQty",1,20,5,
     function(v) Farm.jumlahTanam=v end,
-    "Plot ditanam urut grid (kiri→kanan, atas→bawah)")
+    "Aktif saat Full Mode OFF | 1-20 slot per aksi")
 
 FL:Button("🌱 Mulai Tanam","Tanam sesuai setting",
     function()
         task.spawn(function()
-            -- [FIX v5.15] Auto pakai area pertama kalau belum pilih
             if Farm.selectedArea=="" or not AREA_PLOTS[Farm.selectedArea] then
                 if #AREA_NAMES > 0 then
                     Farm.selectedArea = AREA_NAMES[1]
                     notify("Farm","Auto pilih: "..AREA_NAMES[1],2)
                 else
-                    notify("Farm","Scan ulang area dulu!",3); return
+                    notify("Farm","Scan ulang dulu!",3); return
                 end
             end
+            local plots  = AREA_PLOTS[Farm.selectedArea]
+            local jumlah = Farm.fullMode and #plots or Farm.jumlahTanam
+            notify("Tanam","🌱 "..Farm.selectedCrop.seed..
+                "\n📍 "..Farm.selectedArea..
+                "\n🔢 "..jumlah.." slot"..(Farm.fullMode and " (FULL)" or ""),3)
             tanamPlots()
         end)
     end)
@@ -1133,30 +1254,29 @@ FL:Button("🔍 Cek Slot & Stok","Lihat semua slot inventory",
         local invCount = 0
         for _ in pairs(SeedInventory) do invCount = invCount + 1 end
         notify("🌱 SeedPlanter ("..invCount.." slot)", txt, 12)
-        print("[XKID SLOT]\n"..txt)
     end)
 
--- [FIX v5.15] Tombol force refresh inventory
 FL:Button("🔄 Refresh Inventory","Paksa server kirim data slot bibit",
     function()
         task.spawn(function()
             notify("Inventory","Mengambil data slot...",2)
-            SeedInventory = {}  -- reset dulu
+            SeedInventory = {}
             forceRefreshInventory()
         end)
     end)
 
-FL:Button("🔄 Scan Ulang Area","Refresh semua lahan",
+FL:Button("🔄 Scan Ulang Lahan","Refresh semua Land Part",
     function()
         buildAreaData()
+        local nLand = #LAND_LIST
         local total = #ALL_PLOTS
-        if #AREA_NAMES > 0 then
+        if nLand > 0 then
             Farm.selectedArea = AREA_NAMES[1]
             notify("✅ Scan",
-                #AREA_NAMES.." area | "..total.." total plot\nArea aktif: "..AREA_NAMES[1],5)
+                nLand.." Land | "..total.." total slot\nAktif: "..AREA_NAMES[1],5)
         else
             Farm.selectedArea = ""
-            notify("⚠ Scan","Tidak ada plot!\nPastikan berada di dekat lahan.",5)
+            notify("⚠ Scan","Tidak ada Land!\nPastikan dekat lahan.",5)
         end
     end)
 
@@ -1563,7 +1683,7 @@ SetL:Button("📦 Equip Rod","Cari & equip AdvanceRod",function() equipRod() end
 SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
     function() unequipRod(); notify("Rod","Dikembalikan",2) end)
 
-SetR:Paragraph("XKID HUB v5.15",
+SetR:Paragraph("XKID HUB v5.18",
     "CHANGELOG:\n"..
     "✅ Scan: cari Part name=Land\n"..
     "✅ 8 lahan terdeteksi (51-67)\n"..
@@ -1596,15 +1716,15 @@ local _totalPl=0
 for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 
 if _totalPl>0 then
-    notify("✅ XKID HUB v5.15 Ready",
+    notify("✅ XKID HUB v5.18 Ready",
         #AREA_NAMES.." area | ".._totalPl.." plot\nBeli bibit dulu agar slot terdeteksi!",6)
 else
-    notify("⚠ XKID HUB v5.15",
+    notify("⚠ XKID HUB v5.18",
         "Plot belum ditemukan!\nFarming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.15",
+Library:Notification("XKID HUB v5.18",
     "Farming · Shop · Teleport · Player · Security · Setting",6)
 Library:ConfigSystem(Win)
-print("[XKID HUB] v5.15 loaded — "..LP.Name)
-print("[v5.15] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
+print("[XKID HUB] v5.18 loaded — "..LP.Name)
+print("[v5.18] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
