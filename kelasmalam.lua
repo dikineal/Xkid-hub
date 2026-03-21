@@ -1,12 +1,12 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              🌟  X K I D   H U B  v5.22  🌟              ║
+║              🌟  X K I D   H U B  v5.23  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
 ║  Security  ·  Setting                                    ║
 ╠═══════════════════════════════════════════════════════════╣
-║  CHANGELOG v5.22:                                         ║
+║  CHANGELOG v5.23:                                         ║
 ║  [FIX] Scan plot: scan semua BasePart + cluster          ║
 ║  [FIX] ALL_PLOTS global untuk harvest reliable           ║
 ║  [FIX] Area tidak match → auto fallback ALL_PLOTS        ║
@@ -98,7 +98,7 @@ for _, c in ipairs(CROPS) do table.insert(cropDropNames, c.icon.." "..c.seed) en
 local SeedInventory = {}
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [NEW v5.22] HARVEST CACHE                              │
+-- │  [NEW v5.23] HARVEST CACHE                              │
 -- │  Listen OnClientEvent key "\r" (\x0d)                  │
 -- │  Server kirim data crop ready:                         │
 -- │  cropName, cropPos, sellPrice, seedColor, drops, timer │
@@ -110,7 +110,7 @@ local HarvestCache = {}
 local function updateHarvestCache(data)
     if type(data) ~= "table" then return end
 
-    -- [FIX v5.22] KONFIRMASI dari SimpleSpy:
+    -- [FIX v5.23] KONFIRMASI dari SimpleSpy:
     -- OnClientEvent pakai key "\r" (carriage return = \x0d)
     -- FireServer pakai key "\13" (octal escape)
     -- Keduanya sama secara byte (ASCII 13) tapi Lua bedakan!
@@ -194,7 +194,7 @@ local function startInventoryListener()
 end
 startInventoryListener()
 
--- [FIX v5.22] Fallback: baca slot langsung dari SeedPlanter UI
+-- [FIX v5.23] Fallback: baca slot langsung dari SeedPlanter UI
 -- SeedPlanter punya frame/slots yang bisa dibaca namanya
 -- Dipakai kalau cache dari OnClientEvent belum terisi
 local function readSeedPlanterUI()
@@ -250,7 +250,7 @@ local function readSeedPlanterUI()
     return found > 0
 end
 
--- [FIX v5.22] Force refresh inventory — panggil ini kalau cache kosong
+-- [FIX v5.23] Force refresh inventory — panggil ini kalau cache kosong
 local function forceRefreshInventory()
     -- Coba baca dari UI SeedPlanter dulu
     local uiOk = readSeedPlanterUI()
@@ -290,7 +290,7 @@ local function getSlotIdx(crop)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [FIX v5.22] AREA / PLOT DATA                          │
+-- │  [FIX v5.23] AREA / PLOT DATA                          │
 -- │  Dari full scan:                                        │
 -- │  - 8 Land Part di index 51,52,53,54,64,65,66,67        │
 -- │  - Setiap Land = 1 hitPart                             │
@@ -307,7 +307,7 @@ local AREA_PARTS = {}
 local ALL_PLOTS  = {}
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [v5.22] AREA / PLOT DATA                              │
+-- │  [v5.23] AREA / PLOT DATA                              │
 -- │  Per Land individual + group areas                     │
 -- │  Grid aesthetic: zigzag / spiral dari tengah           │
 -- └─────────────────────────────────────────────────────────┘
@@ -337,7 +337,7 @@ local function generateLandSlots(obj, idx)
 
     local startW = center.X - useW / 2
     local startD = center.Z - useD / 2
-    -- [FIX v5.22] Y dari spy: hitPosition.Y ≈ Land.Position.Y + 0.07
+    -- [FIX v5.23] Y dari spy: hitPosition.Y ≈ Land.Position.Y + 0.07
     local hitY   = center.Y + 0.07
 
     -- Aesthetic: zigzag (baris genap = kanan ke kiri)
@@ -556,7 +556,7 @@ local function tanamPlots()
 
     local slotIdx, stockCount = getSlotIdx(Farm.selectedCrop)
 
-    -- [FIX v5.22] Auto force refresh kalau cache kosong
+    -- [FIX v5.23] Auto force refresh kalau cache kosong
     if not slotIdx then
         xlog("Tanam","SlotIdx nil, coba force refresh...",false)
         notify("Farm ⏳","Cek inventory...",2)
@@ -581,7 +581,7 @@ local function tanamPlots()
     end
 
     local plotList = AREA_PLOTS[Farm.selectedArea]
-    -- [FIX v5.22] Fallback ke ALL_PLOTS kalau area tidak match
+    -- [FIX v5.23] Fallback ke ALL_PLOTS kalau area tidak match
     if not plotList or #plotList == 0 then
         if #ALL_PLOTS > 0 then
             notify("Farm ⚠","Area tidak match → pakai semua ("..#ALL_PLOTS.." plot)",3)
@@ -596,7 +596,7 @@ local function tanamPlots()
         notify("Farm ⚠","Stok "..stockCount.." → tanam "..maxTanam,3)
     end
 
-    -- [v5.22] Grid zigzag aesthetic + fullMode support
+    -- [v5.23] Grid zigzag aesthetic + fullMode support
     local filtered = filterPlots(plotList, maxTanam, Farm.fullMode)
     if #filtered == 0 then notify("Farm ❌","0 plot setelah filter",4); return 0 end
 
@@ -612,7 +612,7 @@ local function tanamPlots()
         tostring(Farm.fullMode)), false)
 
     local count, failed = 0, 0
-    -- [FIX v5.22] hitPart = Land terdekat dari hitPosition
+    -- [FIX v5.23] hitPart = Land terdekat dari hitPosition
     -- Karena spy log kadang workspace.Land kadang workspace:GetChildren()[X]
     -- Server pakai hitPart untuk tau lahan mana, hitPosition untuk slot mana
     -- Solusi: cari Land terdekat dari setiap slot position
@@ -724,7 +724,7 @@ local function harvestAll()
     local count, failed = 0, 0
     for _, entry in ipairs(toHarvest) do
         local ok, err = pcall(function()
-            -- [FIX v5.22] Format persis dari SimpleSpy
+            -- [FIX v5.23] Format persis dari SimpleSpy
             ev:FireServer({
                 ["\13"] = {{
                     seedColor = entry.seedColor,
@@ -1032,7 +1032,7 @@ local function doRespawn()
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │  [FIX v5.22] FISHING SYSTEM                            │
+-- │  [FIX v5.23] FISHING SYSTEM                            │
 -- │  Dari debug log, urutan event server:                  │
 -- │  ← MiniGame: Start  (bar muncul = saatnya complete!)  │
 -- │  ← MiniGame: Start  (kadang 2x)                       │
@@ -1179,7 +1179,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │  WINDOW & TABS                                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win=Library:Window("XKID HUB","sprout","v5.22",false)
+local Win=Library:Window("XKID HUB","sprout","v5.23",false)
 Win:TabSection("MAIN")
 local T_Farm=Win:Tab("Farming","leaf")
 local T_Shop=Win:Tab("Shop","shopping-cart")
@@ -1572,7 +1572,7 @@ SecL:Toggle("Anti Kick","antiKick",false,"HP dikunci < 15%",
         notify("Anti Kick",v and "ON" or "OFF",2)
     end)
 
--- [v5.22] Respawn Cepat — mati + TP balik
+-- [v5.23] Respawn Cepat — mati + TP balik
 SecL:Label("⚡ Respawn Cepat")
 SecL:Button("⚡ Respawn Sekarang","Mati → ganti karakter → TP balik",
     function() task.spawn(doRespawn) end)
@@ -1687,7 +1687,7 @@ SetL:Button("📦 Equip Rod","Cari & equip AdvanceRod",function() equipRod() end
 SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
     function() unequipRod(); notify("Rod","Dikembalikan",2) end)
 
-SetR:Paragraph("XKID HUB v5.22",
+SetR:Paragraph("XKID HUB v5.23",
     "CHANGELOG:\n"..
     "✅ Scan: cari Part name=Land\n"..
     "✅ 8 lahan terdeteksi (51-67)\n"..
@@ -1720,15 +1720,15 @@ local _totalPl=0
 for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 
 if _totalPl>0 then
-    notify("✅ XKID HUB v5.22 Ready",
+    notify("✅ XKID HUB v5.23 Ready",
         #AREA_NAMES.." area | ".._totalPl.." plot\nBeli bibit dulu agar slot terdeteksi!",6)
 else
-    notify("⚠ XKID HUB v5.22",
+    notify("⚠ XKID HUB v5.23",
         "Plot belum ditemukan!\nFarming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.22",
+Library:Notification("XKID HUB v5.23",
     "Farming · Shop · Teleport · Player · Security · Setting",6)
 Library:ConfigSystem(Win)
-print("[XKID HUB] v5.22 loaded — "..LP.Name)
-print("[v5.22] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
+print("[XKID HUB] v5.23 loaded — "..LP.Name)
+print("[v5.23] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
