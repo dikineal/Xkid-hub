@@ -855,7 +855,9 @@ FL:Button("🔍 Cek Slot & Stok","Lihat semua slot inventory",
             local mark=(cropName==Farm.selectedCrop.name) and " ◄" or ""
             txt=txt..string.format("[%d] %s x%d%s\n",data.slot,cropName,data.count,mark)
         end
-        notify("🌱 SeedPlanter ("..table.getn and "" or "").."inventory",txt,12)
+        local invCount = 0
+        for _ in pairs(SeedInventory) do invCount = invCount + 1 end
+        notify("🌱 SeedPlanter ("..invCount.." slot)", txt, 12)
         print("[XKID SLOT]\n"..txt)
     end)
 
