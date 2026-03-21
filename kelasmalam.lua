@@ -1,18 +1,19 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              🌟  X K I D   H U B  v5.7  🌟              ║
+║              🌟  X K I D   H U B  v5.8  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Farming  ·  Shop  ·  Teleport  ·  Player                ║
 ║  Security  ·  Setting                                    ║
 ╠═══════════════════════════════════════════════════════════╣
-║  CHANGELOG v5.7:                                         ║
-║  [FIX] SeedInventory auto force refresh saat nil        ║
-║  [FIX] Fallback baca slot dari SeedPlanter UI           ║
-║  [NEW] Tombol Refresh Inventory di Farming tab          ║
-║  [FIX] Auto Fishing: auto equip + langsung cast         ║
-║  [KEEP] Dual mode: Instant + Normal                     ║
-║  [KEEP] Semua fix v5.6 tetap ada                        ║
+║  CHANGELOG v5.8:                                         ║
+║  [FIX] Scan plot: scan semua BasePart + cluster          ║
+║  [FIX] ALL_PLOTS global untuk harvest reliable           ║
+║  [FIX] Area tidak match → auto fallback ALL_PLOTS        ║
+║  [FIX] Grid sort: tanam urut row by row                 ║
+║  [FIX] Fishing hold: cast(true)→hold→cast(false,depth)  ║
+║  [FIX] Area dropdown auto-set saat scan                 ║
+║  [KEEP] Semua fix v5.7 tetap ada                        ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -125,7 +126,7 @@ local function startInventoryListener()
 end
 startInventoryListener()
 
--- [FIX v5.7] Fallback: baca slot langsung dari SeedPlanter UI
+-- [FIX v5.8] Fallback: baca slot langsung dari SeedPlanter UI
 -- SeedPlanter punya frame/slots yang bisa dibaca namanya
 -- Dipakai kalau cache dari OnClientEvent belum terisi
 local function readSeedPlanterUI()
@@ -181,7 +182,7 @@ local function readSeedPlanterUI()
     return found > 0
 end
 
--- [FIX v5.7] Force refresh inventory — panggil ini kalau cache kosong
+-- [FIX v5.8] Force refresh inventory — panggil ini kalau cache kosong
 local function forceRefreshInventory()
     -- Coba baca dari UI SeedPlanter dulu
     local uiOk = readSeedPlanterUI()
@@ -221,136 +222,153 @@ local function getSlotIdx(crop)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │                  AREA / PLOT DATA                       │
+-- │  [FIX v5.8] AREA / PLOT DATA                           │
+-- │  1 workspace BasePart = 1 plot (sesuai spy log)        │
+-- │  hitPart = objek itu sendiri                           │
+-- │  Scan SEMUA BasePart di workspace range 40-120         │
+-- │  Filter: CanCollide=true, ukuran wajar (lahan)         │
 -- └─────────────────────────────────────────────────────────┘
-local LAND_ZONES = {
-    { name="Area Utama", center=Vector3.new(24.0, 9.3, 0.18),     radius=15 },
-    { name="Area Jauh",  center=Vector3.new(33.31, 15.82, 40.51), radius=15 },
-}
 local SCAN_RANGE_START = 40
 local SCAN_RANGE_END   = 120
-local AREA_NAMES = {}
-local AREA_PLOTS = {}
-local AREA_PARTS = {}
-
-local function isInZone(pos, zone)
-    return (Vector3.new(pos.X, zone.center.Y, pos.Z) - zone.center).Magnitude <= zone.radius
-end
+local AREA_NAMES  = {}
+local AREA_PLOTS  = {}  -- key=nama → list {part,obj,pos,idx}
+local AREA_PARTS  = {}  -- key=nama → list part saja
+local ALL_PLOTS   = {}  -- semua plot gabungan untuk harvest
 
 local function buildAreaData()
-    AREA_NAMES = {}; AREA_PLOTS = {}; AREA_PARTS = {}
-    local zoneData = {}
-    for _, z in ipairs(LAND_ZONES) do zoneData[z.name] = {zone=z, plots={}} end
-    local uncategorized = {}
-    local allCh = Workspace:GetChildren()
+    AREA_NAMES = {}
+    AREA_PLOTS = {}
+    AREA_PARTS = {}
+    ALL_PLOTS  = {}
 
+    local allCh  = Workspace:GetChildren()
+    local plots  = {}
+
+    -- Scan index 40-120, ambil semua BasePart yang valid sebagai lahan
     for idx = SCAN_RANGE_START, math.min(SCAN_RANGE_END, #allCh) do
         local obj = allCh[idx]
-        if obj then
-            local pos
-            if obj:IsA("BasePart") then pos = obj.Position
-            else local p = obj:FindFirstChildOfClass("BasePart"); if p then pos = p.Position end end
-            if pos then
-                local matched = false
-                for _, z in ipairs(LAND_ZONES) do
-                    if isInZone(pos, z) then
-                        table.insert(zoneData[z.name].plots, {
-                            part = obj:IsA("BasePart") and obj or (obj:FindFirstChildOfClass("BasePart") or obj),
-                            obj=obj, pos=pos, idx=idx,
+        if not obj then continue end
+
+        if obj:IsA("BasePart") then
+            -- Lahan = BasePart besar, CanCollide, Y positif
+            local s = obj.Size
+            local minSize = 4  -- minimal ukuran lahan (studs)
+            if obj.CanCollide and s.X >= minSize and s.Z >= minSize then
+                table.insert(plots, {
+                    part = obj,
+                    obj  = obj,
+                    pos  = obj.Position,
+                    idx  = idx,
+                })
+            end
+        else
+            -- Cari BasePart anak langsung
+            for _, child in ipairs(obj:GetChildren()) do
+                if child:IsA("BasePart") and child.CanCollide then
+                    local s = child.Size
+                    if s.X >= 4 and s.Z >= 4 then
+                        table.insert(plots, {
+                            part = child,
+                            obj  = obj,
+                            pos  = child.Position,
+                            idx  = idx,
                         })
-                        matched=true; break
                     end
                 end
-                if not matched then
-                    table.insert(uncategorized, {
-                        part = obj:IsA("BasePart") and obj or (obj:FindFirstChildOfClass("BasePart") or obj),
-                        obj=obj, pos=pos, idx=idx,
+            end
+            -- Kalau tidak ada anak, coba objek sendiri
+            if #plots == 0 or plots[#plots].idx ~= idx then
+                local p = obj:FindFirstChildOfClass("BasePart")
+                if p and p.CanCollide then
+                    table.insert(plots, {
+                        part = p,
+                        obj  = obj,
+                        pos  = p.Position,
+                        idx  = idx,
                     })
                 end
             end
         end
     end
 
-    for _, z in ipairs(LAND_ZONES) do
-        local d = zoneData[z.name]
-        if #d.plots > 0 then
-            local label = z.name.." ("..#d.plots.." plot)"
+    -- Fallback: scan workspace.Land
+    if #plots == 0 then
+        local land = Workspace:FindFirstChild("Land")
+        if land then
+            if land:IsA("BasePart") then
+                table.insert(plots, {part=land, obj=land, pos=land.Position, idx=0})
+            else
+                for _, p in ipairs(land:GetDescendants()) do
+                    if p:IsA("BasePart") and p.CanCollide then
+                        table.insert(plots, {part=p, obj=land, pos=p.Position, idx=0})
+                    end
+                end
+            end
+        end
+    end
+
+    -- Kelompokkan plot berdasarkan kedekatan posisi (cluster per lahan visual)
+    -- Plot yang jaraknya < 50 studs dianggap 1 area
+    local clusters = {}
+    local assigned = {}
+
+    for i, pl in ipairs(plots) do
+        if not assigned[i] then
+            local cluster = {pl}
+            assigned[i] = true
+            for j, pl2 in ipairs(plots) do
+                if not assigned[j] and i ~= j then
+                    local dx = pl.pos.X - pl2.pos.X
+                    local dz = pl.pos.Z - pl2.pos.Z
+                    if math.sqrt(dx*dx + dz*dz) < 50 then
+                        table.insert(cluster, pl2)
+                        assigned[j] = true
+                    end
+                end
+            end
+            table.insert(clusters, cluster)
+        end
+    end
+
+    -- Buat area dari tiap cluster
+    for ci, cluster in ipairs(clusters) do
+        if #cluster > 0 then
+            local label = "Area "..ci.." ("..#cluster.." plot)"
             table.insert(AREA_NAMES, label)
-            AREA_PLOTS[label] = d.plots
+            AREA_PLOTS[label] = cluster
             local parts = {}
-            for _, pl in ipairs(d.plots) do table.insert(parts, pl.part) end
+            for _, pl in ipairs(cluster) do
+                table.insert(parts, pl.part)
+                table.insert(ALL_PLOTS, pl)
+            end
             AREA_PARTS[label] = parts
         end
     end
 
-    if #AREA_NAMES == 0 then
-        local land = Workspace:FindFirstChild("Land")
-        if land then
-            local parts = {}
-            for _, p in ipairs(land:GetDescendants()) do
-                if p:IsA("BasePart") and p.CanCollide then
-                    table.insert(parts, {part=p, obj=land, pos=p.Position, idx=0})
-                end
-            end
-            if #parts > 0 then
-                local label = "Land ("..#parts.." plot)"
-                table.insert(AREA_NAMES, label); AREA_PLOTS[label] = parts
-                local pp = {}; for _,pl in ipairs(parts) do table.insert(pp, pl.part) end
-                AREA_PARTS[label] = pp
-            end
-        end
-    end
-
-    if #AREA_NAMES == 0 and #uncategorized > 0 then
-        local label = "Auto Scan ("..#uncategorized.." plot)"
-        table.insert(AREA_NAMES, label); AREA_PLOTS[label] = uncategorized
-        local pp = {}; for _,pl in ipairs(uncategorized) do table.insert(pp, pl.part) end
-        AREA_PARTS[label] = pp
-    end
-
-    print(string.format("[XKID v5.4] Scan: %d area", #AREA_NAMES))
+    -- Log hasil
+    print(string.format("[XKID v5.8] Scan: %d area, %d total plot", #AREA_NAMES, #ALL_PLOTS))
     for _, name in ipairs(AREA_NAMES) do
-        print(string.format("  → %s: %d plot", name, AREA_PARTS[name] and #AREA_PARTS[name] or 0))
+        print(string.format("  → %s", name))
     end
 end
 
-local POLA_NAMES = {"Normal","Rapat (terdekat)","Selang-seling Lebar","Selang-seling Panjang"}
-local function filterByPola(plotList, pola, jumlah)
-    local max = math.min(jumlah, #plotList, 20)
+-- Grid system: sort plot by X,Z lalu ambil sesuai jumlah
+-- Plot diurutkan row by row (kiri→kanan, atas→bawah)
+local function sortPlotGrid(plotList)
+    local sorted = {table.unpack(plotList)}
+    table.sort(sorted, function(a, b)
+        local dz = a.pos.Z - b.pos.Z
+        if math.abs(dz) > 3 then return dz < 0 end  -- row berbeda
+        return a.pos.X < b.pos.X  -- kolom dalam row sama
+    end)
+    return sorted
+end
+
+local function filterPlots(plotList, jumlah)
+    local sorted = sortPlotGrid(plotList)
+    local max = math.min(jumlah, #sorted, 20)
     local result = {}
-    if pola == "Normal" then
-        for i=1,max do table.insert(result, plotList[i]) end
-    elseif pola == "Rapat (terdekat)" then
-        local root = getRoot()
-        if root then
-            local sorted = {}
-            for _,pl in ipairs(plotList) do
-                table.insert(sorted, {pl=pl, dist=(pl.part.Position-root.Position).Magnitude})
-            end
-            table.sort(sorted, function(a,b) return a.dist<b.dist end)
-            for i=1,math.min(max,#sorted) do table.insert(result, sorted[i].pl) end
-        else for i=1,max do table.insert(result, plotList[i]) end end
-    elseif pola == "Selang-seling Lebar" then
-        local sorted = {table.unpack(plotList)}
-        table.sort(sorted, function(a,b) return a.part.Position.X<b.part.Position.X end)
-        local lastX, skip = nil, false
-        for _,pl in ipairs(sorted) do
-            if lastX==nil then lastX=pl.part.Position.X; skip=false
-            elseif math.abs(pl.part.Position.X-lastX)>6 then lastX=pl.part.Position.X; skip=not skip end
-            if not skip then table.insert(result,pl); if #result>=max then break end end
-        end
-        if #result==0 then for i=1,max do table.insert(result,plotList[i]) end end
-    elseif pola == "Selang-seling Panjang" then
-        local sorted = {table.unpack(plotList)}
-        table.sort(sorted, function(a,b) return a.part.Position.Z<b.part.Position.Z end)
-        local lastZ, skip = nil, false
-        for _,pl in ipairs(sorted) do
-            if lastZ==nil then lastZ=pl.part.Position.Z; skip=false
-            elseif math.abs(pl.part.Position.Z-lastZ)>6 then lastZ=pl.part.Position.Z; skip=not skip end
-            if not skip then table.insert(result,pl); if #result>=max then break end end
-        end
-        if #result==0 then for i=1,max do table.insert(result,plotList[i]) end end
-    end
+    for i = 1, max do table.insert(result, sorted[i]) end
     return result
 end
 
@@ -386,7 +404,7 @@ local function tanamPlots()
 
     local slotIdx, stockCount = getSlotIdx(Farm.selectedCrop)
 
-    -- [FIX v5.7] Auto force refresh kalau cache kosong
+    -- [FIX v5.8] Auto force refresh kalau cache kosong
     if not slotIdx then
         xlog("Tanam","SlotIdx nil, coba force refresh...",false)
         notify("Farm ⏳","Cek inventory...",2)
@@ -411,16 +429,23 @@ local function tanamPlots()
     end
 
     local plotList = AREA_PLOTS[Farm.selectedArea]
+    -- [FIX v5.8] Fallback ke ALL_PLOTS kalau area tidak match
     if not plotList or #plotList == 0 then
-        notify("Farm ❌","Area kosong! Scan Ulang.",5); return 0
+        if #ALL_PLOTS > 0 then
+            notify("Farm ⚠","Area tidak match → pakai semua ("..#ALL_PLOTS.." plot)",3)
+            plotList = ALL_PLOTS
+        else
+            notify("Farm ❌","Area kosong! Scan Ulang.",5); return 0
+        end
     end
 
     local maxTanam = math.min(Farm.jumlahTanam, stockCount)
     if maxTanam < Farm.jumlahTanam then
-        notify("Farm ⚠","Stok "..stockCount.." — tanam disesuaikan ke "..maxTanam,3)
+        notify("Farm ⚠","Stok "..stockCount.." → tanam disesuaikan ke "..maxTanam,3)
     end
 
-    local filtered = filterByPola(plotList, Farm.selectedPola, maxTanam)
+    -- [FIX v5.8] Grid sort — tanam urut row by row (kiri→kanan, atas→bawah)
+    local filtered = filterPlots(plotList, maxTanam)
     if #filtered == 0 then notify("Farm ❌","0 plot setelah filter",4); return 0 end
 
     xlog("Tanam",string.format("crop=%s slot=%d stok=%d plot=%d",
@@ -451,9 +476,15 @@ end
 local function harvestAll()
     local ev = getBridge()
     if not ev then notify("Farm ❌","BridgeNet2 tidak ada!",5); return 0 end
-    local allPlots = {}
-    for _, plotList in pairs(AREA_PLOTS) do
-        for _, pl in ipairs(plotList) do table.insert(allPlots, pl) end
+
+    -- [FIX v5.8] Pakai ALL_PLOTS langsung — lebih reliable dari loop AREA_PLOTS
+    local allPlots = ALL_PLOTS
+    if #allPlots == 0 then
+        -- Fallback: kumpulkan dari AREA_PLOTS
+        allPlots = {}
+        for _, plotList in pairs(AREA_PLOTS) do
+            for _, pl in ipairs(plotList) do table.insert(allPlots, pl) end
+        end
     end
     if #allPlots == 0 then notify("Farm ❌","Tidak ada plot! Scan ulang.",5); return 0 end
 
@@ -920,31 +951,31 @@ local function unequipRod()
 end
 
 -- ── MODE INSTANT ─────────────────────────────────────────
--- cast(true) → delay singkat → cast(false, depth besar) → MiniGame(true)
--- Power bar = clientside only, server tidak validasi
--- Server mungkin validasi waktu minimal → gunakan instantDelay
+-- [FIX v5.8] Hold cast(true) selama instantDelay detik
+-- Sama seperti player tahan tombol, baru lepas
+-- depth = durasi hold (sesuai spy log: 62.9s)
 local function castInstant()
     local castEv = getFishEv("CastEvent")
     local miniEv = getFishEv("MiniGame")
     if not castEv then notify("Fishing","CastEvent tidak ada!",4); return false end
 
-    -- 1. Lempar kail
+    -- 1. Mulai cast (tahan tombol)
     pcall(function() castEv:FireServer(true) end)
 
-    -- 2. Tunggu minimal delay (test: 1s, naikkan kalau server reject)
+    -- 2. Tahan selama holdDelay detik (simulasi hold tombol)
     task.wait(Fish.instantDelay)
 
-    -- 3. Tarik paksa dengan depth besar
-    pcall(function() castEv:FireServer(false, Fish.instantDepth) end)
+    -- 3. Lepas cast = tarik ikan, depth = durasi hold
+    pcall(function() castEv:FireServer(false, Fish.instantDelay) end)
     task.wait(0.3)
 
-    -- 4. Complete minigame (power bar = clientside, server terima langsung)
+    -- 4. Complete minigame (power bar clientside)
     if miniEv then
         pcall(function() miniEv:FireServer(true) end)
     end
 
     Fish.totalFished = Fish.totalFished + 1
-    xlog("Fish","[INSTANT] Cast #"..Fish.totalFished,false)
+    xlog("Fish","[INSTANT] Cast #"..Fish.totalFished.." hold="..Fish.instantDelay.."s",false)
     task.wait(0.5)
     return true
 end
@@ -1007,7 +1038,7 @@ if #AREA_NAMES>0 then Farm.selectedArea=AREA_NAMES[1] end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │  WINDOW & TABS                                          │
 -- └─────────────────────────────────────────────────────────┘
-local Win=Library:Window("XKID HUB","sprout","v5.7",false)
+local Win=Library:Window("XKID HUB","sprout","v5.8",false)
 Win:TabSection("MAIN")
 local T_Farm=Win:Tab("Farming","leaf")
 local T_Shop=Win:Tab("Shop","shopping-cart")
@@ -1039,20 +1070,30 @@ FL:Dropdown("Pilih Tanaman","cropSel",cropDropNames,
 
 FL:Dropdown("Pilih Area","areaSel",
     #AREA_NAMES>0 and AREA_NAMES or {"(Scan dulu)"},
-    function(val) Farm.selectedArea=val
-        notify("Area",val.." | "..(AREA_PARTS[val] and #AREA_PARTS[val] or 0).." plot",2)
+    function(val)
+        Farm.selectedArea=val
+        local plots = AREA_PLOTS[val]
+        local count = plots and #plots or 0
+        notify("Area",val.."\n"..count.." plot tersedia",2)
     end,"Pilih area lahan")
 
-FL:Dropdown("Pola Tanam","polaSel",POLA_NAMES,
-    function(val) Farm.selectedPola=val; notify("Pola",val,2) end,"Pola penanaman")
-
 FL:Label("🌱 Eksekusi")
-FL:Slider("Jumlah Plot","plantQty",1,20,5,function(v) Farm.jumlahTanam=v end,"Max 20")
+FL:Slider("Jumlah Plot","plantQty",1,20,5,
+    function(v) Farm.jumlahTanam=v end,
+    "Plot ditanam urut grid (kiri→kanan, atas→bawah)")
 
 FL:Button("🌱 Mulai Tanam","Tanam sesuai setting",
     function()
         task.spawn(function()
-            if Farm.selectedArea=="" then notify("Farm","Pilih area dulu!",3); return end
+            -- [FIX v5.8] Auto pakai area pertama kalau belum pilih
+            if Farm.selectedArea=="" or not AREA_PLOTS[Farm.selectedArea] then
+                if #AREA_NAMES > 0 then
+                    Farm.selectedArea = AREA_NAMES[1]
+                    notify("Farm","Auto pilih: "..AREA_NAMES[1],2)
+                else
+                    notify("Farm","Scan ulang area dulu!",3); return
+                end
+            end
             tanamPlots()
         end)
     end)
@@ -1073,7 +1114,7 @@ FL:Button("🔍 Cek Slot & Stok","Lihat semua slot inventory",
         print("[XKID SLOT]\n"..txt)
     end)
 
--- [FIX v5.7] Tombol force refresh inventory
+-- [FIX v5.8] Tombol force refresh inventory
 FL:Button("🔄 Refresh Inventory","Paksa server kirim data slot bibit",
     function()
         task.spawn(function()
@@ -1083,17 +1124,17 @@ FL:Button("🔄 Refresh Inventory","Paksa server kirim data slot bibit",
         end)
     end)
 
-FL:Button("🔄 Scan Ulang Area","Refresh lahan",
+FL:Button("🔄 Scan Ulang Area","Refresh semua lahan",
     function()
         buildAreaData()
-        local total=0; for _,v in pairs(AREA_PARTS) do total=total+#v end
-        -- [FIX v5.5] Auto-set selectedArea ke area pertama setelah scan
+        local total = #ALL_PLOTS
         if #AREA_NAMES > 0 then
             Farm.selectedArea = AREA_NAMES[1]
-            notify("✅ Scan","Area:"..#AREA_NAMES.." | Plot:"..total.."\nArea aktif: "..AREA_NAMES[1],5)
+            notify("✅ Scan",
+                #AREA_NAMES.." area | "..total.." total plot\nArea aktif: "..AREA_NAMES[1],5)
         else
             Farm.selectedArea = ""
-            notify("⚠ Scan","Tidak ada area ditemukan!\nCoba pindah ke dekat lahan.",5)
+            notify("⚠ Scan","Tidak ada plot!\nPastikan berada di dekat lahan.",5)
         end
     end)
 
@@ -1423,9 +1464,9 @@ SetL:Toggle("⚡ Instant Mode","fishInstant",false,
         end
     end)
 
-SetL:Slider("Delay Instant (detik)","fishInstantDelay",1,10,1,
+SetL:Slider("Hold Duration (detik)","fishInstantDelay",1,10,3,
     function(v) Fish.instantDelay=v end,
-    "Jeda sebelum tarik (instant mode)\nNaikkan kalau server reject/tidak dapat ikan")
+    "Lama tahan tombol cast (1-10 detik)\nNaikkan kalau tidak dapat ikan")
 
 SetL:Slider("Depth Instant","fishInstantDepth",10,999,999,
     function(v) Fish.instantDepth=v end,
@@ -1436,7 +1477,7 @@ SetL:Toggle("Auto Fishing","autoFish",false,"Auto equip rod + langsung cast loop
     function(v)
         Fish.autoOn=v
         if v then
-            -- [FIX v5.7] Auto equip rod dulu, lalu langsung mulai cast
+            -- [FIX v5.8] Auto equip rod dulu, lalu langsung mulai cast
             task.spawn(function()
                 -- 1. Auto equip rod (cari di karakter + backpack)
                 if not Fish.rodEquipped then
@@ -1495,7 +1536,7 @@ SetL:Button("📤 Unequip Rod","Kembalikan rod ke backpack",
 SetL:Slider("Timeout Normal (detik)","fishWait",10,120,60,
     function(v) Fish.waitDelay=v end,"Maks tunggu ikan — mode NORMAL saja")
 
-SetR:Paragraph("XKID HUB v5.7",
+SetR:Paragraph("XKID HUB v5.8",
     "CHANGELOG:\n"..
     "✅ Instant Mode fishing\n"..
     "✅ Normal Mode (NotifyClient)\n"..
@@ -1528,15 +1569,15 @@ local _totalPl=0
 for _,v in pairs(AREA_PARTS) do _totalPl=_totalPl+#v end
 
 if _totalPl>0 then
-    notify("✅ XKID HUB v5.7 Ready",
+    notify("✅ XKID HUB v5.8 Ready",
         #AREA_NAMES.." area | ".._totalPl.." plot\nBeli bibit dulu agar slot terdeteksi!",6)
 else
-    notify("⚠ XKID HUB v5.7",
+    notify("⚠ XKID HUB v5.8",
         "Plot belum ditemukan!\nFarming → Scan Ulang Area",6)
 end
 
-Library:Notification("XKID HUB v5.7",
+Library:Notification("XKID HUB v5.8",
     "Farming · Shop · Teleport · Player · Security · Setting",6)
 Library:ConfigSystem(Win)
-print("[XKID HUB] v5.7 loaded — "..LP.Name)
-print("[v5.7] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
+print("[XKID HUB] v5.8 loaded — "..LP.Name)
+print("[v5.8] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
