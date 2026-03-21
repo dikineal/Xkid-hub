@@ -661,6 +661,9 @@ local function startHarvestMonitor()
     log("Tunggu tanaman siap lalu panen manual 1x")
     log("")
 
+    -- Auto harvest toggle
+    local autoHarvestOn = false
+
     harvestConn = ev.OnClientEvent:Connect(function(data)
         if type(data) ~= "table" then return end
 
@@ -769,6 +772,9 @@ startHarvestMonitor = function()
     log("Tunggu tanaman siap lalu panen manual 1x")
     log("")
 
+    -- Auto harvest toggle
+    local autoHarvestOn = false
+
     harvestConn = ev.OnClientEvent:Connect(function(data)
         if type(data) ~= "table" then return end
 
@@ -814,6 +820,32 @@ startHarvestMonitor = function()
             log(string.format("  timer: %s → %s (diff=%s)",
                 tostring(tStart),tostring(tEnd),tostring(tEnd-tStart)))
             log("  ← Siap untuk TEST FIRESERVER!")
+
+            -- AUTO HARVEST: kirim LANGSUNG saat terima (0 delay)
+            if autoHarvestOn then
+                log("  ⚡ AUTO HARVEST: kirim sekarang!")
+                local evRef = ev
+                task.spawn(function()
+                    for _, cr in ipairs(cropData) do
+                        if type(cr)=="table" and cr.cropName and cr.cropPos then
+                            local ok2, err2 = pcall(function()
+                                evRef:FireServer({
+                                    ["\13"] = {{
+                                        seedColor = cr.seedColor or {0.298,0.600,0},
+                                        cropName  = cr.cropName,
+                                        cropPos   = cr.cropPos,
+                                        sellPrice = cr.sellPrice or 20,
+                                        drops     = cr.drops or {},
+                                    }},
+                                    ["\2"] = { tStart, tEnd }
+                                })
+                            end)
+                            log("  AUTO: "..(ok2 and "✅ SENT" or "❌ "..tostring(err2):sub(1,40)))
+                            task.wait(0.05)
+                        end
+                    end
+                end)
+            end
         end
         log("")
     end)
@@ -821,6 +853,17 @@ startHarvestMonitor = function()
     notif("🌾 Harvest Monitor","ON! Panen manual 1x",4)
     return true
 end
+
+HL:Toggle("⚡ Auto Harvest (instant)","autoHarv",false,
+    "Harvest LANGSUNG saat server kirim crop ready\n0 delay — test apakah timer expire",
+    function(v)
+        autoHarvestOn = v
+        if v then
+            notif("⚡ Auto Harvest","ON! Harvest langsung saat\ncrop ready diterima",3)
+        else
+            notif("Auto Harvest","OFF",2)
+        end
+    end)
 
 HL:Button("🔥 Test FireServer (pakai data real)","Harvest pakai data dari monitor",
     function()
