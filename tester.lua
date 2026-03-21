@@ -180,14 +180,33 @@ local function fetchShopSeeds()
     end
     print(string.format("[XKID SAWAH] Shop: %d seed", #ShopSeeds))
 end
-fetchShopSeeds()
+task.spawn(fetchShopSeeds)
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                  FARMING FUNCTIONS                      │
 -- └─────────────────────────────────────────────────────────┘
 -- Tanam pakai PlantCrop:FireServer(Vector3)
-local PlantRemote = RS:WaitForChild("Remotes"):WaitForChild("TutorialRemotes"):WaitForChild("PlantCrop")
-local SellRemote  = RS:WaitForChild("Remotes"):WaitForChild("TutorialRemotes"):WaitForChild("RequestSell")
+-- Remote plant & sell — lazy load, tidak blocking
+local PlantRemote = nil
+local SellRemote  = nil
+
+local function getPlantRemote()
+    if PlantRemote then return PlantRemote end
+    local folder = RS:FindFirstChild("Remotes")
+    folder = folder and folder:FindFirstChild("TutorialRemotes")
+    if not folder then return nil end
+    PlantRemote = folder:FindFirstChild("PlantCrop")
+    return PlantRemote
+end
+
+local function getSellRemote()
+    if SellRemote then return SellRemote end
+    local folder = RS:FindFirstChild("Remotes")
+    folder = folder and folder:FindFirstChild("TutorialRemotes")
+    if not folder then return nil end
+    SellRemote = folder:FindFirstChild("RequestSell")
+    return SellRemote
+end
 
 -- Auto Plant loop
 task.spawn(function()
@@ -198,7 +217,8 @@ task.spawn(function()
                 if not Config.AutoPlant then break end
                 pcall(function()
                     if Config.TpToPlot then tpTo(pos) end
-                    PlantRemote:FireServer(pos)
+                    local pr = getPlantRemote()
+                    if pr then pr:FireServer(pos) end
                 end)
                 task.wait(0.15)
             end
@@ -214,7 +234,10 @@ task.spawn(function()
         if Config.AutoSell then
             for _,crop in ipairs(CROP_SELL) do
                 if not Config.AutoSell then break end
-                pcall(function() SellRemote:InvokeServer("SELL",crop,Config.SellAmount) end)
+                pcall(function()
+                    local sr = getSellRemote()
+                    if sr then sr:InvokeServer("SELL",crop,Config.SellAmount) end
+                end)
                 task.wait(0.08)
             end
         end
@@ -692,7 +715,8 @@ FL:Button("🌱 Tanam Sekarang","Tanam 1x ke semua plot",
             for _,pos in ipairs(PlotPositions) do
                 pcall(function()
                     if Config.TpToPlot then tpTo(pos) end
-                    PlantRemote:FireServer(pos); count=count+1
+                    local pr=getPlantRemote(); if pr then pr:FireServer(pos) end
+                    count=count+1
                 end); task.wait(0.15)
             end
             notify("Tanam","✅ "..count.." plot ditanam!",3)
@@ -715,8 +739,10 @@ FR:Slider("Sell Interval (s)","sellDelay",0.5,10,2,function(v) Config.SellDelay=
 FR:Button("💰 Jual Sekarang","Jual semua crop sekarang",
     function()
         task.spawn(function()
+            local sr=getSellRemote()
+            if not sr then notify("❌","Remote tidak ada",3); return end
             for _,crop in ipairs(CROP_SELL) do
-                pcall(function() SellRemote:InvokeServer("SELL",crop,999) end); task.wait(0.08)
+                pcall(function() sr:InvokeServer("SELL",crop,999) end); task.wait(0.08)
             end
             notify("Sell","✅ Semua crop dijual!",3)
         end)
@@ -980,4 +1006,3 @@ Library:Notification("XKID | SAWAH INDO V.2",
     "Farm · Harvest · Shop · NPC · Fly · Security", 6)
 Library:ConfigSystem(Win)
 print("[XKID SAWAH INDO] V.2 loaded — "..LP.Name)
-
