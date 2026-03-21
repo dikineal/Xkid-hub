@@ -1722,3 +1722,4 @@ Library:Notification("XKID HUB v5.20",
 Library:ConfigSystem(Win)
 print("[XKID HUB] v5.20 loaded — "..LP.Name)
 print("[v5.20] equipRod=char+bp | castOnce=NotifyClient | MiniGame=1x | timeout=60s")
+
