@@ -803,10 +803,7 @@ local function runAutoLoop()
             -- Step 4: Panen
             notify("Auto Loop [3/3]","Panen sekarang...",2)
             local harvested = harvestAll()
-            notify("✅ Cycle #"..AutoLoop.total,
-                "Tanam: "..planted.."
-Panen: "..harvested.."
-Tunggu: "..waited.."s",4)
+            notify("✅ Cycle #"..AutoLoop.total, "Tanam:"..planted.." Panen:"..harvested.." Tunggu:"..waited.."s",4)
         end
 
         -- Jeda sebelum cycle berikutnya
@@ -1374,8 +1371,7 @@ FR:Toggle("🔁 Auto Plant Loop","autoLoop",false,
             end
             AutoLoop.total = 0
             AutoLoop.task = task.spawn(runAutoLoop)
-            notify("🔁 Auto Loop","ON!
-"..#LAND_LIST.." lahan | timeout "..AutoLoop.timeout.."s",3)
+            notify("🔁 Auto Loop","ON! "..#LAND_LIST.." lahan | timeout "..AutoLoop.timeout.."s",3)
         else
             if AutoLoop.task then
                 pcall(function() task.cancel(AutoLoop.task) end)
