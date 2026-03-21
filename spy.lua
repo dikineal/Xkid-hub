@@ -1,7 +1,8 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║        🔍  X K I D   D E B U G   T O O L  v4            ║
-║         Aurora UI · setclipboard · Delta Ready           ║
+║        🔍  X K I D   D E B U G   T O O L  v5            ║
+║     Aurora UI · setclipboard · Delta Ready               ║
+║     + FARMING SPY (harvest, tanam, inventory)            ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -42,10 +43,9 @@ local function copyLog()
     if ok then
         local lineCount = 0
         for _ in LogBuffer:gmatch("\n") do lineCount = lineCount + 1 end
-        notif("✅ COPIED!",lineCount.." baris log\nsudah di-copy ke clipboard!\nPaste ke WA / chat",4)
+        notif("✅ COPIED!",lineCount.." baris\ndi clipboard!\nPaste ke WA/chat",4)
     else
-        notif("❌ Copy Gagal",
-            "setclipboard tidak didukung\ndi executor ini.\nCoba screenshot notif.",4)
+        notif("❌ Copy Gagal","setclipboard tidak support\nCoba screenshot notif.",4)
     end
 end
 
@@ -70,7 +70,7 @@ local function scanRange(a, b)
         log(string.format("[%d] %s (%s)%s%s", i, obj.Name, obj.ClassName, pos, size))
     end
     log("=== SELESAI ===")
-    notif("✅ Scan ["..a.."-"..b.."]","Klik COPY LOG untuk copy!",3)
+    notif("✅ Scan ["..a.."-"..b.."]","Klik COPY LOG!",3)
 end
 
 local function scanFull()
@@ -144,9 +144,7 @@ local function startFish()
     for _, c in pairs(fishConns) do pcall(function() c:Disconnect() end) end
     fishConns = {}
     local fr = RS:FindFirstChild("FishRemotes")
-    if not fr then
-        notif("Fish ❌","FishRemotes tidak ada!",4); return false
-    end
+    if not fr then notif("Fish ❌","FishRemotes tidak ada!",4); return false end
     log("=== FISH MONITOR START ===")
     for _, evName in ipairs({"CastEvent","MiniGame","NotifyClient"}) do
         local ev = fr:FindFirstChild(evName)
@@ -221,15 +219,220 @@ local function stopInv()
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
+-- │  [NEW] FARMING SPY                                      │
+-- │  Monitor semua event farming:                           │
+-- │  - OnClientEvent: harvest ready (\r), inventory (\3)   │
+-- │  - Timer data (\x02)                                   │
+-- │  - Semua outgoing FireServer (tanam, beli, harvest)     │
+-- └─────────────────────────────────────────────────────────┘
+local farmConn    = nil
+local farmSpyOn   = false
+
+local function deepSerialize(val, depth)
+    depth = depth or 0
+    if depth > 4 then return "..." end
+    local t = type(val)
+    if t == "nil" then return "nil"
+    elseif t == "boolean" or t == "number" then return tostring(val)
+    elseif t == "string" then
+        -- Print hex untuk kontrol karakter
+        if #val <= 4 then
+            local hex = ""
+            for i = 1, #val do
+                hex = hex .. string.format("\\x%02x", val:byte(i))
+            end
+            return '"'..hex..'"'
+        end
+        return '"'..val:sub(1,50)..'"'
+    elseif t == "userdata" then
+        local s = "?"
+        pcall(function()
+            if val.X then -- Vector3
+                s = string.format("V3(%.2f,%.2f,%.2f)", val.X, val.Y, val.Z)
+            else
+                s = tostring(val)
+            end
+        end)
+        return s
+    elseif t == "table" then
+        local parts = {}
+        local count = 0
+        for k, v in pairs(val) do
+            count = count + 1
+            if count > 20 then
+                table.insert(parts, "..."); break
+            end
+            local keyStr = ""
+            if type(k) == "string" and #k <= 4 then
+                local hex = ""
+                for i = 1, #k do hex = hex .. string.format("\\x%02x", k:byte(i)) end
+                keyStr = "["..hex.."]"
+            else
+                keyStr = "["..tostring(k).."]"
+            end
+            table.insert(parts, keyStr.."="..deepSerialize(v, depth+1))
+        end
+        return "{"..table.concat(parts,", ").."}"
+    end
+    return tostring(val)
+end
+
+local function startFarmSpy()
+    if farmConn then farmConn:Disconnect() end
+    local bn = RS:FindFirstChild("BridgeNet2")
+    local ev = bn and bn:FindFirstChild("dataRemoteEvent")
+    if not ev then notif("Farm ❌","dataRemoteEvent tidak ada!",4); return false end
+
+    log("=== FARMING SPY START ===")
+    log("Lakukan: tanam, tunggu tumbuh, panen manual")
+    log("Semua event akan ter-log di sini")
+    log("")
+
+    farmConn = ev.OnClientEvent:Connect(function(data)
+        if type(data) ~= "table" then return end
+
+        -- Identifikasi jenis event
+        local keys = {}
+        for k in pairs(data) do
+            table.insert(keys, string.format("\\x%02x(%d)", string.byte(k,1), string.byte(k,1)))
+        end
+        log("── OnClientEvent keys: "..table.concat(keys," "))
+
+        -- Key \x03 = inventory update
+        if data["\3"] then
+            local list = data["\3"][1]
+            if type(list) == "table" then
+                log("  [\\x03 INVENTORY UPDATE]")
+                for slot, e in ipairs(list) do
+                    if type(e) == "table" and e.cropName then
+                        log(string.format("    slot[%d] %s x%d", slot, e.cropName, e.count or 0))
+                    end
+                end
+            end
+        end
+
+        -- Key \r (\x0d) = crop ready / harvest data
+        if data["\r"] then
+            log("  [\\x0d CROP READY/HARVEST DATA] ← PENTING!")
+            for i, crop in ipairs(data["\r"]) do
+                if type(crop) == "table" then
+                    log(string.format("    [%d] cropName=%s", i, tostring(crop.cropName)))
+                    if crop.cropPos then
+                        log(string.format("    [%d] cropPos=(%.4f,%.4f,%.4f)",
+                            i, crop.cropPos.X, crop.cropPos.Y, crop.cropPos.Z))
+                    end
+                    log(string.format("    [%d] sellPrice=%s", i, tostring(crop.sellPrice)))
+                    if crop.seedColor then
+                        log(string.format("    [%d] seedColor=(%.4f,%.4f,%.4f)",
+                            i, crop.seedColor[1] or 0, crop.seedColor[2] or 0, crop.seedColor[3] or 0))
+                    end
+                    if crop.drops then
+                        for di, drop in ipairs(crop.drops) do
+                            log(string.format("    [%d] drop[%d]: name=%s rarity=%s coin=%s",
+                                i, di,
+                                tostring(drop.name),
+                                tostring(drop.rarity),
+                                tostring(drop.coinReward)))
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Key \x02 = timer data
+        if data["\2"] then
+            local timer = data["\2"]
+            log(string.format("  [\\x02 TIMER] start=%s end=%s diff=%s",
+                tostring(timer[1]),
+                tostring(timer[2]),
+                (timer[1] and timer[2]) and tostring(timer[2]-timer[1]) or "?"))
+        end
+
+        -- Key \x0b (\v) = transaksi sukses
+        if data["\11"] then
+            local tx = data["\11"][1]
+            if type(tx) == "table" then
+                log(string.format("  [\\x0b TRANSAKSI] success=%s count=%s",
+                    tostring(tx.success), tostring(tx.count)))
+            end
+        end
+
+        -- Key \x08 = unknown, log raw
+        if data["\8"] then
+            log("  [\\x08] "..deepSerialize(data["\8"], 0))
+        end
+
+        log("")
+    end)
+
+    notif("🌱 Farm Spy","ON!\nLakukan tanam → tunggu → panen manual\nSemua event ter-log",5)
+    return true
+end
+
+local function stopFarmSpy()
+    if farmConn then farmConn:Disconnect(); farmConn=nil end
+    farmSpyOn = false
+    log("=== FARMING SPY STOP ===")
+    notif("Farm Spy","OFF — Klik COPY LOG",3)
+end
+
+-- Scan tanaman di workspace
+local function scanCrops()
+    log("=== SCAN TANAMAN DI WORKSPACE ===")
+    local cropNames = {
+        "AppleTree","Padi","Melon","Tomat","Sawi",
+        "Coconut","Daisy","FanPalm","SunFlower","Sawit",
+        -- Kemungkinan nama lain:
+        "Apple","Rice","Corn","Wheat","Carrot",
+    }
+    local found = 0
+
+    -- Scan semua descendants workspace
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        local n = obj.Name
+        -- Cek exact match dulu
+        local isKnown = false
+        for _, cn in ipairs(cropNames) do
+            if n == cn then isKnown = true; break end
+        end
+
+        if isKnown or obj:IsA("BasePart") and obj.Size.Y > 0.5 and obj.Size.Y < 5 then
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                local pos = nil
+                if obj:IsA("BasePart") then pos = obj.Position
+                else
+                    local p = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
+                    if p then pos = p.Position end
+                end
+                if pos then
+                    found = found + 1
+                    if found <= 30 then
+                        log(string.format("  CROP[%d] name=%s class=%s pos=(%.1f,%.1f,%.1f)",
+                            found, n, obj.ClassName, pos.X, pos.Y, pos.Z))
+                    end
+                end
+            end
+        end
+    end
+
+    if found == 0 then
+        log("  Tidak ada tanaman ditemukan")
+        log("  Pastikan ada tanaman yang sudah ditanam!")
+    end
+    log(string.format("Total: %d objek", found))
+    log("=== SELESAI ===")
+    notif("Scan Tanaman",found.." tanaman\nKlik COPY LOG!",4)
+end
+
+-- ┌─────────────────────────────────────────────────────────┐
 -- │  UI                                                     │
 -- └─────────────────────────────────────────────────────────┘
-local Win    = Library:Window("XKID DEBUG v4","search","v4",false)
+local Win    = Library:Window("XKID DEBUG v5","search","v5",false)
 Win:TabSection("DEBUG")
 local T_Scan = Win:Tab("Scan","search")
+local T_Farm = Win:Tab("Farm","leaf")
 local T_Fish = Win:Tab("Fish","anchor")
 local T_Inv  = Win:Tab("Inv","package")
-
--- ── COPY LOG BUTTON — Ada di semua tab ──────────────────
 
 -- ╔══════════════════╗
 -- ║   TAB SCAN       ║
@@ -267,14 +470,13 @@ SL:Button("Posisi Karakter","",
         end
     end)
 
--- COPY BUTTON
 SR:Button("📋 COPY LOG","Salin semua log ke clipboard",
     function() copyLog() end)
 
 SR:Button("🗑 Clear Log","Hapus log",
     function() clearLog(); notif("Log","Cleared",2) end)
 
-SR:Button("📊 Info Log","Lihat info log saat ini",
+SR:Button("📊 Info Log","",
     function()
         local lines = 0
         for _ in LogBuffer:gmatch("\n") do lines = lines + 1 end
@@ -284,35 +486,116 @@ SR:Button("📊 Info Log","Lihat info log saat ini",
 SR:Paragraph("Cara Copy",
     "1. Klik tombol scan\n"..
     "2. Klik 📋 COPY LOG\n"..
-    "3. Log otomatis masuk\n"..
-    "   ke clipboard!\n"..
-    "4. Paste di WA/chat")
+    "3. Paste di WA/chat")
+
+-- ╔══════════════════════════════════╗
+-- ║   TAB FARM (BARU!)               ║
+-- ╚══════════════════════════════════╝
+local FarmP = T_Farm:Page("Farming Spy","leaf")
+local FarmL = FarmP:Section("🌱 Farm Spy","Left")
+local FarmR = FarmP:Section("📋 Copy","Right")
+
+FarmL:Toggle("🌱 Farm Spy ON/OFF","farmSpy",false,
+    "Monitor SEMUA event farming dari server\n(harvest ready, timer, inventory)",
+    function(v)
+        farmSpyOn = v
+        clearLog()
+        if v then
+            startFarmSpy()
+        else
+            stopFarmSpy()
+        end
+    end)
+
+FarmL:Paragraph("Cara Debug Harvest",
+    "1. ON Farm Spy\n"..
+    "2. Tanam 1 tanaman manual\n"..
+    "3. Tunggu sampai besar\n"..
+    "4. Klik tombol panen manual\n"..
+    "5. OFF Farm Spy\n"..
+    "6. Klik COPY LOG\n"..
+    "7. Kirim ke developer!\n\n"..
+    "Yang dicari:\n"..
+    "- Data \\x0d (crop ready)\n"..
+    "- cropPos yang valid\n"..
+    "- seedColor\n"..
+    "- Timer \\x02")
+
+FarmL:Button("🔍 Scan Tanaman WS","Cari tanaman di workspace",
+    function() clearLog(); scanCrops() end)
+
+FarmL:Button("🔍 Scan Crop Names","Cari nama unik tanaman",
+    function()
+        clearLog()
+        log("=== SCAN NAMA UNIK TANAMAN ===")
+        local names = {}
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                local n = obj.Name
+                if not names[n] then
+                    -- Filter: kemungkinan nama tanaman
+                    local nl = n:lower()
+                    if nl:find("crop") or nl:find("plant") or nl:find("tree") or
+                       nl:find("flower") or nl:find("seed") or nl:find("sawi") or
+                       nl:find("padi") or nl:find("melon") or nl:find("tomat") or
+                       nl:find("apple") or nl:find("kelapa") or nl:find("palm") or
+                       nl:find("sun") or nl:find("sawit") or nl:find("daisy") then
+                        names[n] = true
+                        log("  FOUND: "..n.." ("..obj.ClassName..")")
+                    end
+                end
+            end
+        end
+        local count = 0
+        for _ in pairs(names) do count = count + 1 end
+        if count == 0 then log("  Tidak ada tanaman ditemukan") end
+        log("Total: "..count.." nama unik")
+        log("=== SELESAI ===")
+        notif("Crop Names",count.." nama\nKlik COPY LOG!",4)
+    end)
+
+FarmR:Button("📋 COPY LOG","Copy hasil farm spy",
+    function() copyLog() end)
+
+FarmR:Button("🗑 Clear","Hapus log",
+    function() clearLog(); notif("Clear","OK",2) end)
+
+FarmR:Paragraph("Yang Dicari",
+    "Dari log, kita butuh:\n\n"..
+    "1. \\x0d = crop ready\n"..
+    "   → cropName\n"..
+    "   → cropPos (X,Y,Z)\n"..
+    "   → sellPrice\n"..
+    "   → seedColor\n"..
+    "   → drops\n\n"..
+    "2. \\x02 = timer\n"..
+    "   → [start, end]\n\n"..
+    "Ini data untuk harvest!")
 
 -- ╔══════════════════╗
 -- ║   TAB FISH       ║
 -- ╚══════════════════╝
-local FP = T_Fish:Page("Fish Monitor","anchor")
-local FL = FP:Section("🎣 Monitor","Left")
-local FR = FP:Section("📋 Copy","Right")
+local FP2 = T_Fish:Page("Fish Monitor","anchor")
+local FL2 = FP2:Section("🎣 Monitor","Left")
+local FR2 = FP2:Section("📋 Copy","Right")
 
-FL:Toggle("Fish Monitor","fishMon",false,
+FL2:Toggle("Fish Monitor","fishMon",false,
     "Listen semua FishRemotes events",
     function(v)
         clearLog()
         if v then startFish() else stopFish() end
     end)
 
-FL:Paragraph("Cara",
+FL2:Paragraph("Cara",
     "1. ON Fish Monitor\n"..
     "2. Mancing manual 1x\n"..
-    "   (sampai dapat ikan!)\n"..
     "3. OFF Fish Monitor\n"..
     "4. Klik COPY LOG")
 
-FR:Button("📋 COPY LOG","Copy hasil fish monitor",
+FR2:Button("📋 COPY LOG","Copy hasil fish monitor",
     function() copyLog() end)
 
-FR:Button("🗑 Clear","Hapus log",
+FR2:Button("🗑 Clear","",
     function() clearLog(); notif("Clear","OK",2) end)
 
 -- ╔══════════════════╗
@@ -343,24 +626,24 @@ IL:Button("Force Request","Trigger server kirim inventory",
 
 IL:Paragraph("Cara",
     "1. ON Inv Monitor\n"..
-    "2. Beli 1 bibit di shop\n"..
-    "   ATAU klik Force Request\n"..
+    "2. Beli 1 bibit\n"..
+    "   ATAU Force Request\n"..
     "3. Tunggu 2-3 detik\n"..
     "4. OFF Monitor\n"..
     "5. Klik COPY LOG")
 
-IR:Button("📋 COPY LOG","Copy hasil inventory monitor",
+IR:Button("📋 COPY LOG","Copy hasil inventory",
     function() copyLog() end)
 
-IR:Button("🗑 Clear","Hapus log",
+IR:Button("🗑 Clear","",
     function() clearLog(); notif("Clear","OK",2) end)
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │  INIT                                                   │
 -- └─────────────────────────────────────────────────────────┘
-Library:Notification("XKID DEBUG v4",
-    "Scan · Fish · Inv\nKlik scan → COPY LOG → Paste!",5)
+Library:Notification("XKID DEBUG v5",
+    "Scan · Farm Spy · Fish · Inv\n★ Tab Farm = harvest debug!",5)
 Library:ConfigSystem(Win)
 
-log("XKID Debug v4 loaded | "..LP.Name)
+log("XKID Debug v5 loaded | "..LP.Name)
 log("WS children: "..#Workspace:GetChildren())
