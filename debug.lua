@@ -1,7 +1,7 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v16.0  💠              ║
-║                WASD MOVEMENT & SLOW-MO FIX               ║
+║              💠  X K I D   H U B  v17.0  💠              ║
+║                FLY-LOGIC FREECAM & V16 LOCK              ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -36,7 +36,7 @@ local function getPNames()
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │                 ➤  FLY ENGINE (STABLE)                  │
+-- │                 ➤  FLY ENGINE (LOCKED)                  │
 -- └─────────────────────────────────────────────────────────┘
 local function toggleFly(v)
     if not v then
@@ -63,8 +63,9 @@ local function toggleFly(v)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             ➤  CINEMATIC ENGINE (WASD FIX)              │
+-- │             ➤  CINEMATIC ENGINE (FLY LOGIC)             │
 -- └─────────────────────────────────────────────────────────┘
+-- Touch Panning (Nengok)
 UIS.InputChanged:Connect(function(input)
     if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
         local delta = input.Delta
@@ -76,16 +77,19 @@ end)
 RS.RenderStepped:Connect(function()
     if State.Cinema.active then
         Cam.CameraType = Enum.CameraType.Scriptable
+        
+        -- Apply Rotasi Mata
         Cam.CFrame = CFrame.new(Cam.CFrame.Position) * CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
         
         local hum = getHum()
         if hum and hum.MoveDirection.Magnitude > 0 then
             local md = hum.MoveDirection
-            -- FIX: Logic Maju Mundur Persis WASD PC
-            local forward = Cam.CFrame.LookVector * -md.Z
-            local right = Cam.CFrame.RightVector * md.X
-            Cam.CFrame = Cam.CFrame + (forward + right) * State.Cinema.speed
+            -- LOGIKA FLY: Gerak relatif terhadap pandangan kamera
+            -- md.Z -1 = Joystick ke depan, md.X 1 = Joystick ke kanan
+            local moveVector = (Cam.CFrame.LookVector * -md.Z) + (Cam.CFrame.RightVector * md.X)
+            Cam.CFrame = Cam.CFrame + (moveVector * State.Cinema.speed)
         end
+        
         if getRoot() then getRoot().Anchored = true end
     else
         if getRoot() and getRoot().Anchored then getRoot().Anchored = false end
@@ -111,7 +115,7 @@ end)
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V16", "star", "WASD FIX", false)
+local Win = Library:Window("XKID HUB V17", "star", "FLY-LOGIC CAM", false)
 
 -- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -155,7 +159,7 @@ local T_CI = Win:Tab("Cinematic", "video")
 local CIM = T_CI:Page("Camera", "video"):Section("🎬 Controls", "Left")
 local CIW = T_CI:Page("Camera", "video"):Section("📱 Orientation", "Right")
 
-CIM:Toggle("Freecam Analog", "fc", false, "UP = Maju Maju!", function(v)
+CIM:Toggle("Freecam Analog", "fc", false, "Fly Logic Mode", function(v)
     State.Cinema.active = v
     if not v then Cam.CameraType = Enum.CameraType.Custom end
 end)
@@ -194,4 +198,4 @@ end)
 Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPNames()) end)
 Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPNames()) end)
 
-Library:Notification("XKID V16", "Freecam Maju & Slow-mo Aktif!", 5)
+Library:Notification("XKID V17", "Freecam Locked to Fly-Logic!", 5)
