@@ -1,12 +1,12 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v19.0  💠              ║
-║                CINEMATIC RAW-LOCK EDITION                ║
+║              💠  X K I D   H U B  v20.0  💠              ║
+║                CINEMATIC CONTROLS HIJACK                 ║
 ╚═══════════════════════════════════════════════════════════╣
-║  ➤  Fixed: Analog Maju = Selalu Maju (Searah Lensa)       ║
-║  ➤  Fixed: Speed Cam (0.1 - 5) buat Slow-Mo Pro          ║
-║  ➤  Fixed: Atmosfir Malam & Security Lengkap              ║
-║  ➤  Stable: IY Fling & Native Fly Locked                  ║
+║  ➤  Fixed: Karakter diem total pas Freecam (No Move)      ║
+║  ➤  Fixed: Joystick murni buat gerakin Kamera Drone       ║
+║  ➤  Fixed: Auto-Invis karakter pas rekaman                ║
+║  ➤  Stable: IY Fling, Weather, Rejoin, & Security         ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -31,6 +31,10 @@ local State = {
     Security = {afkConn = nil},
     Cinema = {active = false, speed = 0.5, fov = 70, rotX = 0, rotY = 0}
 }
+
+-- Controls Helper
+local PlayerModule = require(LP.PlayerScripts:WaitForChild("PlayerModule"))
+local Controls = PlayerModule:GetControls()
 
 -- Helpers
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
@@ -68,9 +72,8 @@ local function toggleFly(v)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             ➤  CINEMATIC ENGINE (RAW-LOCK)              │
+-- │             ➤  CINEMATIC ENGINE (HIJACK)                │
 -- └─────────────────────────────────────────────────────────┘
--- Touch Panning (Nengok/Swipe)
 UIS.InputChanged:Connect(function(input)
     if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
         local delta = input.Delta
@@ -83,21 +86,14 @@ end)
 RS.RenderStepped:Connect(function()
     if State.Cinema.active then
         Cam.CameraType = Enum.CameraType.Scriptable
-        
-        -- Apply Rotasi dari Swipe Jari
         Cam.CFrame = CFrame.new(Cam.CFrame.Position) * CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
         
-        -- FIXED MOVEMENT: Pakai Raw MoveVector (Joystick Asli)
+        -- Ambil input analog secara manual (Raw)
         local rawInput = UIS:GetMoveVector() 
         if rawInput.Magnitude > 0 then
-            -- LOGIKA FIX: Maju selalu searah LookVector Kamera (Gak bakal kebalik)
             local moveDir = (Cam.CFrame.LookVector * -rawInput.Z) + (Cam.CFrame.RightVector * rawInput.X)
             Cam.CFrame = Cam.CFrame + (moveDir * State.Cinema.speed)
         end
-        
-        if getRoot() then getRoot().Anchored = true end
-    else
-        if getRoot() and getRoot().Anchored then getRoot().Anchored = false end
     end
 end)
 
@@ -120,7 +116,7 @@ end)
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V19", "star", "CINEMATIC PRO", false)
+local Win = Library:Window("XKID HUB V20", "star", "RECORDING MODE", false)
 
 -- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -164,11 +160,23 @@ local T_CI = Win:Tab("Cinematic", "video")
 local CIM = T_CI:Page("Camera", "video"):Section("🎬 Controls", "Left")
 local CIW = T_CI:Page("Camera", "video"):Section("📱 Orientation", "Right")
 
-CIM:Toggle("Freecam Raw Analog", "fc", false, "UP = Selalu Maju", function(v)
+CIM:Toggle("Freecam (Freeze Char)", "fc", false, "Drone Mode", function(v)
     State.Cinema.active = v
-    if not v then Cam.CameraType = Enum.CameraType.Custom end
+    if v then
+        -- HIJACK: Matikan kontrol karakter agar tidak lari
+        Controls:Disable()
+        if getRoot() then getRoot().Anchored = true end
+        -- OPSIONAL: Bikin lo Invisible biar ga ganggu layar
+        if LP.Character then LP.Character.Parent = nil end 
+    else
+        -- RESTORE: Balikkan kontrol
+        Controls:Enable()
+        if getRoot() then getRoot().Anchored = false end
+        if LP.Character then LP.Character.Parent = workspace end
+        Cam.CameraType = Enum.CameraType.Custom
+    end
 end)
-CIM:Slider("Speed Cam (Slow-mo)", "csc", 0.1, 5, 0.5, function(v) State.Cinema.speed = v end)
+CIM:Slider("Speed Cam", "csc", 0.1, 5, 0.5, function(v) State.Cinema.speed = v end)
 CIM:Slider("Zoom (FOV)", "cfov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
 
 CIW:Button("📱 Portrait Mode", "Tegak", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
@@ -203,4 +211,4 @@ end)
 Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPNames()) end)
 Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPNames()) end)
 
-Library:Notification("XKID V19", "Freecam Raw-Lock Aktif! Sikat Bro!", 5)
+Library:Notification("XKID V20", "Drone Mode Aktif! Karakter Diem Total.", 5)
