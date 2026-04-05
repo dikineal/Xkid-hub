@@ -1,12 +1,12 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v18.0  💠              ║
-║                RAW JOYSTICK FREECAM & V17 LOCK           ║
+║              💠  X K I D   H U B  v19.0  💠              ║
+║                CINEMATIC RAW-LOCK EDITION                ║
 ╚═══════════════════════════════════════════════════════════╣
-║  ➤  Fixed: Analog Maju = Selalu Maju (Arah Kamera)        ║
-║  ➤  Fixed: Swipe Layar buat nengok lebih responsif        ║
-║  ➤  Fixed: Speed Cam bisa super lambat (0.1)              ║
-║  ➤  Stable: IY Fling, Weather, Rejoin, & Anti-AFK         ║
+║  ➤  Fixed: Analog Maju = Selalu Maju (Searah Lensa)       ║
+║  ➤  Fixed: Speed Cam (0.1 - 5) buat Slow-Mo Pro          ║
+║  ➤  Fixed: Atmosfir Malam & Security Lengkap              ║
+║  ➤  Stable: IY Fling & Native Fly Locked                  ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -68,16 +68,15 @@ local function toggleFly(v)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             ➤  CINEMATIC ENGINE (RAW FIX)               │
+-- │             ➤  CINEMATIC ENGINE (RAW-LOCK)              │
 -- └─────────────────────────────────────────────────────────┘
 -- Touch Panning (Nengok/Swipe)
 UIS.InputChanged:Connect(function(input)
     if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
         local delta = input.Delta
-        -- Sensitivitas nengok diperhalus buat Mipad 7
         State.Cinema.rotX = State.Cinema.rotX - delta.Y * 0.35
         State.Cinema.rotY = State.Cinema.rotY - delta.X * 0.35
-        State.Cinema.rotX = math.clamp(State.Cinema.rotX, -85, 85) -- Biar ga pusing muter balik
+        State.Cinema.rotX = math.clamp(State.Cinema.rotX, -85, 85)
     end
 end)
 
@@ -89,10 +88,9 @@ RS.RenderStepped:Connect(function()
         Cam.CFrame = CFrame.new(Cam.CFrame.Position) * CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
         
         -- FIXED MOVEMENT: Pakai Raw MoveVector (Joystick Asli)
-        -- Ini rahasianya biar ga kebalik pas nengok belakang
         local rawInput = UIS:GetMoveVector() 
         if rawInput.Magnitude > 0 then
-            -- Gerak maju mundurnya searah dengan kemana lensa kamera menghadap
+            -- LOGIKA FIX: Maju selalu searah LookVector Kamera (Gak bakal kebalik)
             local moveDir = (Cam.CFrame.LookVector * -rawInput.Z) + (Cam.CFrame.RightVector * rawInput.X)
             Cam.CFrame = Cam.CFrame + (moveDir * State.Cinema.speed)
         end
@@ -122,7 +120,7 @@ end)
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V18", "star", "WASD JOYSTICK", false)
+local Win = Library:Window("XKID HUB V19", "star", "CINEMATIC PRO", false)
 
 -- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -158,23 +156,23 @@ PLH:Toggle("Invisible (R15)", "inv", false, "", function(v) if v and LP.Characte
 PLH:Toggle("IY Fling Mode", "ffm", false, "", function(v) State.Fling.active = v; State.Move.ncp = v end)
 
 PLW:Slider("Waktu (ClockTime)", "time", 0, 24, 12, function(v) Lighting.ClockTime = v end)
-PLW:Button("☀️ Siang", "Day", function() Lighting.ClockTime = 14 end)
-PLW:Button("🌙 Malam", "Night", function() Lighting.ClockTime = 0 end)
+PLW:Button("☀️ Set Siang", "Day", function() Lighting.ClockTime = 14 end)
+PLW:Button("🌙 Set Malam", "Night", function() Lighting.ClockTime = 0 end)
 
 -- --- TAB 3: CINEMATIC ---
 local T_CI = Win:Tab("Cinematic", "video")
 local CIM = T_CI:Page("Camera", "video"):Section("🎬 Controls", "Left")
 local CIW = T_CI:Page("Camera", "video"):Section("📱 Orientation", "Right")
 
-CIM:Toggle("Freecam Raw Analog", "fc", false, "WASD Mode", function(v)
+CIM:Toggle("Freecam Raw Analog", "fc", false, "UP = Selalu Maju", function(v)
     State.Cinema.active = v
     if not v then Cam.CameraType = Enum.CameraType.Custom end
 end)
 CIM:Slider("Speed Cam (Slow-mo)", "csc", 0.1, 5, 0.5, function(v) State.Cinema.speed = v end)
 CIM:Slider("Zoom (FOV)", "cfov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
 
-CIW:Button("📱 Portrait", "Tegak", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
-CIW:Button("📺 Landscape", "Mendatar", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
+CIW:Button("📱 Portrait Mode", "Tegak", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
+CIW:Button("📺 Landscape Mode", "Mendatar", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
 
 -- --- TAB 4: SECURITY ---
 local T_SC = Win:Tab("Security", "shield")
@@ -193,7 +191,7 @@ SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
     if v then State.Security.afkConn = LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
     else if State.Security.afkConn then State.Security.afkConn:Disconnect() end end
 end)
-SCP:Button("🔄 Rejoin Server", "", function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+SCP:Button("🔄 Rejoin Server", "Masuk Ulang", function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
 
 -- NOCLIP LOOP
 RS.Stepped:Connect(function()
@@ -205,4 +203,4 @@ end)
 Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPNames()) end)
 Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPNames()) end)
 
-Library:Notification("XKID V18", "Raw Joystick Freecam Aktif!", 5)
+Library:Notification("XKID V19", "Freecam Raw-Lock Aktif! Sikat Bro!", 5)
