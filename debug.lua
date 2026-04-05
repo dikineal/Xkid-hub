@@ -1,11 +1,11 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v9.1   💠              ║
-║                WEATHER & REJOIN EDITION                  ║
+║              💠  X K I D   H U B  v9.2   💠              ║
+║                FLING & WEATHER EDITION                   ║
 ╠═══════════════════════════════════════════════════════════╣
-║  ➤  New: Rejoin Server (Security Tab)                     ║
-║  ➤  New: Weather/Lighting Control (Player Tab)            ║
-║  ➤  Stable: Dual-Mode Teleport & Native Fly               ║
+║  ➤  New: Fly Fling (Tab Player > Hacks)                   ║
+║  ➤  Stable: Rejoin, Weather Control, Native Fly           ║
+║  ➤  Stable: Dual-Mode Teleport & Anti-AFK                 ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -24,6 +24,7 @@ local LP = Players.LocalPlayer
 local State = {
     Move = {ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60},
     Fly = {active = false, bv = nil, bg = nil},
+    Fling = {active = false, power = 500000}, -- Power buat mentalin orang
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil}
 }
@@ -36,6 +37,23 @@ local function getPlayerNames()
     for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(names, p.Name) end end
     return names
 end
+
+-- ┌─────────────────────────────────────────────────────────┐
+-- │                 ➤  FLING ENGINE                         │
+-- └─────────────────────────────────────────────────────────┘
+-- Logika buat mentalin orang (Server-Side Physics)
+task.spawn(function()
+    while true do
+        if State.Fling.active and getRoot() then
+            -- Memberikan velocity tinggi secara instan
+            local oldVel = getRoot().Velocity
+            getRoot().Velocity = Vector3.new(State.Fling.power, State.Fling.power, State.Fling.power)
+            RS.RenderStepped:Wait()
+            getRoot().Velocity = oldVel
+        end
+        RS.RenderStepped:Wait()
+    end
+end)
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                 ➤  CORE FUNCTIONS                       │
@@ -77,7 +95,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V9.1", "star", "MASTER", false)
+local Win = Library:Window("XKID HUB V9.2", "star", "MASTER", false)
 
 -- --- TAB 1: TELEPORT (📍) ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -108,14 +126,20 @@ PLM:Toggle("Infinite Jump", "ij", false, "No Jump Cooldown", function(v)
     else if State.Move.infJ then State.Move.infJ:Disconnect() end end
 end)
 
+-- SEKSI HACKS (Fling & Fly)
 PLH:Toggle("Native Fly", "nf", false, "Joystick Support", function(v) toggleFly(v) end)
 PLH:Slider("Fly Speed", "fs", 10, 500, 60, function(v) State.Move.flyS = v end)
 PLH:Toggle("NoClip", "nc", false, "Tembus", function(v) State.Move.ncp = v end)
 PLH:Toggle("Invisible (R15)", "inv", false, "Remove Torso", function(v) 
     if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end 
 end)
+PLH:Toggle("Fly Fling Mode", "ffm", false, "Tabrak Orang!", function(v) 
+    State.Fling.active = v 
+    -- Noclip otomatis nyala biar kita gak mental sendiri pas nabrak
+    State.Move.ncp = v
+end)
 
--- SEKSI CUACA (Weather)
+-- SEKSI CUACA
 PLW:Slider("Waktu (ClockTime)", "time", 0, 24, 12, function(v) Lighting.ClockTime = v end)
 PLW:Slider("Kecerahan (Brightness)", "bright", 0, 10, 2, function(v) Lighting.Brightness = v end)
 PLW:Button("☀️ Set Siang", "Day Time", function() Lighting.ClockTime = 14 end)
@@ -131,14 +155,13 @@ SCP:Toggle("Anti-AFK Mode", "afk", false, "No Kick", function(v)
 end)
 SCP:Toggle("Bypass Anti-Cheat", "acb", false, "Hooking", function(v) end)
 
--- FITUR REJOIN
 SCP:Button("🔄 Rejoin Server", "Masuk Ulang", function()
     TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
 end)
 
 -- NOCLIP LOOP
 RS.Stepped:Connect(function()
-    if State.Move.ncp and LP.Character then
+    if (State.Move.ncp or State.Fling.active) and LP.Character then
         for _, v in pairs(LP.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
     end
 end)
@@ -146,4 +169,4 @@ end)
 Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPlayerNames()) end)
 Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPlayerNames()) end)
 
-Library:Notification("XKID MASTER V9.1", "Rejoin & Weather Ready!", 5)
+Library:Notification("XKID MASTER V9.2", "Fling & Weather Update!", 5)
