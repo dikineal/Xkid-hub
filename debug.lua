@@ -29,7 +29,7 @@ local State = {
     Fling = {active = false, power = 1000000},
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil},
-    Cinema = {active = false, speed = 0.5, fov = 70, rotX = 0, rotY = 0, pos = nil, lastPos = nil}
+    Cinema = {active = false, speed = 0.5, fov = 70, rotX = 0, rotY = 0, pos = nil, smoothPos = nil, lastPos = nil}
 }
 
 -- Helpers
@@ -70,31 +70,78 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │             ➤  GHOST DRONE ENGINE (FIXED)               │
 -- └─────────────────────────────────────────────────────────┘
+-- Touch drag state
+local touchDragging = false
+local lastTouchPos = nil
+
 UIS.InputChanged:Connect(function(input)
-    if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
+    if not State.Cinema.active then return end
+
+    -- TOUCH: seret untuk rotate kamera
+    if input.UserInputType == Enum.UserInputType.Touch then
+        if lastTouchPos then
+            local delta = input.Position - lastTouchPos
+            State.Cinema.rotY = State.Cinema.rotY - delta.X * 0.25
+            State.Cinema.rotX = State.Cinema.rotX - delta.Y * 0.25
+            State.Cinema.rotX = math.clamp(State.Cinema.rotX, -85, 85)
+        end
+        lastTouchPos = input.Position
+    end
+
+    -- MOUSE: drag klik kiri untuk rotate kamera
+    if input.UserInputType == Enum.UserInputType.MouseMovement and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
         local delta = input.Delta
-        State.Cinema.rotX = State.Cinema.rotX - delta.Y * 0.4
-        State.Cinema.rotY = State.Cinema.rotY - delta.X * 0.4
+        State.Cinema.rotY = State.Cinema.rotY - delta.X * 0.3
+        State.Cinema.rotX = State.Cinema.rotX - delta.Y * 0.3
         State.Cinema.rotX = math.clamp(State.Cinema.rotX, -85, 85)
     end
 end)
 
-RS.RenderStepped:Connect(function()
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        lastTouchPos = nil
+    end
+end)
+
+RS.RenderStepped:Connect(function(dt)
     if State.Cinema.active then
         Cam.CameraType = Enum.CameraType.Scriptable
-        local rotation = CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
-        
-        -- Logic Gerak: Gunakan MoveDirection (Joystick tetap aktif karena tidak di-Anchor)
+
+        -- Bangun rotasi dari sudut accumulated
+        local rotation = CFrame.Angles(0, math.rad(State.Cinema.rotY), 0)
+                       * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
+
+        -- Ambil MoveDirection dari joystick (X/Z) = maju/mundur/kiri/kanan
         local md = getHum() and getHum().MoveDirection or Vector3.zero
+
         if md.Magnitude > 0 then
-            -- Gerak sinkron dengan arah lensa kamera
-            local moveDir = (Cam.CFrame.LookVector * (md:Dot(Cam.CFrame.LookVector * Vector3.new(1,0,1).Unit))) + (Cam.CFrame.RightVector * (md:Dot(Cam.CFrame.RightVector)))
-            State.Cinema.pos = State.Cinema.pos + (md * State.Cinema.speed)
+            -- Hitung arah berdasarkan rotasi kamera saat ini (bukan world axis)
+            local camCF = CFrame.new(Vector3.zero) * rotation
+            local forward = camCF.LookVector
+            local right   = camCF.RightVector
+
+            -- Joystick X/Z -> proyeksikan ke kamera forward & right
+            -- Naik/turun: jika kamera miring, forward.Y sudah handle otomatis
+            local flatForward = Vector3.new(forward.X, forward.Y, forward.Z) -- full 3D, termasuk pitch
+            local flatRight   = Vector3.new(right.X,   0,         right.Z).Unit
+
+            local moveVec = (flatForward * (-md.Z)) + (flatRight * md.X)
+            State.Cinema.pos = State.Cinema.pos + moveVec * State.Cinema.speed
         end
-        Cam.CFrame = CFrame.new(State.Cinema.pos) * rotation
-        
-        -- Jaga badan tetep di bawah map biar ga kelihatan pas rekam
-        if getRoot() then getRoot().CFrame = CFrame.new(State.Cinema.pos.X, -500, State.Cinema.pos.Z) end
+
+        -- Smooth interpolation posisi supaya gerak sinematik (tidak patah-patah)
+        if State.Cinema.smoothPos == nil then
+            State.Cinema.smoothPos = State.Cinema.pos
+        end
+        local lerpAlpha = math.min(1, dt * 12)
+        State.Cinema.smoothPos = State.Cinema.smoothPos:Lerp(State.Cinema.pos, lerpAlpha)
+
+        Cam.CFrame = CFrame.new(State.Cinema.smoothPos) * rotation
+
+        -- Sembunyikan badan jauh di bawah map supaya tidak terlihat di rekaman
+        if getRoot() then
+            getRoot().CFrame = CFrame.new(State.Cinema.smoothPos.X, -9999, State.Cinema.smoothPos.Z)
+        end
     end
 end)
 
@@ -161,7 +208,14 @@ CIM:Toggle("Ghost Drone", "fc", false, "Auto-Invis & Return", function(v)
     if v then
         State.Cinema.lastPos = getRoot().CFrame
         State.Cinema.pos = Cam.CFrame.Position
-        State.Cinema.rotX = 0; State.Cinema.rotY = 0
+        State.Cinema.smoothPos = Cam.CFrame.Position  -- sync supaya tidak lompat
+
+        -- Ambil rotasi awal dari orientasi kamera sekarang, bukan reset ke 0
+        local _, ry, _ = Cam.CFrame:ToEulerAnglesYXZ()
+        local rx = math.asin(Cam.CFrame.LookVector.Y)
+        State.Cinema.rotX = math.deg(rx)
+        State.Cinema.rotY = math.deg(ry)
+
         if getHum() then getHum().WalkSpeed = 0 end
     else
         -- KEMBALIKAN BADAN KE POSISI KAMERA
