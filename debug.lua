@@ -1,11 +1,11 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v9.2   💠              ║
-║                FINAL LOCK - SPIN & FLING                 ║
+║              💠  X K I D   H U B  v9.3   💠              ║
+║                IY-STYLE FLING & LOCK VERSION             ║
 ╠═══════════════════════════════════════════════════════════╣
-║  ➤  Fixed: Fling sekarang pake Spin kenceng (Server-Side) ║
-║  ➤  Lock: Struktur V9.2 yang paling lo suka               ║
-║  ➤  Stable: Rejoin, Weather, Native Fly, & Anti-AFK       ║
+║  ➤  Logic: Infinite Yield Fling (Velocity Spike)          ║
+║  ➤  Stable: Dual-Mode Teleport & Native Fly               ║
+║  ➤  Stable: Rejoin, Weather, & Anti-AFK                   ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -24,7 +24,7 @@ local LP = Players.LocalPlayer
 local State = {
     Move = {ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60},
     Fly = {active = false, bv = nil, bg = nil},
-    Fling = {active = false, power = 50000, bav = nil}, -- Power & Spin engine
+    Fling = {active = false, power = 1000000}, -- Angka keramat IY
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil}
 }
@@ -38,24 +38,23 @@ local function getPNames()
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │                 ➤  FIXED FLING ENGINE                   │
+-- │             ➤  INFINITE YIELD FLING ENGINE              │
 -- └─────────────────────────────────────────────────────────┘
--- Sekarang badan lo bakal muter kenceng buat nge-glitch player lain
 task.spawn(function()
     while true do
         if State.Fling.active and getRoot() then
-            -- Buat putaran maut (Spin)
-            if not State.Fling.bav or State.Fling.bav.Parent ~= getRoot() then
-                State.Fling.bav = Instance.new("BodyAngularVelocity", getRoot())
-                State.Fling.bav.P = 1000000
-                State.Fling.bav.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            end
-            State.Fling.bav.AngularVelocity = Vector3.new(0, State.Fling.power, 0)
+            -- Logic IY: Spike Velocity & RotVelocity secara bergantian
+            local oldVel = getRoot().Velocity
             
-            -- Kasih daya dorong dikit biar makin jauh mentalnya
-            getRoot().Velocity = Vector3.new(50, 50, 50)
-        else
-            if State.Fling.bav then State.Fling.bav:Destroy(); State.Fling.bav = nil end
+            -- Spike 1: Rotasi gila
+            getRoot().RotVelocity = Vector3.new(0, State.Fling.power, 0)
+            -- Spike 2: Daya dorong gila
+            getRoot().Velocity = Vector3.new(State.Fling.power, State.Fling.power, State.Fling.power)
+            
+            RS.RenderStepped:Wait()
+            
+            -- Balikin normal biar gak mental sendiri (Client-Side)
+            getRoot().Velocity = oldVel
         end
         RS.RenderStepped:Wait()
     end
@@ -101,9 +100,9 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V9.2", "star", "FLING FIXED", false)
+local Win = Library:Window("XKID HUB V9.3", "star", "IY FLING LOCK", false)
 
--- TAB 1: TELEPORT
+-- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
 local TPP = T_TP:Page("Navigation", "map-pin")
 local TPT = TPP:Section("🎯 Select Target", "Left")
@@ -118,7 +117,7 @@ TPS:Button("🚀 Teleport Now", "Melesat", function()
     if target and target.Character then getRoot().CFrame = target.Character.HumanoidRootPart.CFrame end
 end)
 
--- TAB 2: PLAYER
+-- --- TAB 2: PLAYER ---
 local T_PL = Win:Tab("Player", "user")
 local PLP = T_PL:Page("Settings", "zap")
 local PLM = PLP:Section("⚡ Movement", "Left")
@@ -127,7 +126,7 @@ local PLW = PLP:Section("🌦️ Atmosphere", "Left")
 
 PLM:Button("🔄 Refresh Char (;re)", "Fix Glitch", function() instantRE() end)
 PLM:Slider("WalkSpeed", "ws", 16, 500, 16, function(v) if getHum() then getHum().WalkSpeed = v end end)
-PLM:Toggle("Infinite Jump", "ij", false, "", function(v) 
+PLM:Toggle("Infinite Jump", "ij", false, "No Jump Cooldown", function(v) 
     if v then State.Move.infJ = UIS.JumpRequest:Connect(function() getHum():ChangeState(3) end)
     else if State.Move.infJ then State.Move.infJ:Disconnect() end end
 end)
@@ -138,15 +137,15 @@ PLH:Toggle("NoClip", "nc", false, "Tembus", function(v) State.Move.ncp = v end)
 PLH:Toggle("Invisible (R15)", "inv", false, "Remove Torso", function(v) 
     if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end 
 end)
-PLH:Toggle("Fly Fling Mode", "ffm", false, "PUTAR & TABRAK", function(v) 
+PLH:Toggle("IY Fling Mode", "ffm", false, "TABRAK = MENTAL", function(v) 
     State.Fling.active = v 
-    State.Move.ncp = v -- Noclip wajib nyala pas nge-fling
+    State.Move.ncp = v -- Wajib Noclip biar gak mental sendiri
 end)
 
 PLW:Slider("Waktu (ClockTime)", "time", 0, 24, 12, function(v) Lighting.ClockTime = v end)
 PLW:Button("☀️ Set Siang", "Day Time", function() Lighting.ClockTime = 14 end)
 
--- TAB 3: SECURITY
+-- --- TAB 3: SECURITY ---
 local T_SC = Win:Tab("Security", "shield")
 local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
 
@@ -166,4 +165,4 @@ end)
 Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPNames()) end)
 Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPNames()) end)
 
-Library:Notification("XKID MASTER V9.2", "Spin Fixed! Sikat, Bro Diki!", 5)
+Library:Notification("XKID MASTER V9.3", "IY Fling Ready! Sikat, Bro!", 5)
