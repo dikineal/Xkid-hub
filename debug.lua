@@ -1,12 +1,12 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v24.0  💠              ║
-║                REAL-TIME SYNC DRONE LOCK                 ║
+║              💠  X K I D   H U B  v26.0  💠              ║
+║                ULTIMATE DRONE & INVIS LOCK               ║
 ╚═══════════════════════════════════════════════════════════╣
-║  ➤  Fixed: Drone Cam (Maju Selalu Searah Lensa)           ║
-║  ➤  Fixed: Analog Sync (Gak bakal terbalik pas nengok)    ║
-║  ➤  Stable: Smart TP (2-3 Huruf), IY Fling, Weather       ║
-║  ➤  Stable: Rejoin, Anti-AFK, & Security Locked           ║
+║  ➤  New: Drone Mode = Auto Invisible (R15 Style)          ║
+║  ➤  Fixed: Drone Movement (Sync Joystick & Look Direction)║
+║  ➤  Stable: Fly, Bypass, Smart TP, & IY Fling Locked      ║
+║  ➤  Stable: Weather Control & Rejoin Locked               ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -40,24 +40,36 @@ local function getPNames()
     return t
 end
 
--- SMART TELEPORT (Locked from V23)
-local function tpToPartialName(nameSnippet)
-    if nameSnippet == "" then return end
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP and (string.find(string.lower(p.Name), string.lower(nameSnippet)) or string.find(string.lower(p.DisplayName), string.lower(nameSnippet))) then
-            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                getRoot().CFrame = p.Character.HumanoidRootPart.CFrame
-                Library:Notification("Teleport", "Melesat ke: " .. p.Name, 2)
-                return
-            end
-        end
+-- ┌─────────────────────────────────────────────────────────┐
+-- │                 ➤  FLY ENGINE (LOCKED)                  │
+-- └─────────────────────────────────────────────────────────┘
+local function toggleFly(v)
+    if not v then
+        State.Fly.active = false
+        if State.Fly.bv then State.Fly.bv:Destroy() end
+        if State.Fly.bg then State.Fly.bg:Destroy() end
+        if getHum() then getHum().PlatformStand = false; getHum():ChangeState(1) end
+        return
     end
+    State.Fly.active = true; getHum().PlatformStand = true
+    local r = getRoot()
+    State.Fly.bv = Instance.new("BodyVelocity", r); State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    State.Fly.bg = Instance.new("BodyGyro", r); State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9); State.Fly.bg.P = 1e5
+    task.spawn(function()
+        while State.Fly.active do
+            local cam = workspace.CurrentCamera; local md = getHum().MoveDirection
+            if md.Magnitude > 0 then
+                local dot = md:Dot(cam.CFrame.LookVector * Vector3.new(1,0,1).Unit)
+                State.Fly.bv.Velocity = Vector3.new(md.X * State.Move.flyS, cam.CFrame.LookVector.Y * State.Move.flyS * dot, md.Z * State.Move.flyS)
+            else State.Fly.bv.Velocity = Vector3.zero end
+            State.Fly.bg.CFrame = cam.CFrame; RS.RenderStepped:Wait()
+        end
+    end)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             ➤  DRONE CAMERA ENGINE (SYNCED)             │
+-- │             ➤  ULTIMATE DRONE ENGINE (INVIS)            │
 -- └─────────────────────────────────────────────────────────┘
--- Handle nengok (Swipe Layar Kanan)
 UIS.InputChanged:Connect(function(input)
     if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
         local delta = input.Delta
@@ -70,20 +82,14 @@ end)
 RS.RenderStepped:Connect(function()
     if State.Cinema.active then
         Cam.CameraType = Enum.CameraType.Scriptable
-        
-        -- Hitung Rotasi Kamera secara instan
         local rotation = CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
         
-        -- Ambil input joystick (Layar Kiri)
         local rawInput = UIS:GetMoveVector() 
         if rawInput.Magnitude > 0 then
-            -- SYNC LOGIC: Gunakan CFrame rotasi terbaru untuk menentukan arah gerak
-            -- Jadi kemana pun mata nengok, arah joystick tetep sinkron
-            local direction = (rotation * CFrame.new(rawInput.X, 0, rawInput.Z)).Position
-            State.Cinema.pos = State.Cinema.pos + (direction * State.Cinema.speed)
+            -- Gerak sinkron Drone (Maju selalu searah mata)
+            local moveDir = (Cam.CFrame.LookVector * -rawInput.Z) + (Cam.CFrame.RightVector * rawInput.X)
+            State.Cinema.pos = State.Cinema.pos + (moveDir * State.Cinema.speed)
         end
-        
-        -- Terapkan ke Kamera
         Cam.CFrame = CFrame.new(State.Cinema.pos) * rotation
     end
 end)
@@ -91,18 +97,30 @@ end)
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V24", "camera", "DRONE MASTER", false)
+local Win = Library:Window("XKID HUB V26", "star", "DRONE EDITION", false)
 
--- --- TAB 1: TELEPORT (SMART) ---
+-- --- TAB 1: TELEPORT (SMART TP LOCKED) ---
 local T_TP = Win:Tab("Teleport", "map-pin")
-local TPT = T_TP:Page("Navigation", "map-pin"):Section("🎯 Smart TP", "Left")
+local TPT = T_TP:Page("Navigation", "map-pin"):Section("🎯 Smart Search", "Left")
 
-TPT:TextBox("Ketik Nama (2-3 Huruf)", "pText", "", function(v) State.Teleport.selectedTarget = v end)
-TPT:Button("🚀 Teleport Now", "Fast Search", function() tpToPartialName(State.Teleport.selectedTarget) end)
+TPT:TextBox("Ketik 2-3 Huruf Nama", "pText", "", function(v) State.Teleport.selectedTarget = v end)
+TPT:Button("🚀 Teleport Now", "Fast TP", function()
+    local snippet = State.Teleport.selectedTarget
+    if snippet == "" then return end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and (string.find(string.lower(p.Name), string.lower(snippet)) or string.find(string.lower(p.DisplayName), string.lower(snippet))) then
+            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                getRoot().CFrame = p.Character.HumanoidRootPart.CFrame
+                Library:Notification("Teleport", "Berhasil ke: " .. p.Name, 2)
+                return
+            end
+        end
+    end
+end)
 local P_Drop = TPT:Dropdown("Manual List", "pDrop", getPNames(), function(v) State.Teleport.selectedTarget = v end)
-TPT:Button("🔄 Refresh Player", "", function() P_Drop:Refresh(getPNames()) end)
+TPT:Button("🔄 Refresh List", "", function() P_Drop:Refresh(getPNames()) end)
 
--- --- TAB 2: PLAYER (LOCKED) ---
+-- --- TAB 2: PLAYER (FLY & WEATHER LOCKED) ---
 local T_PL = Win:Tab("Player", "user")
 local PLP = T_PL:Page("Settings", "zap")
 local PLM = PLP:Section("⚡ Movement", "Left")
@@ -119,47 +137,63 @@ PLM:Toggle("Inf Jump", "ij", false, "", function(v)
     else if State.Move.infJ then State.Move.infJ:Disconnect() end end
 end)
 
+PLH:Toggle("Native Fly", "nf", false, "Joystick", function(v) toggleFly(v) end)
 PLH:Toggle("NoClip", "nc", false, "", function(v) State.Move.ncp = v end)
-PLH:Toggle("Invisible (R15)", "inv", false, "", function(v) if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end end)
-PLH:Toggle("IY Fling Mode", "ffm", false, "Tabrak Musuh", function(v) State.Fling.active = v; State.Move.ncp = v end)
+PLH:Toggle("Invisible (R15)", "inv", false, "Server Side", function(v) 
+    if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end 
+end)
+PLH:Toggle("IY Fling Mode", "ffm", false, "Tabrak!", function(v) State.Fling.active = v; State.Move.ncp = v end)
 
 PLW:Slider("Waktu (ClockTime)", "time", 0, 24, 12, function(v) Lighting.ClockTime = v end)
 PLW:Button("☀️ Set Siang", "", function() Lighting.ClockTime = 14 end)
 PLW:Button("🌙 Set Malam", "", function() Lighting.ClockTime = 0 end)
 
--- --- TAB 3: CINEMATIC (SMOOTH SYNC) ---
+-- --- TAB 3: CINEMATIC (DRONE FIXED) ---
 local T_CI = Win:Tab("Cinematic", "video")
-local CIM = T_CI:Page("Drone", "video"):Section("🎬 Pro Controls", "Left")
+local CIM = T_CI:Page("Drone", "video"):Section("🎬 Drone Mode", "Left")
 local CIW = T_CI:Page("Drone", "video"):Section("📱 Orientation", "Right")
 
-CIM:Toggle("Freecam (Freeze Char)", "fc", false, "Synced Analog", function(v)
+CIM:Toggle("Invisible Drone", "fc", false, "Invis R15 Logic", function(v)
     State.Cinema.active = v
     if v then
         State.Cinema.pos = Cam.CFrame.Position
-        State.Cinema.rotX = 0
-        State.Cinema.rotY = 0
+        State.Cinema.rotX = 0; State.Cinema.rotY = 0
+        -- LOGIKA INVIS: Hapus torso biar gaib pas rekam
+        if LP.Character and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end
         if getRoot() then getRoot().Anchored = true end
     else
+        -- Matikan Drone (Butuh ;re buat balikin badan)
         if getRoot() then getRoot().Anchored = false end
         Cam.CameraType = Enum.CameraType.Custom
+        Library:Notification("Drone", "Gunakan Refresh (;re) buat balikin badan!", 3)
     end
 end)
 CIM:Slider("Drone Speed", "csc", 0.1, 5, 0.5, function(v) State.Cinema.speed = v end)
 CIM:Slider("Zoom (FOV)", "cfov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
 
-CIW:Button("📱 Portrait Mode", "TikTok", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
-CIW:Button("📺 Landscape Mode", "YouTube", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
+CIW:Button("📱 Portrait", "Tegak", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
+CIW:Button("📺 Landscape", "Mendatar", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
 
--- --- TAB 4: SECURITY (LOCKED) ---
+-- --- TAB 4: SECURITY (BYPASS LOCKED) ---
 local T_SC = Win:Tab("Security", "shield")
 local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
+
+SCP:Toggle("Bypass Anti-Cheat", "acb", false, "WS/JP Hook", function(v)
+    if v then 
+        local mt = getrawmetatable(game); setreadonly(mt, false); local old = mt.__index
+        mt.__index = newcclosure(function(t, k)
+            if not checkcaller() and t:IsA("Humanoid") and (k == "WalkSpeed" or k == "JumpPower") then return (k == "WalkSpeed" and 16 or 50) end
+            return old(t, k)
+        end); setreadonly(mt, true)
+    end
+end)
 SCP:Toggle("Anti-AFK", "afk", false, "No Kick", function(v)
     if v then State.Security.afkConn = LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
     else if State.Security.afkConn then State.Security.afkConn:Disconnect() end end
 end)
 SCP:Button("🔄 Rejoin Server", "", function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
 
--- IY FLING LOGIC
+-- IY FLING LOOP
 task.spawn(function()
     while true do
         if State.Fling.active and getRoot() then
@@ -180,4 +214,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-Library:Notification("XKID V24", "Drone Cam Synced! Sikat Bro!", 5)
+Library:Notification("XKID V26", "Drone & Features Locked!", 5)
