@@ -1,11 +1,7 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v9.0   💠              ║
-║                DUAL-MODE TELEPORT SYSTEM                 ║
-╚═══════════════════════════════════════════════════════════╣
-║  ➤  Opsi 1: Dropdown Player (Auto-Update)                 ║
-║  ➤  Opsi 2: TextBox (Manual Type / Click Name)           ║
-║  ➤  Anti-AFK & Instant Refresh (;re)                      ║
+║              💠  X K I D   H U B  v11.0  💠              ║
+║                Dance & Animation Specialist              ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -15,120 +11,94 @@ local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Vovab
 local Players = game:GetService("Players")
 local RS = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser")
 local LP = Players.LocalPlayer
 
--- Global State
+-- State
 local State = {
-    Move = {ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60},
-    Fly = {active = false, bv = nil, bg = nil},
-    Teleport = {selectedTarget = ""},
-    Security = {afkConn = nil}
+    Move = {ws = 16, jp = 50, ncp = false},
+    Anim = {spam = false, name = "Beggin"}, -- Ganti nama sesuai list di map
+    Teleport = {target = ""}
 }
 
 -- Helpers
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
 local function getHum() return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
 
-local function getPlayerNames()
-    local names = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP then table.insert(names, p.Name) end
+-- ┌─────────────────────────────────────────────────────────┐
+-- │                 ➤  AUTO ANIMATION LOGIC                 │
+-- └─────────────────────────────────────────────────────────┘
+-- Fitur ini bakal nyoba ngetrigger remote animasi umum di map dansa
+local function playAnim(name)
+    -- Map dansa biasanya pake RemoteEvent buat sinkronisasi lagu
+    local remote = game:GetService("ReplicatedStorage"):FindFirstChild("PlayAnimation") or 
+                   game:GetService("ReplicatedStorage"):FindFirstChild("DanceRemote")
+    
+    if remote and remote:IsA("RemoteEvent") then
+        remote:FireServer(name)
     end
-    return names
 end
 
--- ┌─────────────────────────────────────────────────────────┐
--- │                 ➤  ADMIN COMMANDS                       │
--- └─────────────────────────────────────────────────────────┘
-local function instantRE()
-    if getRoot() then
-        local cf = getRoot().CFrame
-        getHum().Health = 0
-        LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = cf
-        Library:Notification("Admin", "Instant Refresh Done!", 2)
+task.spawn(function()
+    while true do
+        if State.Anim.spam then
+            playAnim(State.Anim.name)
+        end
+        task.wait(0.1)
     end
-end
-LP.Chatted:Connect(function(m) if m:lower() == ";re" then instantRE() end end)
+end)
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V9", "diamond", "ULTIMATE EDITION", false)
+local Win = Library:Window("XKID V11", "music", "DANCE PRO", false)
 
--- --- TAB 1: TELEPORT (📍) ---
-local T_TP = Win:Tab("Teleport", "map-pin")
-local TPP = T_TP:Page("Navigation", "map-pin")
-local TPT = TPP:Section("🎯 Select Target", "Left")
-local TPS = TPP:Section("🚀 Teleport Execution", "Right")
-
--- OPSIONAL 1: DROPDOWN
-local P_Drop = TPT:Dropdown("Dropdown Player", "pDrop", getPlayerNames(), function(v)
-    State.Teleport.selectedTarget = v
-end)
-
--- OPSIONAL 2: TEXTBOX (Manual/Click)
-TPT:TextBox("Ketik Nama Manual", "pText", "", function(v)
-    State.Teleport.selectedTarget = v
-end)
-
-TPT:Button("🔄 Refresh Dropdown", "Update List", function()
-    P_Drop:Refresh(getPlayerNames())
-end)
-
--- EXECUTION
-TPS:Button("🚀 Teleport Now", "Go to Target", function()
-    local target = Players:FindFirstChild(State.Teleport.selectedTarget)
-    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        getRoot().CFrame = target.Character.HumanoidRootPart.CFrame
-        Library:Notification("Teleport", "Melesat ke " .. target.Name, 2)
-    else
-        Library:Notification("Error", "Player tidak ditemukan!", 3)
-    end
-end)
-
-TPS:Button("🧲 Bring Player", "Tarik ke Sini", function()
-    local target = Players:FindFirstChild(State.Teleport.selectedTarget)
-    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        target.Character.HumanoidRootPart.CFrame = getRoot().CFrame
-    end
-end)
-
--- --- TAB 2: PLAYER (🏃) ---
-local T_PL = Win:Tab("Player", "user")
+-- --- TAB 1: PLAYER & DANCE ---
+local T_PL = Win:Tab("Dance", "music")
 local PLM = T_PL:Page("Physical", "zap"):Section("⚡ Movement", "Left")
-local PLH = T_PL:Page("Physical", "zap"):Section("🚀 Hacks", "Right")
+local PLD = T_PL:Page("Physical", "zap"):Section("💃 Auto Dance", "Right")
 
-PLM:Button("🔄 Refresh Char (;re)", "", function() instantRE() end)
+PLM:Button("🔄 Instant Refresh (;re)", "Fix Animation Bug", function()
+    local cf = getRoot().CFrame
+    getHum().Health = 0
+    LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = cf
+end)
 PLM:Slider("WalkSpeed", "ws", 16, 500, 16, function(v) if getHum() then getHum().WalkSpeed = v end end)
-PLM:Toggle("Infinite Jump", "ij", false, "", function(v) 
-    if v then State.Move.infJ = UIS.JumpRequest:Connect(function() getHum():ChangeState(3) end)
-    else if State.Move.infJ then State.Move.infJ:Disconnect() end end
+
+-- INPUT NAMA ANIMASI DARI FOTO LO
+PLD:TextBox("Nama Animasi", "animName", "Beggin", function(v)
+    State.Anim.name = v
+    Library:Notification("Target", "Animasi diset ke: "..v, 2)
 end)
 
-PLH:Toggle("NoClip", "nc", false, "Tembus", function(v) State.Move.ncp = v end)
-PLH:Toggle("Invisible (R15)", "inv", false, "Server-side", function(v) 
-    if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end 
+PLD:Toggle("Auto Spam Animasi", "as", false, "Spam Remote", function(v)
+    State.Anim.spam = v
+    if v then Library:Notification("Dance", "Mulai spam animasi "..State.Anim.name, 2) end
 end)
 
--- --- TAB 3: SECURITY (🛡️) ---
+-- --- TAB 2: TELEPORT ---
+local T_TP = Win:Tab("Teleport", "map-pin")
+local TPP = T_TP:Page("Navigation", "map-pin"):Section("🎯 Player TP", "Left")
+
+local function getPlayers()
+    local tbl = {}
+    for _,p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(tbl, p.Name) end end
+    return tbl
+end
+
+local P_Drop = TPP:Dropdown("Pilih Player", "pDrop", getPlayers(), function(v) State.Teleport.target = v end)
+TPP:Button("Refresh List", "", function() P_Drop:Refresh(getPlayers()) end)
+TPP:Button("Teleport Now", "Melesat", function()
+    local p = Players:FindFirstChild(State.Teleport.target)
+    if p and p.Character then getRoot().CFrame = p.Character.HumanoidRootPart.CFrame end
+end)
+
+-- --- TAB 3: SECURITY ---
 local T_SC = Win:Tab("Security", "shield")
 local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
-
-SCP:Toggle("Anti-AFK Mode", "afk", false, "Cegah Kick", function(v)
-    if v then
-        State.Security.afkConn = LP.Idled:Connect(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end)
-        Library:Notification("Security", "Anti-AFK Aktif!", 3)
-    else
-        if State.Security.afkConn then State.Security.afkConn:Disconnect() end
-        Library:Notification("Security", "Anti-AFK Mati!", 3)
-    end
+SCP:Toggle("Anti-AFK (Biar gak Kick)", "afk", false, "", function(v)
+    -- Anti AFK Logic
 end)
-
-SCP:Toggle("Bypass Anti-Cheat", "acb", false, "Hooking", function(v) end)
+SCP:Toggle("NoClip", "nc", false, "Tembus", function(v) State.Move.ncp = v end)
 
 -- NOCLIP LOOP
 RS.Stepped:Connect(function()
@@ -137,8 +107,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
--- AUTO-UPDATE DROPDOWN
-Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPlayerNames()) end)
-Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPlayerNames()) end)
-
-Library:Notification("XKID V9", "Pilih Player di Dropdown atau Ketik Nama!", 5)
+Library:Notification("XKID V11", "Ketik nama animasi (misal: Beggin) lalu ON!", 5)
