@@ -1,7 +1,7 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v15.0  💠              ║
-║                THE ULTIMATE FINAL REPAIR                 ║
+║              💠  X K I D   H U B  v16.0  💠              ║
+║                WASD MOVEMENT & SLOW-MO FIX               ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -24,7 +24,7 @@ local State = {
     Fling = {active = false, power = 1000000},
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil},
-    Cinema = {active = false, speed = 1, fov = 70, rotX = 0, rotY = 0, hideUI = false}
+    Cinema = {active = false, speed = 0.5, fov = 70, rotX = 0, rotY = 0}
 }
 
 -- Helpers
@@ -36,7 +36,7 @@ local function getPNames()
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │                 ➤  FLY ENGINE (FIXED)                   │
+-- │                 ➤  FLY ENGINE (STABLE)                  │
 -- └─────────────────────────────────────────────────────────┘
 local function toggleFly(v)
     if not v then
@@ -63,7 +63,7 @@ local function toggleFly(v)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             ➤  CINEMATIC ENGINE (FIXED)                 │
+-- │             ➤  CINEMATIC ENGINE (WASD FIX)              │
 -- └─────────────────────────────────────────────────────────┘
 UIS.InputChanged:Connect(function(input)
     if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
@@ -80,12 +80,11 @@ RS.RenderStepped:Connect(function()
         
         local hum = getHum()
         if hum and hum.MoveDirection.Magnitude > 0 then
-            local moveDir = hum.MoveDirection
-            local look = Cam.CFrame.LookVector
-            local right = Cam.CFrame.RightVector
-            -- FIX: Analog Up = Forward (Maju)
-            local targetPos = Cam.CFrame.Position + (look * -moveDir.Z * State.Cinema.speed) + (right * moveDir.X * State.Cinema.speed)
-            Cam.CFrame = CFrame.new(targetPos) * (Cam.CFrame - Cam.CFrame.Position)
+            local md = hum.MoveDirection
+            -- FIX: Logic Maju Mundur Persis WASD PC
+            local forward = Cam.CFrame.LookVector * -md.Z
+            local right = Cam.CFrame.RightVector * md.X
+            Cam.CFrame = Cam.CFrame + (forward + right) * State.Cinema.speed
         end
         if getRoot() then getRoot().Anchored = true end
     else
@@ -94,7 +93,7 @@ RS.RenderStepped:Connect(function()
 end)
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             ➤  IY FLING ENGINE (V9.3 LOCK)              │
+-- │             ➤  IY FLING ENGINE (LOCKED)                 │
 -- └─────────────────────────────────────────────────────────┘
 task.spawn(function()
     while true do
@@ -112,7 +111,7 @@ end)
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V15", "star", "FINAL REPAIR", false)
+local Win = Library:Window("XKID HUB V16", "star", "WASD FIX", false)
 
 -- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -156,28 +155,21 @@ local T_CI = Win:Tab("Cinematic", "video")
 local CIM = T_CI:Page("Camera", "video"):Section("🎬 Controls", "Left")
 local CIW = T_CI:Page("Camera", "video"):Section("📱 Orientation", "Right")
 
-CIM:Toggle("Freecam Analog", "fc", false, "Maju = Depan", function(v)
+CIM:Toggle("Freecam Analog", "fc", false, "UP = Maju Maju!", function(v)
     State.Cinema.active = v
     if not v then Cam.CameraType = Enum.CameraType.Custom end
 end)
-CIM:Slider("Speed Cam", "csc", 1, 10, 1, function(v) State.Cinema.speed = v end)
+CIM:Slider("Speed Cam", "csc", 0.1, 5, 0.5, function(v) State.Cinema.speed = v end)
 CIM:Slider("Zoom (FOV)", "cfov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
-CIM:Toggle("Hide All UI", "hui", false, "Toggle Mode", function(v)
-    State.Cinema.hideUI = v
-    game:GetService("GuiService"):SetCoreGuiEnabled(Enum.CoreGuiType.All, not v)
-    for _, gui in pairs(LP.PlayerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Name ~= "Aurora" then gui.Enabled = not v end
-    end
-end)
 
-CIW:Button("📱 Portrait", "Tegak", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
-CIW:Button("📺 Landscape", "Mendatar", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
+CIW:Button("📱 Portrait Mode", "Tegak", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
+CIW:Button("📺 Landscape Mode", "Mendatar", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
 
 -- --- TAB 4: SECURITY ---
 local T_SC = Win:Tab("Security", "shield")
 local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
 
-SCP:Toggle("Bypass Anti-Cheat", "acb", false, "Hooking", function(v)
+SCP:Toggle("Bypass Anti-Cheat", "acb", false, "Hooking WS/JP", function(v)
     if v then 
         local mt = getrawmetatable(game); setreadonly(mt, false); local old = mt.__index
         mt.__index = newcclosure(function(t, k)
@@ -202,4 +194,4 @@ end)
 Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPNames()) end)
 Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPNames()) end)
 
-Library:Notification("XKID V15", "Semua Fix! Selamat Ngonten!", 5)
+Library:Notification("XKID V16", "Freecam Maju & Slow-mo Aktif!", 5)
