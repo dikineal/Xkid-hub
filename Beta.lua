@@ -3,8 +3,7 @@
 ║              🌟  X K I D   H U B  v5.26  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
-║  [ULTIMATE UPDATE] Anti-Cheat Hook, Chat Bypass,         ║
-║  Server-Side Invis, & Dynamic Fly Speed                  ║
+║  [HOTFIX] Fly Logic, ESP Cleanup, Anti-AFK Restored      ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -20,7 +19,6 @@ local TpService   = game:GetService("TeleportService")
 local Workspace   = game:GetService("Workspace")
 local LP          = Players.LocalPlayer
 
--- Helper Functions
 local function getChar() return LP.Character end
 local function getRoot()
     local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart")
@@ -33,119 +31,113 @@ local function notify(t, b, d)
 end
 
 -- State Management
-local lastCFrame
-local Move = {speed = 16, flySpeed = 60, noclip = false, noclipConn = nil, jumpConn = nil}
+local Move = {speed = 16, flySpeed = 60, jumpConn = nil}
 local flyFlying = false; local flyConn = nil; local flyBV = nil; local flyBG = nil
 local Respawn = {savedPosition = nil}
-local bypassActive = false
 local chatBypassActive = false
+local afkConn = nil
 
 RunService.Heartbeat:Connect(function()
     local r = getRoot()
-    if r then lastCFrame = r.CFrame; Respawn.savedPosition = r.CFrame end
+    if r then Respawn.savedPosition = r.CFrame end
 end)
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │               ANTI-CHEAT BYPASS (HOOKING)               │
+-- │                 FIXED FLY SYSTEM                        │
 -- └─────────────────────────────────────────────────────────┘
-local function activateBypass()
-    local mt = getrawmetatable(game)
-    local oldIndex = mt.__index
-    setreadonly(mt, false)
-    mt.__index = newcclosure(function(t, k)
-        if not checkcaller() and t:IsA("Humanoid") and (k == "WalkSpeed" or k == "JumpPower") then
-            return (k == "WalkSpeed" and 16 or 50)
-        end
-        return oldIndex(t, k)
-    end)
-    setreadonly(mt, true)
-    notify("Bypass", "Anti-Cheat Hook Active!", 2)
-end
-
--- ┌─────────────────────────────────────────────────────────┐
--- │                   CHAT BYPASS LOGIC                     │
--- └─────────────────────────────────────────────────────────┘
-local function hookChat()
-    local chatEv = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
-    if chatEv and chatEv:FindFirstChild("SayMessageRequest") then
-        local oldChat = chatEv.SayMessageRequest
-        local mt = getrawmetatable(game)
-        local oldNamecall = mt.__namecall
-        setreadonly(mt, false)
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
-            if chatBypassActive and method == "FireServer" and self.Name == "SayMessageRequest" then
-                local msg = args[1]
-                local newMsg = ""
-                for i = 1, #msg do
-                    newMsg = newMsg .. msg:sub(i,i) .. "\203" -- Zero-width char bypass
-                end
-                args[1] = newMsg
-                return oldNamecall(self, unpack(args))
-            end
-            return oldNamecall(self, ...)
-        end)
-        setreadonly(mt, true)
-    end
-end
-task.spawn(hookChat)
-
--- ┌─────────────────────────────────────────────────────────┐
--- │                 SERVER-SIDE INVISIBLE                   │
--- └─────────────────────────────────────────────────────────┘
-local function setInvisMetode1(v)
-    if v then
-        local char = getChar()
-        if char and char:FindFirstChild("LowerTorso") then
-            char.LowerTorso:Destroy() -- Hancurkan tulang pinggang R15
-            notify("Invisible", "Metode 1 Aktif (Server-Sided)", 2)
-        else
-            notify("Error", "Gunakan avatar R15!", 3)
-        end
-    else
-        notify("Note", "Reset karakter untuk muncul lagi", 3)
+local function stopFly()
+    flyFlying = false
+    if flyConn then flyConn:Disconnect(); flyConn = nil end
+    if flyBV then flyBV:Destroy(); flyBV = nil end
+    if flyBG then flyBG:Destroy(); flyBG = nil end
+    local hum = getHum()
+    if hum then 
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.Running)
     end
 end
 
--- ┌─────────────────────────────────────────────────────────┐
--- │                 MODIFIED FLY & ESP                      │
--- └─────────────────────────────────────────────────────────┘
 local function startFly()
-    if flyFlying then return end
-    local root = getRoot(); local hum = getHum(); if not root or not hum then return end
-    flyFlying = true; hum.PlatformStand = true
-    flyBV = Instance.new("BodyVelocity", root); flyBV.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-    flyBG = Instance.new("BodyGyro", root); flyBG.MaxTorque = Vector3.new(1e6, 1e6, 1e6); flyBG.P = 1e5
+    if flyFlying then stopFly() end -- Cegah double run
+    local root = getRoot(); local hum = getHum()
+    if not root or not hum then return end
+    
+    flyFlying = true
+    hum.PlatformStand = true
+    
+    flyBV = Instance.new("BodyVelocity", root)
+    flyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    flyBV.Velocity = Vector3.zero
+    
+    flyBG = Instance.new("BodyGyro", root)
+    flyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    flyBG.P = 1e5
+    
     flyConn = RunService.RenderStepped:Connect(function()
-        if not flyFlying then return end
-        local r2 = getRoot(); local h2 = getHum(); if not r2 or not h2 then return end
-        local cam = Workspace.CurrentCamera; local cf = cam.CFrame
-        h2.PlatformStand = true
+        if not flyFlying or not root.Parent then stopFly(); return end
+        hum.PlatformStand = true
         
-        -- DYNAMIC FLY SPEED FROM Move.flySpeed
+        local cam = Workspace.CurrentCamera
         local moveDir = Vector3.new(0,0,0)
+        
+        -- Deteksi Input (WASD)
         if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
         if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
         if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
         if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
         
-        flyBV.Velocity = moveDir.Unit * Move.flySpeed
-        if moveDir.Magnitude == 0 then flyBV.Velocity = Vector3.new(0,0.1,0) end
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit
+            flyBV.Velocity = moveDir * Move.flySpeed
+        else
+            flyBV.Velocity = Vector3.new(0, 0, 0) -- Berhenti nge-drift
+        end
         flyBG.CFrame = cam.CFrame
     end)
 end
 
--- ESP System (Data lo)
-local ESPPl={active=false,data={},conn=nil}
-local function _mkPlBill(p)
-    if p==LP or ESPPl.data[p] then return end
-    if not p.Character then return end
-    local head=p.Character:FindFirstChild("Head"); if not head then return end
-    local bill=Instance.new("BillboardGui", head); bill.Name="XKID_PESP"; bill.Size=UDim2.new(0,100,0,24); bill.StudsOffset=Vector3.new(0,2.5,0); bill.AlwaysOnTop=true
-    local bg=Instance.new("Frame",bill); bg.Size=UDim2.new(1,0,1,0); bg.BackgroundColor3=Color3.fromRGB(0,0,0); bg.BackgroundTransparency=0.45; Instance.new("UICorner",bg).CornerRadius=UDim.new(0,4)
-    local lbl=Instance.new("TextLabel",bg); lbl.Size=UDim2.new(1,-4,1,-4); lbl.Position=UDim2.new(0,2,0,2); lbl.BackgroundTransparency=1; lbl.TextColor3=Color3.fromRGB(255,230,80); lbl.TextScaled=true; lbl.Font=Enum.Font.GothamBold; lbl.Text=p.Name
-    ESPPl.data[p]={bill=bill,lbl=lbl}
+-- ┌─────────────────────────────────────────────────────────┐
+-- │                 FIXED ESP SYSTEM                        │
+-- └─────────────────────────────────────────────────────────┘
+local ESPPl = {active = false, guis = {}, conn = nil}
+
+local function clearESP()
+    for _, gui in pairs(ESPPl.guis) do
+        if gui then gui:Destroy() end
+    end
+    ESPPl.guis = {}
+end
+
+local function updateESP()
+    clearESP() -- Bersihkan yang lama sebelum buat baru
+    if not ESPPl.active then return end
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("Head") then
+            local head = p.Character.Head
+            local bill = Instance.new("BillboardGui", head)
+            bill.Name = "XKID_ESP"; bill.Size = UDim2.new(0, 150, 0, 20)
+            bill.StudsOffset = Vector3.new(0, 3, 0); bill.AlwaysOnTop = true
+            
+            local lbl = Instance.new("TextLabel", bill)
+            lbl.Size = UDim2.new(1, 0, 1, 0); lbl.BackgroundTransparency = 1
+            lbl.TextColor3 = Color3.fromRGB(0, 255, 128); lbl.TextStrokeTransparency = 0
+            lbl.Font = Enum.Font.Code; lbl.TextSize = 14
+            
+            table.insert(ESPPl.guis, bill)
+            
+            -- Update jarak realtime
+            task.spawn(function()
+                while ESPPl.active and bill.Parent do
+                    if getRoot() and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local dist = math.floor((p.Character.HumanoidRootPart.Position - getRoot().Position).Magnitude)
+                        lbl.Text = p.Name .. " [" .. dist .. "m]"
+                    end
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
@@ -156,19 +148,19 @@ local T_TP = Win:Tab("Teleport", "map-pin")
 local T_Pl = Win:Tab("Player", "user")
 local T_Sec = Win:Tab("Security", "shield")
 
--- TAB TELEPORT (Target System)
+-- TAB TELEPORT
 local TP_P = T_TP:Page("Teleport", "map-pin")
-local TPL = TP_P:Section("🎯 Target Player", "Right")
+local TPL = TP_P:Section("🎯 Target Player", "Left")
 local selectedTarget = ""
 local pNames = {}; for _,p in pairs(Players:GetPlayers()) do if p~=LP then table.insert(pNames, p.Name) end end
 
 TPL:Dropdown("Pilih Player", "pDrop", pNames, function(v) selectedTarget = v end)
 TPL:TextBox("Ketik Manual", "tpInp", "", function(v) selectedTarget = v end)
 TPL:Button("🔍 TP to Target", "Teleport", function() 
-    local p = Players:FindFirstChild(selectedTarget); if p and p.Character then getRoot().CFrame = p.Character.HumanoidRootPart.CFrame end
-end)
-TPL:Button("🧲 Bring Target", "Tarik", function()
-    local p = Players:FindFirstChild(selectedTarget); if p and p.Character then p.Character.HumanoidRootPart.CFrame = getRoot().CFrame end
+    local p = Players:FindFirstChild(selectedTarget)
+    if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then 
+        getRoot().CFrame = p.Character.HumanoidRootPart.CFrame 
+    else notify("TP", "Gagal menemukan player", 2) end
 end)
 
 -- TAB PLAYER
@@ -181,21 +173,47 @@ PL:Toggle("Infinite Jump", "infj", false, "Jump", function(v)
     else if Move.jumpConn then Move.jumpConn:Disconnect() end end
 end)
 
-PR:Toggle("Fly", "fly", false, "Fly", function(v) if v then startFly() else flyFlying = false end end)
-PR:Slider("Fly Speed", "fspd", 10, 500, 60, function(v) Move.flySpeed = v end) -- FIX: Atur Kecepatan Fly
-PR:Toggle("Invisible Metode 1", "inv1", false, "Server-Side", function(v) setInvisMetode1(v) end)
-PR:Toggle("ESP Player", "esp", false, "Visual", function(v) 
+PR:Toggle("Fly", "fly", false, "Terbang WASD", function(v) 
+    if v then startFly() else stopFly() end 
+end)
+PR:Slider("Fly Speed", "fspd", 10, 500, 60, function(v) Move.flySpeed = v end)
+
+PR:Toggle("ESP Player", "esp", false, "Visual Info", function(v) 
     ESPPl.active = v
-    if v then ESPPl.conn = RunService.Heartbeat:Connect(function() for _,p in pairs(Players:GetPlayers()) do _mkPlBill(p) end end)
-    else if ESPPl.conn then ESPPl.conn:Disconnect() end end
+    if v then 
+        updateESP()
+        -- Auto update pas ada yang join/spawn
+        ESPPl.conn = Players.PlayerAdded:Connect(updateESP)
+    else 
+        clearESP()
+        if ESPPl.conn then ESPPl.conn:Disconnect(); ESPPl.conn = nil end
+    end
 end)
 
--- TAB SECURITY
+-- TAB SECURITY (RESTORED)
 local SL = T_Sec:Page("Security", "shield"):Section("🛡️ Protection", "Left")
-SL:Toggle("Anti-Cheat Bypass", "bp", false, "Hooking", function(v) if v then activateBypass() end end)
-SL:Toggle("Chat Bypass", "cbp", false, "Anti-Sensor", function(v) chatBypassActive = v end)
-SL:Button("Fast Respawn", "TP Back", function()
-    local old = lastCFrame; getHum().Health = 0; LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart").CFrame = old
+
+SL:Toggle("Anti AFK", "afk", false, "Cegah Kick Idle", function(v)
+    if v then 
+        afkConn = LP.Idled:Connect(function() 
+            VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame) 
+        end)
+        notify("Anti AFK", "Aktif", 2)
+    else 
+        if afkConn then afkConn:Disconnect(); afkConn = nil end 
+        notify("Anti AFK", "Mati", 2)
+    end
 end)
 
-notify("XKID HUB", "MODIE Edition Active!")
+SL:Button("⚡ Fast Respawn", "TP Back", function()
+    if Respawn.savedPosition then
+        local old = Respawn.savedPosition; getHum().Health = 0
+        LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart").CFrame = old
+    end
+end)
+
+SL:Button("🔄 Rejoin Server", "Masuk ulang", function()
+    TpService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
+end)
+
+notify("XKID HUB", "Hotfix Loaded Successfully!")
