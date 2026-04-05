@@ -3,8 +3,8 @@
 ║              💠  X K I D   H U B  v5.26  💠              ║
 ║                  Aurora UI  ·  Aesthetic Pro             ║
 ╠═══════════════════════════════════════════════════════════╣
-║  ➤  UI FIX: Dedicated Section for Buttons                 ║
-║  ➤  Native Mobile Fly, Refresh Char, Pro ESP              ║
+║  ➤  UI CACHE BYPASS (Forced Render)                       ║
+║  ➤  Refresh Button Relocated to Right Column              ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -110,7 +110,8 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI SETUP (AESTHETIC)               │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB", "diamond", "v5.26 Pro", false)
+-- GANTI NAMA WINDOW BIAR CACHE DELTA KE-RESET
+local Win = Library:Window("XKID V2", "diamond", "Pro 5.26", false)
 local T_TP = Win:Tab("Teleport", "map-pin")
 local T_PL = Win:Tab("Player", "user")
 local T_SC = Win:Tab("Security", "shield")
@@ -139,13 +140,10 @@ end
 
 -- --- PLAYER PAGE ---
 local PL_P = T_PL:Page("Movement", "zap")
-local PLC = PL_P:Section("🔄 Quick Actions", "Left") -- DEDICATED SECTION
 local PLM = PL_P:Section("⚡ Physical", "Left")
-local PLV = PL_P:Section("🚀 Hacks & Visual", "Right")
+local PLV = PL_P:Section("🚀 Hacks & Utility", "Right")
 
--- TOMBOL REFRESH DI SEKSI TERSENDIRI BIAR GAK NGE-BUG
-PLC:Button("🔄 Refresh Character", "Reload Avatar", function() executeRefresh() end)
-
+-- FUNGSI FISIK (KIRI)
 PLM:Slider("Walk Speed", "ws", 16, 500, 16, function(v) State.Move.speed = v; if getHum() then getHum().WalkSpeed = v end end)
 PLM:Slider("Jump Power", "jp", 50, 500, 50, function(v) State.Move.jump = v; if getHum() then getHum().JumpPower = v; getHum().UseJumpPower = true end end)
 PLM:Toggle("Infinite Jump", "infj", false, "Lompat Terus", function(v)
@@ -153,6 +151,8 @@ PLM:Toggle("Infinite Jump", "infj", false, "Lompat Terus", function(v)
     else if State.Move.jumpConn then State.Move.jumpConn:Disconnect() end end
 end)
 
+-- FUNGSI HACKS (KANAN) - TOMBOL REFRESH SEKARANG DI SINI
+PLV:Button("🔄 Refresh Character", "Reset & Restore", function() executeRefresh() end)
 PLV:Toggle("Native Fly", "nfly", false, "Joystick Support", function(v) toggleFly(v) end)
 PLV:Slider("Fly Speed", "fs", 10, 500, 60, function(v) State.Move.flySpeed = v end)
 PLV:Toggle("NoClip", "ncp", false, "Tembus Dinding", function(v) State.Move.noclip = v end)
@@ -161,7 +161,6 @@ PLV:Toggle("Pro ESP", "pesp", false, "Visual Pro", function(v) State.ESP.active 
 -- --- SECURITY PAGE ---
 local SC_P = T_SC:Page("Security", "shield")
 local SCS = SC_P:Section("🛡️ Protection", "Left")
-local SCM = SC_P:Section("🔄 Utilities", "Right")
 
 SCS:Toggle("Anti-Cheat Bypass", "hbp", false, "Hook Metatable", function(v)
     if v then 
@@ -177,9 +176,7 @@ SCS:Toggle("Anti AFK", "aafk", false, "No Kick", function(v)
     else if State.Security.afk then State.Security.afk:Disconnect() end end
 end)
 
--- GANDAKAN TOMBOL DI SINI JUGA
-SCM:Button("🔄 Refresh Character", "Reload Avatar Instan", function() executeRefresh() end)
-SCM:Button("⚡ Fast Respawn", "Instant TP Back", function()
+SCS:Button("⚡ Fast Respawn", "Instant TP Back", function()
     if State.Security.lastCF then
         local target = State.Security.lastCF; getHum().Health = 0
         LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = target
@@ -187,4 +184,4 @@ SCM:Button("⚡ Fast Respawn", "Instant TP Back", function()
     end
 end)
 
-notify("XKID HUB", "UI Glitch Fixed!", 5)
+notify("XKID V2", "Cache Cleared & Button Moved!", 5)
