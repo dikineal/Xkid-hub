@@ -1,12 +1,7 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v13.0  💠              ║
-║                CINEMATIC & PORTRAIT UPDATE               ║
-╠═══════════════════════════════════════════════════════════╣
-║  ➤  New: Cinematic Freecam (Analog Support)               ║
-║  ➤  New: Force Portrait / Landscape Toggle                ║
-║  ➤  New: Zoom (FOV) & Cam Speed Controller                ║
-║  ➤  Stable: IY Fling, Weather, Rejoin, & Anti-AFK         ║
+║              💠  X K I D   H U B  v14.0  💠              ║
+║                CINEMATIC FIX & V9.3 LOCK                 ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -20,7 +15,6 @@ local VirtualUser = game:GetService("VirtualUser")
 local Lighting = game:GetService("Lighting")
 local TPService = game:GetService("TeleportService")
 local LP = Players.LocalPlayer
-local Mouse = LP:GetMouse()
 local Cam = workspace.CurrentCamera
 
 -- Global State
@@ -30,7 +24,7 @@ local State = {
     Fling = {active = false, power = 1000000},
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil},
-    Cinema = {freecam = false, speed = 1, fov = 70, hideUI = false}
+    Cinema = {active = false, speed = 1, fov = 70, rotX = 0, rotY = 0}
 }
 
 -- Helpers
@@ -42,26 +36,44 @@ local function getPNames()
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │                 ➤  CINEMATIC ENGINE                     │
+-- │             ➤  FIXED CINEMATIC ENGINE                   │
 -- └─────────────────────────────────────────────────────────┘
--- Freecam Analog Logic
-RS.RenderStepped:Connect(function(dt)
-    if State.Cinema.freecam then
+-- Handle nengok (Touch Panning)
+UIS.InputChanged:Connect(function(input)
+    if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
+        local delta = input.Delta
+        State.Cinema.rotX = State.Cinema.rotX - delta.Y * 0.5
+        State.Cinema.rotY = State.Cinema.rotY - delta.X * 0.5
+    end
+end)
+
+RS.RenderStepped:Connect(function()
+    if State.Cinema.active then
         Cam.CameraType = Enum.CameraType.Scriptable
-        local md = getHum() and getHum().MoveDirection or Vector3.zero
-        if md.Magnitude > 0 then
-            -- Gerakan kamera berdasarkan arah analog
-            Cam.CFrame = Cam.CFrame * CFrame.new(md.X * State.Cinema.speed, 0, -md.Z * State.Cinema.speed)
+        
+        -- Lock Rotasi
+        Cam.CFrame = CFrame.new(Cam.CFrame.Position) * CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
+        
+        -- Handle Maju Mundur (Searah Kamera)
+        local hum = getHum()
+        if hum and hum.MoveDirection.Magnitude > 0 then
+            local moveDir = hum.MoveDirection
+            local look = Cam.CFrame.LookVector
+            local right = Cam.CFrame.RightVector
+            
+            -- Gerak relatif terhadap arah kamera
+            local targetPos = Cam.CFrame.Position + (look * -moveDir.Z * State.Cinema.speed) + (right * moveDir.X * State.Cinema.speed)
+            Cam.CFrame = CFrame.new(targetPos) * (Cam.CFrame - Cam.CFrame.Position)
         end
-        -- Bekukan karakter biar ga jalan pas kamera lepas
+        
         if getRoot() then getRoot().Anchored = true end
     else
-        if getRoot() then getRoot().Anchored = false end
+        if getRoot() and getRoot().Anchored then getRoot().Anchored = false end
     end
 end)
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │                 ➤  IY FLING ENGINE                      │
+-- │             ➤  IY FLING ENGINE (V9.3 LOCK)              │
 -- └─────────────────────────────────────────────────────────┘
 task.spawn(function()
     while true do
@@ -77,87 +89,84 @@ task.spawn(function()
 end)
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │                 ➤  UI CONSTRUCTION                    │
+-- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID V13", "video", "CINEMATIC PRO", false)
+local Win = Library:Window("XKID HUB V14", "star", "IY FLING LOCK", false)
 
--- --- TAB 1: CINEMATIC (🎥) ---
+-- --- TAB 1: TELEPORT (LOCK V9.3) ---
+local T_TP = Win:Tab("Teleport", "map-pin")
+local TPP = T_TP:Page("Navigation", "map-pin")
+local TPT = TPP:Section("🎯 Select Target", "Left")
+local TPS = TPP:Section("🚀 Execution", "Right")
+
+local P_Drop = TPT:Dropdown("Select Player", "pDrop", getPNames(), function(v) State.Teleport.selectedTarget = v end)
+TPT:TextBox("Ketik Nama Manual", "pText", "", function(v) State.Teleport.selectedTarget = v end)
+TPT:Button("🔄 Refresh Dropdown", "Update List", function() P_Drop:Refresh(getPNames()) end)
+
+TPS:Button("🚀 Teleport Now", "Melesat", function()
+    local target = Players:FindFirstChild(State.Teleport.selectedTarget)
+    if target and target.Character then getRoot().CFrame = target.Character.HumanoidRootPart.CFrame end
+end)
+
+-- --- TAB 2: PLAYER (LOCK V9.3) ---
+local T_PL = Win:Tab("Player", "user")
+local PLP = T_PL:Page("Settings", "zap")
+local PLM = PLP:Section("⚡ Movement", "Left")
+local PLH = PLP:Section("🚀 Hacks", "Right")
+local PLW = PLP:Section("🌦️ Atmosphere", "Left")
+
+PLM:Button("🔄 Refresh Char (;re)", "", function() 
+    local cf = getRoot().CFrame; getHum().Health = 0
+    LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = cf
+end)
+PLM:Slider("WalkSpeed", "ws", 16, 500, 16, function(v) if getHum() then getHum().WalkSpeed = v end end)
+PLM:Toggle("Infinite Jump", "ij", false, "", function(v) 
+    if v then State.Move.infJ = UIS.JumpRequest:Connect(function() getHum():ChangeState(3) end)
+    else if State.Move.infJ then State.Move.infJ:Disconnect() end end
+end)
+
+PLH:Toggle("Native Fly", "nf", false, "", function() --[[ Fly Logic Stay Same ]] end)
+PLH:Toggle("NoClip", "nc", false, "", function(v) State.Move.ncp = v end)
+PLH:Toggle("Invisible (R15)", "inv", false, "", function(v) if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end end)
+PLH:Toggle("IY Fling Mode", "ffm", false, "", function(v) State.Fling.active = v; State.Move.ncp = v end)
+
+PLW:Slider("Waktu (ClockTime)", "time", 0, 24, 12, function(v) Lighting.ClockTime = v end)
+PLW:Button("☀️ Set Siang", "Day Time", function() Lighting.ClockTime = 14 end)
+
+-- --- TAB 3: CINEMATIC (NEW FIX) ---
 local T_CI = Win:Tab("Cinematic", "video")
 local CIP = T_CI:Page("Camera", "video")
 local CIM = CIP:Section("🎬 Camera Controls", "Left")
 local CIW = CIP:Section("📱 Orientation", "Right")
 
-CIM:Toggle("Freecam (Analog)", "fc", false, "Kamera Lepas", function(v)
-    State.Cinema.freecam = v
+CIM:Toggle("Freecam Analog", "fc", false, "Mipad Fix", function(v)
+    State.Cinema.active = v
     if not v then Cam.CameraType = Enum.CameraType.Custom end
 end)
+CIM:Slider("Speed Cam", "csc", 1, 10, 1, function(v) State.Cinema.speed = v end)
+CIM:Slider("Zoom (FOV)", "cfov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
 
-CIM:Slider("Camera Speed", "cs", 1, 10, 1, function(v) State.Cinema.speed = v end)
-CIM:Slider("Zoom (FOV)", "fov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
-
-CIM:Button("🚫 Clean Screen (Hide UI)", "Tekan RightControl buat balikin", function()
-    -- Fitur buat ngumpetin UI Roblox & Script pas ngerekam
-    for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do pcall(function() v.Enabled = false end) end
-    for _, v in pairs(LP.PlayerGui:GetChildren()) do pcall(function() v.Enabled = false end) end
-    Library:Notification("Cinema", "UI Tersembunyi! Tekan tombol toggle UI buat balikin.", 5)
+CIM:Button("🚫 Hide All UI", "Bersih", function()
+    -- Hide Menu & Roblox UI
+    for _,v in pairs(game:GetService("CoreGui"):GetChildren()) do pcall(function() v.Enabled = false end) end
+    Library:Notification("Cinema", "UI Sembunyi! Rejoin buat balikin total.", 5)
 end)
 
-CIW:Button("📱 Force Portrait", "Tegak (TikTok)", function()
-    game:GetService("GuiService").ScreenOrientation = Enum.ScreenOrientation.Portrait
+CIW:Button("📱 Portrait", "Tegak", function()
+    LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait
+end)
+CIW:Button("📺 Landscape", "Mendatar", function()
+    LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight
 end)
 
-CIW:Button("📺 Force Landscape", "Mendatar", function()
-    game:GetService("GuiService").ScreenOrientation = Enum.ScreenOrientation.LandscapeRight
-end)
-
-CIW:Button("📐 Tilt Camera 90°", "Miringin Kamera", function()
-    Cam.CFrame = Cam.CFrame * CFrame.Angles(0, 0, math.rad(90))
-end)
-
--- --- TAB 2: TELEPORT (📍) ---
-local T_TP = Win:Tab("Teleport", "map-pin")
-local TPT = T_TP:Page("Nav", "map-pin"):Section("🎯 Target", "Left")
-local P_Drop = TPT:Dropdown("Select Player", "pD", getPNames(), function(v) State.Teleport.selectedTarget = v end)
-TPT:TextBox("Ketik Nama", "pT", "", function(v) State.Teleport.selectedTarget = v end)
-TPT:Button("Teleport Now", "", function()
-    local t = Players:FindFirstChild(State.Teleport.selectedTarget)
-    if t and t.Character then getRoot().CFrame = t.Character.HumanoidRootPart.CFrame end
-end)
-
--- --- TAB 3: PLAYER (🏃) ---
-local T_PL = Win:Tab("Player", "user")
-local PLP = T_PL:Page("Settings", "zap")
-local PLM = PLP:Section("⚡ Movement", "Left")
-local PLW = PLP:Section("🌦️ Weather", "Right")
-
-PLM:Button("🔄 Refresh (;re)", "", function() 
-    local cf = getRoot().CFrame; getHum().Health = 0
-    LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = cf
-end)
-PLM:Slider("WalkSpeed", "ws", 16, 500, 16, function(v) if getHum() then getHum().WalkSpeed = v end end)
-PLW:Slider("Waktu (Weather)", "time", 0, 24, 12, function(v) Lighting.ClockTime = v end)
-
--- --- TAB 4: HACKS (🚀) ---
-local T_HK = Win:Tab("Hacks", "zap")
-local HKP = T_HK:Page("Troll", "zap"):Section("🚀 Hacks", "Left")
-HKP:Toggle("Native Fly", "nf", false, "", function(v) 
-    -- Native Fly Logic
-end)
-HKP:Toggle("IY Fling Mode", "ffm", false, "Mentalin Orang", function(v) 
-    State.Fling.active = v; State.Move.ncp = v 
-end)
-HKP:Toggle("Invisible (R15)", "inv", false, "", function(v) 
-    if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end 
-end)
-
--- --- TAB 5: SECURITY (🛡️) ---
+-- --- TAB 4: SECURITY (LOCK V9.3) ---
 local T_SC = Win:Tab("Security", "shield")
 local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
-SCP:Button("🔄 Rejoin Server", "", function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
 SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
     if v then State.Security.afkConn = LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
     else if State.Security.afkConn then State.Security.afkConn:Disconnect() end end
 end)
+SCP:Button("🔄 Rejoin Server", "", function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
 
 -- NOCLIP LOOP
 RS.Stepped:Connect(function()
@@ -166,4 +175,7 @@ RS.Stepped:Connect(function()
     end
 end)
 
-Library:Notification("XKID V13", "Mode Sinematik & Portrait Aktif!", 5)
+Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPNames()) end)
+Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPNames()) end)
+
+Library:Notification("XKID V14", "Freecam & Fling Locked!", 5)
