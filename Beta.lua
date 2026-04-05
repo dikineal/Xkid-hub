@@ -3,8 +3,7 @@
 ║              🌟  X K I D   H U B  v5.26  🌟              ║
 ║                  Aurora UI  ·  Pro Edition               ║
 ╠═══════════════════════════════════════════════════════════╣
-║  [FIXED] Mobile Joystick Fly, ESP Cleanup, Anti-AFK      ║
-║  [ADD] Anti-Cheat Hook, Chat Bypass, Server Invis        ║
+║  [ULTIMATE MOBILE FIX] Native Joystick Fly Protocol      ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -40,28 +39,7 @@ local chatBypassActive = false
 local afkConn = nil
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │               MOBILE JOYSTICK DETECTOR                  │
--- └─────────────────────────────────────────────────────────┘
-local ControlModule = nil
-pcall(function()
-    ControlModule = require(LP:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
-end)
-
-local function getMoveVector()
-    if ControlModule then
-        local ok, result = pcall(function() return ControlModule:GetMoveVector() end)
-        if ok and result then return result end
-    end
-    -- Fallback PC
-    return Vector3.new(
-        (UIS:IsKeyDown(Enum.KeyCode.D) and 1 or 0) - (UIS:IsKeyDown(Enum.KeyCode.A) and 1 or 0),
-        0,
-        (UIS:IsKeyDown(Enum.KeyCode.W) and -1 or 0) + (UIS:IsKeyDown(Enum.KeyCode.S) and 1 or 0)
-    )
-end
-
--- ┌─────────────────────────────────────────────────────────┐
--- │                 FIXED FLY (MOBILE/PC)                   │
+-- │             100% NATIVE MOBILE FLY LOGIC                │
 -- └─────────────────────────────────────────────────────────┘
 local function stopFly()
     flyFlying = false
@@ -77,20 +55,33 @@ local function startFly()
     local root = getRoot(); local hum = getHum()
     if not root or not hum then return end
     flyFlying = true; hum.PlatformStand = true
-    flyBV = Instance.new("BodyVelocity", root); flyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9); flyBV.Velocity = Vector3.zero
-    flyBG = Instance.new("BodyGyro", root); flyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9); flyBG.P = 1e5
+    
+    flyBV = Instance.new("BodyVelocity", root)
+    flyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    flyBV.Velocity = Vector3.zero
+    
+    flyBG = Instance.new("BodyGyro", root)
+    flyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    flyBG.P = 1e5
     
     flyConn = RunService.RenderStepped:Connect(function()
         if not flyFlying or not root.Parent then stopFly(); return end
+        hum.PlatformStand = true
+        
         local cam = Workspace.CurrentCamera
-        local md = getMoveVector() -- Baca analog/keyboard
+        local md = hum.MoveDirection -- NATIVE MOBILE JOYSTICK DETECTOR
         
-        local look = cam.CFrame.LookVector
-        local right = cam.CFrame.RightVector
-        local moveDir = (right * md.X) + (look * -md.Z)
-        
-        if moveDir.Magnitude > 0 then
-            flyBV.Velocity = moveDir.Unit * Move.flySpeed
+        if md.Magnitude > 0 then
+            -- Kalkulasi pergerakan murni berdasarkan arah joystick & kamera
+            local pitch = cam.CFrame.LookVector.Y
+            local moveX = md.X * Move.flySpeed
+            local moveZ = md.Z * Move.flySpeed
+            
+            -- Deteksi dorongan maju/mundur untuk naik/turun
+            local dot = md:Dot(cam.CFrame.LookVector * Vector3.new(1,0,1).Unit)
+            local moveY = pitch * Move.flySpeed * dot
+            
+            flyBV.Velocity = Vector3.new(moveX, moveY, moveZ)
         else
             flyBV.Velocity = Vector3.new(0, 0, 0)
         end
@@ -115,7 +106,6 @@ local function activateBypass()
     notify("Security", "Bypass Hook Active", 2)
 end
 
--- Chat Bypass (Zero-Width Injector)
 local function hookChat()
     local mt = getrawmetatable(game)
     local oldNamecall = mt.__namecall
@@ -187,7 +177,7 @@ PL:Toggle("Infinite Jump", "infj", false, "Jump", function(v)
     else if Move.jumpConn then Move.jumpConn:Disconnect() end end
 end)
 
-PR:Toggle("Fly (Mobile Fix)", "fly", false, "Gerak pake Analog", function(v) if v then startFly() else stopFly() end end)
+PR:Toggle("Fly (Native Mobile)", "fly", false, "Pake Analog", function(v) if v then startFly() else stopFly() end end)
 PR:Slider("Fly Speed", "fspd", 10, 500, 60, function(v) Move.flySpeed = v end)
 PR:Toggle("Server Invis (R15)", "inv", false, "LowerTorso Destroy", function(v) 
     if v then local r = getChar():FindFirstChild("LowerTorso"); if r then r:Destroy() end end 
@@ -205,7 +195,11 @@ SL:Toggle("Anti AFK", "afk", false, "No Kick", function(v)
     else if afkConn then afkConn:Disconnect() end end
 end)
 SL:Button("⚡ Fast Respawn", "TP Back", function()
-    local old = getRoot().CFrame; getHum().Health = 0; LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart").CFrame = old
+    local r = getRoot()
+    if r then 
+        local old = r.CFrame; getHum().Health = 0
+        LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart").CFrame = old
+    end
 end)
 
-notify("XKID HUB", "Mobile Fix & Bypass Loaded!")
+notify("XKID HUB", "Native Mobile Fly Activated!")
