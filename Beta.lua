@@ -1,298 +1,306 @@
 --[[
 ╔═══════════════════════════════════════════════════════════════╗
-║              🌟  X K I D   H U B  v5.26  CLEAN 🌟           ║
-║                  Aurora UI  ·  No Fishing Edition          ║
+║              🌟  X K I D   H U B  MINIMAL 🌟                ║
+║                  Aurora UI  ·  19 Features Only            ║
 ╚═══════════════════════════════════════════════════════════════╝
 ]]
 
 local Library = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/Vovabro46/trash/main/Aurora.lua"
+    "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
 ))()
 
-local Players     = game:GetService("Players")
-local RunService  = game:GetService("RunService")
-local UIS         = game:GetService("UserInputService")
-local TpService   = game:GetService("TeleportService")
-local Workspace   = game:GetService("Workspace")
-local LP          = Players.LocalPlayer
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TpService = game:GetService("TeleportService")
+local Workspace = game:GetService("Workspace")
+local LP = Players.LocalPlayer
 
 local function getChar() return LP.Character end
-local function getRoot() local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart") end
-local function getHum() local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid") end
-
-local function notify(t, b, d)
-    pcall(function() Library:Notification(t, b, d or 3) end)
-    print(string.format("[XKID CLEAN] %s | %s", t, tostring(b)))
+local function getRoot() 
+    local c = getChar(); 
+    return c and c:FindFirstChild("HumanoidRootPart") 
+end
+local function getHum() 
+    local c = getChar(); 
+    return c and c:FindFirstChildOfClass("Humanoid") 
 end
 
-local lastCFrame
-RunService.Heartbeat:Connect(function()
-    local r = getRoot()
-    if r and r.Parent then lastCFrame = r.CFrame end
-end)
-
-local Move = {flying = false, flySpeed = 60, speed = 16}
-local ESPPl = {active = false, uis = {}, conn = nil}
-local flyConn, noclipConn, infJumpConn, afkConn, antiKickConn
-
-local function startFly()
-    if Move.flying then return end
-    Move.flying = true
-    local r = getRoot()
-    if not r then return end
-    local bd = Instance.new("BodyVelocity")
-    bd.Parent = r
-    bd.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    bd.Velocity = Vector3.new()
-    flyConn = RunService.RenderStepped:Connect(function()
-        if not Move.flying or not r or not r.Parent then
-            if bd then pcall(function() bd:Destroy() end) end
-            if flyConn then flyConn:Disconnect() end
-            Move.flying = false
-            return
-        end
-        local vel = Vector3.new()
-        if UIS:IsKeyDown(Enum.KeyCode.W) then vel = vel + r.CFrame.LookVector * Move.flySpeed end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then vel = vel - r.CFrame.LookVector * Move.flySpeed end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then vel = vel - r.CFrame.RightVector * Move.flySpeed end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then vel = vel + r.CFrame.RightVector * Move.flySpeed end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then vel = vel + Vector3.new(0, Move.flySpeed, 0) end
-        if UIS:IsKeyDown(Enum.KeyCode.Q) then vel = vel - Vector3.new(0, Move.flySpeed, 0) end
-        bd.Velocity = vel
+local function notify(title, text)
+    pcall(function() 
+        Library:Notification(title, text, 3) 
     end)
+    print(string.format("[XKID MINI] %s: %s", title, text))
 end
 
-local function stopFly()
-    Move.flying = false
-    if flyConn then flyConn:Disconnect() flyConn = nil end
-end
-
-local function setNoclip(enabled)
-    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
-    if not enabled then return end
-    noclipConn = RunService.Stepped:Connect(function()
-        local c = getChar()
-        if c then for _, p in ipairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
-    end)
-end
-
-local function setInfJump(enabled)
-    if infJumpConn then infJumpConn:Disconnect() infJumpConn = nil end
-    if not enabled then return end
-    infJumpConn = UIS.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode.Space then
-            local h = getHum()
-            if h then h:Jump() end
-        end
-    end)
-end
-
-local function startESPPlayer()
-    if ESPPl.conn then ESPPl.conn:Disconnect() end
-    ESPPl.conn = RunService.RenderStepped:Connect(function()
-        if not ESPPl.active then return end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p == LP then continue end
-            local chr = p.Character
-            if chr and chr:FindFirstChild("HumanoidRootPart") then
-                local pos = chr.HumanoidRootPart.Position
-                local dist = (getRoot().Position - pos).Magnitude
-                local txt = string.format("%s [%.1fm]", p.Name, dist)
-                if not ESPPl.uis[p.UserId] then
-                    local label = Instance.new("TextLabel")
-                    label.Name = "ESP_" .. p.UserId
-                    label.Parent = game:GetService("CoreGui")
-                    label.BackgroundTransparency = 0.3
-                    label.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-                    label.TextColor3 = Color3.new(1, 1, 1)
-                    label.TextSize = 14
-                    label.Size = UDim2.new(0, 150, 0, 20)
-                    ESPPl.uis[p.UserId] = label
+-- Fly System
+local flyConn, flyBodyVel
+local Move = {flying = false, flySpeed = 60}
+local function toggleFly(enabled)
+    if enabled then
+        local r = getRoot()
+        if r then
+            flyBodyVel = Instance.new("BodyVelocity")
+            flyBodyVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            flyBodyVel.Parent = r
+            flyConn = RunService.RenderStepped:Connect(function()
+                if not Move.flying or not r.Parent then
+                    if flyBodyVel then flyBodyVel:Destroy() end
+                    if flyConn then flyConn:Disconnect() end
+                    return
                 end
-                local label = ESPPl.uis[p.UserId]
-                if label then
-                    label.Text = txt
-                    local camPos = Workspace.CurrentCamera:WorldToScreenPoint(pos)
-                    label.Position = UDim2.new(0, camPos.X - 75, 0, camPos.Y - 10)
-                    label.Visible = camPos.Z > 0
+                local vel = Vector3.new()
+                if UIS:IsKeyDown(Enum.KeyCode.W) then vel = vel + r.CFrame.LookVector * Move.flySpeed end
+                if UIS:IsKeyDown(Enum.KeyCode.S) then vel = vel - r.CFrame.LookVector * Move.flySpeed end
+                if UIS:IsKeyDown(Enum.KeyCode.A) then vel = vel - r.CFrame.RightVector * Move.flySpeed end
+                if UIS:IsKeyDown(Enum.KeyCode.D) then vel = vel + r.CFrame.RightVector * Move.flySpeed end
+                if UIS:IsKeyDown(Enum.KeyCode.Space) then vel = vel + Vector3.new(0, Move.flySpeed, 0) end
+                if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then vel = vel - Vector3.new(0, Move.flySpeed, 0) end
+                flyBodyVel.Velocity = vel
+            end)
+            notify("Fly", "ON (WASD + Space/Shift)")
+        end
+    else
+        Move.flying = false
+        if flyConn then flyConn:Disconnect() flyConn = nil end
+        if flyBodyVel then flyBodyVel:Destroy() flyBodyVel = nil end
+        notify("Fly", "OFF")
+    end
+end
+
+-- Noclip
+local noclipConn
+local function toggleNoclip(enabled)
+    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    if enabled then
+        noclipConn = RunService.Stepped:Connect(function()
+            local c = getChar()
+            if c then
+                for _, p in pairs(c:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide = false end
                 end
             end
-        end
-    end)
+        end)
+        notify("NoClip", "ON")
+    else
+        notify("NoClip", "OFF")
+    end
 end
 
-local function stopESPPlayer()
-    if ESPPl.conn then ESPPl.conn:Disconnect() ESPPl.conn = nil end
-    for _, label in pairs(ESPPl.uis) do pcall(function() label:Destroy() end) end
-    ESPPl.uis = {}
+-- Infinite Jump
+local infJumpConn
+local function toggleInfJump(enabled)
+    if infJumpConn then infJumpConn:Disconnect() infJumpConn = nil end
+    if enabled then
+        infJumpConn = UIS.JumpRequest:Connect(function()
+            local h = getHum()
+            if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end)
+        notify("Inf Jump", "ON")
+    else
+        notify("Inf Jump", "OFF")
+    end
 end
 
-local function bringPlayer(targetPlayer)
-    if not targetPlayer or not targetPlayer.Character then
-        notify("Bring","Player tidak valid",2)
-        return false
+-- ESP Players
+local espConn, espLabels = nil, {}
+local function toggleESP(enabled)
+    if espConn then espConn:Disconnect() espConn = nil end
+    for _, label in pairs(espLabels) do label:Destroy() end
+    espLabels = {}
+    
+    if enabled then
+        espConn = RunService.RenderStepped:Connect(function()
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local root = p.Character.HumanoidRootPart
+                    local dist = (getRoot().Position - root.Position).Magnitude
+                    local screenPos, onScreen = Workspace.CurrentCamera:WorldToViewportPoint(root.Position)
+                    
+                    if onScreen and not espLabels[p.UserId] then
+                        local label = Instance.new("BillboardGui")
+                        label.Name = "XKID_ESP_" .. p.UserId
+                        label.Adornee = root
+                        label.Size = UDim2.new(0, 200, 0, 50)
+                        label.StudsOffset = Vector3.new(0, 3, 0)
+                        label.Parent = root
+                        
+                        local text = Instance.new("TextLabel")
+                        text.Size = UDim2.new(1, 0, 1, 0)
+                        text.BackgroundTransparency = 1
+                        text.Text = p.Name .. "
+[" .. math.floor(dist) .. "m]"
+                        text.TextColor3 = Color3.new(1, 1, 1)
+                        text.TextStrokeTransparency = 0
+                        text.Font = Enum.Font.GothamBold
+                        text.TextScaled = true
+                        text.Parent = label
+                        
+                        espLabels[p.UserId] = label
+                    elseif espLabels[p.UserId] then
+                        espLabels[p.UserId].TextLabel.Text = p.Name .. "
+[" .. math.floor(dist) .. "m]"
+                    end
+                end
+            end
+        end)
+        notify("ESP", "ON")
+    else
+        notify("ESP", "OFF")
     end
-    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not targetRoot then
-        notify("Bring","Target tidak ada HRP",2)
-        return false
+end
+
+-- Bring Player
+local function bringPlayer(playerName)
+    local target = Players:FindFirstChild(playerName)
+    if not target or not target.Character then
+        notify("Bring", "Player tidak ditemukan")
+        return
     end
+    local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
     local myRoot = getRoot()
-    if not myRoot then
-        notify("Bring","Anda tidak ada HRP",2)
-        return false
-    end
-    local ok = pcall(function()
-        targetRoot.CFrame = myRoot.CFrame + Vector3.new(0, 3, 0)
-    end)
-    if ok then
-        notify("✅ Bring","Pulled "..targetPlayer.Name,2)
-        return true
-    else
-        notify("❌ Bring","Error",2)
-        return false
+    if targetRoot and myRoot then
+        targetRoot.CFrame = myRoot.CFrame * CFrame.new(2, 0, 0)
+        notify("Bring", playerName .. " ditarik!")
     end
 end
 
-local function doRespawn()
-    local saved = lastCFrame
-    local char = LP.Character
-    if char then char:BreakJoints() end
-    local conn
-    conn = LP.CharacterAdded:Connect(function(nc)
-        conn:Disconnect()
-        task.wait(1)
-        local hrp = nc:WaitForChild("HumanoidRootPart",5)
-        if hrp and saved then hrp.CFrame = saved end
-        notify("Respawn","Kembali ke posisi!",2)
-    end)
-end
-
-local Win = Library:CreateWindow("XKID HUB v5.26 CLEAN", false, 3)
-local T_Tele = Win:Tab("Teleport","map-pin")
-local T_Play = Win:Tab("Player","user")
-local T_Sec = Win:Tab("Security","shield")
-local T_Set = Win:Tab("Setting","sliders")
-
-local TeleP=T_Tele:Page("Teleport","map-pin")
-local TeleL=TeleP:Section("📍 Teleport","Left")
-local TeleR=TeleP:Section("👥 Bring","Right")
-
-TeleL:Button("🏠 Spawn","Ke spawn",function()
-    local r=getRoot()
-    if r then r.CFrame=CFrame.new(0,50,0); notify("TP","Spawn",1) end
-end)
-
-TeleL:Button("📍 Save Pos","Save position",function()
-    local root=getRoot()
+-- Respawn with Save
+local savedPos = nil
+local function savePosition()
+    local root = getRoot()
     if root then
-        Respawn.savedPosition=root.CFrame
-        local p=root.Position
-        notify("Saved",string.format("X=%.0f Y=%.0f Z=%.0f",p.X,p.Y,p.Z),2)
+        savedPos = root.CFrame
+        notify("Save Pos", "Posisi tersimpan!")
     end
-end)
+end
 
-TeleR:Button("Pull P1","Bring Player1",function()
-    local p=Players:FindFirstChild("Player1")
-    if p then bringPlayer(p) end
-end)
+local function respawnToSaved()
+    if savedPos then
+        LP.Character:BreakJoints()
+        LP.CharacterAdded:Wait()
+        task.wait(1)
+        local root = getRoot()
+        if root then root.CFrame = savedPos end
+        notify("Respawn", "Teleport kembali!")
+    end
+end
 
-TeleR:Paragraph("Click to pull player to you")
-
-local PlayP=T_Play:Page("Player","user")
-local PlayL=PlayP:Section("⚡ Speed","Left")
-local PlayR=PlayP:Section("🚀 Fly","Right")
-
-PlayL:Slider("Speed","ws",16,500,16,function(v)
-    local h=getHum()
-    if h then h.WalkSpeed=v end
-end,"16")
-
-PlayL:Slider("Jump","jp",50,500,50,function(v)
-    local h=getHum()
-    if h then h.JumpPower=v; h.UseJumpPower=true end
-end,"50")
-
-PlayL:Toggle("Inf Jump","ij",false,"Hold space",function(v)
-    setInfJump(v)
-    notify("Inf Jump",v and "ON" or "OFF",1)
-end)
-
-PlayL:Toggle("NoClip","nc",false,"Walk thru walls",function(v)
-    setNoclip(v)
-    notify("NoClip",v and "ON" or "OFF",1)
-end)
-
-PlayR:Toggle("Fly","fly",false,"WASD+Space/Q",function(v)
-    if v then startFly() else stopFly() end
-    notify("Fly",v and "ON" or "OFF",1)
-end)
-
-PlayR:Slider("Fly Speed","fs",10,300,60,function(v)
-    Move.flySpeed=v
-end,"Speed")
-
-PlayR:Toggle("ESP","esp",false,"See players",function(v)
-    ESPPl.active=v
-    if v then startESPPlayer() else stopESPPlayer() end
-    notify("ESP",v and "ON" or "OFF",1)
-end)
-
-local SecP=T_Sec:Page("Security","shield")
-local SecL=SecP:Section("🛡 Protection","Left")
-
-SecL:Toggle("Anti AFK","antiAfk",false,"Prevent kick",function(v)
-    if v then
-        if afkConn then afkConn:Disconnect() end
-        -- VirtualUser disabled untuk Delta compatibility
-        afkConn=RunService.Heartbeat:Connect(function()
-            -- Simulate mouse move
+-- Anti AFK
+local antiAfkConn
+local function toggleAntiAfk(enabled)
+    if antiAfkConn then antiAfkConn:Disconnect() antiAfkConn = nil end
+    if enabled then
+        antiAfkConn = RunService.Heartbeat:Connect(function()
             local cam = Workspace.CurrentCamera
-            cam.CFrame = cam.CFrame * CFrame.Angles(0,0.001,0)
+            cam.CFrame = cam.CFrame * CFrame.Angles(0, math.rad(1), 0)
         end)
-    else
-        if afkConn then afkConn:Disconnect(); afkConn=nil end
+        notify("Anti AFK", "ON")
     end
-    notify("Anti AFK",v and "ON" or "OFF",1)
-end)
+end
 
-SecL:Toggle("Anti Kick","antiKick",false,"Lock HP >15%",function(v)
-    if v then
-        if antiKickConn then antiKickConn:Disconnect() end
-        antiKickConn=RunService.Heartbeat:Connect(function()
-            local h=getHum()
-            if h and h.Health>0 and h.Health<h.MaxHealth*0.15 then h.Health=h.MaxHealth end
+-- Anti Kick (HP Lock)
+local antiKickConn
+local function toggleAntiKick(enabled)
+    if antiKickConn then antiKickConn:Disconnect() antiKickConn = nil end
+    if enabled then
+        antiKickConn = RunService.Heartbeat:Connect(function()
+            local h = getHum()
+            if h and h.Health < h.MaxHealth * 0.2 then
+                h.Health = h.MaxHealth
+            end
         end)
-    else
-        if antiKickConn then antiKickConn:Disconnect(); antiKickConn=nil end
+        notify("Anti Kick", "ON")
     end
-    notify("Anti Kick",v and "ON" or "OFF",1)
+end
+
+-- Main UI
+local Win = Library:Window("XKID HUB MINIMAL", "crown", "19 Features", false)
+
+-- TELEPORT TAB (5 Fitur)
+local TeleTab = Win:Tab("Teleport", "map-pin")
+local TelePage = TeleTab:Page("Locations", "globe")
+
+TelePage:Button("🏠 Spawn", "Teleport ke spawn", "Left", function()
+    local r = getRoot()
+    if r then r.CFrame = CFrame.new(0, 50, 0) notify("Teleport", "Spawn!") end
 end)
 
-SecL:Button("⚡ Respawn","Die & TP back",function()
-    task.spawn(doRespawn)
+TelePage:Button("📍 Save Position", "Simpan posisi sekarang", "Left", savePosition)
+
+TelePage:Button("🔄 Respawn to Saved", "Respawn & TP kembali", "Left", respawnToSaved)
+
+TelePage:Paragraph("Bring Player", "Tarik player ke posisi kamu", "Right")
+
+TelePage:Button("👤 Bring Player1", "Pull Player1", "Right", function()
+    bringPlayer("Player1")
 end)
 
-SecL:Button("🔄 Rejoin","Rejoin server",function()
-    notify("Rejoin","...",1)
-    task.wait(1)
-    TpService:Teleport(game.PlaceId,LP)
+TelePage:Button("👥 Bring Nearest", "Pull player terdekat", "Right", function()
+    local nearest, dist = nil, math.huge
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local d = (getRoot().Position - p.Character.HumanoidRootPart.Position).Magnitude
+            if d < dist then nearest, dist = p, d end
+        end
+    end
+    if nearest then bringPlayer(nearest.Name) end
 end)
 
-local T_Set=T_Set:Tab("Setting","sliders")
-local SetP=T_Set:Page("Setting","settings")
-local SetL=SetP:Section("Log","Left")
+-- PLAYER TAB (8 Fitur)
+local PlayTab = Win:Tab("Player", "user")
+local PlayPage = PlayTab:Page("Movement", "sword")
 
-SetL:Button("Logs","Show recent logs",function()
-    notify("Clean Version","Fishing removed - Stable!",3)
+PlayPage:Slider("Speed", "ws", 16, 500, 16, function(v)
+    local h = getHum()
+    if h then h.WalkSpeed = v end
+end, "16")
+
+PlayPage:Slider("Jump Power", "jp", 50, 500, 50, function(v)
+    local h = getHum()
+    if h then h.JumpPower = v; h.UseJumpPower = true end
+end, "50")
+
+PlayPage:Toggle("Fly", "fly", false, "WASD + Space/Shift", "Left", function(v)
+    Move.flying = v
+    toggleFly(v)
 end)
 
-SetL:Button("Clear","Clear cache",function()
-    notify("Ready","XKID v5.26 CLEAN Loaded!",4)
+PlayPage:Slider("Fly Speed", "fs", 10, 300, 60, function(v)
+    Move.flySpeed = v
+end, "60")
+
+PlayPage:Toggle("NoClip", "nc", false, "Walk through walls", "Left", function(v)
+    toggleNoclip(v)
 end)
 
-notify("✅ XKID v5.26 CLEAN Ready","No Fishing - Delta Compatible",4)
-Library:Notification("XKID CLEAN","Teleport·Player·Security",6)
+PlayPage:Toggle("Inf Jump", "ij", false, "Unlimited jumping", "Left", function(v)
+    toggleInfJump(v)
+end)
 
-print("[XKID CLEAN] Loaded successfully!")
+PlayPage:Toggle("ESP Players", "esp", false, "Player names + distance", "Left", function(v)
+    toggleESP(v)
+end)
+
+-- SECURITY TAB (6 Fitur)
+local SecTab = Win:Tab("Security", "shield")
+local SecPage = SecTab:Page("Protection", "shield")
+
+SecPage:Toggle("Anti AFK", "antiAfk", false, "Prevent idle kick", "Left", function(v)
+    toggleAntiAfk(v)
+end)
+
+SecPage:Toggle("Anti Kick", "antiKick", false, "HP lock >20%", "Left", function(v)
+    toggleAntiKick(v)
+end)
+
+SecPage:Button("🔄 Rejoin Server", "Rejoin current game", "Left", function()
+    TpService:Teleport(game.PlaceId, LP)
+end)
+
+Library:ConfigSystem(Win)
+
+notify("XKID MINIMAL", "19 Features Loaded!")
+Library:Notification("XKID HUB", "Teleport(5) + Player(8) + Security(6)", 5)
+
+print("XKID MINIMAL v5.26 - 19 Features Only")
