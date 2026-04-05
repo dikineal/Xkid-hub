@@ -8,8 +8,8 @@
 ╚═══════════════════════════════════════════════════════════════╝
 ]]
 
-local Library = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/Vovabro46/trash/main/Aurora.lua"
+Library = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
 ))()
 
 local Players     = game:GetService("Players")
