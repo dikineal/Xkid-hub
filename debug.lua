@@ -41,7 +41,6 @@ local function notify(t, b, d) pcall(function() Library:Notification(t, b, d or 
 -- │             ➤  CORE ENGINE (STABILITY)                  │
 -- └─────────────────────────────────────────────────────────┘
 
--- Precise Position Tracker
 RunService.Heartbeat:Connect(function()
     local r, h = getRoot(), getHum()
     if r and h and h.Health > 0 then
@@ -49,7 +48,6 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- NoClip Engine (Restored)
 RunService.Stepped:Connect(function()
     if State.Move.noclip and getChar() then
         for _, v in pairs(getChar():GetDescendants()) do
@@ -58,7 +56,6 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Native Mobile Fly
 local function toggleFly(v)
     if not v then
         State.Fly.active = false
@@ -88,7 +85,6 @@ local function toggleFly(v)
     end)
 end
 
--- ESP Pro
 local function updateESP()
     for _, g in pairs(State.ESP.guis) do if g then g:Destroy() end end
     State.ESP.guis = {}
@@ -138,11 +134,7 @@ local PL_P = T_PL:Page("Movement", "zap")
 local PLM = PL_P:Section("⚡ Physical", "Left")
 local PLV = PL_P:Section("🚀 Hacks & Visual", "Right")
 
-PLM:Slider("Walk Speed", "ws", 16, 500, 16, function(v) if getHum() then getHum().WalkSpeed = v end end)
-PLM:Toggle("Infinite Jump", "infj", false, "Lompat Terus", function(v)
-    if v then State.Move.jumpConn = UIS.JumpRequest:Connect(function() getHum():ChangeState(3) end)
-    else if State.Move.jumpConn then State.Move.jumpConn:Disconnect() end end
-end)
+-- TOMBOL REFRESH DI PALING ATAS BIAR NGGAK HILANG
 PLM:Button("🔄 Refresh Character", "Reload Avatar", function()
     local r = getRoot()
     if r then
@@ -151,6 +143,13 @@ PLM:Button("🔄 Refresh Character", "Reload Avatar", function()
         LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = oldCF
         notify("Refresh", "Karakter diperbarui!")
     end
+end)
+
+PLM:Slider("Walk Speed", "ws", 16, 500, 16, function(v) State.Move.speed = v; if getHum() then getHum().WalkSpeed = v end end)
+PLM:Slider("Jump Power", "jp", 50, 500, 50, function(v) State.Move.jump = v; if getHum() then getHum().JumpPower = v; getHum().UseJumpPower = true end end)
+PLM:Toggle("Infinite Jump", "infj", false, "Lompat Terus", function(v)
+    if v then State.Move.jumpConn = UIS.JumpRequest:Connect(function() getHum():ChangeState(3) end)
+    else if State.Move.jumpConn then State.Move.jumpConn:Disconnect() end end
 end)
 
 PLV:Toggle("Native Fly", "nfly", false, "Joystick Support", function(v) toggleFly(v) end)
@@ -179,8 +178,8 @@ SCS:Button("⚡ Fast Respawn", "Instant TP Back", function()
     if State.Security.lastCF then
         local target = State.Security.lastCF; getHum().Health = 0
         LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = target
-        notify("Respawn", "Sukses kembali!")
+        notify("Respawn", "Sukses kembali!", 2)
     end
 end)
 
-notify("XKID HUB", "Pro Update Active!", 5)
+notify("XKID HUB", "UI Fixed & Refresh Button Ready!", 5)
