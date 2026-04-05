@@ -1,12 +1,11 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v9.0   💠              ║
-║                ULTIMATE STABLE EDITION                   ║
+║              💠  X K I D   H U B  v9.1   💠              ║
+║                WEATHER & REJOIN EDITION                  ║
 ╠═══════════════════════════════════════════════════════════╣
-║  ➤  Dual-Mode Teleport (Dropdown + Manual)                ║
-║  ➤  Native Fly (Joystick Support) & NoClip                ║
-║  ➤  Anti-AFK & Instant Refresh (;re)                      ║
-║  ➤  Infinite Jump & Server-Side Invisible                 ║
+║  ➤  New: Rejoin Server (Security Tab)                     ║
+║  ➤  New: Weather/Lighting Control (Player Tab)            ║
+║  ➤  Stable: Dual-Mode Teleport & Native Fly               ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -17,6 +16,8 @@ local Players = game:GetService("Players")
 local RS = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
+local Lighting = game:GetService("Lighting")
+local TPService = game:GetService("TeleportService")
 local LP = Players.LocalPlayer
 
 -- Global State
@@ -76,7 +77,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V9", "star", "MASTER", false)
+local Win = Library:Window("XKID HUB V9.1", "star", "MASTER", false)
 
 -- --- TAB 1: TELEPORT (📍) ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -95,8 +96,10 @@ end)
 
 -- --- TAB 2: PLAYER (🏃) ---
 local T_PL = Win:Tab("Player", "user")
-local PLM = T_PL:Page("Physical", "zap"):Section("⚡ Movement", "Left")
-local PLH = T_PL:Page("Physical", "zap"):Section("🚀 Hacks", "Right")
+local PLP = T_PL:Page("Settings", "zap")
+local PLM = PLP:Section("⚡ Movement", "Left")
+local PLH = PLP:Section("🚀 Hacks", "Right")
+local PLW = PLP:Section("🌦️ Atmosphere", "Left")
 
 PLM:Button("🔄 Refresh Char (;re)", "Fix Glitch", function() instantRE() end)
 PLM:Slider("WalkSpeed", "ws", 16, 500, 16, function(v) if getHum() then getHum().WalkSpeed = v end end)
@@ -112,6 +115,12 @@ PLH:Toggle("Invisible (R15)", "inv", false, "Remove Torso", function(v)
     if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end 
 end)
 
+-- SEKSI CUACA (Weather)
+PLW:Slider("Waktu (ClockTime)", "time", 0, 24, 12, function(v) Lighting.ClockTime = v end)
+PLW:Slider("Kecerahan (Brightness)", "bright", 0, 10, 2, function(v) Lighting.Brightness = v end)
+PLW:Button("☀️ Set Siang", "Day Time", function() Lighting.ClockTime = 14 end)
+PLW:Button("🌙 Set Malam", "Night Time", function() Lighting.ClockTime = 0 end)
+
 -- --- TAB 3: SECURITY (🛡️) ---
 local T_SC = Win:Tab("Security", "shield")
 local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
@@ -121,6 +130,11 @@ SCP:Toggle("Anti-AFK Mode", "afk", false, "No Kick", function(v)
     else if State.Security.afkConn then State.Security.afkConn:Disconnect() end end
 end)
 SCP:Toggle("Bypass Anti-Cheat", "acb", false, "Hooking", function(v) end)
+
+-- FITUR REJOIN
+SCP:Button("🔄 Rejoin Server", "Masuk Ulang", function()
+    TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
+end)
 
 -- NOCLIP LOOP
 RS.Stepped:Connect(function()
@@ -132,4 +146,4 @@ end)
 Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPlayerNames()) end)
 Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPlayerNames()) end)
 
-Library:Notification("XKID MASTER V9", "Gaskeun, Bro Diki!", 5)
+Library:Notification("XKID MASTER V9.1", "Rejoin & Weather Ready!", 5)
