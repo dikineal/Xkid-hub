@@ -1,9 +1,12 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              🌟  X K I D   H U B  v5.26  🌟              ║
-║                  Aurora UI  ·  Pro Edition               ║
+║              💠  X K I D   H U B  v5.26  💠              ║
+║                  Aurora UI  ·  Aesthetic Pro             ║
 ╠═══════════════════════════════════════════════════════════╣
-║  [ULTIMATE MOBILE FIX] Native Joystick Fly Protocol      ║
+║  ➤  Native Mobile Fly (Joystick Support)                  ║
+║  ➤  Fast Respawn (Instant Pos Restore)                    ║
+║  ➤  Pro ESP & NoClip (Restored)                           ║
+║  ➤  Anti-Cheat & Chat Bypass (Hooked)                     ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -11,6 +14,7 @@ local Library = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
 ))()
 
+-- Services
 local Players     = game:GetService("Players")
 local RunService  = game:GetService("RunService")
 local UIS         = game:GetService("UserInputService")
@@ -19,187 +23,211 @@ local TpService   = game:GetService("TeleportService")
 local Workspace   = game:GetService("Workspace")
 local LP          = Players.LocalPlayer
 
--- Global Functions
-local function getChar() return LP.Character end
-local function getRoot()
-    local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart")
-end
-local function getHum()
-    local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid")
-end
-local function notify(t, b, d)
-    pcall(function() Library:Notification(t, b, d or 3) end)
-end
+-- Global State & Helpers
+local State = {
+    Move = {speed = 16, jump = 50, flySpeed = 60, noclip = false},
+    Fly = {active = false, conn = nil, bv = nil, bg = nil},
+    ESP = {active = false, guis = {}, conn = nil},
+    Security = {afk = nil, chatBypass = false, lastCF = nil},
+    Teleport = {target = "", slots = {}}
+}
 
--- State Management
-local Move = {speed = 16, flySpeed = 60, jumpConn = nil}
-local flyFlying = false; local flyConn = nil; local flyBV = nil; local flyBG = nil
-local Respawn = {savedPosition = nil}
-local chatBypassActive = false
-local afkConn = nil
+local function getChar() return LP.Character end
+local function getHum() return getChar() and getChar():FindFirstChildOfClass("Humanoid") end
+local function getRoot() return getChar() and getChar():FindFirstChild("HumanoidRootPart") end
+local function notify(t, b, d) pcall(function() Library:Notification(t, b, d or 3) end) end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             100% NATIVE MOBILE FLY LOGIC                │
+-- │             ➤  CORE LOGIC (FLY, NOCLIP, ESP)            │
 -- └─────────────────────────────────────────────────────────┘
-local function stopFly()
-    flyFlying = false
-    if flyConn then flyConn:Disconnect(); flyConn = nil end
-    if flyBV then flyBV:Destroy(); flyBV = nil end
-    if flyBG then flyBG:Destroy(); flyBG = nil end
-    local hum = getHum()
-    if hum then hum.PlatformStand = false; hum:ChangeState(1) end
-end
 
-local function startFly()
-    if flyFlying then stopFly() end
-    local root = getRoot(); local hum = getHum()
-    if not root or not hum then return end
-    flyFlying = true; hum.PlatformStand = true
+-- Precise Position Tracker (For Fast Respawn)
+RunService.Heartbeat:Connect(function()
+    local r, h = getRoot(), getHum()
+    if r and h and h.Health > 0 then
+        State.Security.lastCF = r.CFrame
+    end
+end)
+
+-- NoClip Logic (Restored)
+RunService.Stepped:Connect(function()
+    if State.Move.noclip and getChar() then
+        for _, v in pairs(getChar():GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = false end
+        end
+    end
+end)
+
+-- Native Mobile Fly (Joystick Support)
+local function toggleFly(v)
+    if not v then
+        State.Fly.active = false
+        if State.Fly.conn then State.Fly.conn:Disconnect() end
+        if State.Fly.bv then State.Fly.bv:Destroy() end
+        if State.Fly.bg then State.Fly.bg:Destroy() end
+        if getHum() then getHum().PlatformStand = false; getHum():ChangeState(1) end
+        return
+    end
     
-    flyBV = Instance.new("BodyVelocity", root)
-    flyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    flyBV.Velocity = Vector3.zero
+    local r, h = getRoot(), getHum()
+    if not r or not h then return end
+    State.Fly.active = true
+    h.PlatformStand = true
     
-    flyBG = Instance.new("BodyGyro", root)
-    flyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    flyBG.P = 1e5
+    State.Fly.bv = Instance.new("BodyVelocity", r)
+    State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    State.Fly.bg = Instance.new("BodyGyro", r)
+    State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9); State.Fly.bg.P = 1e5
     
-    flyConn = RunService.RenderStepped:Connect(function()
-        if not flyFlying or not root.Parent then stopFly(); return end
-        hum.PlatformStand = true
-        
+    State.Fly.conn = RunService.RenderStepped:Connect(function()
+        if not State.Fly.active or not r.Parent then toggleFly(false); return end
+        h.PlatformStand = true
         local cam = Workspace.CurrentCamera
-        local md = hum.MoveDirection -- NATIVE MOBILE JOYSTICK DETECTOR
+        local md = h.MoveDirection
         
         if md.Magnitude > 0 then
-            -- Kalkulasi pergerakan murni berdasarkan arah joystick & kamera
             local pitch = cam.CFrame.LookVector.Y
-            local moveX = md.X * Move.flySpeed
-            local moveZ = md.Z * Move.flySpeed
-            
-            -- Deteksi dorongan maju/mundur untuk naik/turun
             local dot = md:Dot(cam.CFrame.LookVector * Vector3.new(1,0,1).Unit)
-            local moveY = pitch * Move.flySpeed * dot
-            
-            flyBV.Velocity = Vector3.new(moveX, moveY, moveZ)
+            State.Fly.bv.Velocity = Vector3.new(md.X * State.Move.flySpeed, pitch * State.Move.flySpeed * dot, md.Z * State.Move.flySpeed)
         else
-            flyBV.Velocity = Vector3.new(0, 0, 0)
+            State.Fly.bv.Velocity = Vector3.new(0, 0, 0)
         end
-        flyBG.CFrame = cam.CFrame
+        State.Fly.bg.CFrame = cam.CFrame
     end)
 end
 
+-- Pro ESP System
+local function updateESP()
+    for _, g in pairs(State.ESP.guis) do if g then g:Destroy() end end
+    State.ESP.guis = {}
+    if not State.ESP.active then return end
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("Head") then
+            local b = Instance.new("BillboardGui", p.Character.Head); b.Size = UDim2.new(0,100,0,24); b.AlwaysOnTop = true; b.StudsOffset = Vector3.new(0,3,0)
+            local f = Instance.new("Frame", b); f.Size = UDim2.new(1,0,1,0); f.BackgroundColor3 = Color3.new(0,0,0); f.BackgroundTransparency = 0.5; Instance.new("UICorner", f)
+            local l = Instance.new("TextLabel", f); l.Size = UDim2.new(1,0,1,0); l.TextColor3 = Color3.fromRGB(255, 220, 50); l.TextScaled = true; l.Font = Enum.Font.Code; l.Text = p.Name
+            table.insert(State.ESP.guis, b)
+            task.spawn(function()
+                while State.ESP.active and b.Parent do
+                    local pr = p.Character:FindFirstChild("HumanoidRootPart")
+                    if pr and getRoot() then
+                        local d = math.floor((pr.Position - getRoot().Position).Magnitude)
+                        l.Text = p.Name .. "\n[" .. d .. "m]"
+                    end
+                    task.wait(0.2)
+                end
+            end)
+        end
+    end
+end
+
 -- ┌─────────────────────────────────────────────────────────┐
--- │                 ANTI-CHEAT & CHAT BYPASS                │
+-- │                 ➤  BYPASS & SECURITY                    │
 -- └─────────────────────────────────────────────────────────┘
-local function activateBypass()
+local function activateHook()
     local mt = getrawmetatable(game)
-    local oldIndex = mt.__index
+    local oldIdx = mt.__index
     setreadonly(mt, false)
     mt.__index = newcclosure(function(t, k)
         if not checkcaller() and t:IsA("Humanoid") and (k == "WalkSpeed" or k == "JumpPower") then
             return (k == "WalkSpeed" and 16 or 50)
         end
-        return oldIndex(t, k)
+        return oldIdx(t, k)
     end)
     setreadonly(mt, true)
-    notify("Security", "Bypass Hook Active", 2)
 end
 
 local function hookChat()
-    local mt = getrawmetatable(game)
-    local oldNamecall = mt.__namecall
+    local mt = getrawmetatable(game); local oldNc = mt.__namecall
     setreadonly(mt, false)
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
-        if chatBypassActive and method == "FireServer" and self.Name == "SayMessageRequest" then
-            local msg = args[1]; local newMsg = ""
-            for i = 1, #msg do newMsg = newMsg .. msg:sub(i,i) .. "\203" end
-            args[1] = newMsg
-            return oldNamecall(self, unpack(args))
+        if State.Security.chatBypass and method == "FireServer" and self.Name == "SayMessageRequest" then
+            local m = args[1]; local nm = ""
+            for i = 1, #m do nm = nm .. m:sub(i,i) .. "\203" end
+            args[1] = nm; return oldNc(self, unpack(args))
         end
-        return oldNamecall(self, ...)
+        return oldNc(self, ...)
     end)
     setreadonly(mt, true)
 end
 task.spawn(hookChat)
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │                 ESP & SECURITY MODULES                  │
+-- │                   ➤  AESTHETIC UI SETUP                 │
 -- └─────────────────────────────────────────────────────────┘
-local ESPPl = {active = false, guis = {}, conn = nil}
-local function clearESP() for _, g in pairs(ESPPl.guis) do if g then g:Destroy() end end; ESPPl.guis = {} end
-local function updateESP()
-    clearESP(); if not ESPPl.active then return end
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP and p.Character and p.Character:FindFirstChild("Head") then
-            local bill = Instance.new("BillboardGui", p.Character.Head); bill.Size = UDim2.new(0, 100, 0, 24); bill.AlwaysOnTop = true; bill.StudsOffset = Vector3.new(0, 2.5, 0)
-            local bg = Instance.new("Frame", bill); bg.Size = UDim2.new(1,0,1,0); bg.BackgroundColor3 = Color3.new(0,0,0); bg.BackgroundTransparency = 0.45; Instance.new("UICorner", bg)
-            local lbl = Instance.new("TextLabel", bg); lbl.Size = UDim2.new(1,0,1,0); lbl.TextColor3 = Color3.fromRGB(255, 230, 80); lbl.TextScaled = true; lbl.Font = Enum.Font.GothamBold; lbl.Text = p.Name
-            table.insert(ESPPl.guis, bill)
-        end
-    end
+local Win = Library:Window("XKID HUB", "diamond", "Pro v5.26", false)
+local T_TP = Win:Tab("Teleport", "map-pin")
+local T_PL = Win:Tab("Player", "user")
+local T_SC = Win:Tab("Security", "shield")
+
+-- --- TELEPORT TAB ---
+local TP_P = T_TP:Page("Navigation", "map-pin")
+local TPT = TP_P:Section("🎯 Target Management", "Left")
+local TPS = TP_P:Section("💾 Position Slots", "Right")
+
+local function getPlayers() 
+    local tbl = {}
+    for _,p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(tbl, p.Name) end end
+    return tbl
 end
 
--- ┌─────────────────────────────────────────────────────────┐
--- │                   GUI INITIALIZATION                    │
--- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB", "shield", "v5.26", false)
-local T_TP = Win:Tab("Teleport", "map-pin")
-local T_Pl = Win:Tab("Player", "user")
-local T_Sec = Win:Tab("Security", "shield")
-
--- Teleport Logic
-local TP_P = T_TP:Page("Teleport", "map-pin")
-local TPL = TP_P:Section("🎯 Target Player", "Left")
-local selectedTarget = ""
-local pNames = {}; for _,p in pairs(Players:GetPlayers()) do if p~=LP then table.insert(pNames, p.Name) end end
-
-TPL:Dropdown("Pilih Player", "pDrop", pNames, function(v) selectedTarget = v end)
-TPL:TextBox("Ketik Manual", "tpInp", "", function(v) selectedTarget = v end)
-TPL:Button("🔍 TP to Target", "Teleport", function() 
-    local p = Players:FindFirstChild(selectedTarget)
+TPT:Dropdown("Select Player", "pSelect", getPlayers(), function(v) State.Teleport.target = v end)
+TPT:TextBox("Manual Search", "pText", "", function(v) State.Teleport.target = v end)
+TPT:Button("🚀 Teleport to Target", "Exec TP", function()
+    local p = Players:FindFirstChild(State.Teleport.target)
     if p and p.Character then getRoot().CFrame = p.Character.HumanoidRootPart.CFrame end
 end)
-TPL:Button("🧲 Bring Target", "Pull", function()
-    local p = Players:FindFirstChild(selectedTarget)
+TPT:Button("🧲 Bring Target", "Pull Player", function()
+    local p = Players:FindFirstChild(State.Teleport.target)
     if p and p.Character then p.Character.HumanoidRootPart.CFrame = getRoot().CFrame end
 end)
 
--- Player Hacks
-local PL = T_Pl:Page("Player", "user"):Section("⚡ Movement", "Left")
-local PR = T_Pl:Page("Player", "user"):Section("🚀 Hacks", "Right")
+for i = 1, 3 do
+    TPS:Button("💾 Save Location "..i, "Store Slot "..i, function() State.Teleport.slots[i] = getRoot().CFrame; notify("Slot "..i, "Tersimpan!") end)
+    TPS:Button("📍 Load Location "..i, "TP Slot "..i, function() if State.Teleport.slots[i] then getRoot().CFrame = State.Teleport.slots[i] end end)
+end
 
-PL:Slider("Walk Speed", "ws", 16, 500, 16, function(v) Move.speed = v; getHum().WalkSpeed = v end)
-PL:Toggle("Infinite Jump", "infj", false, "Jump", function(v) 
-    if v then Move.jumpConn = UIS.JumpRequest:Connect(function() getHum():ChangeState(3) end)
-    else if Move.jumpConn then Move.jumpConn:Disconnect() end end
-end)
+-- --- PLAYER TAB ---
+local PL_P = T_PL:Page("Movement", "zap")
+local PLM = PL_P:Section("⚡ Physical", "Left")
+local PLV = PL_P:Section("🚀 Hacks & Visual", "Right")
 
-PR:Toggle("Fly (Native Mobile)", "fly", false, "Pake Analog", function(v) if v then startFly() else stopFly() end end)
-PR:Slider("Fly Speed", "fspd", 10, 500, 60, function(v) Move.flySpeed = v end)
-PR:Toggle("Server Invis (R15)", "inv", false, "LowerTorso Destroy", function(v) 
-    if v then local r = getChar():FindFirstChild("LowerTorso"); if r then r:Destroy() end end 
-end)
-PR:Toggle("ESP Player", "esp", false, "Visual", function(v) 
-    ESPPl.active = v; if v then updateESP(); ESPPl.conn = Players.PlayerAdded:Connect(updateESP) else clearESP() end 
+PLM:Slider("Walk Speed", "ws", 16, 500, 16, function(v) State.Move.speed = v; if getHum() then getHum().WalkSpeed = v end end)
+PLM:Slider("Jump Power", "jp", 50, 500, 50, function(v) if getHum() then getHum().JumpPower = v; getHum().UseJumpPower = true end end)
+PLM:Toggle("Infinite Jump", "infj", false, "Lompat Terus", function(v)
+    if v then State.Move.jumpConn = UIS.JumpRequest:Connect(function() getHum():ChangeState(3) end)
+    else if State.Move.jumpConn then State.Move.jumpConn:Disconnect() end end
 end)
 
--- Security
-local SL = T_Sec:Page("Security", "shield"):Section("🛡️ Protection", "Left")
-SL:Toggle("Anti-Cheat Bypass", "bp", false, "Hooking", function(v) if v then activateBypass() end end)
-SL:Toggle("Chat Bypass", "cbp", false, "No Sensor", function(v) chatBypassActive = v end)
-SL:Toggle("Anti AFK", "afk", false, "No Kick", function(v)
-    if v then afkConn = LP.Idled:Connect(function() VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame) end)
-    else if afkConn then afkConn:Disconnect() end end
+PLV:Toggle("Native Fly", "nfly", false, "Joystick Ready", function(v) toggleFly(v) end)
+PLV:Slider("Fly Speed", "fs", 10, 500, 60, function(v) State.Move.flySpeed = v end)
+PLV:Toggle("NoClip", "ncp", false, "Tembus Dinding", function(v) State.Move.noclip = v end)
+PLV:Toggle("Pro ESP", "pesp", false, "Nama & Jarak", function(v) State.ESP.active = v; if v then updateESP(); Players.PlayerAdded:Connect(updateESP) else updateESP() end end)
+PLV:Toggle("Invisible (R15)", "inv", false, "Server-Side", function(v) if v then local t = getChar():FindFirstChild("LowerTorso"); if t then t:Destroy() end end end)
+
+-- --- SECURITY TAB ---
+local SC_P = T_SC:Page("Protection", "shield")
+local SCS = SC_P:Section("🛡️ Defensive", "Left")
+
+SCS:Toggle("Anti-Cheat Bypass", "hbp", false, "Hooking Metatable", function(v) if v then activateHook() end end)
+SCS:Toggle("Chat Bypass", "cbp", false, "Anti-Sensor", function(v) State.Security.chatBypass = v end)
+SCS:Toggle("Anti AFK", "aafk", false, "Cegah Kick Idle", function(v)
+    if v then State.Security.afk = LP.Idled:Connect(function() VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame) end)
+    else if State.Security.afk then State.Security.afk:Disconnect() end end
 end)
-SL:Button("⚡ Fast Respawn", "TP Back", function()
-    local r = getRoot()
-    if r then 
-        local old = r.CFrame; getHum().Health = 0
-        LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart").CFrame = old
+
+SCS:Button("⚡ Fast Respawn", "Instant TP Back", function()
+    if State.Security.lastCF then
+        local targetCF = State.Security.lastCF
+        getHum().Health = 0
+        LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = targetCF
+        notify("Respawn", "Kembali ke posisi terakhir!", 2)
     end
 end)
 
-notify("XKID HUB", "Native Mobile Fly Activated!")
+SCS:Button("🔄 Rejoin Server", "Masuk Ulang", function() TpService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+
+notify("XKID HUB", "Aesthetic Pro Active!", 5)
