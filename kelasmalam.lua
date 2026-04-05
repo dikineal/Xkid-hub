@@ -1,12 +1,12 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v27.0  💠              ║
+║              💠  X K I D   H U B  v28.0  💠              ║
 ║                GHOST DRONE & FULL FEATURES LOCK          ║
 ╚═══════════════════════════════════════════════════════════╣
-║  ➤  Fixed: Drone Movement (No Anchor - Joystick Active)   ║
-║  ➤  Fixed: Drone Mode = Ghost Mode (Auto-Invis & Return)  ║
+║  ➤  Fixed: Drone Joystick (ThumbstickInner Read)          ║
+║  ➤  Fixed: Invisible R15 Restore & Camera Return          ║
+║  ➤  New:   Save/Load Location Slot 1-5                    ║
 ║  ➤  Stable: Smart TP, Fly, Bypass, IY Fling Locked        ║
-║  ➤  Stable: Weather Control & Rejoin Locked               ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -308,7 +308,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V27", "star", "GHOST DRONE", false)
+local Win = Library:Window("XKID HUB V28", "star", "GHOST DRONE", false)
 
 -- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -331,30 +331,36 @@ local P_Drop = TPT:Dropdown("Manual List", "pDrop", getPNames(), function(v) Sta
 TPT:Button("🔄 Refresh List", "", function() P_Drop:Refresh(getPNames()) end)
 
 -- --- SAVE / LOAD LOCATION ---
-local TPP2 = T_TP:Page("Locations", "bookmark"):Section("💾 Save Location", "Left")
-local TPP3 = T_TP:Page("Locations", "bookmark"):Section("📍 Load Location", "Right")
+local LocPage = T_TP:Page("Locations", "bookmark")
+local TPP2 = LocPage:Section("💾 Save Location", "Left")
+local TPP3 = LocPage:Section("📍 Load Location", "Right")
 
-local SavedLocs = {nil, nil, nil, nil, nil}
+local SavedLocs = {}
 
 for i = 1, 5 do
     local idx = i
-    TPP2:Button("💾 Save Slot " .. idx, "Simpan posisi", function()
+    TPP2:Button("💾 Slot " .. idx, "Simpan posisi sini", function()
         local r = getRoot()
-        if not r then return end
+        if not r then
+            Library:Notification("Location", "Karakter tidak ditemukan!", 2)
+            return
+        end
         SavedLocs[idx] = r.CFrame
-        Library:Notification("Location", "Slot " .. idx .. " tersimpan!", 2)
+        Library:Notification("✅ Saved", "Slot " .. idx .. " tersimpan di sini!", 2)
     end)
 end
 
 for i = 1, 5 do
     local idx = i
-    TPP3:Button("📍 Load Slot " .. idx, "Teleport ke posisi", function()
+    TPP3:Button("📍 Slot " .. idx, "Teleport ke slot", function()
         if not SavedLocs[idx] then
-            Library:Notification("Location", "Slot " .. idx .. " kosong!", 2)
+            Library:Notification("❌ Kosong", "Slot " .. idx .. " belum di-save!", 2)
             return
         end
         local r = getRoot()
-        if r then r.CFrame = SavedLocs[idx] end
+        if not r then return end
+        r.CFrame = SavedLocs[idx]
+        Library:Notification("📍 Loaded", "Teleport ke Slot " .. idx, 2)
     end)
 end
 
@@ -498,4 +504,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-Library:Notification("XKID V27", "Ghost Drone Ready! Sikat Bro!", 5)
+Library:Notification("XKID V28", "Ghost Drone Ready! Sikat Bro!", 5)
