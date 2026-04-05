@@ -1,946 +1,490 @@
 --[[
-╔═══════════════════════════════════════════════════════════╗
-║        🔍  X K I D   D E B U G   T O O L  v5            ║
-║     Aurora UI · setclipboard · Delta Ready               ║
-║     + FARMING SPY (harvest, tanam, inventory)            ║
-╚═══════════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════════╗
+║              🌟  X K I D   H U B  v5.26  🌟              ║
+║                  Aurora UI  ·  Pro Edition               ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Teleport  ·  Player  ·  Security  ·  Setting                ║
+║  [MODIFIED] Hapus Tab Farming & Shop, Tambah Bring Player    ║
+╚═══════════════════════════════════════════════════════════════╝
 ]]
 
 local Library = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
 ))()
 
-local Players   = game:GetService("Players")
-local RS        = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local LP        = Players.LocalPlayer
+local Players     = game:GetService("Players")
+local RunService  = game:GetService("RunService")
+local UIS         = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+local TpService   = game:GetService("TeleportService")
+local Workspace   = game:GetService("Workspace")
+local RS          = game:GetService("ReplicatedStorage")
+local LP          = Players.LocalPlayer
 
-local function notif(t, b, d)
+local function getChar() return LP.Character end
+local function getRoot()
+    local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart")
+end
+local function getHum()
+    local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid")
+end
+local function notify(t, b, d)
     pcall(function() Library:Notification(t, b, d or 3) end)
+    print(string.format("[XKID] %s | %s", t, tostring(b)))
 end
 
--- ┌─────────────────────────────────────────────────────────┐
--- │  LOG BUFFER                                             │
--- └─────────────────────────────────────────────────────────┘
-local LogBuffer = ""
+local lastCFrame
+RunService.Heartbeat:Connect(function()
+    local r = getRoot(); if r then lastCFrame = r.CFrame end
+end)
 
-local function log(msg)
-    LogBuffer = LogBuffer .. os.date("[%H:%M:%S] ") .. msg .. "\n"
+local function getBridge()
+    local bn = RS:FindFirstChild("BridgeNet2")
+    return bn and bn:FindFirstChild("dataRemoteEvent")
 end
-
-local function clearLog()
-    LogBuffer = ""
-end
-
-local function copyLog()
-    if LogBuffer == "" then
-        notif("Copy","Log kosong! Jalankan scan dulu.",3)
-        return
-    end
-    local ok = pcall(function()
-        setclipboard(LogBuffer)
-    end)
-    if ok then
-        local lineCount = 0
-        for _ in LogBuffer:gmatch("\n") do lineCount = lineCount + 1 end
-        notif("✅ COPIED!",lineCount.." baris\ndi clipboard!\nPaste ke WA/chat",4)
-    else
-        notif("❌ Copy Gagal","setclipboard tidak support\nCoba screenshot notif.",4)
-    end
-end
-
--- ┌─────────────────────────────────────────────────────────┐
--- │  WORKSPACE SCANNER                                      │
--- └─────────────────────────────────────────────────────────┘
-local function scanRange(a, b)
-    local allCh = Workspace:GetChildren()
-    log("=== SCAN ["..a.."-"..b.."] | Total WS: "..#allCh.." ===")
-    for i = a, math.min(b, #allCh) do
-        local obj = allCh[i]
-        if not obj then log("["..i.."] nil"); continue end
-        local pos, size = "", ""
-        if obj:IsA("BasePart") then
-            pos  = string.format(" pos=(%.1f,%.1f,%.1f)", obj.Position.X, obj.Position.Y, obj.Position.Z)
-            size = string.format(" sz=(%.1f,%.1f,%.1f)",  obj.Size.X, obj.Size.Y, obj.Size.Z)
-        else
-            local p = obj:FindFirstChildOfClass("BasePart")
-            if p then pos = string.format(" pos=(%.1f,%.1f,%.1f)", p.Position.X, p.Position.Y, p.Position.Z) end
-            pos = pos .. " ch=" .. #obj:GetChildren()
-        end
-        log(string.format("[%d] %s (%s)%s%s", i, obj.Name, obj.ClassName, pos, size))
-    end
-    log("=== SELESAI ===")
-    notif("✅ Scan ["..a.."-"..b.."]","Klik COPY LOG!",3)
-end
-
-local function scanFull()
-    local allCh = Workspace:GetChildren()
-    log("=== FULL SCAN | Total: "..#allCh.." ===")
-    for i, obj in ipairs(allCh) do
-        local pos, size, tag = "", "", ""
-        if obj:IsA("BasePart") then
-            pos  = string.format(" pos=(%.0f,%.0f,%.0f)", obj.Position.X, obj.Position.Y, obj.Position.Z)
-            size = string.format(" sz=(%.0f,%.0f,%.0f)",  obj.Size.X, obj.Size.Y, obj.Size.Z)
-            if obj.Size.X > 5 and obj.Size.Z > 5 then tag = " [BIGPART]" end
-        else
-            local p = obj:FindFirstChildOfClass("BasePart")
-            if p then
-                pos = string.format(" pos=(%.0f,%.0f,%.0f)", p.Position.X, p.Position.Y, p.Position.Z)
-                if p.Size.X > 5 and p.Size.Z > 5 then tag = " [BIGPART]" end
-            end
-            pos = pos .. " ch=" .. #obj:GetChildren()
-        end
-        local n = obj.Name:lower()
-        if n:find("land") or n:find("farm") or n:find("plot") or
-           n:find("lahan") or n:find("tanah") or n:find("sawah") then
-            tag = tag .. " [LAND]"
-        end
-        log(string.format("[%d] %s (%s)%s%s%s", i, obj.Name, obj.ClassName, pos, size, tag))
-    end
-    log("=== SELESAI ===")
-    notif("✅ Full Scan","Klik COPY LOG!",3)
-end
-
-local function scanLand()
-    log("=== workspace.Land ===")
-    local land = Workspace:FindFirstChild("Land")
-    if not land then log("TIDAK ADA!"); notif("Land","Tidak ada",3); return end
-    log("Class: "..land.ClassName)
-    if land:IsA("BasePart") then
-        log(string.format("Pos=(%.2f,%.2f,%.2f) Size=(%.2f,%.2f,%.2f)",
-            land.Position.X, land.Position.Y, land.Position.Z,
-            land.Size.X, land.Size.Y, land.Size.Z))
-    end
-    local ch = land:GetChildren()
-    log("Children: "..#ch)
-    for i, c in ipairs(ch) do
-        local p = ""
-        if c:IsA("BasePart") then
-            p = string.format(" pos=(%.1f,%.1f,%.1f)", c.Position.X, c.Position.Y, c.Position.Z)
-        end
-        log(string.format("  [%d] %s (%s)%s", i, c.Name, c.ClassName, p))
-    end
-    local bps = 0
-    for _, d in ipairs(land:GetDescendants()) do
-        if d:IsA("BasePart") then
-            bps = bps + 1
-            if bps <= 10 then
-                log(string.format("  BP[%d] %s pos=(%.1f,%.1f,%.1f)",
-                    bps, d.Name, d.Position.X, d.Position.Y, d.Position.Z))
-            end
-        end
-    end
-    log("Total BasePart: "..bps)
-    log("=== SELESAI ===")
-    notif("workspace.Land","Klik COPY LOG!",3)
-end
-
--- ┌─────────────────────────────────────────────────────────┐
--- │  FISH MONITOR                                           │
--- └─────────────────────────────────────────────────────────┘
-local fishConns = {}
-
-local function startFish()
-    for _, c in pairs(fishConns) do pcall(function() c:Disconnect() end) end
-    fishConns = {}
+local function getFishEv(name)
     local fr = RS:FindFirstChild("FishRemotes")
-    if not fr then notif("Fish ❌","FishRemotes tidak ada!",4); return false end
-    log("=== FISH MONITOR START ===")
-    for _, evName in ipairs({"CastEvent","MiniGame","NotifyClient"}) do
-        local ev = fr:FindFirstChild(evName)
-        if ev then
-            log("Listen OK: "..evName)
-            local conn = ev.OnClientEvent:Connect(function(...)
-                local parts = {}
-                for _, a in ipairs({...}) do
-                    local s = "?"
-                    pcall(function()
-                        s = (type(a)=="userdata") and (a.Name or tostring(a)) or tostring(a)
-                    end)
-                    table.insert(parts, s)
-                end
-                log("← "..evName..": "..table.concat(parts, ", "))
-            end)
-            table.insert(fishConns, conn)
-        else
-            log("MISSING: "..evName)
-        end
+    return fr and fr:FindFirstChild(name)
+end
+
+local LOG_MAX = 30
+local logLines = {}
+local function xlog(tag, msg, isError)
+    local entry = string.format("[%s][%s] %s", os.date("%H:%M:%S"), tag, msg)
+    table.insert(logLines, 1, entry)
+    if #logLines > LOG_MAX then table.remove(logLines) end
+    print(entry)
+    if isError then
+        pcall(function() Library:Notification("❌ "..tag, msg:sub(1,80), 5) end)
     end
-    log("Mancing manual 1x sekarang!")
-    notif("🎣 Fish Monitor","ON! Mancing manual 1x\nlalu klik COPY LOG",4)
-    return true
 end
 
-local function stopFish()
-    for _, c in pairs(fishConns) do pcall(function() c:Disconnect() end) end
-    fishConns = {}
-    log("=== FISH MONITOR STOP ===")
-    notif("Fish","OFF — Klik COPY LOG",3)
-end
+local Fish = {
+    autoOn = false,
+    fishTask = nil,
+    waitDelay = 2,
+    rodEquipped = false,
+    totalFished = 0,
+    instantDelay = 2,
+}
 
--- ┌─────────────────────────────────────────────────────────┐
--- │  INVENTORY MONITOR                                      │
--- └─────────────────────────────────────────────────────────┘
-local invConn = nil
+local Move = {
+    flying = false,
+    flySpeed = 60,
+    speed = 16,
+}
 
-local function startInv()
-    if invConn then invConn:Disconnect() end
-    local bn = RS:FindFirstChild("BridgeNet2")
-    local ev = bn and bn:FindFirstChild("dataRemoteEvent")
-    if not ev then notif("Inv ❌","dataRemoteEvent tidak ada!",4); return false end
-    log("=== INVENTORY MONITOR START ===")
-    invConn = ev.OnClientEvent:Connect(function(data)
-        if type(data) ~= "table" then return end
-        local keys = {}
-        for k in pairs(data) do
-            table.insert(keys, string.format("\\x%02x", string.byte(k,1)))
-        end
-        log("Keys: "..table.concat(keys," "))
-        if data["\3"] then
-            local list = data["\3"][1]
-            if type(list)=="table" then
-                log("--- Inventory ---")
-                for slot, e in ipairs(list) do
-                    if type(e)=="table" and e.cropName then
-                        log(string.format("slot[%d] %s x%d", slot, e.cropName, e.count or 0))
-                    end
-                end
-            end
-        end
-    end)
-    notif("📦 Inv Monitor","ON! Beli bibit lalu\nklik COPY LOG",4)
-    return true
-end
+local Respawn = {
+    savedPosition = nil,
+}
 
-local function stopInv()
-    if invConn then invConn:Disconnect(); invConn=nil end
-    log("=== INVENTORY MONITOR STOP ===")
-    notif("Inv","OFF — Klik COPY LOG",3)
-end
+local ESPPl = {active = false, uis = {}, conn = nil}
 
--- ┌─────────────────────────────────────────────────────────┐
--- │  [NEW] FARMING SPY                                      │
--- │  Monitor semua event farming:                           │
--- │  - OnClientEvent: harvest ready (\r), inventory (\3)   │
--- │  - Timer data (\x02)                                   │
--- │  - Semua outgoing FireServer (tanam, beli, harvest)     │
--- └─────────────────────────────────────────────────────────┘
-local farmConn    = nil
-local farmSpyOn   = false
+local flyConn, noclipConn, infJumpConn, afkConn, antiKickConn
 
-local function deepSerialize(val, depth)
-    depth = depth or 0
-    if depth > 4 then return "..." end
-    local t = type(val)
-    if t == "nil" then return "nil"
-    elseif t == "boolean" or t == "number" then return tostring(val)
-    elseif t == "string" then
-        -- Print hex untuk kontrol karakter
-        if #val <= 4 then
-            local hex = ""
-            for i = 1, #val do
-                hex = hex .. string.format("\\x%02x", val:byte(i))
-            end
-            return '"'..hex..'"'
-        end
-        return '"'..val:sub(1,50)..'"'
-    elseif t == "userdata" then
-        local s = "?"
-        pcall(function()
-            if val.X then -- Vector3
-                s = string.format("V3(%.2f,%.2f,%.2f)", val.X, val.Y, val.Z)
-            else
-                s = tostring(val)
-            end
-        end)
-        return s
-    elseif t == "table" then
-        local parts = {}
-        local count = 0
-        for k, v in pairs(val) do
-            count = count + 1
-            if count > 20 then
-                table.insert(parts, "..."); break
-            end
-            local keyStr = ""
-            if type(k) == "string" and #k <= 4 then
-                local hex = ""
-                for i = 1, #k do hex = hex .. string.format("\\x%02x", k:byte(i)) end
-                keyStr = "["..hex.."]"
-            else
-                keyStr = "["..tostring(k).."]"
-            end
-            table.insert(parts, keyStr.."="..deepSerialize(v, depth+1))
-        end
-        return "{"..table.concat(parts,", ").."}"
+local function equipRod()
+    local bp = LP:FindFirstChildOfClass("Backpack")
+    if not bp then return false end
+    local rod = bp:FindFirstChild("AdvanceRod") or bp:FindFirstChild("Rod")
+    if not rod then
+        xlog("Fishing","Rod tidak ada",true)
+        return false
     end
-    return tostring(val)
-end
-
-local function startFarmSpy()
-    if farmConn then farmConn:Disconnect() end
-    local bn = RS:FindFirstChild("BridgeNet2")
-    local ev = bn and bn:FindFirstChild("dataRemoteEvent")
-    if not ev then notif("Farm ❌","dataRemoteEvent tidak ada!",4); return false end
-
-    log("=== FARMING SPY START ===")
-    log("Lakukan: tanam, tunggu tumbuh, panen manual")
-    log("Semua event akan ter-log di sini")
-    log("")
-
-    farmConn = ev.OnClientEvent:Connect(function(data)
-        if type(data) ~= "table" then return end
-
-        -- Identifikasi jenis event
-        local keys = {}
-        for k in pairs(data) do
-            table.insert(keys, string.format("\\x%02x(%d)", string.byte(k,1), string.byte(k,1)))
-        end
-        log("── OnClientEvent keys: "..table.concat(keys," "))
-
-        -- Key \x03 = inventory update
-        if data["\3"] then
-            local list = data["\3"][1]
-            if type(list) == "table" then
-                log("  [\\x03 INVENTORY UPDATE]")
-                for slot, e in ipairs(list) do
-                    if type(e) == "table" and e.cropName then
-                        log(string.format("    slot[%d] %s x%d", slot, e.cropName, e.count or 0))
-                    end
-                end
-            end
-        end
-
-        -- Key \r (\x0d) = crop ready / harvest data
-        if data["\r"] then
-            log("  [\\x0d CROP READY/HARVEST DATA] ← PENTING!")
-            for i, crop in ipairs(data["\r"]) do
-                if type(crop) == "table" then
-                    log(string.format("    [%d] cropName=%s", i, tostring(crop.cropName)))
-                    if crop.cropPos then
-                        log(string.format("    [%d] cropPos=(%.4f,%.4f,%.4f)",
-                            i, crop.cropPos.X, crop.cropPos.Y, crop.cropPos.Z))
-                    end
-                    log(string.format("    [%d] sellPrice=%s", i, tostring(crop.sellPrice)))
-                    if crop.seedColor then
-                        log(string.format("    [%d] seedColor=(%.4f,%.4f,%.4f)",
-                            i, crop.seedColor[1] or 0, crop.seedColor[2] or 0, crop.seedColor[3] or 0))
-                    end
-                    if crop.drops then
-                        for di, drop in ipairs(crop.drops) do
-                            log(string.format("    [%d] drop[%d]: name=%s rarity=%s coin=%s",
-                                i, di,
-                                tostring(drop.name),
-                                tostring(drop.rarity),
-                                tostring(drop.coinReward)))
-                        end
-                    end
-                end
-            end
-        end
-
-        -- Key \x02 = timer data
-        if data["\2"] then
-            local timer = data["\2"]
-            log(string.format("  [\\x02 TIMER] start=%s end=%s diff=%s",
-                tostring(timer[1]),
-                tostring(timer[2]),
-                (timer[1] and timer[2]) and tostring(timer[2]-timer[1]) or "?"))
-        end
-
-        -- Key \x0b (\v) = transaksi sukses
-        if data["\11"] then
-            local tx = data["\11"][1]
-            if type(tx) == "table" then
-                log(string.format("  [\\x0b TRANSAKSI] success=%s count=%s",
-                    tostring(tx.success), tostring(tx.count)))
-            end
-        end
-
-        -- Key \x08 = unknown, log raw
-        if data["\8"] then
-            log("  [\\x08] "..deepSerialize(data["\8"], 0))
-        end
-
-        log("")
-    end)
-
-    notif("🌱 Farm Spy","ON!\nLakukan tanam → tunggu → panen manual\nSemua event ter-log",5)
+    pcall(function() rod.Parent = LP.Character end)
+    task.wait(0.5)
+    Fish.rodEquipped = true
     return true
 end
 
-local function stopFarmSpy()
-    if farmConn then farmConn:Disconnect(); farmConn=nil end
-    farmSpyOn = false
-    log("=== FARMING SPY STOP ===")
-    notif("Farm Spy","OFF — Klik COPY LOG",3)
+local function unequipRod()
+    local char = getChar()
+    if not char then return false end
+    local rod = char:FindFirstChild("AdvanceRod") or char:FindFirstChild("Rod")
+    if rod then pcall(function() rod.Parent = LP.Backpack end) end
+    Fish.rodEquipped = false
+    return true
 end
 
--- Scan tanaman di workspace
-local function scanCrops()
-    log("=== SCAN TANAMAN DI WORKSPACE ===")
-    local cropNames = {
-        "AppleTree","Padi","Melon","Tomat","Sawi",
-        "Coconut","Daisy","FanPalm","SunFlower","Sawit",
-        -- Kemungkinan nama lain:
-        "Apple","Rice","Corn","Wheat","Carrot",
-    }
-    local found = 0
-
-    -- Scan semua descendants workspace
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        local n = obj.Name
-        -- Cek exact match dulu
-        local isKnown = false
-        for _, cn in ipairs(cropNames) do
-            if n == cn then isKnown = true; break end
-        end
-
-        if isKnown or obj:IsA("BasePart") and obj.Size.Y > 0.5 and obj.Size.Y < 5 then
-            if obj:IsA("BasePart") or obj:IsA("Model") then
-                local pos = nil
-                if obj:IsA("BasePart") then pos = obj.Position
-                else
-                    local p = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
-                    if p then pos = p.Position end
-                end
-                if pos then
-                    found = found + 1
-                    if found <= 30 then
-                        log(string.format("  CROP[%d] name=%s class=%s pos=(%.1f,%.1f,%.1f)",
-                            found, n, obj.ClassName, pos.X, pos.Y, pos.Z))
-                    end
-                end
-            end
-        end
+local function castOnce()
+    local castEv = getFishEv("CastEvent")
+    if not castEv then return false end
+    
+    pcall(function() castEv:FireServer(true) end)
+    task.wait(0.8)
+    pcall(function() castEv:FireServer(false, Fish.instantDelay) end)
+    task.wait(Fish.instantDelay)
+    
+    local miniEv = getFishEv("MiniGame")
+    if miniEv then
+        pcall(function() miniEv:FireServer(true) end)
+        task.wait(0.2)
+        pcall(function() miniEv:FireServer(true) end)
     end
-
-    if found == 0 then
-        log("  Tidak ada tanaman ditemukan")
-        log("  Pastikan ada tanaman yang sudah ditanam!")
-    end
-    log(string.format("Total: %d objek", found))
-    log("=== SELESAI ===")
-    notif("Scan Tanaman",found.." tanaman\nKlik COPY LOG!",4)
-end
-
--- ┌─────────────────────────────────────────────────────────┐
--- │  UI                                                     │
--- └─────────────────────────────────────────────────────────┘
-local Win    = Library:Window("XKID DEBUG v6","search","v6",false)
-Win:TabSection("DEBUG")
-local T_Scan    = Win:Tab("Scan","search")
-local T_Farm    = Win:Tab("Farm","leaf")
-local T_Fish    = Win:Tab("Fish","anchor")
-local T_Inv     = Win:Tab("Inv","package")
-local T_Harvest = Win:Tab("Harvest","box")
-
--- ╔══════════════════╗
--- ║   TAB SCAN       ║
--- ╚══════════════════╝
-local SP = T_Scan:Page("Workspace Scan","search")
-local SL = SP:Section("🔍 Scan","Left")
-local SR = SP:Section("📋 Copy","Right")
-
-SL:Button("★ FULL SCAN","Scan semua workspace objects",
-    function() clearLog(); scanFull() end)
-
-SL:Button("Index 40-55","",
-    function() clearLog(); scanRange(40,55) end)
-
-SL:Button("Index 50-65","",
-    function() clearLog(); scanRange(50,65) end)
-
-SL:Button("Index 60-75","",
-    function() clearLog(); scanRange(60,75) end)
-
-SL:Button("Index 70-85","",
-    function() clearLog(); scanRange(70,85) end)
-
-SL:Button("workspace.Land","Detail struktur Land",
-    function() clearLog(); scanLand() end)
-
-SL:Button("Posisi Karakter","",
-    function()
-        local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            log(string.format("POS X=%.4f Y=%.4f Z=%.4f",
-                hrp.Position.X, hrp.Position.Y, hrp.Position.Z))
-            notif("Posisi",string.format("X=%.2f Y=%.2f Z=%.2f",
-                hrp.Position.X, hrp.Position.Y, hrp.Position.Z),5)
-        end
-    end)
-
-SR:Button("📋 COPY LOG","Salin semua log ke clipboard",
-    function() copyLog() end)
-
-SR:Button("🗑 Clear Log","Hapus log",
-    function() clearLog(); notif("Log","Cleared",2) end)
-
-SR:Button("📊 Info Log","",
-    function()
-        local lines = 0
-        for _ in LogBuffer:gmatch("\n") do lines = lines + 1 end
-        notif("Log Info","Lines: "..lines.."\nChars: "..#LogBuffer,4)
-    end)
-
-SR:Paragraph("Cara Copy",
-    "1. Klik tombol scan\n"..
-    "2. Klik 📋 COPY LOG\n"..
-    "3. Paste di WA/chat")
-
--- ╔══════════════════════════════════╗
--- ║   TAB FARM (BARU!)               ║
--- ╚══════════════════════════════════╝
-local FarmP = T_Farm:Page("Farming Spy","leaf")
-local FarmL = FarmP:Section("🌱 Farm Spy","Left")
-local FarmR = FarmP:Section("📋 Copy","Right")
-
-FarmL:Toggle("🌱 Farm Spy ON/OFF","farmSpy",false,
-    "Monitor SEMUA event farming dari server\n(harvest ready, timer, inventory)",
-    function(v)
-        farmSpyOn = v
-        clearLog()
-        if v then
-            startFarmSpy()
-        else
-            stopFarmSpy()
-        end
-    end)
-
-FarmL:Paragraph("Cara Debug Harvest",
-    "1. ON Farm Spy\n"..
-    "2. Tanam 1 tanaman manual\n"..
-    "3. Tunggu sampai besar\n"..
-    "4. Klik tombol panen manual\n"..
-    "5. OFF Farm Spy\n"..
-    "6. Klik COPY LOG\n"..
-    "7. Kirim ke developer!\n\n"..
-    "Yang dicari:\n"..
-    "- Data \\x0d (crop ready)\n"..
-    "- cropPos yang valid\n"..
-    "- seedColor\n"..
-    "- Timer \\x02")
-
-FarmL:Button("🔍 Scan Tanaman WS","Cari tanaman di workspace",
-    function() clearLog(); scanCrops() end)
-
-FarmL:Button("🔍 Scan Crop Names","Cari nama unik tanaman",
-    function()
-        clearLog()
-        log("=== SCAN NAMA UNIK TANAMAN ===")
-        local names = {}
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("BasePart") or obj:IsA("Model") then
-                local n = obj.Name
-                if not names[n] then
-                    -- Filter: kemungkinan nama tanaman
-                    local nl = n:lower()
-                    if nl:find("crop") or nl:find("plant") or nl:find("tree") or
-                       nl:find("flower") or nl:find("seed") or nl:find("sawi") or
-                       nl:find("padi") or nl:find("melon") or nl:find("tomat") or
-                       nl:find("apple") or nl:find("kelapa") or nl:find("palm") or
-                       nl:find("sun") or nl:find("sawit") or nl:find("daisy") then
-                        names[n] = true
-                        log("  FOUND: "..n.." ("..obj.ClassName..")")
-                    end
-                end
-            end
-        end
-        local count = 0
-        for _ in pairs(names) do count = count + 1 end
-        if count == 0 then log("  Tidak ada tanaman ditemukan") end
-        log("Total: "..count.." nama unik")
-        log("=== SELESAI ===")
-        notif("Crop Names",count.." nama\nKlik COPY LOG!",4)
-    end)
-
-FarmR:Button("📋 COPY LOG","Copy hasil farm spy",
-    function() copyLog() end)
-
-FarmR:Button("🗑 Clear","Hapus log",
-    function() clearLog(); notif("Clear","OK",2) end)
-
-FarmR:Paragraph("Yang Dicari",
-    "Dari log, kita butuh:\n\n"..
-    "1. \\x0d = crop ready\n"..
-    "   → cropName\n"..
-    "   → cropPos (X,Y,Z)\n"..
-    "   → sellPrice\n"..
-    "   → seedColor\n"..
-    "   → drops\n\n"..
-    "2. \\x02 = timer\n"..
-    "   → [start, end]\n\n"..
-    "Ini data untuk harvest!")
-
--- ╔══════════════════╗
--- ║   TAB FISH       ║
--- ╚══════════════════╝
-local FP2 = T_Fish:Page("Fish Monitor","anchor")
-local FL2 = FP2:Section("🎣 Monitor","Left")
-local FR2 = FP2:Section("📋 Copy","Right")
-
-FL2:Toggle("Fish Monitor","fishMon",false,
-    "Listen semua FishRemotes events",
-    function(v)
-        clearLog()
-        if v then startFish() else stopFish() end
-    end)
-
-FL2:Paragraph("Cara",
-    "1. ON Fish Monitor\n"..
-    "2. Mancing manual 1x\n"..
-    "3. OFF Fish Monitor\n"..
-    "4. Klik COPY LOG")
-
-FR2:Button("📋 COPY LOG","Copy hasil fish monitor",
-    function() copyLog() end)
-
-FR2:Button("🗑 Clear","",
-    function() clearLog(); notif("Clear","OK",2) end)
-
--- ╔══════════════════╗
--- ║   TAB INVENTORY  ║
--- ╚══════════════════╝
-local IP = T_Inv:Page("Inv Monitor","package")
-local IL = IP:Section("📦 Monitor","Left")
-local IR = IP:Section("📋 Copy","Right")
-
-IL:Toggle("Inv Monitor","invMon",false,
-    "Listen inventory data dari server",
-    function(v)
-        clearLog()
-        if v then startInv() else stopInv() end
-    end)
-
-IL:Button("Force Request","Trigger server kirim inventory",
-    function()
-        local bn = RS:FindFirstChild("BridgeNet2")
-        local ev = bn and bn:FindFirstChild("dataRemoteEvent")
-        if not ev then notif("Err","Remote tidak ada!",3); return end
-        pcall(function()
-            ev:FireServer({{ cropName="Sawi", amount=0 }, "\x07"})
-        end)
-        log("Force request dikirim...")
-        notif("Request","Dikirim! Tunggu 2s",3)
-    end)
-
-IL:Paragraph("Cara",
-    "1. ON Inv Monitor\n"..
-    "2. Beli 1 bibit\n"..
-    "   ATAU Force Request\n"..
-    "3. Tunggu 2-3 detik\n"..
-    "4. OFF Monitor\n"..
-    "5. Klik COPY LOG")
-
-IR:Button("📋 COPY LOG","Copy hasil inventory",
-    function() copyLog() end)
-
-IR:Button("🗑 Clear","",
-    function() clearLog(); notif("Clear","OK",2) end)
-
-
--- ╔══════════════════════════════════════════════════════════╗
--- ║   TAB HARVEST DEBUG                                      ║
--- ╚══════════════════════════════════════════════════════════╝
-local HP  = T_Harvest:Page("Harvest Debug","box")
-local HL  = HP:Section("🌾 Harvest Test","Left")
-local HR  = HP:Section("📋 Copy","Right")
-
-local harvestConn = nil
-local harvestOn   = false
-
--- Intercept semua OnClientEvent dari BridgeNet2
-local function startHarvestMonitor()
-    if harvestConn then harvestConn:Disconnect() end
-    local bn = RS:FindFirstChild("BridgeNet2")
-    local ev = bn and bn:FindFirstChild("dataRemoteEvent")
-    if not ev then notif("Harvest ❌","dataRemoteEvent tidak ada!",4); return false end
-
-    log("=== HARVEST MONITOR START ===")
-    log("Tunggu tanaman siap lalu panen manual 1x")
-    log("")
-
-    -- Auto harvest toggle
-    local autoHarvestOn = false
-
-    harvestConn = ev.OnClientEvent:Connect(function(data)
-        if type(data) ~= "table" then return end
-
-        -- Log semua keys dengan hex
-        local keys = {}
-        for k in pairs(data) do
-            if type(k) == "string" then
-                local hex = ""
-                for i = 1, math.min(#k,4) do hex=hex..string.format("%02x",k:byte(i)) end
-                table.insert(keys, "str["..hex.."]")
-            elseif type(k) == "number" then
-                table.insert(keys, "int["..k.."]")
-            end
-        end
-        log("Keys: "..table.concat(keys," | "))
-
-        -- Cek semua kemungkinan crop key
-        local cropData = nil
-        local foundKey = nil
-        local candidates = {
-            {k="\r",           label="\\r"},
-            {k="\13",          label="\\13"},
-            {k=string.char(13), label="char(13)"},
-            {k=13,              label="int(13)"},
-        }
-        for _, c in ipairs(candidates) do
-            if data[c.k] then
-                cropData = data[c.k]
-                foundKey = c.label
-                break
-            end
-        end
-
-        if cropData then
-            log("✅ CROP DATA → key: "..foundKey)
-            if type(cropData) == "table" then
-                for i, crop in ipairs(cropData) do
-                    if type(crop) == "table" then
-                        local posStr = crop.cropPos and
-                            string.format("(%.2f,%.2f,%.2f)",
-                                crop.cropPos.X,crop.cropPos.Y,crop.cropPos.Z) or "nil"
-                        log(string.format("  [%d] %s pos=%s sell=%s",
-                            i, tostring(crop.cropName), posStr,
-                            tostring(crop.sellPrice)))
-                        if crop.seedColor then
-                            log(string.format("  [%d] seedColor=(%.4f,%.4f,%.4f)",
-                                i, crop.seedColor[1] or 0,
-                                crop.seedColor[2] or 0,
-                                crop.seedColor[3] or 0))
-                        end
-                        if crop.drops then
-                            for di, d in ipairs(crop.drops) do
-                                log(string.format("  [%d] drop[%d] name=%s rarity=%s coin=%s",
-                                    i, di, tostring(d.name),
-                                    tostring(d.rarity), tostring(d.coinReward)))
-                            end
-                        end
-                    end
-                end
-            end
-
-            -- Timer
-            local timerRaw = data["\2"] or data["\x02"]
-                          or data[string.char(2)] or data[2]
-            if timerRaw and type(timerRaw)=="table" then
-                log(string.format("  timer: start=%s end=%s diff=%s",
-                    tostring(timerRaw[1]), tostring(timerRaw[2]),
-                    tostring((timerRaw[2] or 0)-(timerRaw[1] or 0))))
-            else
-                log("  timer: NOT FOUND")
-            end
-        end
-        log("")
-    end)
-
-    notif("🌾 Harvest Monitor","ON!\nPanen manual 1x sekarang",4)
+    
+    Fish.totalFished = Fish.totalFished + 1
+    task.wait(0.5)
     return true
 end
 
-local function stopHarvestMonitor()
-    if harvestConn then harvestConn:Disconnect(); harvestConn=nil end
-    log("=== HARVEST MONITOR STOP ===")
-    notif("Harvest","OFF — Klik COPY LOG",3)
-end
-
-HL:Toggle("🌾 Harvest Monitor","harvestMon",false,
-    "Intercept semua data dari server\nPanen manual 1x setelah ON",
-    function(v)
-        harvestOn = v
-        clearLog()
-        if v then startHarvestMonitor() else stopHarvestMonitor() end
-    end)
-
--- Cache crop data dari monitor untuk dipakai test
-local lastCropData = nil
-
--- Override monitor untuk simpan data
-local _origStart = startHarvestMonitor
-startHarvestMonitor = function()
-    if harvestConn then harvestConn:Disconnect() end
-    local bn = RS:FindFirstChild("BridgeNet2")
-    local ev = bn and bn:FindFirstChild("dataRemoteEvent")
-    if not ev then notif("Harvest ❌","dataRemoteEvent tidak ada!",4); return false end
-
-    log("=== HARVEST MONITOR START ===")
-    log("Tunggu tanaman siap lalu panen manual 1x")
-    log("")
-
-    -- Auto harvest toggle
-    local autoHarvestOn = false
-
-    harvestConn = ev.OnClientEvent:Connect(function(data)
-        if type(data) ~= "table" then return end
-
-        local keys = {}
-        for k in pairs(data) do
-            if type(k) == "string" then
-                local hex = ""
-                for i = 1, math.min(#k,4) do hex=hex..string.format("%02x",k:byte(i)) end
-                table.insert(keys, "str["..hex.."]")
-            elseif type(k) == "number" then
-                table.insert(keys, "int["..k.."]")
-            end
-        end
-        log("Keys: "..table.concat(keys," | "))
-
-        local cropData = data["\r"] or data["\13"]
-                      or data[string.char(13)] or data[13]
-        local timerRaw = data["\2"] or data["\x02"]
-                      or data[string.char(2)] or data[2]
-
-        if cropData then
-            local tStart = (type(timerRaw)=="table" and timerRaw[1]) or 0
-            local tEnd   = (type(timerRaw)=="table" and timerRaw[2]) or (tStart+50)
-
-            log("✅ CROP DATA FOUND!")
-            for i, crop in ipairs(cropData) do
-                if type(crop)=="table" and crop.cropName then
-                    local posStr = crop.cropPos and
-                        string.format("(%.2f,%.2f,%.2f)",
-                            crop.cropPos.X,crop.cropPos.Y,crop.cropPos.Z) or "nil"
-                    log(string.format("  [%d] %s pos=%s",i,crop.cropName,posStr))
-                    if crop.seedColor then
-                        log(string.format("  [%d] color=(%.4f,%.4f,%.4f)",
-                            i,crop.seedColor[1] or 0,
-                            crop.seedColor[2] or 0,crop.seedColor[3] or 0))
-                    end
-                    -- Simpan untuk test
-                    lastCropData = {
-                        crop=crop, tStart=tStart, tEnd=tEnd
-                    }
-                end
-            end
-            log(string.format("  timer: %s → %s (diff=%s)",
-                tostring(tStart),tostring(tEnd),tostring(tEnd-tStart)))
-            log("  ← Siap untuk TEST FIRESERVER!")
-
-            -- AUTO HARVEST: kirim LANGSUNG saat terima (0 delay)
-            if autoHarvestOn then
-                log("  ⚡ AUTO HARVEST: kirim sekarang!")
-                local evRef = ev
-                task.spawn(function()
-                    for _, cr in ipairs(cropData) do
-                        if type(cr)=="table" and cr.cropName and cr.cropPos then
-                            local ok2, err2 = pcall(function()
-                                evRef:FireServer({
-                                    ["\13"] = {{
-                                        seedColor = cr.seedColor or {0.298,0.600,0},
-                                        cropName  = cr.cropName,
-                                        cropPos   = cr.cropPos,
-                                        sellPrice = cr.sellPrice or 20,
-                                        drops     = cr.drops or {},
-                                    }},
-                                    ["\2"] = { tStart, tEnd }
-                                })
-                            end)
-                            log("  AUTO: "..(ok2 and "✅ SENT" or "❌ "..tostring(err2):sub(1,40)))
-                            task.wait(0.05)
-                        end
-                    end
-                end)
-            end
-        end
-        log("")
-    end)
-
-    notif("🌾 Harvest Monitor","ON! Panen manual 1x",4)
-    return true
-end
-
-HL:Toggle("⚡ Auto Harvest (instant)","autoHarv",false,
-    "Harvest LANGSUNG saat server kirim crop ready\n0 delay — test apakah timer expire",
-    function(v)
-        autoHarvestOn = v
-        if v then
-            notif("⚡ Auto Harvest","ON! Harvest langsung saat\ncrop ready diterima",3)
-        else
-            notif("Auto Harvest","OFF",2)
-        end
-    end)
-
-HL:Button("🔥 Test FireServer (pakai data real)","Harvest pakai data dari monitor",
-    function()
-        local bn = RS:FindFirstChild("BridgeNet2")
-        local ev = bn and bn:FindFirstChild("dataRemoteEvent")
-        if not ev then notif("Err","Remote tidak ada!",3); return end
-
-        if not lastCropData then
-            notif("Test ❌","Belum ada data!\nON Monitor dulu,\nlalu panen manual 1x",4)
+local function startFly()
+    if Move.flying then return end
+    Move.flying = true
+    local r = getRoot()
+    if not r then return end
+    local bd = Instance.new("BodyVelocity")
+    bd.Parent = r
+    bd.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    bd.Velocity = Vector3.new()
+    flyConn = RunService.RenderStepped:Connect(function()
+        if not Move.flying or not r or not r.Parent then
+            if bd then pcall(function() bd:Destroy() end) end
+            if flyConn then flyConn:Disconnect() end
+            Move.flying = false
             return
         end
+        local vel = Vector3.new()
+        if UIS:IsKeyDown(Enum.KeyCode.W) then vel = vel + r.CFrame.LookVector * Move.flySpeed end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then vel = vel - r.CFrame.LookVector * Move.flySpeed end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then vel = vel - r.CFrame.RightVector * Move.flySpeed end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then vel = vel + r.CFrame.RightVector * Move.flySpeed end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then vel = vel + Vector3.new(0, Move.flySpeed, 0) end
+        if UIS:IsKeyDown(Enum.KeyCode.Q) then vel = vel - Vector3.new(0, Move.flySpeed, 0) end
+        bd.Velocity = vel
+    end)
+end
 
-        local crop   = lastCropData.crop
-        local tStart = lastCropData.tStart
-        local tEnd   = lastCropData.tEnd
+local function stopFly()
+    Move.flying = false
+    if flyConn then flyConn:Disconnect() flyConn = nil end
+end
 
-        log("=== TEST FIRESERVER (DATA REAL) ===")
-        log(string.format("Crop: %s pos=(%.2f,%.2f,%.2f)",
-            crop.cropName,
-            crop.cropPos and crop.cropPos.X or 0,
-            crop.cropPos and crop.cropPos.Y or 0,
-            crop.cropPos and crop.cropPos.Z or 0))
-        log(string.format("Timer: %d → %d", tStart, tEnd))
-
-        local ok, err = pcall(function()
-            ev:FireServer({
-                ["\13"] = {{
-                    seedColor = crop.seedColor or {0.298,0.600,0},
-                    cropName  = crop.cropName,
-                    cropPos   = crop.cropPos,
-                    sellPrice = crop.sellPrice or 20,
-                    drops     = crop.drops or {},
-                }},
-                ["\2"] = { tStart, tEnd }
-            })
-        end)
-
-        if ok then
-            log("✅ FireServer SENT dengan data real!")
-            log("Cek: inventory bertambah? Tanaman hilang?")
-            notif("Test ✅","Sent dengan timer real!\nCek inventory & lahan",4)
-        else
-            log("❌ ERROR: "..tostring(err))
-            notif("Test ❌",tostring(err):sub(1,60),4)
+local function setNoclip(enabled)
+    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    if not enabled then return end
+    noclipConn = RunService.Stepped:Connect(function()
+        local c = getChar()
+        if c then
+            for _, p in ipairs(c:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = false end
+            end
         end
     end)
+end
 
-HL:Paragraph("Cara Debug Harvest",
-    "1. ON Harvest Monitor\n"..
-    "2. Panen MANUAL 1x di game\n"..
-    "   (klik tombol Panen yg muncul)\n"..
-    "3. OFF Monitor\n"..
-    "4. COPY LOG → kirim ke dev\n\n"..
-    "ATAU:\n"..
-    "Klik Test FireServer Harvest\n"..
-    "Lihat apakah inventory berubah")
+local function setInfJump(enabled)
+    if infJumpConn then infJumpConn:Disconnect() infJumpConn = nil end
+    if not enabled then return end
+    infJumpConn = UIS.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode.Space then
+            local h = getHum()
+            if h then h:Jump() end
+        end
+    end)
+end
 
-HR:Button("📋 COPY LOG","Copy hasil harvest debug",
-    function() copyLog() end)
+local function startESPPlayer()
+    if ESPPl.conn then ESPPl.conn:Disconnect() end
+    ESPPl.conn = RunService.RenderStepped:Connect(function()
+        if not ESPPl.active then return end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p == LP then continue end
+            local chr = p.Character
+            if chr and chr:FindFirstChild("HumanoidRootPart") then
+                local pos = chr.HumanoidRootPart.Position
+                local dist = (getRoot().Position - pos).Magnitude
+                local txt = string.format("%s [%.1fm]", p.Name, dist)
+                if not ESPPl.uis[p.UserId] then
+                    local label = Instance.new("TextLabel")
+                    label.Name = "ESP_" .. p.UserId
+                    label.Parent = game:GetService("CoreGui")
+                    label.BackgroundTransparency = 0.3
+                    label.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+                    label.TextColor3 = Color3.new(1, 1, 1)
+                    label.TextSize = 14
+                    label.Size = UDim2.new(0, 150, 0, 20)
+                    ESPPl.uis[p.UserId] = label
+                end
+                local label = ESPPl.uis[p.UserId]
+                if label then
+                    label.Text = txt
+                    local camPos = Workspace.CurrentCamera:WorldToScreenPoint(pos)
+                    label.Position = UDim2.new(0, camPos.X - 75, 0, camPos.Y - 10)
+                    label.Visible = camPos.Z > 0
+                end
+            end
+        end
+    end)
+end
 
-HR:Button("🗑 Clear","",
-    function() clearLog(); notif("Clear","OK",2) end)
+local function stopESPPlayer()
+    if ESPPl.conn then ESPPl.conn:Disconnect() ESPPl.conn = nil end
+    for _, label in pairs(ESPPl.uis) do
+        pcall(function() label:Destroy() end)
+    end
+    ESPPl.uis = {}
+end
 
-HR:Paragraph("Yang dicari di log",
-    "✅ Keys: str[0d] atau int[13]\n"..
-    "✅ CROP DATA FOUND\n"..
-    "✅ cropName, cropPos, timer\n\n"..
-    "❌ Kalau tidak ada CROP DATA\n"..
-    "   berarti key tidak match\n"..
-    "   → kirim log ke developer!")
+local function bringPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then
+        notify("Bring","Player tidak valid",2)
+        return false
+    end
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then
+        notify("Bring","Target tidak ada HRP",2)
+        return false
+    end
+    local myRoot = getRoot()
+    if not myRoot then
+        notify("Bring","Anda tidak ada HRP",2)
+        return false
+    end
+    local ok = pcall(function()
+        targetRoot.CFrame = myRoot.CFrame + Vector3.new(0, 3, 0)
+    end)
+    if ok then
+        notify("✅ Bring","Pulled "..targetPlayer.Name,2)
+        return true
+    else
+        notify("❌ Bring","Error",2)
+        return false
+    end
+end
 
--- ┌─────────────────────────────────────────────────────────┐
--- │  INIT                                                   │
--- └─────────────────────────────────────────────────────────┘
-Library:Notification("XKID DEBUG v6",
-    "Scan · Farm · Fish · Inv · Harvest\n★ Tab Harvest = harvest debug!",5)
+local function doRespawn()
+    local saved = lastCFrame
+    local char = LP.Character
+    if char then char:BreakJoints() end
+    local conn
+    conn = LP.CharacterAdded:Connect(function(nc)
+        conn:Disconnect()
+        task.wait(1)
+        local hrp = nc:WaitForChild("HumanoidRootPart",5)
+        if hrp and saved then hrp.CFrame = saved end
+        notify("Respawn","Kembali ke posisi!",2)
+    end)
+end
+
+local Win = Library:CreateWindow("XKID HUB v5.26", false, 3)
+local T_Tele = Win:Tab("Teleport","map-pin")
+local T_Play = Win:Tab("Player","user")
+local T_Sec = Win:Tab("Security","shield")
+local T_Set = Win:Tab("Setting","sliders")
+
+local TeleP=T_Tele:Page("Teleport","map-pin")
+local TeleL=TeleP:Section("📍 Teleport","Left")
+local TeleR=TeleP:Section("👥 Bring","Right")
+
+TeleL:Button("🏠 Spawn","Ke spawn",function()
+    local r=getRoot()
+    if r then r.CFrame=CFrame.new(0,50,0); notify("TP","Spawn",1) end
+end)
+
+TeleL:Button("👤 P1","TP Player 1",function()
+    local p=Players:FindFirstChild("Player1")
+    if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+        local r=getRoot()
+        if r then r.CFrame=p.Character.HumanoidRootPart.CFrame+Vector3.new(0,3,0); notify("TP","P1",1) end
+    end
+end)
+
+TeleL:Paragraph("Info","TP Spawn or Players")
+
+TeleR:Label("Bring Player")
+TeleR:Button("Pull P1","Bring Player1",function()
+    local p=Players:FindFirstChild("Player1")
+    if p then bringPlayer(p) end
+end)
+TeleR:Paragraph("Info","Click to pull player\nto your position")
+
+local PlayP=T_Play:Page("Player","user")
+local PlayL=PlayP:Section("⚡ Speed","Left")
+local PlayR=PlayP:Section("🚀 Fly","Right")
+
+PlayL:Slider("Speed","ws",16,500,16,function(v)
+    if not Move.flying then
+        local h=getHum()
+        if h then h.WalkSpeed=v end
+    end
+end,"16")
+
+PlayL:Slider("Jump","jp",50,500,50,function(v)
+    local h=getHum()
+    if h then h.JumpPower=v; h.UseJumpPower=true end
+end,"50")
+
+PlayL:Toggle("Inf Jump","ij",false,"Hold space",function(v)
+    setInfJump(v)
+    notify("Inf Jump",v and "ON" or "OFF",1)
+end)
+
+PlayL:Toggle("NoClip","nc",false,"Walk thru walls",function(v)
+    setNoclip(v)
+    notify("NoClip",v and "ON" or "OFF",1)
+end)
+
+PlayR:Toggle("Fly","fly",false,"WASD+Space/Q",function(v)
+    if v then startFly() else stopFly() end
+    notify("Fly",v and "ON" or "OFF",1)
+end)
+
+PlayR:Slider("Fly Speed","fs",10,300,60,function(v)
+    Move.flySpeed=v
+end,"Speed")
+
+PlayR:Toggle("ESP","esp",false,"See players",function(v)
+    ESPPl.active=v
+    if v then startESPPlayer() else stopESPPlayer() end
+    notify("ESP",v and "ON" or "OFF",1)
+end)
+
+local SecP=T_Sec:Page("Security","shield")
+local SecL=SecP:Section("🛡 Protection","Left")
+local SecR=SecP:Section("Info","Right")
+
+local afkConn=nil
+SecL:Toggle("Anti AFK","antiAfk",false,"Prevent kick",function(v)
+    if v then
+        if afkConn then afkConn:Disconnect() end
+        afkConn=LP.Idled:Connect(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+    else
+        if afkConn then afkConn:Disconnect(); afkConn=nil end
+    end
+    notify("Anti AFK",v and "ON" or "OFF",1)
+end)
+
+local antiKickConn=nil
+SecL:Toggle("Anti Kick","antiKick",false,"Lock HP >15%",function(v)
+    if v then
+        if antiKickConn then antiKickConn:Disconnect() end
+        antiKickConn=RunService.Heartbeat:Connect(function()
+            local h=getHum()
+            if h and h.Health>0 and h.Health<h.MaxHealth*0.15 then h.Health=h.MaxHealth end
+        end)
+    else
+        if antiKickConn then antiKickConn:Disconnect(); antiKickConn=nil end
+    end
+    notify("Anti Kick",v and "ON" or "OFF",1)
+end)
+
+SecL:Button("⚡ Respawn","Die & TP back",function()
+    task.spawn(doRespawn)
+end)
+
+SecL:Button("📍 Save","Save position",function()
+    local root=getRoot()
+    if root then
+        Respawn.savedPosition=root.CFrame
+        local p=root.Position
+        notify("Saved",string.format("X=%.0f Y=%.0f Z=%.0f",p.X,p.Y,p.Z),2)
+    end
+end)
+
+SecL:Button("🔄 Rejoin","Rejoin server",function()
+    notify("Rejoin","...",1)
+    task.wait(1)
+    TpService:Teleport(game.PlaceId,LP)
+end)
+
+SecR:Paragraph("Anti AFK","Prevent idle kick")
+SecR:Paragraph("Anti Kick","HP <15% = heal")
+SecR:Paragraph("Respawn","Save & restore pos")
+
+local SetP=T_Set:Page("Setting","settings")
+local SetL=SetP:Section("🎣 Fishing","Left")
+local SetR=SetP:Section("Log","Right")
+
+SetL:Label("Settings")
+SetL:Slider("Hold","hold",1,10,2,function(v)
+    Fish.instantDelay=v
+end,"Cast hold time")
+
+SetL:Slider("Timeout","to",10,180,120,function(v)
+    Fish.waitDelay=v
+end,"Wait for minigame")
+
+SetL:Label("Auto Fish")
+SetL:Toggle("Auto","af",false,"Cast loop",function(v)
+    Fish.autoOn=v
+    if v then
+        task.spawn(function()
+            if not Fish.rodEquipped then
+                if not equipRod() then Fish.autoOn=false; return end
+                task.wait(0.3)
+            end
+            notify("Fish","ON",2)
+            local attempts=0
+            Fish.fishTask=task.spawn(function()
+                while Fish.autoOn do
+                    local ok=pcall(castOnce)
+                    if ok then
+                        attempts=0
+                    else
+                        attempts=attempts+1
+                        if attempts>=3 then
+                            notify("Fish","Stop",2)
+                            Fish.autoOn=false; break
+                        end
+                        task.wait(3)
+                    end
+                end
+            end)
+        end)
+    else
+        if Fish.fishTask then
+            pcall(function() task.cancel(Fish.fishTask) end)
+            Fish.fishTask=nil
+        end
+        notify("Fish","OFF | Total: "..Fish.totalFished,1)
+    end
+end)
+
+SetL:Button("Cast 1x","Manual cast",function()
+    task.spawn(function()
+        if not Fish.rodEquipped then
+            if not equipRod() then return end
+            task.wait(0.5)
+        end
+        castOnce()
+        notify("Cast","Done! "..Fish.totalFished,1)
+    end)
+end)
+
+SetL:Button("Equip","Get rod",function()
+    if equipRod() then notify("Rod","OK",1) end
+end)
+
+SetL:Button("Unequip","Return rod",function()
+    unequipRod()
+    notify("Rod","OK",1)
+end)
+
+SetR:Button("Logs 5","Recent logs",function()
+    if #logLines==0 then notify("Log","Empty",1); return end
+    local txt=""
+    for i=1,math.min(5,#logLines) do txt=txt..logLines[i].."\n" end
+    notify("Logs",txt,10)
+end)
+
+SetR:Button("Logs 10","All logs",function()
+    if #logLines==0 then notify("Log","Empty",1); return end
+    local txt=""
+    for i=1,math.min(10,#logLines) do txt=txt..logLines[i].."\n" end
+    notify("All",txt,12)
+end)
+
+SetR:Button("Clear","Clear logs",function()
+    logLines={}
+    notify("Log","Cleared",1)
+end)
+
+SetR:Paragraph("v5.26","Teleport+Bring\nPlayer+Security\nFishing")
+
+notify("✅ XKID v5.26 Ready","No Farming/Shop - Bring Player Added",4)
+Library:Notification("XKID HUB v5.26","Teleport·Player·Security·Setting",6)
 Library:ConfigSystem(Win)
-
-log("XKID Debug v5 loaded | "..LP.Name)
-log("WS children: "..#Workspace:GetChildren())
+print("[XKID] v5.26 loaded")
