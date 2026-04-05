@@ -1,11 +1,11 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v21.0  💠              ║
-║                FLY-CAM & ANALOG FINAL LOCK               ║
+║              💠  X K I D   H U B  v22.0  💠              ║
+║                RAW JOYSTICK NAVIGATION FIX               ║
 ╚═══════════════════════════════════════════════════════════╣
-║  ➤  Fixed: Analog Maju = Kamera Maju (Persis Fly)         ║
-║  ➤  Fixed: Karakter diem total & Invisible (Recording)    ║
-║  ➤  Fixed: Speed 0.1 buat Cinematic Slow-Mo               ║
+║  ➤  Fixed: Analog Kiri (Maju/Mundur/Samping) Aktif Total  ║
+║  ➤  Fixed: Panning Layar Kanan Tetap Responsif            ║
+║  ➤  Fixed: Karakter Diem & Invis Pas Rekaman              ║
 ║  ➤  Stable: IY Fling, Weather, Rejoin, & Security         ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
@@ -68,8 +68,9 @@ local function toggleFly(v)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             ➤  CINEMATIC ENGINE (FLY LOGIC)             │
+-- │             ➤  CINEMATIC ENGINE (RAW INPUT)             │
 -- └─────────────────────────────────────────────────────────┘
+-- Handle nengok (Layar Kanan)
 UIS.InputChanged:Connect(function(input)
     if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
         local delta = input.Delta
@@ -83,20 +84,20 @@ RS.RenderStepped:Connect(function()
     if State.Cinema.active then
         Cam.CameraType = Enum.CameraType.Scriptable
         
-        -- Update Rotasi
+        -- Lock Rotasi (Hasil Swipe Jari Kanan)
         local rotation = CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
-        Cam.CFrame = CFrame.new(State.Cinema.pos) * rotation
         
-        -- Update Posisi via MoveDirection (Fly Logic)
-        local hum = getHum()
-        if hum and hum.MoveDirection.Magnitude > 0 then
-            local md = hum.MoveDirection
-            -- LOGIKA FLY: Gerak maju searah lensa kamera
-            local forward = Cam.CFrame.LookVector * (md:Dot(Cam.CFrame.LookVector * Vector3.new(1,0,1).Unit))
-            local right = Cam.CFrame.RightVector * (md:Dot(Cam.CFrame.RightVector))
-            
-            State.Cinema.pos = State.Cinema.pos + (md * State.Cinema.speed)
+        -- UPDATE POSISI PAKAI RAW JOYSTICK (Layar Kiri)
+        -- Ini rahasianya: Pake UIS:GetMoveVector() biar ga butuh Humanoid
+        local rawInput = UIS:GetMoveVector() 
+        if rawInput.Magnitude > 0 then
+            -- Kalkulasi gerak relatif ke arah pandangan kamera
+            local driveVector = (Cam.CFrame.LookVector * -rawInput.Z) + (Cam.CFrame.RightVector * rawInput.X)
+            State.Cinema.pos = State.Cinema.pos + (driveVector * State.Cinema.speed)
         end
+        
+        -- Set Final CFrame Kamera
+        Cam.CFrame = CFrame.new(State.Cinema.pos) * rotation
     end
 end)
 
@@ -119,7 +120,7 @@ end)
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V21", "star", "FLY-CAM PRO", false)
+local Win = Library:Window("XKID HUB V22", "star", "REPAIR ANALOG", false)
 
 -- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -163,14 +164,15 @@ local T_CI = Win:Tab("Cinematic", "video")
 local CIM = T_CI:Page("Camera", "video"):Section("🎬 Controls", "Left")
 local CIW = T_CI:Page("Camera", "video"):Section("📱 Orientation", "Right")
 
-CIM:Toggle("Freecam (Freeze Char)", "fc", false, "Fly Logic", function(v)
+CIM:Toggle("Freecam (Freeze Char)", "fc", false, "Raw Joystick Fix", function(v)
     State.Cinema.active = v
     if v then
+        -- Simpan posisi awal kamera
         State.Cinema.pos = Cam.CFrame.Position
         State.Cinema.rotX = 0
         State.Cinema.rotY = 0
         if getRoot() then getRoot().Anchored = true end
-        if LP.Character then LP.Character.Parent = nil end -- Sembunyikan karakter
+        if LP.Character then LP.Character.Parent = nil end -- Invis
     else
         if getRoot() then getRoot().Anchored = false end
         if LP.Character then LP.Character.Parent = workspace end
@@ -212,4 +214,4 @@ end)
 Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPNames()) end)
 Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPNames()) end)
 
-Library:Notification("XKID V21", "Fly-Cam Fix! Analog Aman.", 5)
+Library:Notification("XKID V22", "Analog Fix! Sikat Bro Diki!", 5)
