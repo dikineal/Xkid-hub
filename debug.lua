@@ -184,3 +184,4 @@ SCS:Button("⚡ Fast Respawn", "Instant TP Back", function()
 end)
 
 notify("XKID V3", "Skrip Berhasil Diperbarui!", 5)
+
