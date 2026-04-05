@@ -1,11 +1,11 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v26.0  💠              ║
-║                ULTIMATE DRONE & INVIS LOCK               ║
+║              💠  X K I D   H U B  v27.0  💠              ║
+║                GHOST DRONE & FULL FEATURES LOCK          ║
 ╚═══════════════════════════════════════════════════════════╣
-║  ➤  New: Drone Mode = Auto Invisible (R15 Style)          ║
-║  ➤  Fixed: Drone Movement (Sync Joystick & Look Direction)║
-║  ➤  Stable: Fly, Bypass, Smart TP, & IY Fling Locked      ║
+║  ➤  Fixed: Drone Movement (No Anchor - Joystick Active)   ║
+║  ➤  Fixed: Drone Mode = Ghost Mode (Auto-Invis & Return)  ║
+║  ➤  Stable: Smart TP, Fly, Bypass, IY Fling Locked        ║
 ║  ➤  Stable: Weather Control & Rejoin Locked               ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
@@ -29,7 +29,7 @@ local State = {
     Fling = {active = false, power = 1000000},
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil},
-    Cinema = {active = false, speed = 0.5, fov = 70, rotX = 0, rotY = 0, pos = nil}
+    Cinema = {active = false, speed = 0.5, fov = 70, rotX = 0, rotY = 0, pos = nil, lastPos = nil}
 }
 
 -- Helpers
@@ -48,7 +48,7 @@ local function toggleFly(v)
         State.Fly.active = false
         if State.Fly.bv then State.Fly.bv:Destroy() end
         if State.Fly.bg then State.Fly.bg:Destroy() end
-        if getHum() then getHum().PlatformStand = false; getHum():ChangeState(1) end
+        if getHum() then getHum().PlatformStand = false; getHum():ChangeState(1); getHum().WalkSpeed = State.Move.ws end
         return
     end
     State.Fly.active = true; getHum().PlatformStand = true
@@ -68,7 +68,7 @@ local function toggleFly(v)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             ➤  ULTIMATE DRONE ENGINE (INVIS)            │
+-- │             ➤  GHOST DRONE ENGINE (FIXED)               │
 -- └─────────────────────────────────────────────────────────┘
 UIS.InputChanged:Connect(function(input)
     if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
@@ -84,22 +84,26 @@ RS.RenderStepped:Connect(function()
         Cam.CameraType = Enum.CameraType.Scriptable
         local rotation = CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
         
-        local rawInput = UIS:GetMoveVector() 
-        if rawInput.Magnitude > 0 then
-            -- Gerak sinkron Drone (Maju selalu searah mata)
-            local moveDir = (Cam.CFrame.LookVector * -rawInput.Z) + (Cam.CFrame.RightVector * rawInput.X)
-            State.Cinema.pos = State.Cinema.pos + (moveDir * State.Cinema.speed)
+        -- Logic Gerak: Gunakan MoveDirection (Joystick tetap aktif karena tidak di-Anchor)
+        local md = getHum() and getHum().MoveDirection or Vector3.zero
+        if md.Magnitude > 0 then
+            -- Gerak sinkron dengan arah lensa kamera
+            local moveDir = (Cam.CFrame.LookVector * (md:Dot(Cam.CFrame.LookVector * Vector3.new(1,0,1).Unit))) + (Cam.CFrame.RightVector * (md:Dot(Cam.CFrame.RightVector)))
+            State.Cinema.pos = State.Cinema.pos + (md * State.Cinema.speed)
         end
         Cam.CFrame = CFrame.new(State.Cinema.pos) * rotation
+        
+        -- Jaga badan tetep di bawah map biar ga kelihatan pas rekam
+        if getRoot() then getRoot().CFrame = CFrame.new(State.Cinema.pos.X, -500, State.Cinema.pos.Z) end
     end
 end)
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V26", "star", "DRONE EDITION", false)
+local Win = Library:Window("XKID HUB V27", "star", "GHOST DRONE", false)
 
--- --- TAB 1: TELEPORT (SMART TP LOCKED) ---
+-- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
 local TPT = T_TP:Page("Navigation", "map-pin"):Section("🎯 Smart Search", "Left")
 
@@ -111,7 +115,6 @@ TPT:Button("🚀 Teleport Now", "Fast TP", function()
         if p ~= LP and (string.find(string.lower(p.Name), string.lower(snippet)) or string.find(string.lower(p.DisplayName), string.lower(snippet))) then
             if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                 getRoot().CFrame = p.Character.HumanoidRootPart.CFrame
-                Library:Notification("Teleport", "Berhasil ke: " .. p.Name, 2)
                 return
             end
         end
@@ -120,7 +123,7 @@ end)
 local P_Drop = TPT:Dropdown("Manual List", "pDrop", getPNames(), function(v) State.Teleport.selectedTarget = v end)
 TPT:Button("🔄 Refresh List", "", function() P_Drop:Refresh(getPNames()) end)
 
--- --- TAB 2: PLAYER (FLY & WEATHER LOCKED) ---
+-- --- TAB 2: PLAYER ---
 local T_PL = Win:Tab("Player", "user")
 local PLP = T_PL:Page("Settings", "zap")
 local PLM = PLP:Section("⚡ Movement", "Left")
@@ -131,7 +134,7 @@ PLM:Button("🔄 Refresh (;re)", "", function()
     local cf = getRoot().CFrame; getHum().Health = 0
     LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = cf
 end)
-PLM:Slider("WalkSpeed", "ws", 16, 500, 16, function(v) if getHum() then getHum().WalkSpeed = v end end)
+PLM:Slider("WalkSpeed", "ws", 16, 500, 16, function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end)
 PLM:Toggle("Inf Jump", "ij", false, "", function(v) 
     if v then State.Move.infJ = UIS.JumpRequest:Connect(function() getHum():ChangeState(3) end)
     else if State.Move.infJ then State.Move.infJ:Disconnect() end end
@@ -139,7 +142,7 @@ end)
 
 PLH:Toggle("Native Fly", "nf", false, "Joystick", function(v) toggleFly(v) end)
 PLH:Toggle("NoClip", "nc", false, "", function(v) State.Move.ncp = v end)
-PLH:Toggle("Invisible (R15)", "inv", false, "Server Side", function(v) 
+PLH:Toggle("Invisible (R15)", "inv", false, "", function(v) 
     if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end 
 end)
 PLH:Toggle("IY Fling Mode", "ffm", false, "Tabrak!", function(v) State.Fling.active = v; State.Move.ncp = v end)
@@ -148,24 +151,24 @@ PLW:Slider("Waktu (ClockTime)", "time", 0, 24, 12, function(v) Lighting.ClockTim
 PLW:Button("☀️ Set Siang", "", function() Lighting.ClockTime = 14 end)
 PLW:Button("🌙 Set Malam", "", function() Lighting.ClockTime = 0 end)
 
--- --- TAB 3: CINEMATIC (DRONE FIXED) ---
+-- --- TAB 3: CINEMATIC ---
 local T_CI = Win:Tab("Cinematic", "video")
 local CIM = T_CI:Page("Drone", "video"):Section("🎬 Drone Mode", "Left")
 local CIW = T_CI:Page("Drone", "video"):Section("📱 Orientation", "Right")
 
-CIM:Toggle("Invisible Drone", "fc", false, "Invis R15 Logic", function(v)
+CIM:Toggle("Ghost Drone", "fc", false, "Auto-Invis & Return", function(v)
     State.Cinema.active = v
     if v then
+        State.Cinema.lastPos = getRoot().CFrame
         State.Cinema.pos = Cam.CFrame.Position
         State.Cinema.rotX = 0; State.Cinema.rotY = 0
-        -- LOGIKA INVIS: Hapus torso biar gaib pas rekam
-        if LP.Character and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end
-        if getRoot() then getRoot().Anchored = true end
+        if getHum() then getHum().WalkSpeed = 0 end
     else
-        -- Matikan Drone (Butuh ;re buat balikin badan)
-        if getRoot() then getRoot().Anchored = false end
+        -- KEMBALIKAN BADAN KE POSISI KAMERA
+        if getRoot() then getRoot().CFrame = Cam.CFrame end
+        if getHum() then getHum().WalkSpeed = State.Move.ws end
         Cam.CameraType = Enum.CameraType.Custom
-        Library:Notification("Drone", "Gunakan Refresh (;re) buat balikin badan!", 3)
+        Library:Notification("Drone", "Badan lo udah balik ke posisi kamera!", 3)
     end
 end)
 CIM:Slider("Drone Speed", "csc", 0.1, 5, 0.5, function(v) State.Cinema.speed = v end)
@@ -174,7 +177,7 @@ CIM:Slider("Zoom (FOV)", "cfov", 10, 120, 70, function(v) Cam.FieldOfView = v en
 CIW:Button("📱 Portrait", "Tegak", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
 CIW:Button("📺 Landscape", "Mendatar", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
 
--- --- TAB 4: SECURITY (BYPASS LOCKED) ---
+-- --- TAB 4: SECURITY ---
 local T_SC = Win:Tab("Security", "shield")
 local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
 
@@ -187,7 +190,7 @@ SCP:Toggle("Bypass Anti-Cheat", "acb", false, "WS/JP Hook", function(v)
         end); setreadonly(mt, true)
     end
 end)
-SCP:Toggle("Anti-AFK", "afk", false, "No Kick", function(v)
+SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
     if v then State.Security.afkConn = LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
     else if State.Security.afkConn then State.Security.afkConn:Disconnect() end end
 end)
@@ -214,4 +217,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-Library:Notification("XKID V26", "Drone & Features Locked!", 5)
+Library:Notification("XKID V27", "Ghost Drone Ready! Sikat Bro!", 5)
