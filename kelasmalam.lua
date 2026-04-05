@@ -249,33 +249,53 @@ local function startDroneLoop()
         )
 
         -- ── VELOCITY (gerak drone) ─────────────────────────────
-        -- Keyboard
-        local kbVel = Vector3.new(
-            moveKeys.d - moveKeys.a,
-            moveKeys.e - moveKeys.q,
-            moveKeys.s - moveKeys.w
-        )
-        -- Joystick (touch/mobile)
-        local md = getHum() and getHum().MoveDirection or Vector3.zero
-        local touchVel = Vector3.new(deadzone(md.X), 0, deadzone(-md.Z))
-        -- Gabung: prioritas keyboard, fallback touch
-        local rawVel = kbVel.Magnitude > 0 and kbVel or touchVel
-        -- Terapkan spring + speed
-        local baseSpeed = State.Cinema.speed * 64  -- skala sama dg Freecam (64 studs/s base)
-        local velTarget = spPos:Update(dt, rawVel) * (FC.speedMul * (FC.slow and 0.25 or 1))
+        -- Baca joystick LANGSUNG dari DynamicThumbstick position delta
+        -- Ini paling akurat untuk mobile, tidak bergantung pada world-transform
+        local rawJoy = Vector3.zero
+        local touchGui = LP.PlayerGui:FindFirstChild("TouchGui")
+        if touchGui then
+            local tcf = touchGui:FindFirstChild("TouchControlFrame")
+            local dtf = tcf and tcf:FindFirstChild("DynamicThumbstickFrame")
+            -- ThumbstickInner adalah lingkaran yang bergerak mengikuti jari
+            local inner = dtf and dtf:FindFirstChild("ThumbstickInner")
+            if inner and dtf then
+                -- Hitung offset inner dari center frame = raw joystick vector
+                local center = dtf.AbsolutePosition + dtf.AbsoluteSize * 0.5
+                local pos    = inner.AbsolutePosition + inner.AbsoluteSize * 0.5
+                local offset = pos - center
+                local radius = dtf.AbsoluteSize.X * 0.5
+                if radius > 0 then
+                    local nx = math.clamp(offset.X / radius, -1, 1)
+                    local ny = math.clamp(offset.Y / radius, -1, 1)
+                    -- nx = kanan/kiri, ny = bawah/atas (positif = bawah di screen = maju)
+                    rawJoy = Vector3.new(deadzone(nx), 0, deadzone(ny))
+                end
+            end
+        end
 
-        -- Konversi ke arah kamera (pitch + yaw)
-        local camOri = CFrame.fromOrientation(FC.angles.X, FC.angles.Y, 0)
-        local worldVel = camOri * Vector3.new(velTarget.X, velTarget.Y, velTarget.Z)
-        FC.pos = FC.pos + worldVel * baseSpeed * dt
+        -- Bangun CFrame kamera dari angles saat ini
+        local camCF = CFrame.new(FC.pos) * CFrame.fromOrientation(FC.angles.X, FC.angles.Y, 0)
+
+        -- Proyeksikan ke ruang kamera drone:
+        -- rawJoy.X = kanan/kiri → RightVector kamera
+        -- rawJoy.Z = maju/mundur (positif screen = maju) → LookVector kamera
+        -- Pitch ikut kamera (terbang ke bawah kalau kamera nunduk)
+        local smoothJoy = spPos:Update(dt, rawJoy)
+        local smoothMove = camCF.LookVector * (-smoothJoy.Z) + camCF.RightVector * smoothJoy.X
+
+        local baseSpeed = State.Cinema.speed * 64
+        FC.pos = FC.pos + smoothMove * baseSpeed * dt * FC.speedMul
 
         -- ── TERAPKAN KE KAMERA ────────────────────────────────
         local cf = CFrame.new(FC.pos) * CFrame.fromOrientation(FC.angles.X, FC.angles.Y, 0)
         Cam.CFrame = cf
 
-        -- ── SEMBUNYIKAN BADAN ─────────────────────────────────
-        if getRoot() then
-            getRoot().CFrame = CFrame.new(FC.pos.X, -9999, FC.pos.Z)
+        -- ── ANCHOR + SEMBUNYIKAN BADAN ─────────────────────────
+        -- Anchor supaya physics engine tidak gerakkan karakter sama sekali
+        local hrp = getRoot()
+        if hrp then
+            if not hrp.Anchored then hrp.Anchored = true end
+            hrp.CFrame = CFrame.new(FC.pos.X, -9999, FC.pos.Z)
         end
     end)
 end
@@ -310,6 +330,34 @@ end)
 local P_Drop = TPT:Dropdown("Manual List", "pDrop", getPNames(), function(v) State.Teleport.selectedTarget = v end)
 TPT:Button("🔄 Refresh List", "", function() P_Drop:Refresh(getPNames()) end)
 
+-- --- SAVE / LOAD LOCATION ---
+local TPP2 = T_TP:Page("Locations", "bookmark"):Section("💾 Save Location", "Left")
+local TPP3 = T_TP:Page("Locations", "bookmark"):Section("📍 Load Location", "Right")
+
+local SavedLocs = {nil, nil, nil, nil, nil}
+
+for i = 1, 5 do
+    local idx = i
+    TPP2:Button("💾 Save Slot " .. idx, "Simpan posisi", function()
+        local r = getRoot()
+        if not r then return end
+        SavedLocs[idx] = r.CFrame
+        Library:Notification("Location", "Slot " .. idx .. " tersimpan!", 2)
+    end)
+end
+
+for i = 1, 5 do
+    local idx = i
+    TPP3:Button("📍 Load Slot " .. idx, "Teleport ke posisi", function()
+        if not SavedLocs[idx] then
+            Library:Notification("Location", "Slot " .. idx .. " kosong!", 2)
+            return
+        end
+        local r = getRoot()
+        if r then r.CFrame = SavedLocs[idx] end
+    end)
+end
+
 -- --- TAB 2: PLAYER ---
 local T_PL = Win:Tab("Player", "user")
 local PLP = T_PL:Page("Settings", "zap")
@@ -329,8 +377,31 @@ end)
 
 PLH:Toggle("Native Fly", "nf", false, "Joystick", function(v) toggleFly(v) end)
 PLH:Toggle("NoClip", "nc", false, "", function(v) State.Move.ncp = v end)
-PLH:Toggle("Invisible (R15)", "inv", false, "", function(v) 
-    if v and LP.Character:FindFirstChild("LowerTorso") then LP.Character.LowerTorso:Destroy() end 
+-- Invisible R15: simpan transparency asli lalu restore saat off
+local invisSaved = {}
+PLH:Toggle("Invisible (R15)", "inv", false, "", function(v)
+    local char = LP.Character
+    if not char then return end
+    if v then
+        invisSaved = {}
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                invisSaved[part] = part.Transparency
+                part.Transparency = 1
+            end
+        end
+    else
+        for part, origTrans in pairs(invisSaved) do
+            if part and part.Parent then
+                part.Transparency = origTrans
+            end
+        end
+        invisSaved = {}
+        -- Pastikan kamera balik ke mode normal
+        if Cam.CameraType ~= Enum.CameraType.Custom then
+            Cam.CameraType = Enum.CameraType.Custom
+        end
+    end
 end)
 PLH:Toggle("IY Fling Mode", "ffm", false, "Tabrak!", function(v) State.Fling.active = v; State.Move.ncp = v end)
 
@@ -369,8 +440,12 @@ CIM:Toggle("Ghost Drone", "fc", false, "Auto-Invis & Return", function(v)
         stopDroneLoop()
         stopDroneCapture()
 
-        -- KEMBALIKAN BADAN KE POSISI KAMERA
-        if getRoot() then getRoot().CFrame = Cam.CFrame end
+        -- Unanchor dulu sebelum teleport, lalu kembalikan ke posisi kamera
+        local hrp = getRoot()
+        if hrp then
+            hrp.Anchored = false
+            hrp.CFrame = Cam.CFrame
+        end
         if getHum() then getHum().WalkSpeed = State.Move.ws end
         Cam.FieldOfView = 70
         Cam.CameraType = Enum.CameraType.Custom
