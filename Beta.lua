@@ -1,4 +1,4 @@
--- XKID HUB LITE + UTILITY (MERGED FINAL)
+-- XKID HUB (FINAL - MOVEMENT & TELEPORT UPGRADE)
 
 local Library = loadstring(game:HttpGet(
 "https://raw.githubusercontent.com/Vovabro46/trash/main/Aurora.lua?cache="..tostring(os.time())
@@ -27,20 +27,8 @@ local function notify(t,b,d)
     pcall(function() Library:Notification(t,b,d or 3) end)
 end
 
--- ================= STATE =================
-local State = {
-    speed = 16,
-    jump = 50,
-    noclip = false,
-    infJump = false,
-    fly = false,
-    flySpeed = 70,
-    esp = false,
-    antiAFK = false
-}
-
 -- ================= WINDOW =================
-local Win=Library:Window("XKID HUB","sprout","Lite",false)
+local Win=Library:Window("XKID HUB","sprout","vFinal",false)
 Win:TabSection("MAIN")
 
 local T_TP  =Win:Tab("Teleport","map-pin")
@@ -48,200 +36,190 @@ local T_Pl  =Win:Tab("Player","user")
 local T_Sec =Win:Tab("Security","shield")
 local T_Set =Win:Tab("Setting","settings")
 
--- ================= TELEPORT =================
-local TP=T_TP:Page("Teleport","map-pin")
-local TPL=TP:Section("👥 Player","Left")
-local TPR=TP:Section("📍 Lokasi","Right")
+-- =========================================================
+-- 🧠 MOVEMENT SYSTEM (FULL UPGRADE DARI LU)
+-- =========================================================
 
-for _,p in pairs(Players:GetPlayers()) do
-    if p~=LP then
-        TPL:Button("🚀 "..p.Name,"TP",function()
-            local root=getRoot()
-            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                root.CFrame=p.Character.HumanoidRootPart.CFrame
-                notify("TP","→ "..p.Name,2)
-            end
-        end)
-    end
-end
-
-local SavedLoc={nil,nil,nil,nil,nil}
-for i=1,5 do
-    local idx=i
-    TPR:Button("💾 Save "..idx,"Simpan posisi",function()
-        local r=getRoot()
-        if r then SavedLoc[idx]=r.CFrame notify("Saved","Slot "..idx,2) end
-    end)
-    TPR:Button("📍 Load "..idx,"Teleport posisi",function()
-        if SavedLoc[idx] then
-            local r=getRoot()
-            if r then r.CFrame=SavedLoc[idx] end
-        end
-    end)
-end
-
-TPR:Button("📌 Posisi Saya","Cek koordinat",function()
-    local r=getRoot()
-    if r then
-        local p=r.Position
-        notify("Posisi",string.format("X=%.1f Y=%.1f Z=%.1f",p.X,p.Y,p.Z),5)
-    end
-end)
-
--- ================= PLAYER =================
-local PP=T_Pl:Page("Player","user")
-local PL=PP:Section("⚡ Movement","Left")
-local PR=PP:Section("🔥 Utility","Right")
+local Move={speed=16,flySpeed=60,noclip=false,noclipConn=nil,jumpConn=nil}
+local flyFlying=false; local flyConn=nil; local flyBV=nil; local flyBG=nil
 
 RunService.RenderStepped:Connect(function()
-    local h=getHum()
-    if h and not h.PlatformStand then
-        h.WalkSpeed=State.speed
-        h.JumpPower=State.jump
-    end
+    if flyFlying then return end
+    local h=getHum(); if h then h.WalkSpeed=Move.speed end
 end)
 
-PL:Slider("Speed","spd",16,200,16,function(v) State.speed=v end)
-PL:Slider("Jump","jmp",50,200,50,function(v) State.jump=v end)
-
-UIS.JumpRequest:Connect(function()
-    if State.infJump then
-        local h=getHum()
-        if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+local function setNoclip(v)
+    Move.noclip=v
+    if v then
+        if Move.noclipConn then Move.noclipConn:Disconnect() end
+        Move.noclipConn=RunService.Stepped:Connect(function()
+            local c=getChar(); if not c then return end
+            for _,p in pairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end
+        end)
+    else
+        if Move.noclipConn then Move.noclipConn:Disconnect(); Move.noclipConn=nil end
+        local c=getChar()
+        if c then for _,p in pairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=true end end end
     end
+end
+
+local function setInfJump(v)
+    if v then
+        if Move.jumpConn then Move.jumpConn:Disconnect() end
+        Move.jumpConn=UIS.JumpRequest:Connect(function()
+            local h=getHum(); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end)
+    else
+        if Move.jumpConn then Move.jumpConn:Disconnect(); Move.jumpConn=nil end
+    end
+end
+
+-- MOBILE + PC CONTROL
+local ControlModule=nil
+pcall(function()
+    ControlModule=require(LP:WaitForChild("PlayerScripts")
+        :WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
 end)
 
-PL:Toggle("Infinite Jump","ij",false,function(v) State.infJump=v end)
-
-RunService.Stepped:Connect(function()
-    if State.noclip and LP.Character then
-        for _,v in pairs(LP.Character:GetDescendants()) do
-            if v:IsA("BasePart") then v.CanCollide=false end
-        end
+local function getMoveVector()
+    if ControlModule then
+        local ok,result=pcall(function() return ControlModule:GetMoveVector() end)
+        if ok and result then return result end
     end
-end)
-
-PL:Toggle("NoClip","nc",false,function(v) State.noclip=v end)
-
--- ================= FLY =================
-local flyConn, flyBV, flyBG, flying
+    return Vector3.new(
+        (UIS:IsKeyDown(Enum.KeyCode.D) and 1 or 0)-(UIS:IsKeyDown(Enum.KeyCode.A) and 1 or 0),
+        0,
+        (UIS:IsKeyDown(Enum.KeyCode.W) and -1 or 0)+(UIS:IsKeyDown(Enum.KeyCode.S) and 1 or 0))
+end
 
 local function startFly()
-    if flying then return end
-    local root=getRoot()
-    local hum=getHum()
-    if not root or not hum then return end
-
-    flying=true
-    hum.PlatformStand=true
+    if flyFlying then return end
+    local root=getRoot(); if not root then return end
+    local hum=getHum(); if not hum then return end
+    flyFlying=true; hum.PlatformStand=true
 
     flyBV=Instance.new("BodyVelocity",root)
     flyBV.MaxForce=Vector3.new(1e6,1e6,1e6)
 
     flyBG=Instance.new("BodyGyro",root)
-    flyBG.MaxTorque=Vector3.new(1e6,1e6,1e6)
-    flyBG.P=1e5
+    flyBG.MaxTorque=Vector3.new(1e6,1e6,1e6); flyBG.P=1e5; flyBG.D=1e3
 
-    flyConn=RunService.RenderStepped:Connect(function()
-        if not flying then return end
+    flyConn=RunService.RenderStepped:Connect(function(dt)
+        local r2=getRoot(); if not r2 then return end
+        local h2=getHum(); if not h2 then return end
 
-        local cam=Workspace.CurrentCamera
-        local dir=Vector3.zero
+        local cam=Workspace.CurrentCamera; local cf=cam.CFrame
+        h2.PlatformStand=true
 
-        if UIS:IsKeyDown(Enum.KeyCode.W) then dir+=cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then dir-=cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then dir-=cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then dir+=cam.CFrame.RightVector end
+        local md=getMoveVector()
+        local look=Vector3.new(cf.LookVector.X,0,cf.LookVector.Z)
+        local right=Vector3.new(cf.RightVector.X,0,cf.RightVector.Z)
 
-        if dir.Magnitude>0 then
-            flyBV.Velocity=dir.Unit*State.flySpeed
-        else
-            flyBV.Velocity=Vector3.new(0,0.1,0)
-        end
+        if look.Magnitude>0 then look=look.Unit end
+        if right.Magnitude>0 then right=right.Unit end
 
-        flyBG.CFrame=cam.CFrame
+        local move=right*md.X+look*(-md.Z)
+
+        local pitch=cf.LookVector.Y
+        local vVel=pitch*Move.flySpeed
+
+        flyBV.Velocity=Vector3.new(move.X*Move.flySpeed,vVel,move.Z*Move.flySpeed)
+        flyBG.CFrame=cf
     end)
 end
 
 local function stopFly()
-    flying=false
-    if flyConn then flyConn:Disconnect() flyConn=nil end
-    if flyBV then flyBV:Destroy() flyBV=nil end
-    if flyBG then flyBG:Destroy() flyBG=nil end
-    local h=getHum()
-    if h then h.PlatformStand=false end
+    flyFlying=false
+    if flyConn then flyConn:Disconnect(); flyConn=nil end
+    if flyBV then flyBV:Destroy(); flyBV=nil end
+    if flyBG then flyBG:Destroy(); flyBG=nil end
+    local hum=getHum()
+    if hum then hum.PlatformStand=false; hum.WalkSpeed=Move.speed end
 end
 
+-- =========================================================
+-- 🚀 TELEPORT SYSTEM (ADVANCED)
+-- =========================================================
+
+local function inferPlayer(prefix)
+    if not prefix or prefix=="" then return nil end
+    local best,bestScore=nil,math.huge
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP then
+            local score=math.huge
+            if p.Name:lower():sub(1,#prefix)==prefix:lower() then score=#p.Name-#prefix end
+            if score<bestScore then best=p bestScore=score end
+        end
+    end
+    return best
+end
+
+local function tpToPlayer(prefix)
+    local p=inferPlayer(prefix)
+    if not p then notify("TP","Player tidak ditemukan",2); return end
+    local hrp=p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+    local root=getRoot()
+    if hrp and root then root.CFrame=hrp.CFrame*CFrame.new(0,0,3) end
+end
+
+-- =========================================================
+-- 🧩 UI PLAYER (CONNECT KE SYSTEM LU)
+-- =========================================================
+
+local PP=T_Pl:Page("Player","user")
+local PL=PP:Section("Movement","Left")
+local PR=PP:Section("Utility","Right")
+
+PL:Slider("Speed","spd",16,200,16,function(v) Move.speed=v end)
+PL:Toggle("NoClip","nc",false,function(v) setNoclip(v) end)
+PL:Toggle("Infinite Jump","ij",false,function(v) setInfJump(v) end)
+
 PR:Toggle("Fly","fly",false,function(v)
-    State.fly=v
     if v then startFly() else stopFly() end
 end)
 
-PR:Slider("Fly Speed","fspd",20,150,70,function(v) State.flySpeed=v end)
+PR:Slider("Fly Speed","fspd",20,150,60,function(v) Move.flySpeed=v end)
 
--- ================= ESP =================
-RunService.Heartbeat:Connect(function()
-    if not State.esp then return end
-    for _,p in pairs(Players:GetPlayers()) do
-        if p~=LP and p.Character and p.Character:FindFirstChild("Head") then
-            if not p.Character.Head:FindFirstChild("XKID_ESP") then
-                local bill=Instance.new("BillboardGui",p.Character.Head)
-                bill.Name="XKID_ESP"
-                bill.Size=UDim2.new(0,100,0,20)
-                bill.AlwaysOnTop=true
+-- =========================================================
+-- 🧩 UI TELEPORT
+-- =========================================================
 
-                local txt=Instance.new("TextLabel",bill)
-                txt.Size=UDim2.new(1,0,1,0)
-                txt.BackgroundTransparency=1
-                txt.TextColor3=Color3.new(1,1,0)
-                txt.Text=p.Name
-            end
-        end
-    end
-end)
+local TP=T_TP:Page("Teleport","map-pin")
+local TL=TP:Section("Player","Left")
 
-PR:Toggle("ESP Player","esp",false,function(v) State.esp=v end)
+local input=""
+TL:TextBox("Nama Player","tp","",function(v) input=v end)
+TL:Button("Teleport","TP",function() tpToPlayer(input) end)
 
--- ================= SECURITY =================
+-- =========================================================
+-- 🛡 SECURITY
+-- =========================================================
+
 local Sec=T_Sec:Page("Security","shield")
-local SL=Sec:Section("🛡 Protection","Left")
+local SL=Sec:Section("Protection","Left")
 
-local afk
 SL:Toggle("Anti AFK","afk",false,function(v)
-    State.antiAFK=v
     if v then
-        afk=LP.Idled:Connect(function()
+        LP.Idled:Connect(function()
             VirtualUser:ClickButton2(Vector2.new())
         end)
-    else
-        if afk then afk:Disconnect() end
     end
 end)
 
-SL:Button("🔄 Rejoin","Reconnect",function()
+SL:Button("Rejoin","Reconnect",function()
     TpService:Teleport(game.PlaceId,LP)
 end)
 
-SL:Button("⚡ Respawn","Fast Respawn",function()
-    local r=getRoot()
-    local h=getHum()
-    if r and h then
-        local cf=r.CFrame
-        h.Health=0
-        LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart").CFrame=cf
-    end
-end)
+-- =========================================================
+-- ⚙️ SETTING
+-- =========================================================
 
--- ================= SETTING =================
 local Set=T_Set:Page("Setting","settings")
 local ST=Set:Section("Info","Left")
 
-ST:Button("📌 Posisi Saya","Cek posisi",function()
+ST:Button("Cek Posisi","",function()
     local r=getRoot()
-    if r then
-        local p=r.Position
-        notify("Posisi",p.X..","..p.Y..","..p.Z,5)
-    end
+    if r then notify("Posisi",tostring(r.Position),5) end
 end)
 
-notify("XKID HUB","Loaded + Utility Aktif",5)
+notify("XKID HUB","Movement & TP upgraded",5)
