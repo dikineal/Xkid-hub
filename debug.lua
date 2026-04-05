@@ -1,7 +1,7 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v5.26  💠              ║
-║                  Aurora UI  ·  Aesthetic Pro             ║
+║              💠  X K I D   H U B  v3.0   💠              ║
+║                  Aurora UI  ·  Refresh Update            ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  ➤  UI CACHE BYPASS (Forced Render)                       ║
 ║  ➤  Refresh Button Relocated to Right Column              ║
@@ -110,8 +110,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI SETUP (AESTHETIC)               │
 -- └─────────────────────────────────────────────────────────┘
--- GANTI NAMA WINDOW BIAR CACHE DELTA KE-RESET
-local Win = Library:Window("XKID V2", "diamond", "Pro 5.26", false)
+local Win = Library:Window("XKID V3", "diamond", "REFRESH UPDATE", false)
 local T_TP = Win:Tab("Teleport", "map-pin")
 local T_PL = Win:Tab("Player", "user")
 local T_SC = Win:Tab("Security", "shield")
@@ -151,7 +150,7 @@ PLM:Toggle("Infinite Jump", "infj", false, "Lompat Terus", function(v)
     else if State.Move.jumpConn then State.Move.jumpConn:Disconnect() end end
 end)
 
--- FUNGSI HACKS (KANAN) - TOMBOL REFRESH SEKARANG DI SINI
+-- FUNGSI HACKS (KANAN) - TOMBOL REFRESH DI SINI
 PLV:Button("🔄 Refresh Character", "Reset & Restore", function() executeRefresh() end)
 PLV:Toggle("Native Fly", "nfly", false, "Joystick Support", function(v) toggleFly(v) end)
 PLV:Slider("Fly Speed", "fs", 10, 500, 60, function(v) State.Move.flySpeed = v end)
@@ -184,5 +183,4 @@ SCS:Button("⚡ Fast Respawn", "Instant TP Back", function()
     end
 end)
 
-notify("XKID V2", "Cache Cleared & Button Moved!", 5)
-
+notify("XKID V3", "Skrip Berhasil Diperbarui!", 5)
