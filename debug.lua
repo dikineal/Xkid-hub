@@ -3,10 +3,8 @@
 ║              💠  X K I D   H U B  v5.26  💠              ║
 ║                  Aurora UI  ·  Aesthetic Pro             ║
 ╠═══════════════════════════════════════════════════════════╣
-║  ➤  Native Mobile Fly (Joystick Support)                  ║
-║  ➤  Character Refresh (Instant Reset & Restore)           ║
-║  ➤  Fast Respawn & Pro ESP (Stable)                       ║
-║  ➤  NoClip & Anti-Cheat Bypass (Restored)                 ║
+║  ➤  UI FIX: Dedicated Section for Buttons                 ║
+║  ➤  Native Mobile Fly, Refresh Char, Pro ESP              ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -99,6 +97,16 @@ local function updateESP()
     end
 end
 
+local function executeRefresh()
+    local r = getRoot()
+    if r then
+        local oldCF = r.CFrame
+        getHum().Health = 0
+        LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = oldCF
+        notify("Refresh", "Karakter diperbarui!", 2)
+    end
+end
+
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI SETUP (AESTHETIC)               │
 -- └─────────────────────────────────────────────────────────┘
@@ -131,19 +139,12 @@ end
 
 -- --- PLAYER PAGE ---
 local PL_P = T_PL:Page("Movement", "zap")
+local PLC = PL_P:Section("🔄 Quick Actions", "Left") -- DEDICATED SECTION
 local PLM = PL_P:Section("⚡ Physical", "Left")
 local PLV = PL_P:Section("🚀 Hacks & Visual", "Right")
 
--- TOMBOL REFRESH DI PALING ATAS BIAR NGGAK HILANG
-PLM:Button("🔄 Refresh Character", "Reload Avatar", function()
-    local r = getRoot()
-    if r then
-        local oldCF = r.CFrame
-        getHum().Health = 0
-        LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = oldCF
-        notify("Refresh", "Karakter diperbarui!")
-    end
-end)
+-- TOMBOL REFRESH DI SEKSI TERSENDIRI BIAR GAK NGE-BUG
+PLC:Button("🔄 Refresh Character", "Reload Avatar", function() executeRefresh() end)
 
 PLM:Slider("Walk Speed", "ws", 16, 500, 16, function(v) State.Move.speed = v; if getHum() then getHum().WalkSpeed = v end end)
 PLM:Slider("Jump Power", "jp", 50, 500, 50, function(v) State.Move.jump = v; if getHum() then getHum().JumpPower = v; getHum().UseJumpPower = true end end)
@@ -160,6 +161,7 @@ PLV:Toggle("Pro ESP", "pesp", false, "Visual Pro", function(v) State.ESP.active 
 -- --- SECURITY PAGE ---
 local SC_P = T_SC:Page("Security", "shield")
 local SCS = SC_P:Section("🛡️ Protection", "Left")
+local SCM = SC_P:Section("🔄 Utilities", "Right")
 
 SCS:Toggle("Anti-Cheat Bypass", "hbp", false, "Hook Metatable", function(v)
     if v then 
@@ -174,7 +176,10 @@ SCS:Toggle("Anti AFK", "aafk", false, "No Kick", function(v)
     if v then State.Security.afk = LP.Idled:Connect(function() VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame) end)
     else if State.Security.afk then State.Security.afk:Disconnect() end end
 end)
-SCS:Button("⚡ Fast Respawn", "Instant TP Back", function()
+
+-- GANDAKAN TOMBOL DI SINI JUGA
+SCM:Button("🔄 Refresh Character", "Reload Avatar Instan", function() executeRefresh() end)
+SCM:Button("⚡ Fast Respawn", "Instant TP Back", function()
     if State.Security.lastCF then
         local target = State.Security.lastCF; getHum().Health = 0
         LP.CharacterAdded:Wait():WaitForChild("HumanoidRootPart", 10).CFrame = target
@@ -182,4 +187,4 @@ SCS:Button("⚡ Fast Respawn", "Instant TP Back", function()
     end
 end)
 
-notify("XKID HUB", "UI Fixed & Refresh Button Ready!", 5)
+notify("XKID HUB", "UI Glitch Fixed!", 5)
