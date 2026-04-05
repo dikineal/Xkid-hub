@@ -1,11 +1,11 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v20.0  💠              ║
-║                CINEMATIC CONTROLS HIJACK                 ║
+║              💠  X K I D   H U B  v21.0  💠              ║
+║                FLY-CAM & ANALOG FINAL LOCK               ║
 ╚═══════════════════════════════════════════════════════════╣
-║  ➤  Fixed: Karakter diem total pas Freecam (No Move)      ║
-║  ➤  Fixed: Joystick murni buat gerakin Kamera Drone       ║
-║  ➤  Fixed: Auto-Invis karakter pas rekaman                ║
+║  ➤  Fixed: Analog Maju = Kamera Maju (Persis Fly)         ║
+║  ➤  Fixed: Karakter diem total & Invisible (Recording)    ║
+║  ➤  Fixed: Speed 0.1 buat Cinematic Slow-Mo               ║
 ║  ➤  Stable: IY Fling, Weather, Rejoin, & Security         ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
@@ -29,12 +29,8 @@ local State = {
     Fling = {active = false, power = 1000000},
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil},
-    Cinema = {active = false, speed = 0.5, fov = 70, rotX = 0, rotY = 0}
+    Cinema = {active = false, speed = 0.5, fov = 70, rotX = 0, rotY = 0, pos = nil}
 }
-
--- Controls Helper
-local PlayerModule = require(LP.PlayerScripts:WaitForChild("PlayerModule"))
-local Controls = PlayerModule:GetControls()
 
 -- Helpers
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
@@ -72,7 +68,7 @@ local function toggleFly(v)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │             ➤  CINEMATIC ENGINE (HIJACK)                │
+-- │             ➤  CINEMATIC ENGINE (FLY LOGIC)             │
 -- └─────────────────────────────────────────────────────────┘
 UIS.InputChanged:Connect(function(input)
     if State.Cinema.active and input.UserInputType == Enum.UserInputType.Touch then
@@ -86,13 +82,20 @@ end)
 RS.RenderStepped:Connect(function()
     if State.Cinema.active then
         Cam.CameraType = Enum.CameraType.Scriptable
-        Cam.CFrame = CFrame.new(Cam.CFrame.Position) * CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
         
-        -- Ambil input analog secara manual (Raw)
-        local rawInput = UIS:GetMoveVector() 
-        if rawInput.Magnitude > 0 then
-            local moveDir = (Cam.CFrame.LookVector * -rawInput.Z) + (Cam.CFrame.RightVector * rawInput.X)
-            Cam.CFrame = Cam.CFrame + (moveDir * State.Cinema.speed)
+        -- Update Rotasi
+        local rotation = CFrame.Angles(0, math.rad(State.Cinema.rotY), 0) * CFrame.Angles(math.rad(State.Cinema.rotX), 0, 0)
+        Cam.CFrame = CFrame.new(State.Cinema.pos) * rotation
+        
+        -- Update Posisi via MoveDirection (Fly Logic)
+        local hum = getHum()
+        if hum and hum.MoveDirection.Magnitude > 0 then
+            local md = hum.MoveDirection
+            -- LOGIKA FLY: Gerak maju searah lensa kamera
+            local forward = Cam.CFrame.LookVector * (md:Dot(Cam.CFrame.LookVector * Vector3.new(1,0,1).Unit))
+            local right = Cam.CFrame.RightVector * (md:Dot(Cam.CFrame.RightVector))
+            
+            State.Cinema.pos = State.Cinema.pos + (md * State.Cinema.speed)
         end
     end
 end)
@@ -116,7 +119,7 @@ end)
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V20", "star", "RECORDING MODE", false)
+local Win = Library:Window("XKID HUB V21", "star", "FLY-CAM PRO", false)
 
 -- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -160,17 +163,15 @@ local T_CI = Win:Tab("Cinematic", "video")
 local CIM = T_CI:Page("Camera", "video"):Section("🎬 Controls", "Left")
 local CIW = T_CI:Page("Camera", "video"):Section("📱 Orientation", "Right")
 
-CIM:Toggle("Freecam (Freeze Char)", "fc", false, "Drone Mode", function(v)
+CIM:Toggle("Freecam (Freeze Char)", "fc", false, "Fly Logic", function(v)
     State.Cinema.active = v
     if v then
-        -- HIJACK: Matikan kontrol karakter agar tidak lari
-        Controls:Disable()
+        State.Cinema.pos = Cam.CFrame.Position
+        State.Cinema.rotX = 0
+        State.Cinema.rotY = 0
         if getRoot() then getRoot().Anchored = true end
-        -- OPSIONAL: Bikin lo Invisible biar ga ganggu layar
-        if LP.Character then LP.Character.Parent = nil end 
+        if LP.Character then LP.Character.Parent = nil end -- Sembunyikan karakter
     else
-        -- RESTORE: Balikkan kontrol
-        Controls:Enable()
         if getRoot() then getRoot().Anchored = false end
         if LP.Character then LP.Character.Parent = workspace end
         Cam.CameraType = Enum.CameraType.Custom
@@ -211,4 +212,4 @@ end)
 Players.PlayerAdded:Connect(function() P_Drop:Refresh(getPNames()) end)
 Players.PlayerRemoving:Connect(function() P_Drop:Refresh(getPNames()) end)
 
-Library:Notification("XKID V20", "Drone Mode Aktif! Karakter Diem Total.", 5)
+Library:Notification("XKID V21", "Fly-Cam Fix! Analog Aman.", 5)
