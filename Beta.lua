@@ -1,225 +1,171 @@
--- XKID HUB (FINAL - MOVEMENT & TELEPORT UPGRADE)
+-- XKID HUB CLEAN VERSION (NO FARMING / NO FISHING / NO LIKE)
 
 local Library = loadstring(game:HttpGet(
-"https://raw.githubusercontent.com/Vovabro46/trash/main/Aurora.lua?cache="..tostring(os.time())
+    "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"
 ))()
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
+local Players     = game:GetService("Players")
+local RunService  = game:GetService("RunService")
+local UIS         = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
-local TpService = game:GetService("TeleportService")
-local Workspace = game:GetService("Workspace")
+local TpService   = game:GetService("TeleportService")
+local Workspace   = game:GetService("Workspace")
+local LP          = Players.LocalPlayer
 
-local LP = Players.LocalPlayer
+-- ================= CORE =================
 
 local function getChar() return LP.Character end
 local function getRoot()
-    local c = getChar()
-    return c and c:FindFirstChild("HumanoidRootPart")
+    local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart")
 end
 local function getHum()
-    local c = getChar()
-    return c and c:FindFirstChildOfClass("Humanoid")
+    local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid")
 end
 
-local function notify(t,b,d)
-    pcall(function() Library:Notification(t,b,d or 3) end)
+local function notify(t, b, d)
+    pcall(function() Library:Notification(t, b, d or 3) end)
+    print("[XKID]", t, b)
 end
 
--- ================= WINDOW =================
-local Win=Library:Window("XKID HUB","sprout","vFinal",false)
+-- ================= LOG =================
+
+local logLines = {}
+local function xlog(tag, msg)
+    local entry = "["..tag.."] "..msg
+    table.insert(logLines, 1, entry)
+    if #logLines > 30 then table.remove(logLines) end
+    print(entry)
+end
+
+-- ================= ESP PLAYER =================
+
+local ESPPl={active=false,data={},conn=nil}
+
+local function _mkPlBill(p)
+    if p==LP or ESPPl.data[p] then return end
+    if not p.Character then return end
+
+    local head=p.Character:FindFirstChild("Head")
+    if not head then return end
+
+    local bill=Instance.new("BillboardGui")
+    bill.Size=UDim2.new(0,100,0,24)
+    bill.StudsOffset=Vector3.new(0,2.5,0)
+    bill.AlwaysOnTop=true
+    bill.Adornee=head
+    bill.Parent=head
+
+    local lbl=Instance.new("TextLabel",bill)
+    lbl.Size=UDim2.new(1,0,1,0)
+    lbl.BackgroundTransparency=1
+    lbl.TextColor3=Color3.fromRGB(255,230,80)
+    lbl.TextScaled=true
+    lbl.Font=Enum.Font.GothamBold
+    lbl.Text=p.Name
+
+    ESPPl.data[p]={bill=bill,lbl=lbl}
+end
+
+local function startESPPlayer()
+    for _,p in pairs(Players:GetPlayers()) do _mkPlBill(p) end
+
+    ESPPl.conn=RunService.Heartbeat:Connect(function()
+        local myR=getRoot()
+        for p,d in pairs(ESPPl.data) do
+            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") and myR then
+                local dist=math.floor((p.Character.HumanoidRootPart.Position-myR.Position).Magnitude)
+                d.lbl.Text=p.Name.." ["..dist.."m]"
+            end
+        end
+    end)
+end
+
+local function stopESPPlayer()
+    if ESPPl.conn then ESPPl.conn:Disconnect() end
+    for _,d in pairs(ESPPl.data) do
+        pcall(function() d.bill:Destroy() end)
+    end
+    ESPPl.data={}
+end
+
+-- ================= MOVEMENT =================
+
+local Move={speed=16,flySpeed=60}
+
+RunService.RenderStepped:Connect(function()
+    local h=getHum()
+    if h then h.WalkSpeed=Move.speed end
+end)
+
+-- ================= TELEPORT =================
+
+local function tpToPlayer(name)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p.Name:lower():find(name:lower()) then
+            local hrp=p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+            local root=getRoot()
+            if hrp and root then
+                root.CFrame=hrp.CFrame
+                notify("TP",p.Name)
+            end
+        end
+    end
+end
+
+-- ================= SECURITY =================
+
+local afkConn=nil
+
+local function setAntiAFK(v)
+    if v then
+        afkConn=LP.Idled:Connect(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+    else
+        if afkConn then afkConn:Disconnect() end
+    end
+end
+
+-- ================= UI =================
+
+local Win=Library:Window("XKID HUB CLEAN","clean","v1",false)
+
 Win:TabSection("MAIN")
 
 local T_TP  =Win:Tab("Teleport","map-pin")
 local T_Pl  =Win:Tab("Player","user")
 local T_Sec =Win:Tab("Security","shield")
-local T_Set =Win:Tab("Setting","settings")
 
--- =========================================================
--- 🧠 MOVEMENT SYSTEM (FULL UPGRADE DARI LU)
--- =========================================================
-
-local Move={speed=16,flySpeed=60,noclip=false,noclipConn=nil,jumpConn=nil}
-local flyFlying=false; local flyConn=nil; local flyBV=nil; local flyBG=nil
-
-RunService.RenderStepped:Connect(function()
-    if flyFlying then return end
-    local h=getHum(); if h then h.WalkSpeed=Move.speed end
-end)
-
-local function setNoclip(v)
-    Move.noclip=v
-    if v then
-        if Move.noclipConn then Move.noclipConn:Disconnect() end
-        Move.noclipConn=RunService.Stepped:Connect(function()
-            local c=getChar(); if not c then return end
-            for _,p in pairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end
-        end)
-    else
-        if Move.noclipConn then Move.noclipConn:Disconnect(); Move.noclipConn=nil end
-        local c=getChar()
-        if c then for _,p in pairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=true end end end
-    end
-end
-
-local function setInfJump(v)
-    if v then
-        if Move.jumpConn then Move.jumpConn:Disconnect() end
-        Move.jumpConn=UIS.JumpRequest:Connect(function()
-            local h=getHum(); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
-        end)
-    else
-        if Move.jumpConn then Move.jumpConn:Disconnect(); Move.jumpConn=nil end
-    end
-end
-
--- MOBILE + PC CONTROL
-local ControlModule=nil
-pcall(function()
-    ControlModule=require(LP:WaitForChild("PlayerScripts")
-        :WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
-end)
-
-local function getMoveVector()
-    if ControlModule then
-        local ok,result=pcall(function() return ControlModule:GetMoveVector() end)
-        if ok and result then return result end
-    end
-    return Vector3.new(
-        (UIS:IsKeyDown(Enum.KeyCode.D) and 1 or 0)-(UIS:IsKeyDown(Enum.KeyCode.A) and 1 or 0),
-        0,
-        (UIS:IsKeyDown(Enum.KeyCode.W) and -1 or 0)+(UIS:IsKeyDown(Enum.KeyCode.S) and 1 or 0))
-end
-
-local function startFly()
-    if flyFlying then return end
-    local root=getRoot(); if not root then return end
-    local hum=getHum(); if not hum then return end
-    flyFlying=true; hum.PlatformStand=true
-
-    flyBV=Instance.new("BodyVelocity",root)
-    flyBV.MaxForce=Vector3.new(1e6,1e6,1e6)
-
-    flyBG=Instance.new("BodyGyro",root)
-    flyBG.MaxTorque=Vector3.new(1e6,1e6,1e6); flyBG.P=1e5; flyBG.D=1e3
-
-    flyConn=RunService.RenderStepped:Connect(function(dt)
-        local r2=getRoot(); if not r2 then return end
-        local h2=getHum(); if not h2 then return end
-
-        local cam=Workspace.CurrentCamera; local cf=cam.CFrame
-        h2.PlatformStand=true
-
-        local md=getMoveVector()
-        local look=Vector3.new(cf.LookVector.X,0,cf.LookVector.Z)
-        local right=Vector3.new(cf.RightVector.X,0,cf.RightVector.Z)
-
-        if look.Magnitude>0 then look=look.Unit end
-        if right.Magnitude>0 then right=right.Unit end
-
-        local move=right*md.X+look*(-md.Z)
-
-        local pitch=cf.LookVector.Y
-        local vVel=pitch*Move.flySpeed
-
-        flyBV.Velocity=Vector3.new(move.X*Move.flySpeed,vVel,move.Z*Move.flySpeed)
-        flyBG.CFrame=cf
-    end)
-end
-
-local function stopFly()
-    flyFlying=false
-    if flyConn then flyConn:Disconnect(); flyConn=nil end
-    if flyBV then flyBV:Destroy(); flyBV=nil end
-    if flyBG then flyBG:Destroy(); flyBG=nil end
-    local hum=getHum()
-    if hum then hum.PlatformStand=false; hum.WalkSpeed=Move.speed end
-end
-
--- =========================================================
--- 🚀 TELEPORT SYSTEM (ADVANCED)
--- =========================================================
-
-local function inferPlayer(prefix)
-    if not prefix or prefix=="" then return nil end
-    local best,bestScore=nil,math.huge
-    for _,p in pairs(Players:GetPlayers()) do
-        if p~=LP then
-            local score=math.huge
-            if p.Name:lower():sub(1,#prefix)==prefix:lower() then score=#p.Name-#prefix end
-            if score<bestScore then best=p bestScore=score end
-        end
-    end
-    return best
-end
-
-local function tpToPlayer(prefix)
-    local p=inferPlayer(prefix)
-    if not p then notify("TP","Player tidak ditemukan",2); return end
-    local hrp=p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-    local root=getRoot()
-    if hrp and root then root.CFrame=hrp.CFrame*CFrame.new(0,0,3) end
-end
-
--- =========================================================
--- 🧩 UI PLAYER (CONNECT KE SYSTEM LU)
--- =========================================================
-
+-- PLAYER TAB
 local PP=T_Pl:Page("Player","user")
 local PL=PP:Section("Movement","Left")
-local PR=PP:Section("Utility","Right")
 
-PL:Slider("Speed","spd",16,200,16,function(v) Move.speed=v end)
-PL:Toggle("NoClip","nc",false,function(v) setNoclip(v) end)
-PL:Toggle("Infinite Jump","ij",false,function(v) setInfJump(v) end)
-
-PR:Toggle("Fly","fly",false,function(v)
-    if v then startFly() else stopFly() end
+PL:Slider("Speed","ws",16,200,16,function(v)
+    Move.speed=v
 end)
 
-PR:Slider("Fly Speed","fspd",20,150,60,function(v) Move.flySpeed=v end)
+PL:Toggle("ESP Player","esp",false,function(v)
+    ESPPl.active=v
+    if v then startESPPlayer() else stopESPPlayer() end
+end)
 
--- =========================================================
--- 🧩 UI TELEPORT
--- =========================================================
-
+-- TELEPORT TAB
 local TP=T_TP:Page("Teleport","map-pin")
-local TL=TP:Section("Player","Left")
+local TPL=TP:Section("Player","Left")
 
-local input=""
-TL:TextBox("Nama Player","tp","",function(v) input=v end)
-TL:Button("Teleport","TP",function() tpToPlayer(input) end)
+TPL:TextBox("Nama","tpInput","",function(v)
+    tpToPlayer(v)
+end)
 
--- =========================================================
--- 🛡 SECURITY
--- =========================================================
-
-local Sec=T_Sec:Page("Security","shield")
-local SL=Sec:Section("Protection","Left")
+-- SECURITY TAB
+local SP=T_Sec:Page("Security","shield")
+local SL=SP:Section("Security","Left")
 
 SL:Toggle("Anti AFK","afk",false,function(v)
-    if v then
-        LP.Idled:Connect(function()
-            VirtualUser:ClickButton2(Vector2.new())
-        end)
-    end
+    setAntiAFK(v)
 end)
 
-SL:Button("Rejoin","Reconnect",function()
-    TpService:Teleport(game.PlaceId,LP)
-end)
+-- ================= INIT =================
 
--- =========================================================
--- ⚙️ SETTING
--- =========================================================
-
-local Set=T_Set:Page("Setting","settings")
-local ST=Set:Section("Info","Left")
-
-ST:Button("Cek Posisi","",function()
-    local r=getRoot()
-    if r then notify("Posisi",tostring(r.Position),5) end
-end)
-
-notify("XKID HUB","Movement & TP upgraded",5)
+notify("XKID CLEAN","Loaded tanpa farming/fishing/like",5)
