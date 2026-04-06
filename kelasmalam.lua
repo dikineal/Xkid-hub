@@ -493,14 +493,18 @@ local specPanDelta   = Vector2.zero
 local specConns      = {}
 
 local function startSpecCapture()
-    -- satu jari di luar joystick = rotate orbit/FP
     table.insert(specConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp or not Spec.active then return end
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if not specTouchMain and not inJoystickArea(inp.Position) then
+        if inJoystickArea(inp.Position) then return end -- abaikan joystick area
+        -- Masukkan semua touch non-joystick ke tabel pinch
+        table.insert(specTouchPinch, inp)
+        -- Touch pertama = kandidat pan, touch kedua = pinch mode aktif
+        if #specTouchPinch == 1 then
             specTouchMain = inp
         else
-            table.insert(specTouchPinch, inp)
+            -- Dua jari atau lebih = pinch mode, batalkan pan
+            specTouchMain = nil
         end
     end))
 
@@ -508,16 +512,20 @@ local function startSpecCapture()
         if not Spec.active then return end
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
 
-        -- Pan dari jari utama
-        if inp == specTouchMain then
+        if #specTouchPinch == 1 and inp == specTouchMain then
+            -- Satu jari = rotate orbit / FP
             specPanDelta = specPanDelta + Vector2.new(inp.Delta.X, inp.Delta.Y)
-        end
 
-        -- Pinch zoom (third person)
-        if #specTouchPinch >= 2 then
+        elseif #specTouchPinch >= 2 then
+            -- Dua jari = pinch zoom (hitung jarak antara dua jari aktif)
             local d = (specTouchPinch[1].Position - specTouchPinch[2].Position).Magnitude
             if specPinchDist then
-                Spec.dist = math.clamp(Spec.dist + -(d - specPinchDist) * 0.05, 3, 30)
+                local diff = d - specPinchDist
+                -- Jauh = zoom out (FOV naik), dekat = zoom in (FOV turun)
+                Cam.FieldOfView = math.clamp(Cam.FieldOfView - diff * 0.15, 10, 120)
+                if Spec.mode == "third" then
+                    Spec.dist = math.clamp(Spec.dist - diff * 0.03, 3, 30)
+                end
             end
             specPinchDist = d
         end
@@ -525,11 +533,16 @@ local function startSpecCapture()
 
     table.insert(specConns, UIS.InputEnded:Connect(function(inp)
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp == specTouchMain then specTouchMain = nil end
         for i, v in ipairs(specTouchPinch) do
             if v == inp then table.remove(specTouchPinch, i); break end
         end
-        if #specTouchPinch < 2 then specPinchDist = nil end
+        specPinchDist = nil
+        -- Kalau tinggal satu jari, lanjut pan dari jari yang tersisa
+        if #specTouchPinch == 1 then
+            specTouchMain = specTouchPinch[1]
+        else
+            specTouchMain = nil
+        end
     end))
 end
 
@@ -651,13 +664,31 @@ SPS:Slider("Jarak Orbit", "specdist", 3, 30, 8, function(v)
     Spec.dist = v
 end)
 
--- FOV Zoom — bisa dipakai kapan saja
-SPF:Slider("🔍 FOV (Zoom)", "fovzoom", 10, 120, 70, function(v)
-    Cam.FieldOfView = v
+-- FOV Zoom — tombol +/- lebih mudah disentuh di mobile
+SPF:Button("🔭 Zoom In  [ FOV - ]", "Makin sempit", function()
+    local newFov = math.clamp(Cam.FieldOfView - 10, 10, 120)
+    Cam.FieldOfView = newFov
+    Library:Notification("FOV", "FOV: " .. newFov, 1)
 end)
-SPF:Button("🔭 Zoom In (30)", "", function() Cam.FieldOfView = 30 end)
-SPF:Button("👁️ Normal (70)", "", function() Cam.FieldOfView = 70 end)
-SPF:Button("🌐 Zoom Out (100)", "", function() Cam.FieldOfView = 100 end)
+SPF:Button("🔭 Zoom In  [ FOV -- ]", "Makin sempit cepat", function()
+    local newFov = math.clamp(Cam.FieldOfView - 30, 10, 120)
+    Cam.FieldOfView = newFov
+    Library:Notification("FOV", "FOV: " .. newFov, 1)
+end)
+SPF:Button("👁️ Reset Normal (70)", "", function()
+    Cam.FieldOfView = 70
+    Library:Notification("FOV", "FOV: 70 (Normal)", 1)
+end)
+SPF:Button("🌐 Zoom Out [ FOV + ]", "Makin lebar", function()
+    local newFov = math.clamp(Cam.FieldOfView + 10, 10, 120)
+    Cam.FieldOfView = newFov
+    Library:Notification("FOV", "FOV: " .. newFov, 1)
+end)
+SPF:Button("🌐 Zoom Out [ FOV ++ ]", "Makin lebar cepat", function()
+    local newFov = math.clamp(Cam.FieldOfView + 30, 10, 120)
+    Cam.FieldOfView = newFov
+    Library:Notification("FOV", "FOV: " .. newFov, 1)
+end)
 
 -- --- TAB 5: SECURITY ---
 local T_SC = Win:Tab("Security", "shield")
