@@ -690,7 +690,158 @@ SPF:Button("🌐 Zoom Out [ FOV ++ ]", "Makin lebar cepat", function()
     Library:Notification("FOV", "FOV: " .. newFov, 1)
 end)
 
--- --- TAB 5: SECURITY ---
+-- --- TAB 5: WORLD ---
+local T_WO = Win:Tab("World", "globe")
+
+-- PAGE 1: WEATHER
+local WOP1  = T_WO:Page("Weather", "cloud")
+local WOW   = WOP1:Section("🌤️ Preset Cuaca", "Left")
+local WOA   = WOP1:Section("🌈 Atmosphere", "Right")
+
+-- Helper: pastikan Atmosphere instance ada
+local function getAtmos()
+    local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+    if not atm then
+        atm = Instance.new("Atmosphere", Lighting)
+    end
+    return atm
+end
+
+-- Helper: set cuaca lengkap sekaligus
+local function setWeather(clock, bright, fogStart, fogEnd, fogR, fogG, fogB, ambR, ambG, ambB, density, offset, glare, halo)
+    Lighting.ClockTime        = clock
+    Lighting.Brightness       = bright
+    Lighting.FogStart         = fogStart
+    Lighting.FogEnd           = fogEnd
+    Lighting.FogColor         = Color3.fromRGB(fogR, fogG, fogB)
+    Lighting.Ambient          = Color3.fromRGB(ambR, ambG, ambB)
+    local atm                 = getAtmos()
+    atm.Density               = density
+    atm.Offset                = offset
+    atm.Glare                 = glare
+    atm.Halo                  = halo
+end
+
+-- Preset cuaca
+WOW:Button("☀️ Cerah", "Siang terang", function()
+    setWeather(14, 2, 1000, 10000, 200,220,255, 120,120,120, 0.05, 0.1, 0.3, 0.2)
+    Library:Notification("Weather", "☀️ Cerah!", 2)
+end)
+WOW:Button("🌅 Sunset / Golden Hour", "Sore hari", function()
+    setWeather(18, 1.5, 500, 4000, 255,180,100, 180,100,60, 0.2, 0.3, 0.8, 0.5)
+    Library:Notification("Weather", "🌅 Golden Hour!", 2)
+end)
+WOW:Button("🌃 Malam Bintang", "Malam cerah", function()
+    setWeather(0, 0.3, 2000, 20000, 10,10,30, 20,20,40, 0.02, 0.0, 0.0, 0.1)
+    Library:Notification("Weather", "🌃 Malam Bintang!", 2)
+end)
+WOW:Button("🌫️ Berkabut", "Kabut tebal", function()
+    setWeather(12, 0.8, 20, 300, 200,200,200, 150,150,150, 0.6, 0.5, 0.0, 0.1)
+    Library:Notification("Weather", "🌫️ Berkabut!", 2)
+end)
+WOW:Button("🌧️ Mendung Gelap", "Awan gelap", function()
+    setWeather(12, 0.4, 100, 800, 80,80,100, 60,60,80, 0.5, 0.2, 0.0, 0.0)
+    Library:Notification("Weather", "🌧️ Mendung Gelap!", 2)
+end)
+WOW:Button("❄️ Salju", "Putih bersih", function()
+    setWeather(10, 1.2, 50, 500, 220,230,255, 180,190,210, 0.4, 0.4, 0.0, 0.3)
+    Library:Notification("Weather", "❄️ Salju!", 2)
+end)
+WOW:Button("🌪️ Badai", "Gelap & berat", function()
+    setWeather(12, 0.1, 30, 200, 40,40,50, 30,30,40, 0.8, 0.1, 0.0, 0.0)
+    Library:Notification("Weather", "🌪️ Badai!", 2)
+end)
+WOW:Button("🔄 Reset Default", "Kembalikan normal", function()
+    setWeather(14, 1, 0, 100000, 191,191,191, 70,70,70, 0.35, 0.0, 0.0, 0.25)
+    Library:Notification("Weather", "🔄 Reset!", 2)
+end)
+
+-- Atmosphere fine-tune
+WOA:Slider("🕐 ClockTime", "wtime", 0, 24, 14, function(v)
+    Lighting.ClockTime = v
+end)
+WOA:Slider("☀️ Brightness", "wbright", 0, 5, 1, function(v)
+    Lighting.Brightness = v
+end)
+WOA:Slider("🌫️ Fog Jarak", "wfog", 0, 5000, 100000, function(v)
+    Lighting.FogEnd = v
+end)
+WOA:Slider("💨 Density", "wdens", 0, 1, 0, function(v)
+    getAtmos().Density = v
+end)
+WOA:Slider("🌅 Offset (Haze)", "woffset", 0, 1, 0, function(v)
+    getAtmos().Offset = v
+end)
+WOA:Slider("✨ Glare", "wglare", 0, 1, 0, function(v)
+    getAtmos().Glare = v
+end)
+WOA:Slider("🌟 Halo", "whalo", 0, 1, 0, function(v)
+    getAtmos().Halo = v
+end)
+
+-- PAGE 2: GRAPHICS
+local WOP2  = T_WO:Page("Graphics", "monitor")
+local WOG   = WOP2:Section("📱 Mode Grafik", "Left")
+local WOGF  = WOP2:Section("⚙️ Level Manual", "Right")
+
+-- Helper set grafik
+local function setGfx(level)
+    local ok, err = pcall(function()
+        settings().Rendering.QualityLevel = level
+    end)
+    if not ok then
+        -- fallback via UserGameSettings
+        pcall(function()
+            UserSettings():GetService("UserGameSettings").SavedQualityLevel = level
+        end)
+    end
+end
+
+WOG:Button("🥔 Potato (Level 1)", "Paling hemat", function()
+    setGfx(Enum.QualityLevel.Level01)
+    Library:Notification("Graphics", "🥔 Potato — Level 1", 2)
+end)
+WOG:Button("📉 Low (Level 3)", "Ringan", function()
+    setGfx(Enum.QualityLevel.Level03)
+    Library:Notification("Graphics", "📉 Low — Level 3", 2)
+end)
+WOG:Button("📊 Medium (Level 5)", "Seimbang", function()
+    setGfx(Enum.QualityLevel.Level05)
+    Library:Notification("Graphics", "📊 Medium — Level 5", 2)
+end)
+WOG:Button("📈 High (Level 8)", "Bagus", function()
+    setGfx(Enum.QualityLevel.Level08)
+    Library:Notification("Graphics", "📈 High — Level 8", 2)
+end)
+WOG:Button("💎 Ultra (Level 10)", "Maksimal", function()
+    setGfx(Enum.QualityLevel.Level10)
+    Library:Notification("Graphics", "💎 Ultra — Level 10", 2)
+end)
+WOG:Button("🎬 Cinematic (Ultra+Atmos)", "Terbaik untuk rekam", function()
+    setGfx(Enum.QualityLevel.Level10)
+    setWeather(14, 2, 1000, 10000, 200,220,255, 120,120,120, 0.05, 0.1, 0.3, 0.2)
+    Library:Notification("Graphics", "🎬 Cinematic Mode!", 3)
+end)
+
+-- Level manual 1-10 via tombol +/-
+WOGF:Button("▲ Naik Level", "Grafik lebih tinggi", function()
+    local cur = settings().Rendering.QualityLevel.Value
+    local next = math.clamp(cur + 1, 1, 10)
+    setGfx(next)
+    Library:Notification("Graphics", "Level: " .. next, 1)
+end)
+WOGF:Button("▼ Turun Level", "Grafik lebih rendah", function()
+    local cur = settings().Rendering.QualityLevel.Value
+    local next = math.clamp(cur - 1, 1, 10)
+    setGfx(next)
+    Library:Notification("Graphics", "Level: " .. next, 1)
+end)
+WOGF:Button("🔄 Cek Level Sekarang", "", function()
+    local cur = settings().Rendering.QualityLevel.Value
+    Library:Notification("Graphics", "Level Sekarang: " .. cur, 3)
+end)
+
+-- --- TAB 6: SECURITY ---
 local T_SC = Win:Tab("Security", "shield")
 local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
 SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
