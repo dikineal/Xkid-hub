@@ -290,12 +290,21 @@ local function startDroneLoop()
         local cf = CFrame.new(FC.pos) * CFrame.fromOrientation(FC.angles.X, FC.angles.Y, 0)
         Cam.CFrame = cf
 
-        -- ── ANCHOR + SEMBUNYIKAN BADAN ─────────────────────────
-        -- Anchor supaya physics engine tidak gerakkan karakter sama sekali
+        -- ── FREEZE BADAN (3 lapis) ─────────────────────────────
+        -- Karakter tetap di posisi asli, tidak dipindah ke -9999
+        -- Transparansi sudah dihandle saat toggle ON
         local hrp = getRoot()
+        local hum = getHum()
         if hrp then
             if not hrp.Anchored then hrp.Anchored = true end
-            hrp.CFrame = CFrame.new(FC.pos.X, -9999, FC.pos.Z)
+        end
+        if hum then
+            -- ChangeState Physics = humanoid tidak proses movement sama sekali
+            if hum:GetState() ~= Enum.HumanoidStateType.Physics then
+                hum:ChangeState(Enum.HumanoidStateType.Physics)
+            end
+            hum.WalkSpeed  = 0
+            hum.JumpPower  = 0
         end
     end)
 end
@@ -420,10 +429,13 @@ local T_CI = Win:Tab("Cinematic", "video")
 local CIM = T_CI:Page("Drone", "video"):Section("🎬 Drone Mode", "Left")
 local CIW = T_CI:Page("Drone", "video"):Section("📱 Orientation", "Right")
 
+-- Simpan transparency karakter saat drone aktif
+local droneInvisSaved = {}
+
 CIM:Toggle("Ghost Drone", "fc", false, "Auto-Invis & Return", function(v)
     State.Cinema.active = v
     if v then
-        State.Cinema.lastPos = getRoot().CFrame
+        State.Cinema.lastPos = getRoot() and getRoot().CFrame
 
         -- Ambil posisi & sudut dari kamera sekarang (tidak lompat)
         local cf = Cam.CFrame
@@ -434,25 +446,65 @@ CIM:Toggle("Ghost Drone", "fc", false, "Auto-Invis & Return", function(v)
         FC.speedMul = 1
         FC.slow   = false
 
-        -- Reset spring ke zero (bukan ke posisi, karena spring mengukur delta kecepatan)
+        -- Reset spring
         spPos:Reset(Vector3.zero)
         spPan:Reset(Vector2.zero)
         spFov:Reset(0)
 
-        if getHum() then getHum().WalkSpeed = 0 end
+        -- ── FREEZE KARAKTER (3 lapis) ──────────────────────────
+        local hrp = getRoot()
+        local hum = getHum()
+        if hrp then hrp.Anchored = true end
+        if hum then
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+            hum:ChangeState(Enum.HumanoidStateType.Physics)
+        end
+
+        -- ── SEMBUNYIKAN KARAKTER (transparansi) ────────────────
+        -- Karakter tetap di posisi asli, hanya tidak kelihatan
+        droneInvisSaved = {}
+        local char = LP.Character
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    droneInvisSaved[part] = part.Transparency
+                    part.Transparency = 1
+                end
+            end
+        end
+
         startDroneCapture()
         startDroneLoop()
     else
         stopDroneLoop()
         stopDroneCapture()
 
-        -- Unanchor dulu sebelum teleport, lalu kembalikan ke posisi kamera
+        -- ── RESTORE KARAKTER ───────────────────────────────────
         local hrp = getRoot()
+        local hum = getHum()
+
+        -- Restore transparency
+        for part, origTrans in pairs(droneInvisSaved) do
+            if part and part.Parent then
+                part.Transparency = origTrans
+            end
+        end
+        droneInvisSaved = {}
+
+        -- Unanchor + pindah ke posisi kamera
         if hrp then
             hrp.Anchored = false
             hrp.CFrame = Cam.CFrame
         end
-        if getHum() then getHum().WalkSpeed = State.Move.ws end
+
+        -- Restore humanoid state normal
+        if hum then
+            hum.WalkSpeed = State.Move.ws
+            hum.JumpPower = State.Move.jp
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+
         Cam.FieldOfView = 70
         Cam.CameraType = Enum.CameraType.Custom
         Library:Notification("Drone", "Badan lo udah balik ke posisi kamera!", 3)
