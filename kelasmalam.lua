@@ -464,19 +464,204 @@ CIM:Slider("Zoom (FOV)", "cfov", 10, 120, 70, function(v) Cam.FieldOfView = v en
 CIW:Button("📱 Portrait", "Tegak", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
 CIW:Button("📺 Landscape", "Mendatar", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
 
--- --- TAB 4: SECURITY ---
-local T_SC = Win:Tab("Security", "shield")
-local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
+-- --- TAB 4: SPECTATE ---
+local T_SP = Win:Tab("Spectate", "eye")
+local SPP  = T_SP:Page("Viewer", "eye")
+local SPS  = SPP:Section("👁️ Spectate Player", "Left")
+local SPF  = SPP:Section("🔍 FOV Zoom", "Right")
 
-SCP:Toggle("Bypass Anti-Cheat", "acb", false, "WS/JP Hook", function(v)
-    if v then 
-        local mt = getrawmetatable(game); setreadonly(mt, false); local old = mt.__index
-        mt.__index = newcclosure(function(t, k)
-            if not checkcaller() and t:IsA("Humanoid") and (k == "WalkSpeed" or k == "JumpPower") then return (k == "WalkSpeed" and 16 or 50) end
-            return old(t, k)
-        end); setreadonly(mt, true)
+-- ── SPECTATE STATE ─────────────────────────────────────────
+local Spec = {
+    active  = false,
+    target  = nil,
+    mode    = "third",   -- "third" | "first"
+    dist    = 8,
+    origFov = 70,
+    -- orbit angles (third person)
+    orbitYaw   = 0,
+    orbitPitch = 0,
+    -- free rotate angles (first person, seperti drone)
+    fpYaw   = 0,
+    fpPitch = 0,
+}
+
+-- Touch input untuk spectate (terpisah dari drone)
+local specTouchMain  = nil
+local specTouchPinch = {}
+local specPinchDist  = nil
+local specPanDelta   = Vector2.zero
+local specConns      = {}
+
+local function startSpecCapture()
+    -- satu jari di luar joystick = rotate orbit/FP
+    table.insert(specConns, UIS.InputBegan:Connect(function(inp, gp)
+        if gp or not Spec.active then return end
+        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        if not specTouchMain and not inJoystickArea(inp.Position) then
+            specTouchMain = inp
+        else
+            table.insert(specTouchPinch, inp)
+        end
+    end))
+
+    table.insert(specConns, UIS.InputChanged:Connect(function(inp)
+        if not Spec.active then return end
+        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+
+        -- Pan dari jari utama
+        if inp == specTouchMain then
+            specPanDelta = specPanDelta + Vector2.new(inp.Delta.X, inp.Delta.Y)
+        end
+
+        -- Pinch zoom (third person)
+        if #specTouchPinch >= 2 then
+            local d = (specTouchPinch[1].Position - specTouchPinch[2].Position).Magnitude
+            if specPinchDist then
+                Spec.dist = math.clamp(Spec.dist + -(d - specPinchDist) * 0.05, 3, 30)
+            end
+            specPinchDist = d
+        end
+    end))
+
+    table.insert(specConns, UIS.InputEnded:Connect(function(inp)
+        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        if inp == specTouchMain then specTouchMain = nil end
+        for i, v in ipairs(specTouchPinch) do
+            if v == inp then table.remove(specTouchPinch, i); break end
+        end
+        if #specTouchPinch < 2 then specPinchDist = nil end
+    end))
+end
+
+local function stopSpecCapture()
+    for _, c in ipairs(specConns) do c:Disconnect() end
+    specConns      = {}
+    specTouchMain  = nil
+    specTouchPinch = {}
+    specPinchDist  = nil
+    specPanDelta   = Vector2.zero
+end
+
+-- ── RENDER LOOP SPECTATE ───────────────────────────────────
+local specLoop = nil
+
+local function startSpecLoop()
+    RS:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value + 1, function(dt)
+        if not Spec.active then return end
+        Cam.CameraType = Enum.CameraType.Scriptable
+
+        local char = Spec.target and Spec.target.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        -- Ambil pan delta frame ini
+        local pan  = specPanDelta
+        specPanDelta = Vector2.zero
+        local sens = 0.3
+
+        if Spec.mode == "third" then
+            -- ── ORBIT CAMERA ──────────────────────────────
+            -- drag X = putar kiri/kanan (yaw)
+            -- drag Y = putar atas/bawah (pitch)
+            Spec.orbitYaw   = Spec.orbitYaw   + pan.X * sens
+            Spec.orbitPitch = math.clamp(Spec.orbitPitch + pan.Y * sens, -75, 75)
+
+            local orbitCF = CFrame.new(hrp.Position)
+                * CFrame.Angles(0, math.rad(-Spec.orbitYaw), 0)
+                * CFrame.Angles(math.rad(-Spec.orbitPitch), 0, 0)
+                * CFrame.new(0, 0, Spec.dist)
+
+            -- Kamera lihat ke HRP (sedikit di atas pusat badan)
+            local focusPos = hrp.Position + Vector3.new(0, 1, 0)
+            Cam.CFrame = CFrame.new(orbitCF.Position, focusPos)
+
+        else
+            -- ── FIRST PERSON FREE ROTATE (seperti drone) ──
+            local head = char:FindFirstChild("Head")
+            local origin = head and head.Position or hrp.Position + Vector3.new(0, 1.5, 0)
+
+            Spec.fpYaw   = Spec.fpYaw   - pan.X * sens
+            Spec.fpPitch = math.clamp(Spec.fpPitch - pan.Y * sens, -85, 85)
+
+            Cam.CFrame = CFrame.new(origin)
+                * CFrame.Angles(0, math.rad(Spec.fpYaw), 0)
+                * CFrame.Angles(math.rad(Spec.fpPitch), 0, 0)
+        end
+    end)
+    specLoop = true
+end
+
+local function stopSpecLoop()
+    RS:UnbindFromRenderStep("XKIDSpec")
+    specLoop = nil
+end
+
+-- ── UI SPECTATE ────────────────────────────────────────────
+local specDrop = SPS:Dropdown("Pilih Target", "spDrop", getPNames(), function(v)
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Name == v then
+            Spec.target = p
+            -- Reset angles ke arah belakang target saat ini supaya tidak lompat
+            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ()
+                Spec.orbitYaw   = math.deg(ry)
+                Spec.orbitPitch = 20   -- sedikit dari atas
+                Spec.fpYaw      = math.deg(ry)
+                Spec.fpPitch    = 0
+            end
+            break
+        end
     end
 end)
+SPS:Button("🔄 Refresh", "", function() specDrop:Refresh(getPNames()) end)
+
+SPS:Toggle("👁️ Spectate ON/OFF", "spec", false, "Nonton target", function(v)
+    Spec.active = v
+    if v then
+        if not Spec.target then
+            Library:Notification("Spectate", "Pilih target dulu!", 3)
+            Spec.active = false
+            return
+        end
+        Spec.origFov = Cam.FieldOfView
+        startSpecCapture()
+        startSpecLoop()
+        Library:Notification("Spectate", "Nonton: " .. Spec.target.Name, 3)
+    else
+        stopSpecLoop()
+        stopSpecCapture()
+        Cam.CameraType = Enum.CameraType.Custom
+        Cam.FieldOfView = Spec.origFov
+        Library:Notification("Spectate", "Spectate off!", 2)
+    end
+end)
+
+SPS:Toggle("🎥 First Person", "specfp", false, "ON=FP Drone | OFF=Orbit", function(v)
+    Spec.mode = v and "first" or "third"
+    -- Reset FP angles dari posisi kamera orbit sekarang supaya tidak lompat
+    if v and Spec.target and Spec.target.Character then
+        local _, ry, _ = Cam.CFrame:ToEulerAnglesYXZ()
+        local rx = math.asin(Cam.CFrame.LookVector.Y)
+        Spec.fpYaw   = math.deg(ry)
+        Spec.fpPitch = math.deg(rx)
+    end
+end)
+
+SPS:Slider("Jarak Orbit", "specdist", 3, 30, 8, function(v)
+    Spec.dist = v
+end)
+
+-- FOV Zoom — bisa dipakai kapan saja
+SPF:Slider("🔍 FOV (Zoom)", "fovzoom", 10, 120, 70, function(v)
+    Cam.FieldOfView = v
+end)
+SPF:Button("🔭 Zoom In (30)", "", function() Cam.FieldOfView = 30 end)
+SPF:Button("👁️ Normal (70)", "", function() Cam.FieldOfView = 70 end)
+SPF:Button("🌐 Zoom Out (100)", "", function() Cam.FieldOfView = 100 end)
+
+-- --- TAB 5: SECURITY ---
+local T_SC = Win:Tab("Security", "shield")
+local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
 SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
     if v then State.Security.afkConn = LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
     else if State.Security.afkConn then State.Security.afkConn:Disconnect() end end
