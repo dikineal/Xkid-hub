@@ -68,250 +68,207 @@ local function toggleFly(v)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │        ➤  GHOST DRONE ENGINE (FREECAM PORT)             │
+-- │        ➤  FREECAM ENGINE (FIXED & MOBILE READY)         │
 -- └─────────────────────────────────────────────────────────┘
 
--- Spring class (ported dari Freecam original)
-local Spring = {}
-Spring.__index = Spring
-function Spring.new(freq, val)
-    return setmetatable({F = freq, P = val, V = val * 0}, Spring)
-end
-function Spring:Update(dt, target)
-    local w  = self.F * 2 * math.pi
-    local dX = target - self.P
-    local eW = math.exp(-w * dt)
-    local np = target + (self.V * dt - dX * (w * dt + 1)) * eW
-    self.V   = (w * dt * (dX * w - self.V) + self.V) * eW
-    self.P   = np
-    return np
-end
-function Spring:Reset(val)
-    self.P = val
-    self.V = val * 0
-end
+local onMobile = not UIS.KeyboardEnabled
 
--- Deadzone helper (sama persis logic Freecam)
-local function deadzone(x)
-    local s  = math.sign(x)
-    local v  = (math.abs(x) - 0.15) / 0.85 * 2
-    return s * math.clamp((math.exp(v) - 1) / (math.exp(2) - 1), 0, 1)
-end
-
--- State drone internal
+-- State freecam
 local FC = {
-    pos    = Vector3.zero,   -- posisi kamera drone
-    angles = Vector2.zero,   -- (pitch, yaw) dalam radian
-    fov    = 70,             -- fov saat ini
-    speedMul = 1,            -- speed multiplier (Up/Down arrow)
-    slow   = false,          -- shift = slow mode 0.25x
+    active   = false,
+    pos      = Vector3.zero,
+    pitchDeg = 0,
+    yawDeg   = 0,
+    speed    = 1,      -- diset dari slider menu
+    sens     = 0.25,   -- sensitivity rotate
 }
 
--- Spring instances: posisi (Vec3), pan (Vec2), fov delta (number)
-local spPos = Spring.new(1.5, Vector3.zero)
-local spPan = Spring.new(1,   Vector2.zero)
-local spFov = Spring.new(4,   0)
+-- Touch state — split layar kiri gerak, kanan rotate
+local fcRotTouch   = nil    -- touch objek untuk rotate (kanan)
+local fcMoveTouch  = nil    -- touch objek untuk gerak (kiri)
+local fcMoveSt     = nil    -- posisi awal touch gerak
+local fcRotLast    = nil    -- posisi terakhir touch rotate
 
--- Input accumulator
-local panDelta   = Vector2.zero   -- mouse / touch rotate
-local fovDelta   = 0              -- scroll / pinch zoom
-local moveKeys   = {w=0,a=0,s=0,d=0,e=0,q=0}  -- keyboard WASD+EQ
+-- Virtual joystick state (analog, bukan digital)
+local fcJoy = Vector2.zero  -- (-1..1) X=kanan/kiri, Y=maju/mundur
 
--- Touch state (joystick kiri = gerak, satu jari kanan = pan, dua jari = pinch)
-local touchMain   = nil   -- objek touch untuk pan (di luar joystick)
-local touchPinch  = {}    -- tabel touch untuk pinch
-local pinchDist   = nil
+-- Deadzone pixel (dari script kamu, dipertahankan)
+local DEAD_X = 25
+local DEAD_Y = 20
 
--- Cek apakah posisi touch ada di area joystick
-local function inJoystickArea(pos)
-    local ctrl = LP and LP.PlayerGui and LP.PlayerGui:FindFirstChild("TouchGui")
-    if ctrl then
-        local frame = ctrl:FindFirstChild("TouchControlFrame")
-        local thumb  = frame and frame:FindFirstChild("DynamicThumbstickFrame")
-        if thumb then
-            local ap = thumb.AbsolutePosition
-            local as = thumb.AbsoluteSize
-            if pos.X >= ap.X and pos.Y >= ap.Y and pos.X <= ap.X + as.X and pos.Y <= ap.Y + as.Y then
-                return true
-            end
-        end
-    end
-    return false
-end
+-- Input connections (hanya aktif saat freecam ON)
+local fcConns = {}
 
--- Koneksi input — hanya aktif saat drone nyala
-local droneConns = {}
+-- Simpan transparency saat freecam aktif
+local fcInvisSaved = {}
 
-local function startDroneCapture()
-    -- Keyboard: WASD gerak, E naik, Q turun, Shift = slow
-    table.insert(droneConns, UIS.InputBegan:Connect(function(inp, gp)
+local function startFCCapture()
+    -- ── KEYBOARD (PC) ─────────────────────────────────────
+    local keysHeld = {}
+    table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
-        local k = inp.KeyCode.Name
-        if moveKeys[string.lower(k)] ~= nil then moveKeys[string.lower(k)] = 1 end
-        if k == "LeftShift" or k == "RightShift" then FC.slow = true end
-        if k == "Up"   then FC.speedMul = math.clamp(FC.speedMul + 0.25, 0.25, 4) end
-        if k == "Down" then FC.speedMul = math.clamp(FC.speedMul - 0.25, 0.25, 4) end
+        local k = inp.KeyCode
+        if k == Enum.KeyCode.W or k == Enum.KeyCode.A or
+           k == Enum.KeyCode.S or k == Enum.KeyCode.D or
+           k == Enum.KeyCode.E or k == Enum.KeyCode.Q then
+            keysHeld[k] = true
+        end
+        -- Mouse kanan = rotate PC
+        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+            FC._mouseRotate = true
+            UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+        end
     end))
-    table.insert(droneConns, UIS.InputEnded:Connect(function(inp)
-        local k = inp.KeyCode.Name
-        if moveKeys[string.lower(k)] ~= nil then moveKeys[string.lower(k)] = 0 end
-        if k == "LeftShift" or k == "RightShift" then FC.slow = false end
-    end))
-
-    -- Mouse: klik kanan + gerak = pan; scroll = zoom
-    table.insert(droneConns, UIS.InputChanged:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseMovement then
-            if UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-                -- sensitivitas dinamis sesuai FOV (makin sempit = makin lambat)
-                local sens = Vector2.new(0.75, 1) * 8
-                local fovScale = math.sqrt(0.7002 / math.tan(math.rad(FC.fov / 2)))
-                panDelta = panDelta + Vector2.new(-inp.Delta.Y, -inp.Delta.X)
-                    * sens * 0.04908 * (1 / fovScale)
-            end
-        elseif inp.UserInputType == Enum.UserInputType.MouseWheel then
-            fovDelta = fovDelta + (-inp.Position.Z)
+    table.insert(fcConns, UIS.InputEnded:Connect(function(inp)
+        local k = inp.KeyCode
+        keysHeld[k] = false
+        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+            FC._mouseRotate = false
+            UIS.MouseBehavior = Enum.MouseBehavior.Default
         end
     end))
 
-    -- Touch: satu jari (bukan joystick) = pan; dua jari = pinch zoom
-    table.insert(droneConns, UIS.InputBegan:Connect(function(inp, gp)
+    -- Mouse move (PC rotate)
+    table.insert(fcConns, UIS.InputChanged:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseMovement and FC._mouseRotate then
+            FC.yawDeg   = FC.yawDeg   - inp.Delta.X * FC.sens
+            FC.pitchDeg = math.clamp(FC.pitchDeg - inp.Delta.Y * FC.sens, -80, 80)
+        end
+        if inp.UserInputType == Enum.UserInputType.MouseWheel then
+            Cam.FieldOfView = math.clamp(Cam.FieldOfView - inp.Position.Z * 5, 10, 120)
+        end
+    end))
+
+    -- ── TOUCH (MOBILE) ────────────────────────────────────
+    table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if not touchMain and not inJoystickArea(inp.Position) then
-            touchMain = inp
+        local half = Cam.ViewportSize.X / 2
+        if inp.Position.X > half then
+            -- Kanan layar = rotate
+            if not fcRotTouch then
+                fcRotTouch = inp
+                fcRotLast  = inp.Position
+            end
         else
-            table.insert(touchPinch, inp)
-        end
-    end))
-    table.insert(droneConns, UIS.InputChanged:Connect(function(inp)
-        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        -- Pan dari touch utama
-        if inp == touchMain then
-            local fovScale = math.sqrt(0.7002 / math.tan(math.rad(FC.fov / 2)))
-            panDelta = panDelta + Vector2.new(-inp.Delta.Y, -inp.Delta.X)
-                * 0.19635 * (1 / fovScale)
-        end
-        -- Pinch zoom dari dua jari
-        if #touchPinch >= 2 then
-            local d = (touchPinch[1].Position - touchPinch[2].Position).Magnitude
-            if pinchDist then
-                fovDelta = fovDelta + -(d - pinchDist) * 0.04
+            -- Kiri layar = gerak (analog)
+            if not fcMoveTouch then
+                fcMoveTouch = inp
+                fcMoveSt    = inp.Position
             end
-            pinchDist = d
         end
     end))
-    table.insert(droneConns, UIS.InputEnded:Connect(function(inp)
+
+    table.insert(fcConns, UIS.TouchMoved:Connect(function(inp)
+        -- Rotate dari kanan layar
+        if inp == fcRotTouch and fcRotLast then
+            local dx = inp.Position.X - fcRotLast.X
+            local dy = inp.Position.Y - fcRotLast.Y
+            FC.yawDeg   = FC.yawDeg   - dx * FC.sens
+            FC.pitchDeg = math.clamp(FC.pitchDeg - dy * FC.sens, -80, 80)
+            fcRotLast = inp.Position
+        end
+
+        -- Gerak analog dari kiri layar
+        if inp == fcMoveTouch and fcMoveSt then
+            local dx = inp.Position.X - fcMoveSt.X
+            local dy = inp.Position.Y - fcMoveSt.Y
+            -- Deadzone + normalize ke -1..1
+            local nx = 0
+            local ny = 0
+            if math.abs(dx) > DEAD_X then
+                nx = math.clamp((dx - math.sign(dx) * DEAD_X) / 80, -1, 1)
+            end
+            if math.abs(dy) > DEAD_Y then
+                ny = math.clamp((dy - math.sign(dy) * DEAD_Y) / 80, -1, 1)
+            end
+            fcJoy = Vector2.new(nx, ny)  -- X=kanan/kiri, Y=maju(+)/mundur(-)
+        end
+    end))
+
+    table.insert(fcConns, UIS.InputEnded:Connect(function(inp)
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp == touchMain then touchMain = nil end
-        for i, v in ipairs(touchPinch) do
-            if v == inp then table.remove(touchPinch, i); break end
+        if inp == fcRotTouch then
+            fcRotTouch = nil
+            fcRotLast  = nil
         end
-        if #touchPinch < 2 then pinchDist = nil end
+        if inp == fcMoveTouch then
+            fcMoveTouch = nil
+            fcMoveSt    = nil
+            fcJoy       = Vector2.zero
+        end
     end))
+
+    -- Simpan keysHeld di FC supaya bisa diakses render loop
+    FC._keys = keysHeld
 end
 
-local function stopDroneCapture()
-    for _, c in ipairs(droneConns) do c:Disconnect() end
-    droneConns = {}
-    panDelta  = Vector2.zero
-    fovDelta  = 0
-    moveKeys  = {w=0,a=0,s=0,d=0,e=0,q=0}
-    FC.slow   = false
-    FC.speedMul = 1
-    touchMain = nil
-    touchPinch = {}
-    pinchDist = nil
+local function stopFCCapture()
+    for _, c in ipairs(fcConns) do c:Disconnect() end
+    fcConns      = {}
+    fcRotTouch   = nil
+    fcMoveTouch  = nil
+    fcMoveSt     = nil
+    fcRotLast    = nil
+    fcJoy        = Vector2.zero
+    FC._mouseRotate = false
+    FC._keys     = {}
+    UIS.MouseBehavior = Enum.MouseBehavior.Default
 end
 
--- Render loop drone (hanya aktif saat Cinema.active)
-local droneLoop = nil
-
-local function startDroneLoop()
-    droneLoop = RS:BindToRenderStep("XKIDDrone", Enum.RenderPriority.Camera.Value + 1, function(dt)
-        if not State.Cinema.active then return end
+local function startFCLoop()
+    RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
+        if not FC.active then return end
         Cam.CameraType = Enum.CameraType.Scriptable
 
-        -- ── FOV ───────────────────────────────────────────────
-        local fovScale = math.sqrt(0.7002 / math.tan(math.rad(FC.fov / 2)))
-        local fovTarget = spFov:Update(dt, fovDelta)
-        fovDelta = 0
-        FC.fov = math.clamp(FC.fov + fovTarget * 300 * (dt / fovScale), 1, 120)
-        Cam.FieldOfView = FC.fov
+        -- ── BUILD CFRAME DARI ACCUMULATED YAW + PITCH ─────────
+        -- Yaw dulu (world Y), lalu pitch lokal — tidak kebalik
+        local cf = CFrame.new(FC.pos)
+            * CFrame.Angles(0, math.rad(FC.yawDeg), 0)
+            * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
 
-        -- ── PAN (rotasi kamera) ────────────────────────────────
-        local panTarget = spPan:Update(dt, panDelta)
-        panDelta = Vector2.zero
-        FC.angles = FC.angles + panTarget * (dt / fovScale)
-        -- Clamp pitch, wrap yaw
-        FC.angles = Vector2.new(
-            math.clamp(FC.angles.X, -math.pi / 2 + 0.001, math.pi / 2 - 0.001),
-            FC.angles.Y % (2 * math.pi)
-        )
+        -- ── GERAK ─────────────────────────────────────────────
+        local spd  = FC.speed * 32 * dt
+        local move = Vector3.zero
+        local keys = FC._keys or {}
 
-        -- ── VELOCITY (gerak drone) ─────────────────────────────
-        -- Baca joystick LANGSUNG dari DynamicThumbstick position delta
-        -- Ini paling akurat untuk mobile, tidak bergantung pada world-transform
-        local rawJoy = Vector3.zero
-        local touchGui = LP.PlayerGui:FindFirstChild("TouchGui")
-        if touchGui then
-            local tcf = touchGui:FindFirstChild("TouchControlFrame")
-            local dtf = tcf and tcf:FindFirstChild("DynamicThumbstickFrame")
-            -- ThumbstickInner adalah lingkaran yang bergerak mengikuti jari
-            local inner = dtf and dtf:FindFirstChild("ThumbstickInner")
-            if inner and dtf then
-                -- Hitung offset inner dari center frame = raw joystick vector
-                local center = dtf.AbsolutePosition + dtf.AbsoluteSize * 0.5
-                local pos    = inner.AbsolutePosition + inner.AbsoluteSize * 0.5
-                local offset = pos - center
-                local radius = dtf.AbsoluteSize.X * 0.5
-                if radius > 0 then
-                    local nx = math.clamp(offset.X / radius, -1, 1)
-                    local ny = math.clamp(offset.Y / radius, -1, 1)
-                    -- nx = kanan/kiri, ny = bawah/atas (positif = bawah di screen = maju)
-                    rawJoy = Vector3.new(deadzone(nx), 0, deadzone(ny))
-                end
-            end
+        if onMobile then
+            -- Analog joystick kiri: Y = maju/mundur, X = kiri/kanan
+            move = cf.LookVector * (-fcJoy.Y) * spd
+                 + cf.RightVector * fcJoy.X   * spd
+        else
+            -- Keyboard WASD + E naik Q turun
+            if keys[Enum.KeyCode.W] then move = move + cf.LookVector  * spd end
+            if keys[Enum.KeyCode.S] then move = move - cf.LookVector  * spd end
+            if keys[Enum.KeyCode.D] then move = move + cf.RightVector * spd end
+            if keys[Enum.KeyCode.A] then move = move - cf.RightVector * spd end
+            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) * spd end
+            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) * spd end
         end
 
-        -- Bangun CFrame kamera dari angles saat ini
-        local camCF = CFrame.new(FC.pos) * CFrame.fromOrientation(FC.angles.X, FC.angles.Y, 0)
+        FC.pos = FC.pos + move
 
-        -- Proyeksikan ke ruang kamera drone:
-        -- rawJoy.X = kanan/kiri → RightVector kamera
-        -- rawJoy.Z = maju/mundur (positif screen = maju) → LookVector kamera
-        -- Pitch ikut kamera (terbang ke bawah kalau kamera nunduk)
-        local smoothJoy = spPos:Update(dt, rawJoy)
-        local smoothMove = camCF.LookVector * (-smoothJoy.Z) + camCF.RightVector * smoothJoy.X
+        -- ── TERAPKAN KAMERA ────────────────────────────────────
+        Cam.CFrame = CFrame.new(FC.pos)
+            * CFrame.Angles(0, math.rad(FC.yawDeg), 0)
+            * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
 
-        local baseSpeed = State.Cinema.speed * 64
-        FC.pos = FC.pos + smoothMove * baseSpeed * dt * FC.speedMul
-
-        -- ── TERAPKAN KE KAMERA ────────────────────────────────
-        local cf = CFrame.new(FC.pos) * CFrame.fromOrientation(FC.angles.X, FC.angles.Y, 0)
-        Cam.CFrame = cf
-
-        -- ── FREEZE BADAN (3 lapis) ─────────────────────────────
-        -- Karakter tetap di posisi asli, tidak dipindah ke -9999
-        -- Transparansi sudah dihandle saat toggle ON
+        -- ── FREEZE KARAKTER (3 lapis) ──────────────────────────
         local hrp = getRoot()
         local hum = getHum()
-        if hrp then
-            if not hrp.Anchored then hrp.Anchored = true end
-        end
+        if hrp and not hrp.Anchored then hrp.Anchored = true end
         if hum then
-            -- ChangeState Physics = humanoid tidak proses movement sama sekali
             if hum:GetState() ~= Enum.HumanoidStateType.Physics then
                 hum:ChangeState(Enum.HumanoidStateType.Physics)
             end
-            hum.WalkSpeed  = 0
-            hum.JumpPower  = 0
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
         end
     end)
 end
 
-local function stopDroneLoop()
-    RS:UnbindFromRenderStep("XKIDDrone")
-    droneLoop = nil
+local function stopFCLoop()
+    RS:UnbindFromRenderStep("XKIDFreecam")
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
@@ -426,30 +383,24 @@ PLW:Button("🌙 Set Malam", "", function() Lighting.ClockTime = 0 end)
 
 -- --- TAB 3: CINEMATIC ---
 local T_CI = Win:Tab("Cinematic", "video")
-local CIM = T_CI:Page("Drone", "video"):Section("🎬 Drone Mode", "Left")
-local CIW = T_CI:Page("Drone", "video"):Section("📱 Orientation", "Right")
+local CIM = T_CI:Page("Freecam", "video"):Section("🎬 Freecam", "Left")
+local CIW = T_CI:Page("Freecam", "video"):Section("📱 Orientation", "Right")
 
--- Simpan transparency karakter saat drone aktif
-local droneInvisSaved = {}
+-- Simpan transparency karakter saat freecam aktif
+local fcInvisSaved = {}
 
-CIM:Toggle("Ghost Drone", "fc", false, "Auto-Invis & Return", function(v)
+CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", function(v)
+    FC.active = v
     State.Cinema.active = v
     if v then
-        State.Cinema.lastPos = getRoot() and getRoot().CFrame
-
-        -- Ambil posisi & sudut dari kamera sekarang (tidak lompat)
+        -- Ambil posisi & sudut dari kamera sekarang supaya tidak lompat
         local cf = Cam.CFrame
+        FC.pos = cf.Position
         local rx, ry = cf:ToEulerAnglesYXZ()
-        FC.pos    = cf.Position
-        FC.angles = Vector2.new(rx, ry)
-        FC.fov    = Cam.FieldOfView
-        FC.speedMul = 1
-        FC.slow   = false
-
-        -- Reset spring
-        spPos:Reset(Vector3.zero)
-        spPan:Reset(Vector2.zero)
-        spFov:Reset(0)
+        FC.pitchDeg = math.deg(rx)
+        FC.yawDeg   = math.deg(ry)
+        FC._keys    = {}
+        FC._mouseRotate = false
 
         -- ── FREEZE KARAKTER (3 lapis) ──────────────────────────
         local hrp = getRoot()
@@ -461,44 +412,37 @@ CIM:Toggle("Ghost Drone", "fc", false, "Auto-Invis & Return", function(v)
             hum:ChangeState(Enum.HumanoidStateType.Physics)
         end
 
-        -- ── SEMBUNYIKAN KARAKTER (transparansi) ────────────────
-        -- Karakter tetap di posisi asli, hanya tidak kelihatan
-        droneInvisSaved = {}
+        -- ── SEMBUNYIKAN KARAKTER ───────────────────────────────
+        fcInvisSaved = {}
         local char = LP.Character
         if char then
             for _, part in pairs(char:GetDescendants()) do
                 if part:IsA("BasePart") then
-                    droneInvisSaved[part] = part.Transparency
+                    fcInvisSaved[part] = part.Transparency
                     part.Transparency = 1
                 end
             end
         end
 
-        startDroneCapture()
-        startDroneLoop()
+        startFCCapture()
+        startFCLoop()
+        Library:Notification("Freecam", "ON — Kiri gerak | Kanan rotate", 3)
     else
-        stopDroneLoop()
-        stopDroneCapture()
+        stopFCLoop()
+        stopFCCapture()
 
         -- ── RESTORE KARAKTER ───────────────────────────────────
+        for part, t in pairs(fcInvisSaved) do
+            if part and part.Parent then part.Transparency = t end
+        end
+        fcInvisSaved = {}
+
         local hrp = getRoot()
         local hum = getHum()
-
-        -- Restore transparency
-        for part, origTrans in pairs(droneInvisSaved) do
-            if part and part.Parent then
-                part.Transparency = origTrans
-            end
-        end
-        droneInvisSaved = {}
-
-        -- Unanchor + pindah ke posisi kamera
         if hrp then
             hrp.Anchored = false
-            hrp.CFrame = Cam.CFrame
+            hrp.CFrame   = Cam.CFrame
         end
-
-        -- Restore humanoid state normal
         if hum then
             hum.WalkSpeed = State.Move.ws
             hum.JumpPower = State.Move.jp
@@ -506,12 +450,14 @@ CIM:Toggle("Ghost Drone", "fc", false, "Auto-Invis & Return", function(v)
         end
 
         Cam.FieldOfView = 70
-        Cam.CameraType = Enum.CameraType.Custom
-        Library:Notification("Drone", "Badan lo udah balik ke posisi kamera!", 3)
+        Cam.CameraType  = Enum.CameraType.Custom
+        Library:Notification("Freecam", "OFF — Balik ke posisi kamera", 3)
     end
 end)
-CIM:Slider("Drone Speed", "csc", 0.1, 5, 1, function(v) State.Cinema.speed = v end)
-CIM:Slider("Zoom (FOV)", "cfov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
+
+CIM:Slider("⚡ Speed", "fcspd", 1, 20, 5, function(v) FC.speed = v end)
+CIM:Slider("🎯 Sensitivity", "fcsens", 1, 10, 3, function(v) FC.sens = v * 0.08 end)
+CIM:Slider("🔍 FOV", "fcfov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
 
 CIW:Button("📱 Portrait", "Tegak", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
 CIW:Button("📺 Landscape", "Mendatar", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
@@ -521,6 +467,23 @@ local T_SP = Win:Tab("Spectate", "eye")
 local SPP  = T_SP:Page("Viewer", "eye")
 local SPS  = SPP:Section("👁️ Spectate Player", "Left")
 local SPF  = SPP:Section("🔍 FOV Zoom", "Right")
+
+-- Helper cek area joystick (dipakai spectate touch)
+local function inJoystickArea(pos)
+    local ctrl = LP and LP.PlayerGui and LP.PlayerGui:FindFirstChild("TouchGui")
+    if ctrl then
+        local frame = ctrl:FindFirstChild("TouchControlFrame")
+        local thumb = frame and frame:FindFirstChild("DynamicThumbstickFrame")
+        if thumb then
+            local ap = thumb.AbsolutePosition
+            local as = thumb.AbsoluteSize
+            if pos.X >= ap.X and pos.Y >= ap.Y and pos.X <= ap.X+as.X and pos.Y <= ap.Y+as.Y then
+                return true
+            end
+        end
+    end
+    return false
+end
 
 -- ── SPECTATE STATE ─────────────────────────────────────────
 local Spec = {
