@@ -75,12 +75,13 @@ local onMobile = not UIS.KeyboardEnabled
 
 -- State freecam
 local FC = {
-    active   = false,
-    pos      = Vector3.zero,
-    pitchDeg = 0,
-    yawDeg   = 0,
-    speed    = 1,      -- diset dari slider menu
-    sens     = 0.25,   -- sensitivity rotate
+    active          = false,
+    pos             = Vector3.zero,
+    pitchDeg        = 0,
+    yawDeg          = 0,
+    speed           = 1,      -- diset dari slider menu
+    sens            = 0.25,   -- sensitivity rotate
+    savedCharCFrame = nil,    -- simpan posisi karakter sebelum freecam ON
 }
 
 -- Touch state — split layar kiri gerak, kanan rotate
@@ -405,7 +406,10 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
         -- ── FREEZE KARAKTER (3 lapis) ──────────────────────────
         local hrp = getRoot()
         local hum = getHum()
-        if hrp then hrp.Anchored = true end
+        if hrp then
+            FC.savedCharCFrame = hrp.CFrame  -- simpan posisi karakter sebelum freeze
+            hrp.Anchored = true
+        end
         if hum then
             hum.WalkSpeed = 0
             hum.JumpPower = 0
@@ -441,7 +445,11 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
         local hum = getHum()
         if hrp then
             hrp.Anchored = false
-            hrp.CFrame   = Cam.CFrame
+            -- Kembalikan karakter ke posisi sebelum freecam ON (bukan posisi kamera)
+            if FC.savedCharCFrame then
+                hrp.CFrame = FC.savedCharCFrame
+                FC.savedCharCFrame = nil
+            end
         end
         if hum then
             hum.WalkSpeed = State.Move.ws
