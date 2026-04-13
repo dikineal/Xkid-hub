@@ -1,12 +1,12 @@
 --[[
 ╔═══════════════════════════════════════════════════════════╗
-║              💠  X K I D   H U B  v28.0  💠              ║
-║                GHOST DRONE & FULL FEATURES LOCK          ║
+║              💠  X K I D   H U B  v29.0  💠              ║
+║                FREECAM & FULL FEATURES LOCK              ║
 ╚═══════════════════════════════════════════════════════════╣
-║  ➤  Fixed: Drone Joystick (ThumbstickInner Read)          ║
-║  ➤  Fixed: Invisible R15 Restore & Camera Return          ║
-║  ➤  New:   Save/Load Location Slot 1-5                    ║
-║  ➤  Stable: Smart TP, Fly, Bypass, IY Fling Locked        ║
+║  ➤  Fixed: Spectate Nickname + Refresh                    ║
+║  ➤  New:   God Mode (HP infinite)                         ║
+║  ➤  Removed: Invisible R15 (visual only)                  ║
+║  ➤  Stable: Freecam, TP, Fly, Fling, World Locked         ║
 ╚═══════════════════════════════════════════════════════════╝
 ]]
 
@@ -38,6 +38,27 @@ local function getHum() return LP.Character and LP.Character:FindFirstChildOfCla
 local function getPNames()
     local t = {}; for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.Name) end end
     return t
+end
+
+-- Return "Nickname (username)" untuk spectate dropdown
+local function getDisplayNames()
+    local t = {}
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP then
+            table.insert(t, p.DisplayName .. " (@" .. p.Name .. ")")
+        end
+    end
+    return t
+end
+
+-- Cari player dari string "Nickname (@username)"
+local function findPlayerByDisplay(str)
+    for _, p in pairs(Players:GetPlayers()) do
+        if str == p.DisplayName .. " (@" .. p.Name .. ")" then
+            return p
+        end
+    end
+    return nil
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
@@ -275,7 +296,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("XKID HUB V28", "star", "GHOST DRONE", false)
+local Win = Library:Window("XKID HUB V29", "star", "FREECAM", false)
 
 -- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -350,33 +371,35 @@ end)
 
 PLH:Toggle("Native Fly", "nf", false, "Joystick", function(v) toggleFly(v) end)
 PLH:Toggle("NoClip", "nc", false, "", function(v) State.Move.ncp = v end)
--- Invisible R15: simpan transparency asli lalu restore saat off
-local invisSaved = {}
-PLH:Toggle("Invisible (R15)", "inv", false, "", function(v)
-    local char = LP.Character
-    if not char then return end
+PLH:Toggle("IY Fling Mode", "ffm", false, "Tabrak!", function(v) State.Fling.active = v; State.Move.ncp = v end)
+
+-- God Mode: HP tidak habis, restore tiap frame
+local godConn = nil
+PLH:Toggle("🛡️ God Mode", "god", false, "HP Infinite", function(v)
     if v then
-        invisSaved = {}
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                invisSaved[part] = part.Transparency
-                part.Transparency = 1
-            end
+        local hum = getHum()
+        if hum then
+            hum.MaxHealth = math.huge
+            hum.Health    = math.huge
         end
+        godConn = RS.Heartbeat:Connect(function()
+            local h = getHum()
+            if h then
+                h.MaxHealth = math.huge
+                h.Health    = math.huge
+            end
+        end)
+        Library:Notification("God Mode", "🛡️ Aktif! HP Infinite", 2)
     else
-        for part, origTrans in pairs(invisSaved) do
-            if part and part.Parent then
-                part.Transparency = origTrans
-            end
+        if godConn then godConn:Disconnect(); godConn = nil end
+        local hum = getHum()
+        if hum then
+            hum.MaxHealth = 100
+            hum.Health    = 100
         end
-        invisSaved = {}
-        -- Pastikan kamera balik ke mode normal
-        if Cam.CameraType ~= Enum.CameraType.Custom then
-            Cam.CameraType = Enum.CameraType.Custom
-        end
+        Library:Notification("God Mode", "❌ Nonaktif", 2)
     end
 end)
-PLH:Toggle("IY Fling Mode", "ffm", false, "Tabrak!", function(v) State.Fling.active = v; State.Move.ncp = v end)
 
 PLW:Slider("Waktu (ClockTime)", "time", 0, 24, 12, function(v) Lighting.ClockTime = v end)
 PLW:Button("☀️ Set Siang", "", function() Lighting.ClockTime = 14 end)
@@ -633,23 +656,25 @@ local function stopSpecLoop()
 end
 
 -- ── UI SPECTATE ────────────────────────────────────────────
-local specDrop = SPS:Dropdown("Pilih Target", "spDrop", getPNames(), function(v)
-    for _, p in pairs(Players:GetPlayers()) do
-        if p.Name == v then
-            Spec.target = p
-            -- Reset angles ke arah belakang target saat ini supaya tidak lompat
-            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ()
-                Spec.orbitYaw   = math.deg(ry)
-                Spec.orbitPitch = 20   -- sedikit dari atas
-                Spec.fpYaw      = math.deg(ry)
-                Spec.fpPitch    = 0
-            end
-            break
+local specDrop = SPS:Dropdown("Pilih Target", "spDrop", getDisplayNames(), function(v)
+    local p = findPlayerByDisplay(v)
+    if p then
+        Spec.target = p
+        -- Reset angles ke arah belakang target supaya tidak lompat
+        if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ()
+            Spec.orbitYaw   = math.deg(ry)
+            Spec.orbitPitch = 20
+            Spec.fpYaw      = math.deg(ry)
+            Spec.fpPitch    = 0
         end
     end
 end)
-SPS:Button("🔄 Refresh", "", function() specDrop:Refresh(getPNames()) end)
+SPS:Button("🔄 Refresh", "", function()
+    Spec.target = nil  -- reset target supaya tidak salah orang
+    specDrop:Refresh(getDisplayNames())
+    Library:Notification("Spectate", "List diperbarui!", 2)
+end)
 
 SPS:Toggle("👁️ Spectate ON/OFF", "spec", false, "Nonton target", function(v)
     Spec.active = v
@@ -662,7 +687,8 @@ SPS:Toggle("👁️ Spectate ON/OFF", "spec", false, "Nonton target", function(v
         Spec.origFov = Cam.FieldOfView
         startSpecCapture()
         startSpecLoop()
-        Library:Notification("Spectate", "Nonton: " .. Spec.target.Name, 3)
+        -- Tampilkan nickname target
+        Library:Notification("Spectate", "Nonton: " .. Spec.target.DisplayName, 3)
     else
         stopSpecLoop()
         stopSpecCapture()
@@ -894,4 +920,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-Library:Notification("XKID V28", "Ghost Drone Ready! Sikat Bro!", 5)
+Library:Notification("XKID V29", "Freecam Ready! Sikat Bro!", 5)
