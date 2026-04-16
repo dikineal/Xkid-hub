@@ -65,11 +65,8 @@ end
 local onMobile = not UIS.KeyboardEnabled
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │     ➤  FLY ENGINE  (SAMA PERSIS SEPERTI FREECAM)        │
+-- │     ➤  FLY ENGINE  (FIXED JOYSTICK ARAH KAMERA)         │
 -- └─────────────────────────────────────────────────────────┘
--- Fly menggunakan logika render step + BodyVelocity/BodyGyro
--- identik dengan freecam, bedanya kamera TIDAK diambil alih.
-
 local flyRotTouch  = nil
 local flyMoveTouch = nil
 local flyMoveSt    = nil
@@ -108,7 +105,6 @@ local function startFlyCapture()
             flyPitch = math.clamp(flyPitch - inp.Delta.Y * 0.3, -80, 80)
         end
     end))
-    -- Touch: kiri=gerak, kanan=rotate (identik freecam)
     table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
@@ -182,10 +178,8 @@ local function toggleFly(v)
     hum.PlatformStand = true
     State.Move.ncp = true
 
-    -- Simpan posisi awal untuk referensi
     flyLastPos = hrp.CFrame
 
-    -- BodyVelocity + BodyGyro (gaya freecam)
     if State.Fly.bv then State.Fly.bv:Destroy() end
     if State.Fly.bg then State.Fly.bg:Destroy() end
 
@@ -199,28 +193,25 @@ local function toggleFly(v)
     State.Fly.bg.P = 1e5
     State.Fly.bg.Parent    = hrp
 
-    -- Ambil yaw dari kamera saat ini supaya tidak lompat
     local _, ry = Cam.CFrame:ToEulerAnglesYXZ()
     flyYaw   = math.deg(ry)
     flyPitch = 0
 
     startFlyCapture()
 
-    -- ─── RENDER STEP (identik dengan freecam loop) ───────────
     RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not State.Fly.active then return end
         local r = getRoot()
         local h = getHum()
         if not r or not h then return end
 
-        -- Simpan posisi terakhir (untuk security auto-reset)
         flyLastPos = r.CFrame
         if State.Security.lastPos ~= nil then
             State.Security.lastPos = r.CFrame
         end
 
-        -- Build CFrame dari yaw+pitch (sama persis freecam)
-        local cf = CFrame.new(r.Position)
+        -- PERBAIKAN: arah berdasarkan kamera (sama kaya freecam)
+        local camDir = CFrame.new(r.Position)
             * CFrame.Angles(0, math.rad(flyYaw), 0)
             * CFrame.Angles(math.rad(flyPitch), 0, 0)
 
@@ -229,23 +220,23 @@ local function toggleFly(v)
         local keys = State.Fly._keys or {}
 
         if onMobile then
-            move = cf.LookVector * (-flyJoy.Y) * spd
-                 + cf.RightVector * flyJoy.X   * spd
+            -- Joystick sesuai arah kamera
+            move = camDir.LookVector * (-flyJoy.Y) * spd
+                 + camDir.RightVector * flyJoy.X * spd
         else
-            if keys[Enum.KeyCode.W] then move = move + cf.LookVector  * spd end
-            if keys[Enum.KeyCode.S] then move = move - cf.LookVector  * spd end
-            if keys[Enum.KeyCode.D] then move = move + cf.RightVector * spd end
-            if keys[Enum.KeyCode.A] then move = move - cf.RightVector * spd end
+            if keys[Enum.KeyCode.W] then move = move + camDir.LookVector  * spd end
+            if keys[Enum.KeyCode.S] then move = move - camDir.LookVector  * spd end
+            if keys[Enum.KeyCode.D] then move = move + camDir.RightVector * spd end
+            if keys[Enum.KeyCode.A] then move = move - camDir.RightVector * spd end
             if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) * spd end
             if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) * spd end
         end
 
-        -- Apply ke BodyVelocity & BodyGyro
         if State.Fly.bv and State.Fly.bv.Parent then
             State.Fly.bv.Velocity = move
         end
         if State.Fly.bg and State.Fly.bg.Parent then
-            State.Fly.bg.CFrame = cf
+            State.Fly.bg.CFrame = camDir
         end
     end)
 
@@ -459,7 +450,6 @@ PLM:Button("🔄 Refresh POV", "Reset kamera & karakter", function()
     Library:Notification("✅ Refresh", "POV & kamera sudah di-reset!", 2)
 end)
 
--- ── WALKSPEED SLIDER (ganti +/- button) ─────────────────
 PLM:Slider("🏃 WalkSpeed", "ws", 16, 500, 16, function(v)
     State.Move.ws = v
     if getHum() then getHum().WalkSpeed = v end
@@ -470,7 +460,6 @@ PLM:Button("🔄 Reset Speed", "Kembali default 16", function()
     Library:Notification("Speed", "WalkSpeed: 16 (default)", 1)
 end)
 
--- ── JUMPPOWER SLIDER (ganti +/- button) ──────────────────
 PLM:Slider("🦘 JumpPower", "jp", 50, 500, 50, function(v)
     State.Move.jp = v
     if getHum() then getHum().JumpPower = v end
@@ -491,14 +480,8 @@ PLM:Toggle("∞  Inf Jump", "ij", false, "Lompat terus", function(v)
     end
 end)
 
--- ── FLY (toggle) + FLY SPEED SLIDER ─────────────────────
 PLH:Toggle("✈️  Native Fly", "nf", false, "Freecam style", function(v) toggleFly(v) end)
-
--- FlySpeed slider (ganti +/- button)
-PLH:Slider("✈️ Fly Speed", "flyspd", 10, 300, 60, function(v)
-    State.Move.flyS = v
-end)
-
+PLH:Slider("✈️ Fly Speed", "flyspd", 10, 300, 60, function(v) State.Move.flyS = v end)
 PLH:Toggle("👻 NoClip", "nc", false, "Tembus dinding", function(v) State.Move.ncp = v end)
 PLH:Toggle("💥 IY Fling", "ffm", false, "Tabrak!", function(v) State.Fling.active = v; State.Move.ncp = v end)
 
@@ -539,20 +522,26 @@ PLH:Toggle("🛡️ God Mode", "god", false, "HP Infinite + Respawn", function(v
     end
 end)
 
--- PAGE 2: LOCK
+-- PAGE 2: LOCK (DENGAN FITUR UNLOCK SEMENTARA)
 local PLPage2 = T_PL:Page("Lock", "lock")
 local PLLock  = PLPage2:Section("🔒 Lock Karakter", "Left")
 local PLLockR = PLPage2:Section("📷 Lock Kamera", "Right")
 
-local lockRotConn = nil; local lockedYaw = 0
+local lockRotConn = nil
+local lockedYaw = 0
+local tempUnlock = false
+
 PLLock:Toggle("🔒 Lock Rotasi", "lockrot", false, "Karakter tidak berputar", function(v)
     if v then
         local hrp = getRoot()
         if not hrp then Library:Notification("Lock", "❌ Karakter tidak ditemukan!", 2); return end
-        local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ(); lockedYaw = ry
+        local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ()
+        lockedYaw = ry
         lockRotConn = RS.Heartbeat:Connect(function()
             local r = getRoot()
-            if r then r.CFrame = CFrame.new(r.Position) * CFrame.Angles(0, lockedYaw, 0) end
+            if r and not tempUnlock then
+                r.CFrame = CFrame.new(r.Position) * CFrame.Angles(0, lockedYaw, 0)
+            end
         end)
         Library:Notification("Lock", "🔒 Rotasi dikunci!", 2)
     else
@@ -560,17 +549,31 @@ PLLock:Toggle("🔒 Lock Rotasi", "lockrot", false, "Karakter tidak berputar", f
         Library:Notification("Lock", "🔓 Rotasi bebas", 2)
     end
 end)
-PLLock:Button("📌 Simpan Arah Sekarang", "Update arah kunci", function()
-    local hrp = getRoot()
-    if hrp then local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ(); lockedYaw = ry; Library:Notification("Lock", "📌 Arah baru disimpan!", 2) end
+
+PLLock:Button("🔓 UNLOCK SEMENTARA (Tekan buat muter)", "Sementara buka lock", function()
+    tempUnlock = true
+    task.wait(0.5)
+    tempUnlock = false
+    Library:Notification("Lock", "🔓 Unlock 0.5 detik, sekarang lock lagi!", 1)
 end)
 
-local lockPosConn = nil; local lockedCF = nil
+PLLock:Button("📌 Simpan Arah Lock Sekarang", "Update arah kunci", function()
+    local hrp = getRoot()
+    if hrp then
+        local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ()
+        lockedYaw = ry
+        Library:Notification("Lock", "📌 Arah lock di-update!", 2)
+    end
+end)
+
+local lockPosConn = nil
+local lockedCF = nil
 PLLock:Toggle("📍 Lock Posisi", "lockpos", false, "Karakter diam total", function(v)
     if v then
         local hrp = getRoot()
         if not hrp then return end
-        lockedCF = hrp.CFrame; hrp.Anchored = true
+        lockedCF = hrp.CFrame
+        hrp.Anchored = true
         lockPosConn = RS.Heartbeat:Connect(function()
             local r = getRoot()
             if r and lockedCF then r.CFrame = lockedCF end
@@ -588,7 +591,8 @@ PLLock:Button("📌 Update Posisi Kunci", "Kunci di posisi baru", function()
     if hrp then lockedCF = hrp.CFrame; Library:Notification("Lock", "📌 Posisi baru dikunci!", 2) end
 end)
 
-local lockCamConn = nil; local lockCamDist = 8
+local lockCamConn = nil
+local lockCamDist = 8
 PLLockR:Toggle("📷 Lock Kamera", "lockcam", false, "Kamera follow karakter", function(v)
     if v then
         Cam.CameraType = Enum.CameraType.Scriptable
@@ -608,7 +612,6 @@ PLLockR:Toggle("📷 Lock Kamera", "lockcam", false, "Kamera follow karakter", f
     end
 end)
 
--- ── LOCK CAM DIST SLIDER (ganti +/- button) ──────────────
 PLLockR:Slider("📷 Jarak Kamera", "camdist", 3, 30, 8, function(v)
     lockCamDist = v
 end)
@@ -667,13 +670,8 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
     end
 end)
 
--- ── FREECAM SPEED SLIDER (ganti +/- button) ──────────────
 CIM:Slider("⚡ FC Speed", "fcspd", 1, 30, 1, function(v) FC.speed = v end)
-
--- ── FREECAM SENSITIVITY SLIDER (ganti +/- button) ────────
 CIM:Slider("🎯 FC Sensitivity", "fcsens", 1, 20, 5, function(v) FC.sens = v * 0.05 end)
-
--- ── FOV SLIDER (ganti +/- button) ────────────────────────
 CIM:Slider("🔍 FOV", "fcfov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
 CIM:Button("🔄 Reset FOV", "FOV normal 70", function()
     Cam.FieldOfView = 70; Library:Notification("Freecam", "FOV: 70 (Normal)", 1)
@@ -730,7 +728,6 @@ CIPre:Button("🔄  Reset Semua", "Kembalikan default", function()
     Library:Notification("🎬 Preset", "🔄 Reset Default", 2)
 end)
 
--- ── FINE TUNE SLIDERS (ganti semua +/- button) ───────────
 CIFine:Slider("☀️ Brightness", "ftbright", 0, 50, 10, function(v)
     Lighting.Brightness = v * 0.1
 end)
@@ -811,7 +808,6 @@ local function stopSpecCapture()
     specConns = {}; specTouchMain = nil; specTouchPinch = {}; specPinchDist = nil; specPanDelta = Vector2.zero
 end
 
-local specLoop = nil
 local function startSpecLoop()
     RS:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not Spec.active then return end
@@ -838,11 +834,10 @@ local function startSpecLoop()
                 * CFrame.Angles(math.rad(Spec.fpPitch), 0, 0)
         end
     end)
-    specLoop = true
 end
 
 local function stopSpecLoop()
-    RS:UnbindFromRenderStep("XKIDSpec"); specLoop = nil
+    RS:UnbindFromRenderStep("XKIDSpec")
 end
 
 local specDrop = SPS:Dropdown("Pilih Target", "spDrop", getDisplayNames(), function(v)
@@ -880,13 +875,8 @@ SPS:Toggle("🎥 First Person", "specfp", false, "ON=FP Drone | OFF=Orbit", func
     end
 end)
 
--- ── ORBIT DIST SLIDER (ganti +/- button) ─────────────────
 SPS:Slider("Jarak Orbit", "specdist", 3, 30, 8, function(v) Spec.dist = v end)
-
--- ── FOV SLIDER SPECTATE (ganti +/- button) ───────────────
-SPF:Slider("🔍 FOV Zoom", "specfov", 10, 120, 70, function(v)
-    Cam.FieldOfView = v
-end)
+SPF:Slider("🔍 FOV Zoom", "specfov", 10, 120, 70, function(v) Cam.FieldOfView = v end)
 SPF:Button("👁️ Reset FOV Normal (70)", "", function()
     Cam.FieldOfView = 70; Library:Notification("FOV", "FOV: 70 (Normal)", 1)
 end)
@@ -951,7 +941,6 @@ WOG:Button("🎬 Cinematic (Ultra+Atmos)",  "Terbaik untuk rekam",   function()
     Library:Notification("Graphics","🎬 Cinematic Mode!",3)
 end)
 
--- ── GRAFIK LEVEL SLIDER (ganti ▲▼ button) ─────────────────
 WOGF:Slider("📊 Level Grafik", "gfxlvl", 1, 10, 5, function(v)
     pcall(function() settings().Rendering.QualityLevel = v end)
     Library:Notification("Graphics", "Level: " .. v, 1)
@@ -962,21 +951,21 @@ WOGF:Button("🔄 Cek Level Sekarang", "", function()
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- TAB 6: SECURITY
+-- TAB 6: SECURITY (DENGAN RESET KARAKTER LANGSUNG)
 -- ═══════════════════════════════════════════════════════════
 local T_SC  = Win:Tab("Security", "shield")
 local SCPage= T_SC:Page("Guard", "shield")
 local SCP   = SCPage:Section("🛡️ Protection", "Left")
-local SCR   = SCPage:Section("🔁 Auto Reset", "Right")  -- BARU
+local SCR   = SCPage:Section("💀 Reset Karakter", "Right")
 
--- Lacak posisi terakhir karakter secara terus-menerus
-local secLastPos = nil
+-- Simpan posisi terakhir otomatis
+local lastPosReset = nil
 RS.Heartbeat:Connect(function()
     local r = getRoot()
-    if r then secLastPos = r.CFrame end
+    if r then lastPosReset = r.CFrame end
 end)
 
--- ── Anti-AFK ─────────────────────────────────────────────
+-- Anti-AFK
 SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
     if v then
         State.Security.afkConn = LP.Idled:Connect(function()
@@ -991,91 +980,67 @@ SCP:Button("🔄 Rejoin Server", "", function()
     TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
 end)
 
--- ── AUTO RESET KARAKTER TANPA ANIMASI ────────────────────
--- Reset karakter langsung (tanpa animasi kematian/respawn normal)
--- setelah reset, karakter dikembalikan ke posisi terakhir sebelum mati
-
-local autoResetConn = nil
-SCR:Toggle("🔁 Auto Reset Karakter", "autoreset", false, "Reset tanpa animasi, balik ke posisi terakhir", function(v)
-    if v then
-        -- Simpan posisi saat toggle dinyalakan
-        if getRoot() then secLastPos = getRoot().CFrame end
-
-        -- Sambungkan ke CharacterAdded untuk handle setelah respawn
-        autoResetConn = LP.CharacterAdded:Connect(function(char)
-            -- Matikan animasi respawn standar secepat mungkin
-            local hum = char:WaitForChild("Humanoid", 5)
-            if hum then
-                -- Nonaktifkan animator supaya tidak putar animasi spawn
-                local animator = hum:FindFirstChildOfClass("Animator")
-                if animator then animator:Destroy() end
-                -- Stop semua AnimationTrack
-                for _, track in pairs(hum:GetPlayingAnimationTracks()) do
-                    track:Stop(0)
-                end
-                hum.PlatformStand = true
-            end
-            -- Tunggu HRP ada
-            local hrp = char:WaitForChild("HumanoidRootPart", 5)
-            task.wait(0.05)  -- frame satu supaya physics siap
-            if hrp and secLastPos then
-                -- Teleport langsung ke posisi terakhir
-                hrp.CFrame = secLastPos
-                Library:Notification("🔁 Auto Reset", "Kembali ke posisi terakhir!", 2)
-            end
-            task.wait(0.1)
-            -- Kembalikan kontrol normal
-            if hum then
-                hum.PlatformStand = false
-                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-            end
-        end)
-        Library:Notification("Auto Reset", "🔁 ON — Akan balik ke posisi terakhir setelah reset", 3)
-    else
-        if autoResetConn then autoResetConn:Disconnect(); autoResetConn = nil end
-        Library:Notification("Auto Reset", "❌ Auto Reset OFF", 2)
-    end
-end)
-
--- Tombol reset manual sekali (tanpa perlu toggle auto)
-SCR:Button("💀 Reset Sekarang", "Reset karakter sekarang, balik ke posisi ini", function()
-    -- Simpan posisi sebelum reset
-    local savedPos = secLastPos or (getRoot() and getRoot().CFrame)
+-- Tombol reset: langsung matiin karakter, respawn, balik ke posisi
+SCR:Button("💀 RESET KARAKTER (Kembali ke posisi)", "", function()
+    local savedPos = lastPosReset
     if not savedPos then
-        Library:Notification("Reset", "❌ Tidak ada posisi tersimpan!", 2)
+        local r = getRoot()
+        if r then savedPos = r.CFrame end
+    end
+    if not savedPos then
+        Library:Notification("Reset", "❌ Gak ada posisi yang tersimpan!", 2)
         return
     end
 
-    -- Connect sekali ke CharacterAdded
-    local oneConn
-    oneConn = LP.CharacterAdded:Connect(function(char)
-        oneConn:Disconnect()
-        local hum = char:WaitForChild("Humanoid", 5)
-        if hum then
-            local animator = hum:FindFirstChildOfClass("Animator")
-            if animator then animator:Destroy() end
-            for _, track in pairs(hum:GetPlayingAnimationTracks()) do track:Stop(0) end
-            hum.PlatformStand = true
-        end
-        local hrp = char:WaitForChild("HumanoidRootPart", 5)
-        task.wait(0.05)
-        if hrp then hrp.CFrame = savedPos end
-        task.wait(0.1)
-        if hum then hum.PlatformStand = false; hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
-        Library:Notification("💀 Reset", "Kembali ke posisi terakhir!", 2)
-    end)
+    local targetPos = savedPos
 
-    -- Trigger reset karakter via LoadCharacter
+    LP.CharacterAdded:Wait()
     LP:LoadCharacter()
+
+    task.wait(0.1)
+    local char = LP.Character
+    if not char then
+        char = LP.CharacterAdded:Wait()
+    end
+
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum then
+        local animator = hum:FindFirstChildOfClass("Animator")
+        if animator then animator:Destroy() end
+        for _, track in pairs(hum:GetPlayingAnimationTracks()) do
+            track:Stop(0)
+        end
+        hum.PlatformStand = true
+    end
+
+    local hrp = char:WaitForChild("HumanoidRootPart", 5)
+    task.wait(0.05)
+    if hrp then
+        hrp.CFrame = targetPos
+    end
+
+    task.wait(0.1)
+    if hum then
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+    end
+
+    Library:Notification("💀 Reset", "Karakter di-reset, balik ke posisi!", 2)
 end)
 
--- Tombol hanya balik ke posisi terakhir (tanpa reset karakter)
-SCR:Button("📍 Kembali ke Posisi Terakhir", "Teleport ke posisi terakhir yang tersimpan", function()
+-- Tombol tambahan: cuma balik posisi (tanpa reset)
+SCR:Button("📍 TELEPORT KE POSISI TERAKHIR", "", function()
     local r = getRoot()
-    if not r then Library:Notification("Posisi", "❌ Karakter tidak ditemukan!", 2); return end
-    if not secLastPos then Library:Notification("Posisi", "❌ Belum ada posisi tersimpan!", 2); return end
-    r.CFrame = secLastPos
-    Library:Notification("📍 Posisi", "Kembali ke posisi terakhir!", 2)
+    if not r then
+        Library:Notification("Posisi", "❌ Karakter gak ditemukan!", 2)
+        return
+    end
+    if not lastPosReset then
+        Library:Notification("Posisi", "❌ Belum ada posisi tersimpan!", 2)
+        return
+    end
+    r.CFrame = lastPosReset
+    Library:Notification("📍 Posisi", "Balik ke posisi terakhir!", 2)
 end)
 
 -- ═══════════════════════════════════════════════════════════
