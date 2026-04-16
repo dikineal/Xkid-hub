@@ -1,7 +1,8 @@
+```lua
 --[[
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║        ✦  X  K  I  D     H  U  B  ✦   FINAL  V.1           ║
+║        ✦  X  K  I  D     H  U  B  ✦   FINAL  V.2           ║
 ║                                                              ║
 ╠══════════════════════════════════════════════════════════════╣
 ║                                                              ║
@@ -11,9 +12,9 @@
 ╠══════════════════════════════════════════════════════════════╣
 ║   ✦  Fly Freecam Style   ✦  Lock Rotasi & Kamera            ║
 ║   ✦  God Mode + Respawn  ✦  JumpPower Control               ║
-║   ✦  Preset Cinematic    ✦  All Sliders → +/- Buttons       ║
+║   ✦  Preset Cinematic    ✦  All Sliders → Responsive        ║
 ╚══════════════════════════════════════════════════════════════╝
-]]
+--]]
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Aurora.lua"))()
 
@@ -29,7 +30,7 @@ local Cam = workspace.CurrentCamera
 
 -- Global State
 local State = {
-    Move = {ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60},
+    Move = {ws = 16, jp = 50, ncp = false, infJ = nil, flyS = 60},
     Fly = {active = false, bv = nil, bg = nil},
     Fling = {active = false, power = 1000000},
     Teleport = {selectedTarget = ""},
@@ -66,185 +67,296 @@ local function findPlayerByDisplay(str)
     return nil
 end
 
+-- Mobile detection (lebih akurat)
+local onMobile = not UIS.KeyboardEnabled
+
 -- ┌─────────────────────────────────────────────────────────┐
 -- │           ➤  FLY ENGINE  (FREECAM STYLE)                │
+-- │           SAME MOVEMENT LOGIC AS FREECAM                 │
 -- └─────────────────────────────────────────────────────────┘
 
--- Touch state fly (sama gaya freecam: kiri=gerak, kanan=rotate)
-local flyRotTouch  = nil
-local flyMoveTouch = nil
-local flyMoveSt    = nil
-local flyRotLast   = nil
-local flyJoy       = Vector2.zero
-local flyYaw       = 0
-local flyPitch     = 0
-local flyConns     = {}
-local flyLastPos   = nil  -- untuk auto-respawn
+-- Fly state variables (mirip dengan FreeCam)
+local FlyState = {
+    active = false,
+    bv = nil,
+    bg = nil,
+    yaw = 0,
+    pitch = 0,
+    pos = nil,  -- position saat fly start (untuk tracking)
+    speed = 60,
+    -- Touch state
+    rotTouch = nil,
+    moveTouch = nil,
+    moveStartPos = nil,
+    rotLastPos = nil,
+    joy = Vector2.zero,
+    -- Keyboard state
+    keys = {},
+    mouseRot = false,
+    -- Connections
+    conns = {}
+}
 
 local function startFlyCapture()
-    local keysHeld = {}
-    -- Keyboard
-    table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
+    -- Keyboard handlers
+    table.insert(FlyState.conns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         local k = inp.KeyCode
         if k == Enum.KeyCode.W or k == Enum.KeyCode.A or
            k == Enum.KeyCode.S or k == Enum.KeyCode.D or
            k == Enum.KeyCode.E or k == Enum.KeyCode.Q then
-            keysHeld[k] = true
+            FlyState.keys[k] = true
         end
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            State.Fly._mouseRot = true
+            FlyState.mouseRot = true
             UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
         end
     end))
-    table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
-        keysHeld[inp.KeyCode] = false
+
+    table.insert(FlyState.conns, UIS.InputEnded:Connect(function(inp)
+        FlyState.keys[inp.KeyCode] = false
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            State.Fly._mouseRot = false
+            FlyState.mouseRot = false
             UIS.MouseBehavior = Enum.MouseBehavior.Default
         end
     end))
-    -- Mouse rotate
-    table.insert(flyConns, UIS.InputChanged:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseMovement and State.Fly._mouseRot then
-            flyYaw   = flyYaw   - inp.Delta.X * 0.3
-            flyPitch = math.clamp(flyPitch - inp.Delta.Y * 0.3, -80, 80)
+
+    -- Mouse rotation (PC)
+    table.insert(FlyState.conns, UIS.InputChanged:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseMovement and FlyState.mouseRot then
+            FlyState.yaw = FlyState.yaw - inp.Delta.X * 0.3
+            FlyState.pitch = math.clamp(FlyState.pitch - inp.Delta.Y * 0.3, -80, 80)
         end
     end))
-    -- Touch: kiri=gerak, kanan=rotate
-    table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
+
+    -- Touch handlers (Mobile) - split screen: kiri gerak, kanan rotate
+    table.insert(FlyState.conns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
         local half = Cam.ViewportSize.X / 2
         if inp.Position.X > half then
-            if not flyRotTouch then flyRotTouch = inp; flyRotLast = inp.Position end
+            -- Right side = rotate
+            if not FlyState.rotTouch then
+                FlyState.rotTouch = inp
+                FlyState.rotLastPos = inp.Position
+            end
         else
-            if not flyMoveTouch then flyMoveTouch = inp; flyMoveSt = inp.Position end
+            -- Left side = movement (analog)
+            if not FlyState.moveTouch then
+                FlyState.moveTouch = inp
+                FlyState.moveStartPos = inp.Position
+            end
         end
     end))
-    table.insert(flyConns, UIS.TouchMoved:Connect(function(inp)
-        if inp == flyRotTouch and flyRotLast then
-            flyYaw   = flyYaw   - (inp.Position.X - flyRotLast.X) * 0.3
-            flyPitch = math.clamp(flyPitch - (inp.Position.Y - flyRotLast.Y) * 0.3, -80, 80)
-            flyRotLast = inp.Position
+
+    table.insert(FlyState.conns, UIS.TouchMoved:Connect(function(inp)
+        -- Rotation
+        if inp == FlyState.rotTouch and FlyState.rotLastPos then
+            local dx = inp.Position.X - FlyState.rotLastPos.X
+            local dy = inp.Position.Y - FlyState.rotLastPos.Y
+            FlyState.yaw = FlyState.yaw - dx * 0.3
+            FlyState.pitch = math.clamp(FlyState.pitch - dy * 0.3, -80, 80)
+            FlyState.rotLastPos = inp.Position
         end
-        if inp == flyMoveTouch and flyMoveSt then
-            local dx = inp.Position.X - flyMoveSt.X
-            local dy = inp.Position.Y - flyMoveSt.Y
-            local nx = math.abs(dx) > 25 and math.clamp((dx - math.sign(dx)*25)/80,-1,1) or 0
-            local ny = math.abs(dy) > 20 and math.clamp((dy - math.sign(dy)*20)/80,-1,1) or 0
-            flyJoy = Vector2.new(nx, ny)
+
+        -- Movement analog (left side)
+        if inp == FlyState.moveTouch and FlyState.moveStartPos then
+            local dx = inp.Position.X - FlyState.moveStartPos.X
+            local dy = inp.Position.Y - FlyState.moveStartPos.Y
+            local nx = 0
+            local ny = 0
+            if math.abs(dx) > 25 then
+                nx = math.clamp((dx - math.sign(dx) * 25) / 80, -1, 1)
+            end
+            if math.abs(dy) > 20 then
+                ny = math.clamp((dy - math.sign(dy) * 20) / 80, -1, 1)
+            end
+            FlyState.joy = Vector2.new(nx, ny)
         end
     end))
-    table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
+
+    table.insert(FlyState.conns, UIS.InputEnded:Connect(function(inp)
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp == flyRotTouch then flyRotTouch = nil; flyRotLast = nil end
-        if inp == flyMoveTouch then flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero end
+        if inp == FlyState.rotTouch then
+            FlyState.rotTouch = nil
+            FlyState.rotLastPos = nil
+        end
+        if inp == FlyState.moveTouch then
+            FlyState.moveTouch = nil
+            FlyState.moveStartPos = nil
+            FlyState.joy = Vector2.zero
+        end
     end))
-    State.Fly._keys = keysHeld
 end
 
 local function stopFlyCapture()
-    for _, c in ipairs(flyConns) do c:Disconnect() end
-    flyConns = {}
-    flyRotTouch = nil; flyMoveTouch = nil
-    flyMoveSt = nil; flyRotLast = nil
-    flyJoy = Vector2.zero
-    State.Fly._mouseRot = false
-    State.Fly._keys = {}
+    for _, c in ipairs(FlyState.conns) do
+        pcall(function() c:Disconnect() end)
+    end
+    FlyState.conns = {}
+    FlyState.rotTouch = nil
+    FlyState.moveTouch = nil
+    FlyState.moveStartPos = nil
+    FlyState.rotLastPos = nil
+    FlyState.joy = Vector2.zero
+    FlyState.mouseRot = false
+    FlyState.keys = {}
     UIS.MouseBehavior = Enum.MouseBehavior.Default
 end
 
-local function toggleFly(v)
-    if not v then
-        State.Fly.active = false
-        stopFlyCapture()
-        RS:UnbindFromRenderStep("XKIDFly")
-        if State.Fly.bv then State.Fly.bv:Destroy(); State.Fly.bv = nil end
-        if State.Fly.bg then State.Fly.bg:Destroy(); State.Fly.bg = nil end
-        local hum = getHum()
-        if hum then
-            hum.PlatformStand = false
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-            hum.WalkSpeed = State.Move.ws
-        end
-        -- Disable noclip yang diaktifkan fly
-        State.Move.ncp = false
-        Library:Notification("Fly", "✈️ Fly OFF", 2)
-        return
+local function stopFly()
+    if not FlyState.active then return end
+    
+    FlyState.active = false
+    stopFlyCapture()
+    RS:UnbindFromRenderStep("XKIDFly")
+    
+    if FlyState.bv then 
+        pcall(function() FlyState.bv:Destroy() end)
+        FlyState.bv = nil
     end
+    if FlyState.bg then 
+        pcall(function() FlyState.bg:Destroy() end)
+        FlyState.bg = nil
+    end
+    
+    local hum = getHum()
+    if hum then
+        hum.PlatformStand = false
+        pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+        hum.WalkSpeed = State.Move.ws
+    end
+    
+    -- Disable noclip that was activated by fly
+    State.Move.ncp = false
+    
+    Library:Notification("Fly", "✈️ Fly OFF", 2)
+end
 
+local function startFly()
     local hrp = getRoot()
     local hum = getHum()
-    if not hrp or not hum then return end
-
-    State.Fly.active = true
+    if not hrp or not hum then
+        Library:Notification("Fly", "❌ Character not found!", 2)
+        return false
+    end
+    
+    -- Clean up previous fly state
+    if FlyState.bv then pcall(function() FlyState.bv:Destroy() end) end
+    if FlyState.bg then pcall(function() FlyState.bg:Destroy() end) end
+    stopFlyCapture()
+    
+    FlyState.active = true
+    FlyState.speed = State.Move.flyS
+    FlyState.pos = hrp.Position
+    
+    -- Get current camera orientation for initial yaw/pitch
+    local cf = Cam.CFrame
+    local _, ry, _ = cf:ToEulerAnglesYXZ()
+    local rx = math.asin(cf.LookVector.Y)
+    FlyState.yaw = math.deg(ry)
+    FlyState.pitch = math.deg(rx)
+    
+    -- Reset input states
+    FlyState.keys = {}
+    FlyState.joy = Vector2.zero
+    FlyState.mouseRot = false
+    FlyState.rotTouch = nil
+    FlyState.moveTouch = nil
+    
+    -- Setup character
     hum.PlatformStand = true
-
+    
     -- Auto NoClip saat fly ON
     State.Move.ncp = true
-
-    -- Simpan posisi untuk respawn
-    flyLastPos = hrp.CFrame
-
-    -- BodyVelocity + BodyGyro
-    State.Fly.bv = Instance.new("BodyVelocity", hrp)
-    State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    State.Fly.bv.Velocity  = Vector3.zero
-
-    State.Fly.bg = Instance.new("BodyGyro", hrp)
-    State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    State.Fly.bg.P = 1e5
-
-    -- Ambil yaw dari kamera saat ini supaya tidak lompat
-    local _, ry = Cam.CFrame:ToEulerAnglesYXZ()
-    flyYaw   = math.deg(ry)
-    flyPitch = 0
-
+    
+    -- BodyVelocity + BodyGyro (sama seperti freecam style)
+    FlyState.bv = Instance.new("BodyVelocity", hrp)
+    FlyState.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    FlyState.bv.Velocity = Vector3.zero
+    
+    FlyState.bg = Instance.new("BodyGyro", hrp)
+    FlyState.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    FlyState.bg.P = 1e5
+    FlyState.bg.CFrame = hrp.CFrame
+    
+    -- Start input capture
     startFlyCapture()
-
+    
+    -- Render loop (sama persis dengan freecam movement logic)
     RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function(dt)
-        if not State.Fly.active then return end
-        local r   = getRoot()
-        local h   = getHum()
-        if not r or not h then return end
-
-        -- Simpan posisi terakhir untuk respawn
-        flyLastPos = r.CFrame
-
-        -- Build CFrame dari yaw+pitch
-        local camCF = CFrame.new(r.Position)
-            * CFrame.Angles(0, math.rad(flyYaw), 0)
-            * CFrame.Angles(math.rad(flyPitch), 0, 0)
-
-        local spd  = State.Move.flyS * dt * 60
-        local move = Vector3.zero
-        local keys = State.Fly._keys or {}
-
-        if onMobile then
-            move = camCF.LookVector * (-flyJoy.Y) * spd
-                 + camCF.RightVector * flyJoy.X   * spd
-        else
-            if keys[Enum.KeyCode.W] then move = move + camCF.LookVector  * spd end
-            if keys[Enum.KeyCode.S] then move = move - camCF.LookVector  * spd end
-            if keys[Enum.KeyCode.D] then move = move + camCF.RightVector * spd end
-            if keys[Enum.KeyCode.A] then move = move - camCF.RightVector * spd end
-            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) * spd end
-            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) * spd end
+        if not FlyState.active then
+            RS:UnbindFromRenderStep("XKIDFly")
+            return
         end
-
-        State.Fly.bv.Velocity = move
-        State.Fly.bg.CFrame   = camCF
+        
+        local r = getRoot()
+        local h = getHum()
+        if not r or not h then
+            -- Character died or respawned
+            stopFly()
+            return
+        end
+        
+        -- Update position tracking
+        FlyState.pos = r.Position
+        
+        -- Build movement CFrame from yaw and pitch (sama dengan freecam)
+        local moveCF = CFrame.new(r.Position)
+            * CFrame.Angles(0, math.rad(FlyState.yaw), 0)
+            * CFrame.Angles(math.rad(FlyState.pitch), 0, 0)
+        
+        local spd = FlyState.speed * dt * 60
+        local move = Vector3.zero
+        local keys = FlyState.keys
+        
+        if onMobile then
+            -- Mobile: analog joystick (kiri layar)
+            -- Y axis = forward/backward, X axis = left/right
+            move = moveCF.LookVector * (-FlyState.joy.Y) * spd
+                 + moveCF.RightVector * FlyState.joy.X * spd
+        else
+            -- PC: WASD + E/Q
+            if keys[Enum.KeyCode.W] then move = move + moveCF.LookVector * spd end
+            if keys[Enum.KeyCode.S] then move = move - moveCF.LookVector * spd end
+            if keys[Enum.KeyCode.D] then move = move + moveCF.RightVector * spd end
+            if keys[Enum.KeyCode.A] then move = move - moveCF.RightVector * spd end
+            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0, 1, 0) * spd end
+            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0, 1, 0) * spd end
+        end
+        
+        -- Apply velocity
+        if FlyState.bv then
+            FlyState.bv.Velocity = move
+        end
+        
+        -- Update gyro to face movement direction (atau maintain orientation)
+        if move.Magnitude > 0.1 and FlyState.bg then
+            local lookDir = move.Unit
+            if lookDir.Y > 0.9 then lookDir = Vector3.new(0, 1, 0) end
+            FlyState.bg.CFrame = CFrame.lookAt(r.Position, r.Position + lookDir)
+        elseif FlyState.bg then
+            FlyState.bg.CFrame = moveCF
+        end
     end)
+    
+    Library:Notification("Fly", "✈️ Fly ON — " .. (onMobile and "Kiri gerak | Kanan rotate" or "WASD + Mouse"), 3)
+    return true
+end
 
-    Library:Notification("Fly", "✈️ Fly ON — Kiri gerak | Kanan rotate", 3)
+-- Public toggle function
+local function toggleFly(active)
+    if active then
+        if FlyState.active then stopFly() end
+        startFly()
+    else
+        stopFly()
+    end
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
 -- │        ➤  FREECAM ENGINE (FIXED & MOBILE READY)         │
 -- └─────────────────────────────────────────────────────────┘
-
-local onMobile = not UIS.KeyboardEnabled
 
 -- State freecam
 local FC = {
@@ -252,56 +364,48 @@ local FC = {
     pos             = Vector3.zero,
     pitchDeg        = 0,
     yawDeg          = 0,
-    speed           = 1,      -- diset dari slider menu
-    sens            = 0.25,   -- sensitivity rotate
-    savedCharCFrame = nil,    -- simpan posisi karakter sebelum freecam ON
+    speed           = 5,
+    sens            = 0.25,
+    savedCharCFrame = nil,
 }
 
 -- Touch state — split layar kiri gerak, kanan rotate
-local fcRotTouch   = nil    -- touch objek untuk rotate (kanan)
-local fcMoveTouch  = nil    -- touch objek untuk gerak (kiri)
-local fcMoveSt     = nil    -- posisi awal touch gerak
-local fcRotLast    = nil    -- posisi terakhir touch rotate
-
--- Virtual joystick state (analog, bukan digital)
-local fcJoy = Vector2.zero  -- (-1..1) X=kanan/kiri, Y=maju/mundur
-
--- Deadzone pixel (dari script kamu, dipertahankan)
-local DEAD_X = 25
-local DEAD_Y = 20
-
--- Input connections (hanya aktif saat freecam ON)
-local fcConns = {}
+local fcRotTouch   = nil
+local fcMoveTouch  = nil
+local fcMoveSt     = nil
+local fcRotLast    = nil
+local fcJoy        = Vector2.zero
+local fcConns      = {}
+local fcKeys       = {}
+local fcMouseRot   = false
 
 local function startFCCapture()
-    -- ── KEYBOARD (PC) ─────────────────────────────────────
-    local keysHeld = {}
+    -- Keyboard (PC)
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         local k = inp.KeyCode
         if k == Enum.KeyCode.W or k == Enum.KeyCode.A or
            k == Enum.KeyCode.S or k == Enum.KeyCode.D or
            k == Enum.KeyCode.E or k == Enum.KeyCode.Q then
-            keysHeld[k] = true
+            fcKeys[k] = true
         end
-        -- Mouse kanan = rotate PC
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            FC._mouseRotate = true
+            fcMouseRot = true
             UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
         end
     end))
+
     table.insert(fcConns, UIS.InputEnded:Connect(function(inp)
-        local k = inp.KeyCode
-        keysHeld[k] = false
+        fcKeys[inp.KeyCode] = false
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            FC._mouseRotate = false
+            fcMouseRot = false
             UIS.MouseBehavior = Enum.MouseBehavior.Default
         end
     end))
 
     -- Mouse move (PC rotate)
     table.insert(fcConns, UIS.InputChanged:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseMovement and FC._mouseRotate then
+        if inp.UserInputType == Enum.UserInputType.MouseMovement and fcMouseRot then
             FC.yawDeg   = FC.yawDeg   - inp.Delta.X * FC.sens
             FC.pitchDeg = math.clamp(FC.pitchDeg - inp.Delta.Y * FC.sens, -80, 80)
         end
@@ -310,19 +414,17 @@ local function startFCCapture()
         end
     end))
 
-    -- ── TOUCH (MOBILE) ────────────────────────────────────
+    -- Touch (Mobile)
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
         local half = Cam.ViewportSize.X / 2
         if inp.Position.X > half then
-            -- Kanan layar = rotate
             if not fcRotTouch then
                 fcRotTouch = inp
                 fcRotLast  = inp.Position
             end
         else
-            -- Kiri layar = gerak (analog)
             if not fcMoveTouch then
                 fcMoveTouch = inp
                 fcMoveSt    = inp.Position
@@ -331,7 +433,6 @@ local function startFCCapture()
     end))
 
     table.insert(fcConns, UIS.TouchMoved:Connect(function(inp)
-        -- Rotate dari kanan layar
         if inp == fcRotTouch and fcRotLast then
             local dx = inp.Position.X - fcRotLast.X
             local dy = inp.Position.Y - fcRotLast.Y
@@ -340,20 +441,18 @@ local function startFCCapture()
             fcRotLast = inp.Position
         end
 
-        -- Gerak analog dari kiri layar
         if inp == fcMoveTouch and fcMoveSt then
             local dx = inp.Position.X - fcMoveSt.X
             local dy = inp.Position.Y - fcMoveSt.Y
-            -- Deadzone + normalize ke -1..1
             local nx = 0
             local ny = 0
-            if math.abs(dx) > DEAD_X then
-                nx = math.clamp((dx - math.sign(dx) * DEAD_X) / 80, -1, 1)
+            if math.abs(dx) > 25 then
+                nx = math.clamp((dx - math.sign(dx) * 25) / 80, -1, 1)
             end
-            if math.abs(dy) > DEAD_Y then
-                ny = math.clamp((dy - math.sign(dy) * DEAD_Y) / 80, -1, 1)
+            if math.abs(dy) > 20 then
+                ny = math.clamp((dy - math.sign(dy) * 20) / 80, -1, 1)
             end
-            fcJoy = Vector2.new(nx, ny)  -- X=kanan/kiri, Y=maju(+)/mundur(-)
+            fcJoy = Vector2.new(nx, ny)
         end
     end))
 
@@ -369,69 +468,59 @@ local function startFCCapture()
             fcJoy       = Vector2.zero
         end
     end))
-
-    -- Simpan keysHeld di FC supaya bisa diakses render loop
-    FC._keys = keysHeld
 end
 
 local function stopFCCapture()
-    for _, c in ipairs(fcConns) do c:Disconnect() end
+    for _, c in ipairs(fcConns) do pcall(function() c:Disconnect() end) end
     fcConns      = {}
     fcRotTouch   = nil
     fcMoveTouch  = nil
     fcMoveSt     = nil
     fcRotLast    = nil
     fcJoy        = Vector2.zero
-    FC._mouseRotate = false
-    FC._keys     = {}
+    fcMouseRot   = false
+    fcKeys       = {}
     UIS.MouseBehavior = Enum.MouseBehavior.Default
 end
+
+local fcInvisSaved = {}
 
 local function startFCLoop()
     RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not FC.active then return end
         Cam.CameraType = Enum.CameraType.Scriptable
 
-        -- ── BUILD CFRAME DARI ACCUMULATED YAW + PITCH ─────────
-        -- Yaw dulu (world Y), lalu pitch lokal — tidak kebalik
         local cf = CFrame.new(FC.pos)
             * CFrame.Angles(0, math.rad(FC.yawDeg), 0)
             * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
 
-        -- ── GERAK ─────────────────────────────────────────────
         local spd  = FC.speed * 32 * dt
         local move = Vector3.zero
-        local keys = FC._keys or {}
 
         if onMobile then
-            -- Analog joystick kiri: Y = maju/mundur, X = kiri/kanan
             move = cf.LookVector * (-fcJoy.Y) * spd
                  + cf.RightVector * fcJoy.X   * spd
         else
-            -- Keyboard WASD + E naik Q turun
-            if keys[Enum.KeyCode.W] then move = move + cf.LookVector  * spd end
-            if keys[Enum.KeyCode.S] then move = move - cf.LookVector  * spd end
-            if keys[Enum.KeyCode.D] then move = move + cf.RightVector * spd end
-            if keys[Enum.KeyCode.A] then move = move - cf.RightVector * spd end
-            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) * spd end
-            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) * spd end
+            if fcKeys[Enum.KeyCode.W] then move = move + cf.LookVector  * spd end
+            if fcKeys[Enum.KeyCode.S] then move = move - cf.LookVector  * spd end
+            if fcKeys[Enum.KeyCode.D] then move = move + cf.RightVector * spd end
+            if fcKeys[Enum.KeyCode.A] then move = move - cf.RightVector * spd end
+            if fcKeys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) * spd end
+            if fcKeys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) * spd end
         end
 
         FC.pos = FC.pos + move
 
-        -- ── TERAPKAN KAMERA ────────────────────────────────────
         Cam.CFrame = CFrame.new(FC.pos)
             * CFrame.Angles(0, math.rad(FC.yawDeg), 0)
             * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
 
-        -- ── FREEZE KARAKTER (3 lapis) ──────────────────────────
+        -- Freeze karakter
         local hrp = getRoot()
         local hum = getHum()
         if hrp and not hrp.Anchored then hrp.Anchored = true end
         if hum then
-            if hum:GetState() ~= Enum.HumanoidStateType.Physics then
-                hum:ChangeState(Enum.HumanoidStateType.Physics)
-            end
+            pcall(function() hum:ChangeState(Enum.HumanoidStateType.Physics) end)
             hum.WalkSpeed = 0
             hum.JumpPower = 0
         end
@@ -442,10 +531,80 @@ local function stopFCLoop()
     RS:UnbindFromRenderStep("XKIDFreecam")
 end
 
+local function setFreecam(active)
+    FC.active = active
+    State.Cinema.active = active
+    
+    if active then
+        local cf = Cam.CFrame
+        FC.pos = cf.Position
+        local rx, ry = cf:ToEulerAnglesYXZ()
+        FC.pitchDeg = math.deg(rx)
+        FC.yawDeg   = math.deg(ry)
+        fcKeys = {}
+        fcMouseRot = false
+        
+        local hrp = getRoot()
+        local hum = getHum()
+        if hrp then
+            FC.savedCharCFrame = hrp.CFrame
+            hrp.Anchored = true
+        end
+        if hum then
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+            pcall(function() hum:ChangeState(Enum.HumanoidStateType.Physics) end)
+        end
+        
+        -- Sembunyikan karakter
+        local char = LP.Character
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    fcInvisSaved[part] = part.Transparency
+                    part.Transparency = 1
+                end
+            end
+        end
+        
+        startFCCapture()
+        startFCLoop()
+        Library:Notification("Freecam", "ON — " .. (onMobile and "Kiri gerak | Kanan rotate" or "WASD + Mouse"), 3)
+    else
+        stopFCLoop()
+        stopFCCapture()
+        
+        for part, t in pairs(fcInvisSaved) do
+            pcall(function() if part and part.Parent then part.Transparency = t end end)
+        end
+        fcInvisSaved = {}
+        
+        local hrp = getRoot()
+        local hum = getHum()
+        if hrp then
+            hrp.Anchored = false
+            if FC.savedCharCFrame then
+                pcall(function() hrp.CFrame = FC.savedCharCFrame end)
+                FC.savedCharCFrame = nil
+            end
+        end
+        if hum then
+            hum.WalkSpeed = State.Move.ws
+            hum.JumpPower = State.Move.jp
+            pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+        end
+        
+        Cam.FieldOfView = 70
+        Cam.CameraType = Enum.CameraType.Custom
+        Library:Notification("Freecam", "OFF", 2)
+    end
+end
+
 -- ┌─────────────────────────────────────────────────────────┐
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("✦ XKID HUB — FINAL V.1 ✦", "star", "FREECAM", false)
+
+local Win = Library:Window("✦ XKID HUB — FINAL V.2 ✦", "star", "FREECAM", false)
 
 -- --- TAB 1: TELEPORT ---
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -458,16 +617,18 @@ TPT:Button("🚀 Teleport Now", "Fast TP", function()
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP and (string.find(string.lower(p.Name), string.lower(snippet)) or string.find(string.lower(p.DisplayName), string.lower(snippet))) then
             if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                getRoot().CFrame = p.Character.HumanoidRootPart.CFrame
+                local hrp = getRoot()
+                if hrp then hrp.CFrame = p.Character.HumanoidRootPart.CFrame end
                 return
             end
         end
     end
 end)
+
 local P_Drop = TPT:Dropdown("Manual List", "pDrop", getPNames(), function(v) State.Teleport.selectedTarget = v end)
 TPT:Button("🔄 Refresh List", "", function() P_Drop:Refresh(getPNames()) end)
 
--- --- SAVE / LOAD LOCATION ---
+-- SAVE / LOAD LOCATION
 local LocPage = T_TP:Page("Locations", "bookmark")
 local TPP2 = LocPage:Section("💾 Save Location", "Left")
 local TPP3 = LocPage:Section("📍 Load Location", "Right")
@@ -483,7 +644,7 @@ for i = 1, 5 do
             return
         end
         SavedLocs[idx] = r.CFrame
-        Library:Notification("✅ Saved", "Slot " .. idx .. " tersimpan di sini!", 2)
+        Library:Notification("✅ Saved", "Slot " .. idx .. " tersimpan!", 2)
     end)
 end
 
@@ -509,7 +670,7 @@ local PLPage1 = T_PL:Page("Movement", "zap")
 local PLM = PLPage1:Section("⚡ Movement", "Left")
 local PLH = PLPage1:Section("🚀 Abilities", "Right")
 
--- Fix Refresh POV: pcall + sequence reset
+-- Refresh POV
 PLM:Button("🔄 Refresh POV", "Reset kamera & karakter", function()
     local r = getRoot()
     local h = getHum()
@@ -517,121 +678,124 @@ PLM:Button("🔄 Refresh POV", "Reset kamera & karakter", function()
         Library:Notification("Refresh", "❌ Karakter tidak ditemukan!", 2)
         return
     end
-    -- Reset kamera
     Cam.CameraType = Enum.CameraType.Custom
     task.wait(0.05)
     Cam.CameraType = Enum.CameraType.Scriptable
     task.wait(0.05)
     Cam.CameraType = Enum.CameraType.Custom
-    -- Reset humanoid state
     pcall(function() h:ChangeState(Enum.HumanoidStateType.GettingUp) end)
     Library:Notification("✅ Refresh", "POV & kamera sudah di-reset!", 2)
 end)
 
--- WalkSpeed +/-
-PLM:Button("🏃 Speed  [ + ]", "Naikkan kecepatan", function()
-    State.Move.ws = math.clamp(State.Move.ws + 5, 16, 500)
-    if getHum() then getHum().WalkSpeed = State.Move.ws end
-    Library:Notification("Speed", "WalkSpeed: " .. State.Move.ws, 1)
-end)
-PLM:Button("🏃 Speed  [ - ]", "Turunkan kecepatan", function()
-    State.Move.ws = math.clamp(State.Move.ws - 5, 16, 500)
-    if getHum() then getHum().WalkSpeed = State.Move.ws end
-    Library:Notification("Speed", "WalkSpeed: " .. State.Move.ws, 1)
-end)
-PLM:Button("🔄 Reset Speed", "Kembali default", function()
-    State.Move.ws = 16
-    if getHum() then getHum().WalkSpeed = 16 end
-    Library:Notification("Speed", "WalkSpeed: 16 (default)", 1)
+-- WalkSpeed Slider (Responsive)
+PLM:Slider("🏃 Walk Speed", "ws", 16, 500, 16, function(v)
+    State.Move.ws = v
+    local hum = getHum()
+    if hum and not FlyState.active then
+        hum.WalkSpeed = v
+    end
 end)
 
--- JumpPower +/-
-PLM:Button("🦘 Jump  [ + ]", "Naikkan lompatan", function()
-    State.Move.jp = math.clamp(State.Move.jp + 10, 50, 500)
-    if getHum() then getHum().JumpPower = State.Move.jp end
-    Library:Notification("Jump", "JumpPower: " .. State.Move.jp, 1)
-end)
-PLM:Button("🦘 Jump  [ - ]", "Turunkan lompatan", function()
-    State.Move.jp = math.clamp(State.Move.jp - 10, 50, 500)
-    if getHum() then getHum().JumpPower = State.Move.jp end
-    Library:Notification("Jump", "JumpPower: " .. State.Move.jp, 1)
-end)
-PLM:Button("🔄 Reset Jump", "Kembali default", function()
-    State.Move.jp = 50
-    if getHum() then getHum().JumpPower = 50 end
-    Library:Notification("Jump", "JumpPower: 50 (default)", 1)
+-- JumpPower Slider (Responsive)
+PLM:Slider("🦘 Jump Power", "jp", 50, 500, 50, function(v)
+    State.Move.jp = v
+    local hum = getHum()
+    if hum then
+        hum.JumpPower = v
+    end
 end)
 
 PLM:Toggle("∞  Inf Jump", "ij", false, "Lompat terus", function(v)
     if v then
         State.Move.infJ = UIS.JumpRequest:Connect(function()
-            if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end
+            local hum = getHum()
+            if hum then pcall(function() hum:ChangeState(Enum.HumanoidStateType.Jumping) end) end
         end)
     else
         if State.Move.infJ then State.Move.infJ:Disconnect(); State.Move.infJ = nil end
     end
 end)
 
--- FlySpeed +/-
-PLH:Toggle("✈️  Native Fly", "nf", false, "Freecam style", function(v) toggleFly(v) end)
-PLH:Button("✈️ Fly Speed [ + ]", "Lebih cepat", function()
-    State.Move.flyS = math.clamp(State.Move.flyS + 10, 10, 300)
-    Library:Notification("Fly Speed", "FlySpeed: " .. State.Move.flyS, 1)
+-- Fly Section
+PLH:Toggle("✈️  Freecam Fly", "nf", false, "Smooth movement", function(v)
+    toggleFly(v)
 end)
-PLH:Button("✈️ Fly Speed [ - ]", "Lebih lambat", function()
-    State.Move.flyS = math.clamp(State.Move.flyS - 10, 10, 300)
-    Library:Notification("Fly Speed", "FlySpeed: " .. State.Move.flyS, 1)
-end)
-PLH:Toggle("👻 NoClip", "nc", false, "Tembus dinding", function(v) State.Move.ncp = v end)
-PLH:Toggle("💥 IY Fling", "ffm", false, "Tabrak!", function(v) State.Fling.active = v; State.Move.ncp = v end)
 
--- God Mode: HealthChanged lebih reaktif + auto respawn ke posisi fly/jalan
-local godConn    = nil
-local godRespawn = nil
+-- Fly Speed Slider (Responsive)
+PLH:Slider("✈️ Fly Speed", "flys", 10, 300, 60, function(v)
+    State.Move.flyS = v
+    if FlyState.active then
+        FlyState.speed = v
+    end
+end)
+
+PLH:Toggle("👻 NoClip", "nc", false, "Tembus dinding", function(v)
+    State.Move.ncp = v
+end)
+
+PLH:Toggle("💥 IY Fling", "ffm", false, "Tabrak!", function(v)
+    State.Fling.active = v
+    if v then State.Move.ncp = true end
+end)
+
+-- God Mode dengan Fast Respawn
+local godConn = nil
+local godRespawnConn = nil
 local godLastPos = nil
-PLH:Toggle("🛡️ God Mode", "god", false, "HP Infinite + Respawn", function(v)
+local godActive = false
+
+PLH:Toggle("🛡️ God Mode", "god", false, "HP Infinite + Fast Respawn", function(v)
+    godActive = v
     if v then
         local hum = getHum()
         if hum then
             hum.MaxHealth = math.huge
-            hum.Health    = math.huge
+            hum.Health = math.huge
         end
-        -- Simpan posisi tiap detik
+        
         godLastPos = getRoot() and getRoot().CFrame
-        godRespawn = RS.Heartbeat:Connect(function()
+        
+        godRespawnConn = RS.Heartbeat:Connect(function()
             local r = getRoot()
             if r then godLastPos = r.CFrame end
         end)
-        -- HealthChanged lebih reaktif dari Heartbeat untuk restore HP
+        
         godConn = RS.Heartbeat:Connect(function()
             local h = getHum()
             if h then
-                if h.Health < h.MaxHealth then
-                    h.Health = h.MaxHealth
-                end
-                if h.MaxHealth ~= math.huge then
-                    h.MaxHealth = math.huge
-                end
+                if h.Health < h.MaxHealth then h.Health = h.MaxHealth end
+                if h.MaxHealth ~= math.huge then h.MaxHealth = math.huge end
             end
         end)
-        -- Auto respawn ke posisi terakhir jika karakter mati
+        
+        -- Fast Respawn handler
         LP.CharacterAdded:Connect(function(char)
-            if not State.Move.ncp then return end -- hanya kalau god mode masih aktif
-            task.wait(0.2)
-            local hrp = char:WaitForChild("HumanoidRootPart", 5)
+            if not godActive then return end
+            task.wait(0.1)
+            local hrp = char:WaitForChild("HumanoidRootPart", 3)
+            local hum = char:WaitForChild("Humanoid", 3)
             if hrp and godLastPos then
                 hrp.CFrame = godLastPos
             end
-            local h = char:WaitForChild("Humanoid", 5)
-            if h then
-                h.MaxHealth = math.huge
-                h.Health    = math.huge
+            if hum then
+                hum.MaxHealth = math.huge
+                hum.Health = math.huge
+            end
+            -- Re-apply noclip if needed
+            if State.Move.ncp then
+                task.wait(0.05)
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
             end
         end)
-        Library:Notification("God Mode", "🛡️ Aktif! HP Infinite + Auto Respawn", 3)
+        
+        Library:Notification("God Mode", "🛡️ Aktif! Fast Respawn siap", 3)
     else
-        if godConn    then godConn:Disconnect();    godConn    = nil end
-        if godRespawn then godRespawn:Disconnect(); godRespawn = nil end
+        if godConn then godConn:Disconnect(); godConn = nil end
+        if godRespawnConn then godRespawnConn:Disconnect(); godRespawnConn = nil end
         local hum = getHum()
         if hum then hum.MaxHealth = 100; hum.Health = 100 end
         Library:Notification("God Mode", "❌ Nonaktif", 2)
@@ -643,9 +807,9 @@ local PLPage2 = T_PL:Page("Lock", "lock")
 local PLLock  = PLPage2:Section("🔒 Lock Karakter", "Left")
 local PLLockR = PLPage2:Section("📷 Lock Kamera", "Right")
 
--- Lock Rotasi: karakter selalu hadap arah yang disimpan
-local lockRotConn  = nil
-local lockedYaw    = 0
+local lockRotConn = nil
+local lockedYaw = 0
+
 PLLock:Toggle("🔒 Lock Rotasi", "lockrot", false, "Karakter tidak berputar", function(v)
     if v then
         local hrp = getRoot()
@@ -653,14 +817,12 @@ PLLock:Toggle("🔒 Lock Rotasi", "lockrot", false, "Karakter tidak berputar", f
             Library:Notification("Lock", "❌ Karakter tidak ditemukan!", 2)
             return
         end
-        -- Simpan yaw sekarang
         local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ()
         lockedYaw = ry
         lockRotConn = RS.Heartbeat:Connect(function()
             local r = getRoot()
             if r then
-                r.CFrame = CFrame.new(r.Position)
-                    * CFrame.Angles(0, lockedYaw, 0)
+                r.CFrame = CFrame.new(r.Position) * CFrame.Angles(0, lockedYaw, 0)
             end
         end)
         Library:Notification("Lock", "🔒 Rotasi dikunci!", 2)
@@ -669,7 +831,8 @@ PLLock:Toggle("🔒 Lock Rotasi", "lockrot", false, "Karakter tidak berputar", f
         Library:Notification("Lock", "🔓 Rotasi bebas", 2)
     end
 end)
-PLLock:Button("📌 Simpan Arah Sekarang", "Update arah kunci", function()
+
+PLLock:Button("📌 Simpan Arah Sekarang", "", function()
     local hrp = getRoot()
     if hrp then
         local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ()
@@ -678,9 +841,9 @@ PLLock:Button("📌 Simpan Arah Sekarang", "Update arah kunci", function()
     end
 end)
 
--- Lock Posisi: karakter tidak bisa dipindah sama sekali
 local lockPosConn = nil
-local lockedCF    = nil
+local lockedCF = nil
+
 PLLock:Toggle("📍 Lock Posisi", "lockpos", false, "Karakter diam total", function(v)
     if v then
         local hrp = getRoot()
@@ -701,7 +864,8 @@ PLLock:Toggle("📍 Lock Posisi", "lockpos", false, "Karakter diam total", funct
         Library:Notification("Lock", "🔓 Posisi bebas", 2)
     end
 end)
-PLLock:Button("📌 Update Posisi Kunci", "Kunci di posisi baru", function()
+
+PLLock:Button("📌 Update Posisi Kunci", "", function()
     local hrp = getRoot()
     if hrp then
         lockedCF = hrp.CFrame
@@ -709,9 +873,9 @@ PLLock:Button("📌 Update Posisi Kunci", "Kunci di posisi baru", function()
     end
 end)
 
--- Lock Kamera: kamera follow karakter dari belakang
 local lockCamConn = nil
 local lockCamDist = 8
+
 PLLockR:Toggle("📷 Lock Kamera", "lockcam", false, "Kamera follow karakter", function(v)
     if v then
         Cam.CameraType = Enum.CameraType.Scriptable
@@ -719,263 +883,163 @@ PLLockR:Toggle("📷 Lock Kamera", "lockcam", false, "Kamera follow karakter", f
             local hrp = getRoot()
             if not hrp then return end
             local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ()
-            local camPos = hrp.Position
-                + CFrame.Angles(0, ry, 0) * Vector3.new(0, 2, lockCamDist)
+            local camPos = hrp.Position + CFrame.Angles(0, ry, 0) * Vector3.new(0, 2, lockCamDist)
             local focusPos = hrp.Position + Vector3.new(0, 1, 0)
             Cam.CFrame = CFrame.new(camPos, focusPos)
         end)
-        Library:Notification("Kamera", "📷 Kamera dikunci ke karakter!", 2)
+        Library:Notification("Kamera", "📷 Kamera dikunci!", 2)
     else
         if lockCamConn then lockCamConn:Disconnect(); lockCamConn = nil end
         Cam.CameraType = Enum.CameraType.Custom
         Library:Notification("Kamera", "🔓 Kamera bebas", 2)
     end
 end)
-PLLockR:Button("📷 Jarak  [ + ]", "Lebih jauh", function()
-    lockCamDist = math.clamp(lockCamDist + 2, 3, 30)
-    Library:Notification("Kamera", "Jarak: " .. lockCamDist, 1)
-end)
-PLLockR:Button("📷 Jarak  [ - ]", "Lebih dekat", function()
-    lockCamDist = math.clamp(lockCamDist - 2, 3, 30)
-    Library:Notification("Kamera", "Jarak: " .. lockCamDist, 1)
+
+PLLockR:Slider("📷 Jarak Kamera", "camdist", 3, 30, 8, function(v)
+    lockCamDist = v
 end)
 
--- PAGE 3: ATMOSPHERE (dipindah ke sini dari section bawah)
+-- PAGE 3: ATMOSPHERE
 local PLPage3 = T_PL:Page("Atmosphere", "cloud")
 local PLW = PLPage3:Section("🌦️ Waktu & Cahaya", "Left")
 
-PLW:Slider("Waktu (ClockTime)", "time", 0, 24, 12, function(v) Lighting.ClockTime = v end)
+PLW:Slider("🕐 Waktu (ClockTime)", "time", 0, 24, 12, function(v)
+    Lighting.ClockTime = v
+end)
 PLW:Button("☀️ Set Siang", "", function() Lighting.ClockTime = 14 end)
 PLW:Button("🌙 Set Malam", "", function() Lighting.ClockTime = 0 end)
 
 -- --- TAB 3: CINEMATIC ---
-local T_CI  = Win:Tab("Cinematic", "video")
+local T_CI = Win:Tab("Cinematic", "video")
 local CIPage1 = T_CI:Page("Freecam", "video")
-local CIM   = CIPage1:Section("🎬 Freecam", "Left")
-local CIW   = CIPage1:Section("📱 Display", "Right")
+local CIM = CIPage1:Section("🎬 Freecam", "Left")
+local CIW = CIPage1:Section("📱 Display", "Right")
 
--- Simpan transparency karakter saat freecam aktif
-local fcInvisSaved = {}
-
-CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", function(v)
-    FC.active = v
-    State.Cinema.active = v
-    if v then
-        -- Ambil posisi & sudut dari kamera sekarang supaya tidak lompat
-        local cf = Cam.CFrame
-        FC.pos = cf.Position
-        local rx, ry = cf:ToEulerAnglesYXZ()
-        FC.pitchDeg = math.deg(rx)
-        FC.yawDeg   = math.deg(ry)
-        FC._keys    = {}
-        FC._mouseRotate = false
-
-        -- ── FREEZE KARAKTER (3 lapis) ──────────────────────────
-        local hrp = getRoot()
-        local hum = getHum()
-        if hrp then
-            FC.savedCharCFrame = hrp.CFrame  -- simpan posisi karakter sebelum freeze
-            hrp.Anchored = true
-        end
-        if hum then
-            hum.WalkSpeed = 0
-            hum.JumpPower = 0
-            hum:ChangeState(Enum.HumanoidStateType.Physics)
-        end
-
-        -- ── SEMBUNYIKAN KARAKTER ───────────────────────────────
-        fcInvisSaved = {}
-        local char = LP.Character
-        if char then
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    fcInvisSaved[part] = part.Transparency
-                    part.Transparency = 1
-                end
-            end
-        end
-
-        startFCCapture()
-        startFCLoop()
-        Library:Notification("Freecam", "ON — Kiri gerak | Kanan rotate", 3)
-    else
-        stopFCLoop()
-        stopFCCapture()
-
-        -- ── RESTORE KARAKTER ───────────────────────────────────
-        for part, t in pairs(fcInvisSaved) do
-            if part and part.Parent then part.Transparency = t end
-        end
-        fcInvisSaved = {}
-
-        local hrp = getRoot()
-        local hum = getHum()
-        if hrp then
-            hrp.Anchored = false
-            -- Kembalikan karakter ke posisi sebelum freecam ON (bukan posisi kamera)
-            if FC.savedCharCFrame then
-                hrp.CFrame = FC.savedCharCFrame
-                FC.savedCharCFrame = nil
-            end
-        end
-        if hum then
-            hum.WalkSpeed = State.Move.ws
-            hum.JumpPower = State.Move.jp
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
-
-        Cam.FieldOfView = 70
-        Cam.CameraType  = Enum.CameraType.Custom
-        Library:Notification("Freecam", "OFF — Balik ke posisi kamera", 3)
-    end
+CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, onMobile and "Kiri gerak | Kanan rotate" or "WASD + Mouse", function(v)
+    setFreecam(v)
 end)
 
-CIM:Button("⚡ Speed  [ + ]", "Lebih cepat", function()
-    FC.speed = math.clamp(FC.speed + 1, 1, 30)
-    Library:Notification("Freecam", "Speed: " .. FC.speed, 1)
+CIM:Slider("⚡ Freecam Speed", "fcspeed", 1, 30, 5, function(v)
+    FC.speed = v
 end)
-CIM:Button("⚡ Speed  [ - ]", "Lebih lambat", function()
-    FC.speed = math.clamp(FC.speed - 1, 1, 30)
-    Library:Notification("Freecam", "Speed: " .. FC.speed, 1)
+
+CIM:Slider("🎯 Sensitivity", "fcsens", 0.05, 1, 0.25, function(v)
+    FC.sens = v
 end)
-CIM:Button("🎯 Sens   [ + ]", "Lebih sensitif", function()
-    FC.sens = math.clamp(FC.sens + 0.05, 0.05, 1)
-    Library:Notification("Freecam", "Sensitivity: " .. string.format("%.2f", FC.sens), 1)
+
+CIM:Slider("🔍 FOV", "fcfov", 10, 120, 70, function(v)
+    Cam.FieldOfView = v
 end)
-CIM:Button("🎯 Sens   [ - ]", "Kurang sensitif", function()
-    FC.sens = math.clamp(FC.sens - 0.05, 0.05, 1)
-    Library:Notification("Freecam", "Sensitivity: " .. string.format("%.2f", FC.sens), 1)
-end)
-CIM:Button("🔍 FOV    [ + ]", "Zoom out", function()
-    local f = math.clamp(Cam.FieldOfView + 5, 10, 120)
-    Cam.FieldOfView = f
-    Library:Notification("Freecam", "FOV: " .. f, 1)
-end)
-CIM:Button("🔍 FOV    [ - ]", "Zoom in", function()
-    local f = math.clamp(Cam.FieldOfView - 5, 10, 120)
-    Cam.FieldOfView = f
-    Library:Notification("Freecam", "FOV: " .. f, 1)
-end)
+
 CIM:Button("🔄 Reset FOV", "FOV normal 70", function()
     Cam.FieldOfView = 70
     Library:Notification("Freecam", "FOV: 70 (Normal)", 1)
 end)
 
-CIW:Button("📱 Portrait",  "Tegak",    function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
-CIW:Button("📺 Landscape", "Mendatar", function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
+CIW:Button("📱 Portrait", "Tegak", function()
+    pcall(function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end)
+end)
+CIW:Button("📺 Landscape", "Mendatar", function()
+    pcall(function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end)
+end)
 
 -- PAGE 2: CINEMATIC PRESETS
-local CIPage2  = T_CI:Page("Presets", "film")
-local CIPre    = CIPage2:Section("🎬 Preset Sinematik", "Left")
-local CIFine   = CIPage2:Section("🎛️ Fine-Tune", "Right")
+local CIPage2 = T_CI:Page("Presets", "film")
+local CIPre = CIPage2:Section("🎬 Preset Sinematik", "Left")
+local CIFine = CIPage2:Section("🎛️ Fine-Tune", "Right")
 
--- Helper apply preset lengkap
 local function applyPreset(fov, speed, clock, bright, fogEnd, fogR, fogG, fogB, ambR, ambG, ambB, density, offset, glare, halo, gfxLevel)
-    Cam.FieldOfView    = fov
-    FC.speed           = speed
+    Cam.FieldOfView = fov
+    FC.speed = speed
     Lighting.ClockTime = clock
-    Lighting.Brightness= bright
-    Lighting.FogEnd    = fogEnd
-    Lighting.FogColor  = Color3.fromRGB(fogR, fogG, fogB)
-    Lighting.Ambient   = Color3.fromRGB(ambR, ambG, ambB)
+    Lighting.Brightness = bright
+    Lighting.FogEnd = fogEnd
+    Lighting.FogColor = Color3.fromRGB(fogR, fogG, fogB)
+    Lighting.Ambient = Color3.fromRGB(ambR, ambG, ambB)
     local atm = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere", Lighting)
     atm.Density = density
-    atm.Offset  = offset
-    atm.Glare   = glare
-    atm.Halo    = halo
+    atm.Offset = offset
+    atm.Glare = glare
+    atm.Halo = halo
     pcall(function() settings().Rendering.QualityLevel = gfxLevel end)
 end
 
-CIPre:Button("☀️  Cinematic Day", "Film siang hari cerah", function()
+CIPre:Button("☀️ Cinematic Day", "Siang cerah", function()
     applyPreset(50, 3, 14, 2, 10000, 200,220,255, 120,120,120, 0.05, 0.1, 0.3, 0.2, Enum.QualityLevel.Level10)
-    Library:Notification("🎬 Preset", "☀️ Cinematic Day", 3)
+    Library:Notification("🎬 Preset", "☀️ Cinematic Day", 2)
 end)
-CIPre:Button("🌆  Golden Hour", "Sore sinematik hangat", function()
+CIPre:Button("🌆 Golden Hour", "Sore hangat", function()
     applyPreset(55, 3, 18, 1.5, 4000, 255,180,100, 180,100,60, 0.2, 0.3, 0.8, 0.5, Enum.QualityLevel.Level10)
-    Library:Notification("🎬 Preset", "🌆 Golden Hour", 3)
+    Library:Notification("🎬 Preset", "🌆 Golden Hour", 2)
 end)
-CIPre:Button("🌃  Night Cinematic", "Drama malam gelap", function()
+CIPre:Button("🌃 Night Cinematic", "Malam dramatis", function()
     applyPreset(45, 2, 0, 0.3, 20000, 10,10,30, 20,20,40, 0.02, 0.0, 0.0, 0.1, Enum.QualityLevel.Level10)
-    Library:Notification("🎬 Preset", "🌃 Night Cinematic", 3)
+    Library:Notification("🎬 Preset", "🌃 Night Cinematic", 2)
 end)
-CIPre:Button("🌫️  Fog Drama", "Kabut misterius", function()
+CIPre:Button("🌫️ Fog Drama", "Kabut misterius", function()
     applyPreset(55, 2, 12, 0.8, 300, 200,200,200, 150,150,150, 0.6, 0.5, 0.0, 0.1, Enum.QualityLevel.Level08)
-    Library:Notification("🎬 Preset", "🌫️ Fog Drama", 3)
+    Library:Notification("🎬 Preset", "🌫️ Fog Drama", 2)
 end)
-CIPre:Button("❄️  Snow Scene", "Salju bersih putih", function()
+CIPre:Button("❄️ Snow Scene", "Salju putih", function()
     applyPreset(50, 2, 10, 1.2, 500, 220,230,255, 180,190,210, 0.4, 0.4, 0.0, 0.3, Enum.QualityLevel.Level10)
-    Library:Notification("🎬 Preset", "❄️ Snow Scene", 3)
+    Library:Notification("🎬 Preset", "❄️ Snow Scene", 2)
 end)
-CIPre:Button("🎭  Dark Thriller", "Gelap intens dramatis", function()
+CIPre:Button("🎭 Dark Thriller", "Gelap intens", function()
     applyPreset(40, 2, 12, 0.1, 200, 40,40,50, 30,30,40, 0.8, 0.1, 0.0, 0.0, Enum.QualityLevel.Level08)
-    Library:Notification("🎬 Preset", "🎭 Dark Thriller", 3)
+    Library:Notification("🎬 Preset", "🎭 Dark Thriller", 2)
 end)
-CIPre:Button("📺  Vlog Style", "Casual natural cerah", function()
+CIPre:Button("📺 Vlog Style", "Casual natural", function()
     applyPreset(75, 5, 14, 1.5, 8000, 210,225,255, 110,110,110, 0.1, 0.1, 0.1, 0.15, Enum.QualityLevel.Level05)
-    Library:Notification("🎬 Preset", "📺 Vlog Style", 3)
+    Library:Notification("🎬 Preset", "📺 Vlog Style", 2)
 end)
-CIPre:Button("🔄  Reset Semua", "Kembalikan default", function()
+CIPre:Button("🔄 Reset Semua", "Kembalikan default", function()
     applyPreset(70, 5, 14, 1, 100000, 191,191,191, 70,70,70, 0.35, 0.0, 0.0, 0.25, Enum.QualityLevel.Level05)
     Library:Notification("🎬 Preset", "🔄 Reset Default", 2)
 end)
 
--- Fine-tune setelah preset
-CIFine:Button("☀️ Brightness [ + ]", "", function()
-    Lighting.Brightness = math.clamp(Lighting.Brightness + 0.1, 0, 5)
-    Library:Notification("Fine-Tune", "Brightness: " .. string.format("%.1f", Lighting.Brightness), 1)
+-- Fine-tune sliders
+CIFine:Slider("☀️ Brightness", "bright", 0, 5, 1, function(v)
+    Lighting.Brightness = v
 end)
-CIFine:Button("☀️ Brightness [ - ]", "", function()
-    Lighting.Brightness = math.clamp(Lighting.Brightness - 0.1, 0, 5)
-    Library:Notification("Fine-Tune", "Brightness: " .. string.format("%.1f", Lighting.Brightness), 1)
+CIFine:Slider("🕐 Waktu", "waktu", 0, 24, 14, function(v)
+    Lighting.ClockTime = v
 end)
-CIFine:Button("🕐 Waktu  [ + ]", "Maju 1 jam", function()
-    Lighting.ClockTime = (Lighting.ClockTime + 1) % 24
-    Library:Notification("Fine-Tune", "ClockTime: " .. math.floor(Lighting.ClockTime), 1)
-end)
-CIFine:Button("🕐 Waktu  [ - ]", "Mundur 1 jam", function()
-    Lighting.ClockTime = (Lighting.ClockTime - 1) % 24
-    Library:Notification("Fine-Tune", "ClockTime: " .. math.floor(Lighting.ClockTime), 1)
-end)
-CIFine:Button("🌫️ Fog     [ + ]", "Lebih dekat", function()
+CIFine:Slider("🌫️ Fog Density", "fogdens", 0, 1, 0.35, function(v)
     local atm = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere", Lighting)
-    atm.Density = math.clamp(atm.Density + 0.05, 0, 1)
-    Library:Notification("Fine-Tune", "Density: " .. string.format("%.2f", atm.Density), 1)
+    atm.Density = v
 end)
-CIFine:Button("🌫️ Fog     [ - ]", "Lebih tipis", function()
+CIFine:Slider("✨ Glare", "glare", 0, 1, 0, function(v)
     local atm = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere", Lighting)
-    atm.Density = math.clamp(atm.Density - 0.05, 0, 1)
-    Library:Notification("Fine-Tune", "Density: " .. string.format("%.2f", atm.Density), 1)
+    atm.Glare = v
 end)
-CIFine:Button("✨ Glare   [ + ]", "Silau lebih kuat", function()
+CIFine:Slider("🌟 Halo", "halo", 0, 1, 0.25, function(v)
     local atm = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere", Lighting)
-    atm.Glare = math.clamp(atm.Glare + 0.05, 0, 1)
-    Library:Notification("Fine-Tune", "Glare: " .. string.format("%.2f", atm.Glare), 1)
-end)
-CIFine:Button("✨ Glare   [ - ]", "Silau lebih lemah", function()
-    local atm = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere", Lighting)
-    atm.Glare = math.clamp(atm.Glare - 0.05, 0, 1)
-    Library:Notification("Fine-Tune", "Glare: " .. string.format("%.2f", atm.Glare), 1)
-end)
-CIFine:Button("📊 Grafik  [ + ]", "Kualitas naik", function()
-    local cur = pcall(function() return settings().Rendering.QualityLevel.Value end) and settings().Rendering.QualityLevel.Value or 5
-    local nxt = math.clamp(cur + 1, 1, 10)
-    pcall(function() settings().Rendering.QualityLevel = nxt end)
-    Library:Notification("Fine-Tune", "Grafik Level: " .. nxt, 1)
-end)
-CIFine:Button("📊 Grafik  [ - ]", "Kualitas turun", function()
-    local cur = pcall(function() return settings().Rendering.QualityLevel.Value end) and settings().Rendering.QualityLevel.Value or 5
-    local nxt = math.clamp(cur - 1, 1, 10)
-    pcall(function() settings().Rendering.QualityLevel = nxt end)
-    Library:Notification("Fine-Tune", "Grafik Level: " .. nxt, 1)
+    atm.Halo = v
 end)
 
 -- --- TAB 4: SPECTATE ---
 local T_SP = Win:Tab("Spectate", "eye")
-local SPP  = T_SP:Page("Viewer", "eye")
-local SPS  = SPP:Section("👁️ Spectate Player", "Left")
-local SPF  = SPP:Section("🔍 FOV Zoom", "Right")
+local SPP = T_SP:Page("Viewer", "eye")
+local SPS = SPP:Section("👁️ Spectate Player", "Left")
+local SPF = SPP:Section("🔍 FOV Zoom", "Right")
 
--- Helper cek area joystick (dipakai spectate touch)
+local Spec = {
+    active = false,
+    target = nil,
+    mode = "third",
+    dist = 8,
+    origFov = 70,
+    orbitYaw = 0,
+    orbitPitch = 0,
+    fpYaw = 0,
+    fpPitch = 0,
+}
+
+local specTouchPinch = {}
+local specPinchDist = nil
+local specPanDelta = Vector2.zero
+local specConns = {}
+
 local function inJoystickArea(pos)
     local ctrl = LP and LP.PlayerGui and LP.PlayerGui:FindFirstChild("TouchGui")
     if ctrl then
@@ -992,58 +1056,24 @@ local function inJoystickArea(pos)
     return false
 end
 
--- ── SPECTATE STATE ─────────────────────────────────────────
-local Spec = {
-    active  = false,
-    target  = nil,
-    mode    = "third",   -- "third" | "first"
-    dist    = 8,
-    origFov = 70,
-    -- orbit angles (third person)
-    orbitYaw   = 0,
-    orbitPitch = 0,
-    -- free rotate angles (first person, seperti drone)
-    fpYaw   = 0,
-    fpPitch = 0,
-}
-
--- Touch input untuk spectate (terpisah dari drone)
-local specTouchMain  = nil
-local specTouchPinch = {}
-local specPinchDist  = nil
-local specPanDelta   = Vector2.zero
-local specConns      = {}
-
 local function startSpecCapture()
     table.insert(specConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp or not Spec.active then return end
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inJoystickArea(inp.Position) then return end -- abaikan joystick area
-        -- Masukkan semua touch non-joystick ke tabel pinch
+        if inJoystickArea(inp.Position) then return end
         table.insert(specTouchPinch, inp)
-        -- Touch pertama = kandidat pan, touch kedua = pinch mode aktif
-        if #specTouchPinch == 1 then
-            specTouchMain = inp
-        else
-            -- Dua jari atau lebih = pinch mode, batalkan pan
-            specTouchMain = nil
-        end
     end))
 
     table.insert(specConns, UIS.InputChanged:Connect(function(inp)
         if not Spec.active then return end
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
 
-        if #specTouchPinch == 1 and inp == specTouchMain then
-            -- Satu jari = rotate orbit / FP
+        if #specTouchPinch == 1 and inp == specTouchPinch[1] then
             specPanDelta = specPanDelta + Vector2.new(inp.Delta.X, inp.Delta.Y)
-
         elseif #specTouchPinch >= 2 then
-            -- Dua jari = pinch zoom (hitung jarak antara dua jari aktif)
             local d = (specTouchPinch[1].Position - specTouchPinch[2].Position).Magnitude
             if specPinchDist then
                 local diff = d - specPinchDist
-                -- Jauh = zoom out (FOV naik), dekat = zoom in (FOV turun)
                 Cam.FieldOfView = math.clamp(Cam.FieldOfView - diff * 0.15, 10, 120)
                 if Spec.mode == "third" then
                     Spec.dist = math.clamp(Spec.dist - diff * 0.03, 3, 30)
@@ -1059,25 +1089,17 @@ local function startSpecCapture()
             if v == inp then table.remove(specTouchPinch, i); break end
         end
         specPinchDist = nil
-        -- Kalau tinggal satu jari, lanjut pan dari jari yang tersisa
-        if #specTouchPinch == 1 then
-            specTouchMain = specTouchPinch[1]
-        else
-            specTouchMain = nil
-        end
     end))
 end
 
 local function stopSpecCapture()
-    for _, c in ipairs(specConns) do c:Disconnect() end
-    specConns      = {}
-    specTouchMain  = nil
+    for _, c in ipairs(specConns) do pcall(function() c:Disconnect() end) end
+    specConns = {}
     specTouchPinch = {}
-    specPinchDist  = nil
-    specPanDelta   = Vector2.zero
+    specPinchDist = nil
+    specPanDelta = Vector2.zero
 end
 
--- ── RENDER LOOP SPECTATE ───────────────────────────────────
 local specLoop = nil
 
 local function startSpecLoop()
@@ -1086,19 +1108,15 @@ local function startSpecLoop()
         Cam.CameraType = Enum.CameraType.Scriptable
 
         local char = Spec.target and Spec.target.Character
-        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
-        -- Ambil pan delta frame ini
-        local pan  = specPanDelta
+        local pan = specPanDelta
         specPanDelta = Vector2.zero
         local sens = 0.3
 
         if Spec.mode == "third" then
-            -- ── ORBIT CAMERA ──────────────────────────────
-            -- drag X = putar kiri/kanan (yaw)
-            -- drag Y = putar atas/bawah (pitch)
-            Spec.orbitYaw   = Spec.orbitYaw   + pan.X * sens
+            Spec.orbitYaw = Spec.orbitYaw + pan.X * sens
             Spec.orbitPitch = math.clamp(Spec.orbitPitch + pan.Y * sens, -75, 75)
 
             local orbitCF = CFrame.new(hrp.Position)
@@ -1106,16 +1124,13 @@ local function startSpecLoop()
                 * CFrame.Angles(math.rad(-Spec.orbitPitch), 0, 0)
                 * CFrame.new(0, 0, Spec.dist)
 
-            -- Kamera lihat ke HRP (sedikit di atas pusat badan)
             local focusPos = hrp.Position + Vector3.new(0, 1, 0)
             Cam.CFrame = CFrame.new(orbitCF.Position, focusPos)
-
         else
-            -- ── FIRST PERSON FREE ROTATE (seperti drone) ──
             local head = char:FindFirstChild("Head")
             local origin = head and head.Position or hrp.Position + Vector3.new(0, 1.5, 0)
 
-            Spec.fpYaw   = Spec.fpYaw   - pan.X * sens
+            Spec.fpYaw = Spec.fpYaw - pan.X * sens
             Spec.fpPitch = math.clamp(Spec.fpPitch - pan.Y * sens, -85, 85)
 
             Cam.CFrame = CFrame.new(origin)
@@ -1131,23 +1146,22 @@ local function stopSpecLoop()
     specLoop = nil
 end
 
--- ── UI SPECTATE ────────────────────────────────────────────
 local specDrop = SPS:Dropdown("Pilih Target", "spDrop", getDisplayNames(), function(v)
     local p = findPlayerByDisplay(v)
     if p then
         Spec.target = p
-        -- Reset angles ke arah belakang target supaya tidak lompat
         if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
             local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ()
-            Spec.orbitYaw   = math.deg(ry)
+            Spec.orbitYaw = math.deg(ry)
             Spec.orbitPitch = 20
-            Spec.fpYaw      = math.deg(ry)
-            Spec.fpPitch    = 0
+            Spec.fpYaw = math.deg(ry)
+            Spec.fpPitch = 0
         end
     end
 end)
+
 SPS:Button("🔄 Refresh", "", function()
-    Spec.target = nil  -- reset target supaya tidak salah orang
+    Spec.target = nil
     specDrop:Refresh(getDisplayNames())
     Library:Notification("Spectate", "List diperbarui!", 2)
 end)
@@ -1156,15 +1170,14 @@ SPS:Toggle("👁️ Spectate ON/OFF", "spec", false, "Nonton target", function(v
     Spec.active = v
     if v then
         if not Spec.target then
-            Library:Notification("Spectate", "Pilih target dulu!", 3)
+            Library:Notification("Spectate", "Pilih target dulu!", 2)
             Spec.active = false
             return
         end
         Spec.origFov = Cam.FieldOfView
         startSpecCapture()
         startSpecLoop()
-        -- Tampilkan nickname target
-        Library:Notification("Spectate", "Nonton: " .. Spec.target.DisplayName, 3)
+        Library:Notification("Spectate", "Nonton: " .. Spec.target.DisplayName, 2)
     else
         stopSpecLoop()
         stopSpecCapture()
@@ -1174,13 +1187,12 @@ SPS:Toggle("👁️ Spectate ON/OFF", "spec", false, "Nonton target", function(v
     end
 end)
 
-SPS:Toggle("🎥 First Person", "specfp", false, "ON=FP Drone | OFF=Orbit", function(v)
+SPS:Toggle("🎥 First Person", "specfp", false, "FP Drone mode", function(v)
     Spec.mode = v and "first" or "third"
-    -- Reset FP angles dari posisi kamera orbit sekarang supaya tidak lompat
     if v and Spec.target and Spec.target.Character then
         local _, ry, _ = Cam.CFrame:ToEulerAnglesYXZ()
         local rx = math.asin(Cam.CFrame.LookVector.Y)
-        Spec.fpYaw   = math.deg(ry)
+        Spec.fpYaw = math.deg(ry)
         Spec.fpPitch = math.deg(rx)
     end
 end)
@@ -1189,41 +1201,23 @@ SPS:Slider("Jarak Orbit", "specdist", 3, 30, 8, function(v)
     Spec.dist = v
 end)
 
--- FOV Zoom — tombol +/- lebih mudah disentuh di mobile
-SPF:Button("🔭 Zoom In  [ FOV - ]", "Makin sempit", function()
-    local newFov = math.clamp(Cam.FieldOfView - 10, 10, 120)
-    Cam.FieldOfView = newFov
-    Library:Notification("FOV", "FOV: " .. newFov, 1)
-end)
-SPF:Button("🔭 Zoom In  [ FOV -- ]", "Makin sempit cepat", function()
-    local newFov = math.clamp(Cam.FieldOfView - 30, 10, 120)
-    Cam.FieldOfView = newFov
-    Library:Notification("FOV", "FOV: " .. newFov, 1)
+-- FOV Zoom
+SPF:Slider("🔭 FOV Zoom", "specfov", 10, 120, 70, function(v)
+    Cam.FieldOfView = v
 end)
 SPF:Button("👁️ Reset Normal (70)", "", function()
     Cam.FieldOfView = 70
     Library:Notification("FOV", "FOV: 70 (Normal)", 1)
-end)
-SPF:Button("🌐 Zoom Out [ FOV + ]", "Makin lebar", function()
-    local newFov = math.clamp(Cam.FieldOfView + 10, 10, 120)
-    Cam.FieldOfView = newFov
-    Library:Notification("FOV", "FOV: " .. newFov, 1)
-end)
-SPF:Button("🌐 Zoom Out [ FOV ++ ]", "Makin lebar cepat", function()
-    local newFov = math.clamp(Cam.FieldOfView + 30, 10, 120)
-    Cam.FieldOfView = newFov
-    Library:Notification("FOV", "FOV: " .. newFov, 1)
 end)
 
 -- --- TAB 5: WORLD ---
 local T_WO = Win:Tab("World", "globe")
 
 -- PAGE 1: WEATHER
-local WOP1  = T_WO:Page("Weather", "cloud")
-local WOW   = WOP1:Section("🌤️ Preset Cuaca", "Left")
-local WOA   = WOP1:Section("🌈 Atmosphere", "Right")
+local WOP1 = T_WO:Page("Weather", "cloud")
+local WOW = WOP1:Section("🌤️ Preset Cuaca", "Left")
+local WOA = WOP1:Section("🌈 Atmosphere", "Right")
 
--- Helper: pastikan Atmosphere instance ada
 local function getAtmos()
     local atm = Lighting:FindFirstChildOfClass("Atmosphere")
     if not atm then
@@ -1232,56 +1226,41 @@ local function getAtmos()
     return atm
 end
 
--- Helper: set cuaca lengkap sekaligus
 local function setWeather(clock, bright, fogStart, fogEnd, fogR, fogG, fogB, ambR, ambG, ambB, density, offset, glare, halo)
-    Lighting.ClockTime        = clock
-    Lighting.Brightness       = bright
-    Lighting.FogStart         = fogStart
-    Lighting.FogEnd           = fogEnd
-    Lighting.FogColor         = Color3.fromRGB(fogR, fogG, fogB)
-    Lighting.Ambient          = Color3.fromRGB(ambR, ambG, ambB)
-    local atm                 = getAtmos()
-    atm.Density               = density
-    atm.Offset                = offset
-    atm.Glare                 = glare
-    atm.Halo                  = halo
+    Lighting.ClockTime = clock
+    Lighting.Brightness = bright
+    Lighting.FogStart = fogStart
+    Lighting.FogEnd = fogEnd
+    Lighting.FogColor = Color3.fromRGB(fogR, fogG, fogB)
+    Lighting.Ambient = Color3.fromRGB(ambR, ambG, ambB)
+    local atm = getAtmos()
+    atm.Density = density
+    atm.Offset = offset
+    atm.Glare = glare
+    atm.Halo = halo
 end
 
--- Preset cuaca
 WOW:Button("☀️ Cerah", "Siang terang", function()
     setWeather(14, 2, 1000, 10000, 200,220,255, 120,120,120, 0.05, 0.1, 0.3, 0.2)
     Library:Notification("Weather", "☀️ Cerah!", 2)
 end)
-WOW:Button("🌅 Sunset / Golden Hour", "Sore hari", function()
+WOW:Button("🌅 Sunset", "Sore hari", function()
     setWeather(18, 1.5, 500, 4000, 255,180,100, 180,100,60, 0.2, 0.3, 0.8, 0.5)
-    Library:Notification("Weather", "🌅 Golden Hour!", 2)
+    Library:Notification("Weather", "🌅 Sunset!", 2)
 end)
-WOW:Button("🌃 Malam Bintang", "Malam cerah", function()
+WOW:Button("🌃 Malam", "Malam cerah", function()
     setWeather(0, 0.3, 2000, 20000, 10,10,30, 20,20,40, 0.02, 0.0, 0.0, 0.1)
-    Library:Notification("Weather", "🌃 Malam Bintang!", 2)
+    Library:Notification("Weather", "🌃 Malam!", 2)
 end)
 WOW:Button("🌫️ Berkabut", "Kabut tebal", function()
     setWeather(12, 0.8, 20, 300, 200,200,200, 150,150,150, 0.6, 0.5, 0.0, 0.1)
     Library:Notification("Weather", "🌫️ Berkabut!", 2)
-end)
-WOW:Button("🌧️ Mendung Gelap", "Awan gelap", function()
-    setWeather(12, 0.4, 100, 800, 80,80,100, 60,60,80, 0.5, 0.2, 0.0, 0.0)
-    Library:Notification("Weather", "🌧️ Mendung Gelap!", 2)
-end)
-WOW:Button("❄️ Salju", "Putih bersih", function()
-    setWeather(10, 1.2, 50, 500, 220,230,255, 180,190,210, 0.4, 0.4, 0.0, 0.3)
-    Library:Notification("Weather", "❄️ Salju!", 2)
-end)
-WOW:Button("🌪️ Badai", "Gelap & berat", function()
-    setWeather(12, 0.1, 30, 200, 40,40,50, 30,30,40, 0.8, 0.1, 0.0, 0.0)
-    Library:Notification("Weather", "🌪️ Badai!", 2)
 end)
 WOW:Button("🔄 Reset Default", "Kembalikan normal", function()
     setWeather(14, 1, 0, 100000, 191,191,191, 70,70,70, 0.35, 0.0, 0.0, 0.25)
     Library:Notification("Weather", "🔄 Reset!", 2)
 end)
 
--- Atmosphere fine-tune
 WOA:Slider("🕐 ClockTime", "wtime", 0, 24, 14, function(v)
     Lighting.ClockTime = v
 end)
@@ -1291,104 +1270,100 @@ end)
 WOA:Slider("🌫️ Fog Jarak", "wfog", 0, 5000, 100000, function(v)
     Lighting.FogEnd = v
 end)
-WOA:Slider("💨 Density", "wdens", 0, 1, 0, function(v)
+WOA:Slider("💨 Density", "wdens", 0, 1, 0.35, function(v)
     getAtmos().Density = v
-end)
-WOA:Slider("🌅 Offset (Haze)", "woffset", 0, 1, 0, function(v)
-    getAtmos().Offset = v
 end)
 WOA:Slider("✨ Glare", "wglare", 0, 1, 0, function(v)
     getAtmos().Glare = v
 end)
-WOA:Slider("🌟 Halo", "whalo", 0, 1, 0, function(v)
+WOA:Slider("🌟 Halo", "whalo", 0, 1, 0.25, function(v)
     getAtmos().Halo = v
 end)
 
 -- PAGE 2: GRAPHICS
-local WOP2  = T_WO:Page("Graphics", "monitor")
-local WOG   = WOP2:Section("📱 Mode Grafik", "Left")
-local WOGF  = WOP2:Section("⚙️ Level Manual", "Right")
+local WOP2 = T_WO:Page("Graphics", "monitor")
+local WOG = WOP2:Section("📱 Mode Grafik", "Left")
+local WOGF = WOP2:Section("⚙️ Level Manual", "Right")
 
--- Helper set grafik
 local function setGfx(level)
-    local ok, err = pcall(function()
-        settings().Rendering.QualityLevel = level
-    end)
-    if not ok then
-        -- fallback via UserGameSettings
-        pcall(function()
-            UserSettings():GetService("UserGameSettings").SavedQualityLevel = level
-        end)
-    end
+    pcall(function() settings().Rendering.QualityLevel = level end)
+    pcall(function() UserSettings():GetService("UserGameSettings").SavedQualityLevel = level end)
 end
 
-WOG:Button("🥔 Potato (Level 1)", "Paling hemat", function()
+WOG:Button("🥔 Potato (Lv1)", "Paling hemat", function()
     setGfx(Enum.QualityLevel.Level01)
     Library:Notification("Graphics", "🥔 Potato — Level 1", 2)
 end)
-WOG:Button("📉 Low (Level 3)", "Ringan", function()
+WOG:Button("📉 Low (Lv3)", "Ringan", function()
     setGfx(Enum.QualityLevel.Level03)
     Library:Notification("Graphics", "📉 Low — Level 3", 2)
 end)
-WOG:Button("📊 Medium (Level 5)", "Seimbang", function()
+WOG:Button("📊 Medium (Lv5)", "Seimbang", function()
     setGfx(Enum.QualityLevel.Level05)
     Library:Notification("Graphics", "📊 Medium — Level 5", 2)
 end)
-WOG:Button("📈 High (Level 8)", "Bagus", function()
+WOG:Button("📈 High (Lv8)", "Bagus", function()
     setGfx(Enum.QualityLevel.Level08)
     Library:Notification("Graphics", "📈 High — Level 8", 2)
 end)
-WOG:Button("💎 Ultra (Level 10)", "Maksimal", function()
+WOG:Button("💎 Ultra (Lv10)", "Maksimal", function()
     setGfx(Enum.QualityLevel.Level10)
     Library:Notification("Graphics", "💎 Ultra — Level 10", 2)
 end)
-WOG:Button("🎬 Cinematic (Ultra+Atmos)", "Terbaik untuk rekam", function()
-    setGfx(Enum.QualityLevel.Level10)
-    setWeather(14, 2, 1000, 10000, 200,220,255, 120,120,120, 0.05, 0.1, 0.3, 0.2)
-    Library:Notification("Graphics", "🎬 Cinematic Mode!", 3)
-end)
 
--- Level manual 1-10 via tombol +/-
-WOGF:Button("▲ Naik Level", "Grafik lebih tinggi", function()
-    local cur = settings().Rendering.QualityLevel.Value
-    local next = math.clamp(cur + 1, 1, 10)
-    setGfx(next)
-    Library:Notification("Graphics", "Level: " .. next, 1)
-end)
-WOGF:Button("▼ Turun Level", "Grafik lebih rendah", function()
-    local cur = settings().Rendering.QualityLevel.Value
-    local next = math.clamp(cur - 1, 1, 10)
-    setGfx(next)
-    Library:Notification("Graphics", "Level: " .. next, 1)
-end)
-WOGF:Button("🔄 Cek Level Sekarang", "", function()
-    local cur = settings().Rendering.QualityLevel.Value
-    Library:Notification("Graphics", "Level Sekarang: " .. cur, 3)
+WOGF:Slider("Level Manual", "gfxlvl", 1, 10, 5, function(v)
+    setGfx(v)
+    Library:Notification("Graphics", "Level: " .. v, 1)
 end)
 
 -- --- TAB 6: SECURITY ---
 local T_SC = Win:Tab("Security", "shield")
 local SCP = T_SC:Page("Guard", "shield"):Section("🛡️ Protection", "Left")
-SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
-    if v then State.Security.afkConn = LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
-    else if State.Security.afkConn then State.Security.afkConn:Disconnect() end end
-end)
-SCP:Button("🔄 Rejoin Server", "", function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
 
--- IY FLING LOOP (fix: pakai AssemblyLinearVelocity, tidak deprecated)
+SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
+    if v then
+        State.Security.afkConn = LP.Idled:Connect(function()
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+        end)
+    else
+        if State.Security.afkConn then
+            State.Security.afkConn:Disconnect()
+            State.Security.afkConn = nil
+        end
+    end
+end)
+
+-- Fast Respawn Button (manual)
+SCP:Button("⚡ Fast Respawn", "Respawn ke posisi terakhir", function()
+    if godLastPos then
+        LP.CharacterAdded:Wait()
+        task.wait(0.1)
+        local hrp = getRoot()
+        if hrp then
+            hrp.CFrame = godLastPos
+            Library:Notification("Respawn", "✅ Kembali ke posisi terakhir!", 2)
+        end
+    else
+        Library:Notification("Respawn", "❌ Belum ada posisi tersimpan!", 2)
+    end
+end)
+
+SCP:Button("🔄 Rejoin Server", "", function()
+    pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+end)
+
+-- IY FLING LOOP
 task.spawn(function()
     while true do
-        if State.Fling.active and getRoot() then
+        if State.Fling.active then
             local r = getRoot()
-            local ok = pcall(function()
-                r.AssemblyAngularVelocity = Vector3.new(0, State.Fling.power, 0)
-                r.AssemblyLinearVelocity  = Vector3.new(State.Fling.power, State.Fling.power, State.Fling.power)
-            end)
-            if not ok then
-                -- fallback legacy
+            if r then
                 pcall(function()
-                    r.RotVelocity = Vector3.new(0, State.Fling.power, 0)
-                    r.Velocity    = Vector3.new(State.Fling.power, State.Fling.power, State.Fling.power)
+                    r.AssemblyAngularVelocity = Vector3.new(0, State.Fling.power, 0)
+                    r.AssemblyLinearVelocity = Vector3.new(State.Fling.power, State.Fling.power, State.Fling.power)
                 end)
             end
         end
@@ -1399,9 +1374,13 @@ end)
 -- NOCLIP LOOP
 RS.Stepped:Connect(function()
     if (State.Move.ncp or State.Fling.active) and LP.Character then
-        for _, v in pairs(LP.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
+        for _, v in pairs(LP.Character:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.CanCollide = false
+            end
+        end
     end
 end)
 
-Library:Notification("✦ XKID HUB", "FINAL V.1 — Ready! Let's Go! 🚀", 5)
-
+Library:Notification("✦ XKID HUB", "FINAL V.2 — Ready! 🚀", 5)
+```
