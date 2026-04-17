@@ -1,3 +1,4 @@
+```lua
 --[[
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
@@ -67,24 +68,20 @@ local function findPlayerByDisplay(str)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │        ➤  FLY ENGINE  (V29 + FREECAM INPUT)             │
+-- │        ➤  FLY ENGINE  (LOCK CAMERA DIRECTION)           │
 -- └─────────────────────────────────────────────────────────┘
 
 local onMobile = not UIS.KeyboardEnabled
 
 -- Touch state fly
-local flyRotTouch  = nil
 local flyMoveTouch = nil
 local flyMoveSt    = nil
-local flyRotLast   = nil
 local flyJoy       = Vector2.zero
-local flyYaw       = 0
-local flyPitch     = 0
 local flyConns     = {}
-local flyLastPos   = nil
 
 local function startFlyCapture()
     local keysHeld = {}
+    -- Keyboard Input
     table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         local k = inp.KeyCode
@@ -93,202 +90,21 @@ local function startFlyCapture()
            k == Enum.KeyCode.E or k == Enum.KeyCode.Q then
             keysHeld[k] = true
         end
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            State.Fly._mouseRot = true
-            UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
-        end
     end))
     table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
         keysHeld[inp.KeyCode] = false
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            State.Fly._mouseRot = false
-            UIS.MouseBehavior = Enum.MouseBehavior.Default
-        end
     end))
-    table.insert(flyConns, UIS.InputChanged:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseMovement and State.Fly._mouseRot then
-            flyYaw   = flyYaw   - inp.Delta.X * 0.3
-            flyPitch = math.clamp(flyPitch - inp.Delta.Y * 0.3, -80, 80)
-        end
-    end))
-    -- Touch: kiri layar = gerak analog, kanan layar = rotate
+    
+    -- Touch Input (Hanya untuk analog gerak di kiri, rotasi otomatis ikut kamera)
     table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
         local half = Cam.ViewportSize.X / 2
-        if inp.Position.X > half then
-            if not flyRotTouch then flyRotTouch = inp; flyRotLast = inp.Position end
-        else
+        if inp.Position.X <= half then
             if not flyMoveTouch then flyMoveTouch = inp; flyMoveSt = inp.Position end
         end
     end))
     table.insert(flyConns, UIS.TouchMoved:Connect(function(inp)
-        if inp == flyRotTouch and flyRotLast then
-            flyYaw   = flyYaw   - (inp.Position.X - flyRotLast.X) * 0.3
-            flyPitch = math.clamp(flyPitch - (inp.Position.Y - flyRotLast.Y) * 0.3, -80, 80)
-            flyRotLast = inp.Position
-        end
-        if inp == flyMoveTouch and flyMoveSt then
-            local dx = inp.Position.X - flyMoveSt.X
-            local dy = inp.Position.Y - flyMoveSt.Y
-            local nx = math.abs(dx) > 20 and math.clamp((dx - math.sign(dx)*20)/80,-1,1) or 0
-            local ny = math.abs(dy) > 20 and math.clamp((dy - math.sign(dy)*20)/80,-1,1) or 0
-            flyJoy = Vector2.new(nx, ny)
-        end
-    end))
-    table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
-        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp == flyRotTouch then flyRotTouch = nil; flyRotLast = nil end
-        if inp == flyMoveTouch then flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero end
-    end))
-    State.Fly._keys = keysHeld
-end
-
-local function stopFlyCapture()
-    for _, c in ipairs(flyConns) do c:Disconnect() end
-    flyConns = {}
-    flyRotTouch = nil; flyMoveTouch = nil
-    flyMoveSt = nil; flyRotLast = nil
-    flyJoy = Vector2.zero
-    State.Fly._mouseRot = false
-    State.Fly._keys = {}
-    UIS.MouseBehavior = Enum.MouseBehavior.Default
-end
-
-local function toggleFly(v)
-    if not v then
-        State.Fly.active = false
-        stopFlyCapture()
-        if State.Fly.bv then State.Fly.bv:Destroy(); State.Fly.bv = nil end
-        if State.Fly.bg then State.Fly.bg:Destroy(); State.Fly.bg = nil end
-        local hum = getHum()
-        if hum then
-            hum.PlatformStand = false
-            pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
-            hum.WalkSpeed = State.Move.ws
-        end
-        State.Move.ncp = false
-        Library:Notification("Fly", "✈️ Fly OFF", 2)
-        return
-    end
-
-    local hrp = getRoot()
-    local hum = getHum()
-    if not hrp or not hum then
-        Library:Notification("Fly", "❌ Karakter tidak ditemukan!", 2)
-        return
-    end
-
-    State.Fly.active = true
-    hum.PlatformStand = true
-    State.Move.ncp = true
-    flyLastPos = hrp.CFrame
-
-    -- Ambil yaw dari kamera supaya tidak lompat arah
-    local _, ry = Cam.CFrame:ToEulerAnglesYXZ()
-    flyYaw   = math.deg(ry)
-    flyPitch = 0
-
-    -- BodyVelocity + BodyGyro (v29 style, terbukti jalan)
-    State.Fly.bv = Instance.new("BodyVelocity", hrp)
-    State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    State.Fly.bv.Velocity  = Vector3.zero
-    State.Fly.bv.Name = "XKIDFlyBV"
-
-    State.Fly.bg = Instance.new("BodyGyro", hrp)
-    State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    State.Fly.bg.P = 1e5
-    State.Fly.bg.Name = "XKIDFlyBG"
-
-    startFlyCapture()
-
-    -- Fly loop: task.spawn seperti v29, kontrol freecam style
-    task.spawn(function()
-        while State.Fly.active do
-            local r = getRoot()
-            local h = getHum()
-            if not r or not h or not State.Fly.bv or not State.Fly.bg then break end
-
-            flyLastPos = r.CFrame
-
-            -- Build CFrame dari accumulated yaw + pitch
-            local camCF = CFrame.new(r.Position)
-                * CFrame.Angles(0, math.rad(flyYaw), 0)
-                * CFrame.Angles(math.rad(flyPitch), 0, 0)
-
-            local spd  = State.Move.flyS
-            local move = Vector3.zero
-            local keys = State.Fly._keys or {}
-
-            if onMobile then
-                -- Analog joystick kiri: maju/mundur/kiri/kanan ngikut arah kamera
-                move = camCF.LookVector * (-flyJoy.Y) * spd
-                     + camCF.RightVector * flyJoy.X   * spd
-            else
-                if keys[Enum.KeyCode.W] then move = move + camCF.LookVector  * spd end
-                if keys[Enum.KeyCode.S] then move = move - camCF.LookVector  * spd end
-                if keys[Enum.KeyCode.D] then move = move + camCF.RightVector * spd end
-                if keys[Enum.KeyCode.A] then move = move - camCF.RightVector * spd end
-                if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) * spd end
-                if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) * spd end
-            end
-
-            State.Fly.bv.Velocity = move
-            State.Fly.bg.CFrame   = camCF
-            RS.RenderStepped:Wait()
-        end
-    end)
-
-    Library:Notification("Fly", "✈️ Fly ON — Kiri gerak | Kanan rotate", 3)
-end
-
-local function startFlyCapture()
-    local keysHeld = {}
-    -- Keyboard
-    table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        local k = inp.KeyCode
-        if k == Enum.KeyCode.W or k == Enum.KeyCode.A or
-           k == Enum.KeyCode.S or k == Enum.KeyCode.D or
-           k == Enum.KeyCode.E or k == Enum.KeyCode.Q then
-            keysHeld[k] = true
-        end
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            State.Fly._mouseRot = true
-            UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
-        end
-    end))
-    table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
-        keysHeld[inp.KeyCode] = false
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            State.Fly._mouseRot = false
-            UIS.MouseBehavior = Enum.MouseBehavior.Default
-        end
-    end))
-    -- Mouse rotate
-    table.insert(flyConns, UIS.InputChanged:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseMovement and State.Fly._mouseRot then
-            flyYaw   = flyYaw   - inp.Delta.X * 0.3
-            flyPitch = math.clamp(flyPitch - inp.Delta.Y * 0.3, -80, 80)
-        end
-    end))
-    -- Touch: kiri=gerak, kanan=rotate
-    table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        local half = Cam.ViewportSize.X / 2
-        if inp.Position.X > half then
-            if not flyRotTouch then flyRotTouch = inp; flyRotLast = inp.Position end
-        else
-            if not flyMoveTouch then flyMoveTouch = inp; flyMoveSt = inp.Position end
-        end
-    end))
-    table.insert(flyConns, UIS.TouchMoved:Connect(function(inp)
-        if inp == flyRotTouch and flyRotLast then
-            flyYaw   = flyYaw   - (inp.Position.X - flyRotLast.X) * 0.3
-            flyPitch = math.clamp(flyPitch - (inp.Position.Y - flyRotLast.Y) * 0.3, -80, 80)
-            flyRotLast = inp.Position
-        end
         if inp == flyMoveTouch and flyMoveSt then
             local dx = inp.Position.X - flyMoveSt.X
             local dy = inp.Position.Y - flyMoveSt.Y
@@ -299,7 +115,6 @@ local function startFlyCapture()
     end))
     table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp == flyRotTouch then flyRotTouch = nil; flyRotLast = nil end
         if inp == flyMoveTouch then flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero end
     end))
     State.Fly._keys = keysHeld
@@ -308,12 +123,10 @@ end
 local function stopFlyCapture()
     for _, c in ipairs(flyConns) do c:Disconnect() end
     flyConns = {}
-    flyRotTouch = nil; flyMoveTouch = nil
-    flyMoveSt = nil; flyRotLast = nil
+    flyMoveTouch = nil
+    flyMoveSt = nil
     flyJoy = Vector2.zero
-    State.Fly._mouseRot = false
     State.Fly._keys = {}
-    UIS.MouseBehavior = Enum.MouseBehavior.Default
 end
 
 local function toggleFly(v)
@@ -329,7 +142,6 @@ local function toggleFly(v)
             hum:ChangeState(Enum.HumanoidStateType.GettingUp)
             hum.WalkSpeed = State.Move.ws
         end
-        -- Disable noclip yang diaktifkan fly
         State.Move.ncp = false
         Library:Notification("Fly", "✈️ Fly OFF", 2)
         return
@@ -341,14 +153,8 @@ local function toggleFly(v)
 
     State.Fly.active = true
     hum.PlatformStand = true
-
-    -- Auto NoClip saat fly ON
     State.Move.ncp = true
 
-    -- Simpan posisi untuk respawn
-    flyLastPos = hrp.CFrame
-
-    -- BodyVelocity + BodyGyro
     State.Fly.bv = Instance.new("BodyVelocity", hrp)
     State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
     State.Fly.bv.Velocity  = Vector3.zero
@@ -356,11 +162,6 @@ local function toggleFly(v)
     State.Fly.bg = Instance.new("BodyGyro", hrp)
     State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
     State.Fly.bg.P = 1e5
-
-    -- Ambil yaw dari kamera saat ini supaya tidak lompat
-    local _, ry = Cam.CFrame:ToEulerAnglesYXZ()
-    flyYaw   = math.deg(ry)
-    flyPitch = 0
 
     startFlyCapture()
 
@@ -370,15 +171,8 @@ local function toggleFly(v)
         local h   = getHum()
         if not r or not h then return end
 
-        -- Simpan posisi terakhir untuk respawn
-        flyLastPos = r.CFrame
-
-        -- Build CFrame dari yaw+pitch
-        local camCF = CFrame.new(r.Position)
-            * CFrame.Angles(0, math.rad(flyYaw), 0)
-            * CFrame.Angles(math.rad(flyPitch), 0, 0)
-
-        local spd  = State.Move.flyS * dt * 60
+        local camCF = Cam.CFrame
+        local spd  = State.Move.flyS
         local move = Vector3.zero
         local keys = State.Fly._keys or {}
 
@@ -386,19 +180,21 @@ local function toggleFly(v)
             move = camCF.LookVector * (-flyJoy.Y) * spd
                  + camCF.RightVector * flyJoy.X   * spd
         else
-            if keys[Enum.KeyCode.W] then move = move + camCF.LookVector  * spd end
-            if keys[Enum.KeyCode.S] then move = move - camCF.LookVector  * spd end
-            if keys[Enum.KeyCode.D] then move = move + camCF.RightVector * spd end
-            if keys[Enum.KeyCode.A] then move = move - camCF.RightVector * spd end
-            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) * spd end
-            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) * spd end
+            if keys[Enum.KeyCode.W] then move = move + camCF.LookVector end
+            if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end
+            if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end
+            if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end
+            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) end
+            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) end
+            if move.Magnitude > 0 then move = move.Unit * spd end
         end
 
         State.Fly.bv.Velocity = move
-        State.Fly.bg.CFrame   = camCF
+        -- Lock karakter mengikuti arah kamera
+        State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector)
     end)
 
-    Library:Notification("Fly", "✈️ Fly ON — Kiri gerak | Kanan rotate", 3)
+    Library:Notification("Fly", "✈️ Fly ON — Ikut arah kamera", 3)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
@@ -706,7 +502,7 @@ PLM:Toggle("∞  Inf Jump", "ij", false, "Lompat terus", function(v)
 end)
 
 -- Fly toggle + speed slider
-PLH:Toggle("✈️  Native Fly", "nf", false, "Kiri gerak | Kanan rotate", function(v) toggleFly(v) end)
+PLH:Toggle("✈️  Native Fly", "nf", false, "Mengikuti arah kamera", function(v) toggleFly(v) end)
 PLH:Slider("✈️ Fly Speed", "flyspd", 10, 300, 60, function(v)
     State.Move.flyS = v
 end)
@@ -769,7 +565,6 @@ end)
 -- PAGE 2: LOCK
 local PLPage2 = T_PL:Page("Lock", "lock")
 local PLLock  = PLPage2:Section("🔒 Lock Karakter", "Left")
-local PLLockR = PLPage2:Section("📷 Lock Kamera", "Right")
 
 -- Lock Rotasi: pakai AutoRotate = false (cara resmi Roblox)
 PLLock:Toggle("🔒 Lock Rotasi", "lockrot", false, "Karakter tidak berputar", function(v)
@@ -787,87 +582,22 @@ PLLock:Toggle("🔒 Lock Rotasi", "lockrot", false, "Karakter tidak berputar", f
 end)
 
 -- Lock Posisi: anchor karakter di tempat
-local lockPosConn = nil
-local lockedCF    = nil
 PLLock:Toggle("📍 Lock Posisi", "lockpos", false, "Karakter diam total", function(v)
+    local hrp = getRoot()
+    if not hrp then
+        Library:Notification("Lock", "❌ Karakter tidak ditemukan!", 2)
+        return
+    end
     if v then
-        local hrp = getRoot()
-        if not hrp then
-            Library:Notification("Lock", "❌ Karakter tidak ditemukan!", 2)
-            return
-        end
-        lockedCF     = hrp.CFrame
         hrp.Anchored = true
-        lockPosConn  = RS.Heartbeat:Connect(function()
-            local r = getRoot()
-            if r and lockedCF then r.CFrame = lockedCF end
-        end)
         Library:Notification("Lock", "📍 Posisi dikunci!", 2)
     else
-        if lockPosConn then lockPosConn:Disconnect(); lockPosConn = nil end
-        local hrp = getRoot()
-        if hrp then hrp.Anchored = false end
+        hrp.Anchored = false
         Library:Notification("Lock", "🔓 Posisi bebas", 2)
     end
 end)
-PLLock:Button("📌 Update Posisi Kunci", "Kunci di posisi baru", function()
-    local hrp = getRoot()
-    if hrp then
-        lockedCF = hrp.CFrame
-        Library:Notification("Lock", "📌 Posisi baru dikunci!", 2)
-    end
-end)
 
--- Lock Kamera: pakai CameraType.Follow (cara resmi Roblox)
--- Follow = kamera otomatis ikut karakter tanpa perlu loop manual
-PLLockR:Toggle("📷 Lock Kamera (Follow)", "lockcam", false, "Kamera otomatis follow", function(v)
-    if v then
-        Cam.CameraType = Enum.CameraType.Follow
-        Library:Notification("Kamera", "📷 Follow mode aktif!", 2)
-    else
-        Cam.CameraType = Enum.CameraType.Custom
-        Library:Notification("Kamera", "🔓 Kamera bebas", 2)
-    end
-end)
-
--- Lock Kamera Attach: kamera nempel tepat di belakang karakter
-PLLockR:Toggle("🎯 Lock Kamera (Attach)", "lockcamat", false, "Kamera nempel karakter", function(v)
-    if v then
-        Cam.CameraType = Enum.CameraType.Attach
-        Library:Notification("Kamera", "🎯 Attach mode aktif!", 2)
-    else
-        Cam.CameraType = Enum.CameraType.Custom
-        Library:Notification("Kamera", "🔓 Kamera bebas", 2)
-    end
-end)
-
--- Lock Kamera Custom (orbit manual dengan jarak)
-local lockCamConn = nil
-local lockCamDist = 8
-PLLockR:Toggle("🔭 Lock Kamera (Orbit)", "lockcamorb", false, "Orbit manual + jarak", function(v)
-    if v then
-        Cam.CameraType = Enum.CameraType.Scriptable
-        lockCamConn = RS.RenderStepped:Connect(function()
-            local hrp = getRoot()
-            if not hrp then return end
-            local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ()
-            local back    = CFrame.new(hrp.Position)
-                * CFrame.Angles(0, ry, 0)
-                * CFrame.new(0, 2, lockCamDist)
-            Cam.CFrame = CFrame.new(back.Position, hrp.Position + Vector3.new(0,1,0))
-        end)
-        Library:Notification("Kamera", "🔭 Orbit mode aktif!", 2)
-    else
-        if lockCamConn then lockCamConn:Disconnect(); lockCamConn = nil end
-        Cam.CameraType = Enum.CameraType.Custom
-        Library:Notification("Kamera", "🔓 Kamera bebas", 2)
-    end
-end)
-PLLockR:Slider("Jarak Orbit", "camdist", 3, 30, 8, function(v)
-    lockCamDist = v
-end)
-
--- PAGE 3: ATMOSPHERE (dipindah ke sini dari section bawah)
+-- PAGE 3: ATMOSPHERE
 local PLPage3 = T_PL:Page("Atmosphere", "cloud")
 local PLW = PLPage3:Section("🌦️ Waktu & Cahaya", "Left")
 
@@ -1421,39 +1151,23 @@ SCP:Button("🔄 Rejoin Server", "", function()
     TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
 end)
 
--- Fast Respawn: simpan posisi terakhir, respawn dan teleport balik
+-- Fast Respawn: Auto save background loop
 local respawnLastPos = nil
-local respawnSaveConn = nil
 
-SCR:Toggle("📍 Simpan Posisi Auto", "savepos", false, "Rekam posisi tiap 2 detik", function(v)
-    if v then
-        respawnLastPos = getRoot() and getRoot().CFrame
-        respawnSaveConn = task.spawn(function()
-            while v do
-                local r = getRoot()
-                if r then respawnLastPos = r.CFrame end
-                task.wait(2)
-            end
-        end)
-        Library:Notification("Respawn", "📍 Posisi direkam otomatis!", 2)
-    else
-        Library:Notification("Respawn", "⏹️ Rekam posisi berhenti", 2)
-    end
-end)
-
-SCR:Button("📌 Simpan Posisi Sekarang", "Simpan manual", function()
-    local r = getRoot()
-    if r then
-        respawnLastPos = r.CFrame
-        Library:Notification("Respawn", "📌 Posisi tersimpan!", 2)
-    else
-        Library:Notification("Respawn", "❌ Karakter tidak ditemukan!", 2)
+task.spawn(function()
+    while true do
+        task.wait(1)
+        local r = getRoot()
+        local h = getHum()
+        if r and h and h.Health > 0 then
+            respawnLastPos = r.CFrame
+        end
     end
 end)
 
 SCR:Button("💀 Fast Respawn", "Mati & balik ke posisi terakhir", function()
     if not respawnLastPos then
-        Library:Notification("Respawn", "❌ Simpan posisi dulu!", 2)
+        Library:Notification("Respawn", "❌ Posisi belum direkam!", 2)
         return
     end
     local savedCF = respawnLastPos
@@ -1476,7 +1190,7 @@ SCR:Button("💀 Fast Respawn", "Mati & balik ke posisi terakhir", function()
     end)
 end)
 
--- IY FLING LOOP (fix: pakai AssemblyLinearVelocity, tidak deprecated)
+-- IY FLING LOOP
 task.spawn(function()
     while true do
         if State.Fling.active and getRoot() then
@@ -1506,3 +1220,4 @@ end)
 
 Library:Notification("✦ XKID HUB", "FINAL V.1 — Ready! Let's Go! 🚀", 5)
 
+```
