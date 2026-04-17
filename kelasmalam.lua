@@ -68,6 +68,19 @@ local function findPlayerByDisplay(str)
     return nil
 end
 
+-- Persistent Movement (Re-apply WS & JP after respawn)
+LP.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        if State.Move.ws ~= 16 then hum.WalkSpeed = State.Move.ws end
+        if State.Move.jp ~= 50 then 
+            hum.UseJumpPower = true
+            hum.JumpPower = State.Move.jp 
+        end
+    end
+end)
+
 -- ┌─────────────────────────────────────────────────────────┐
 -- │        ➤  FLY ENGINE  (LOCK CAMERA DIRECTION)           │
 -- └─────────────────────────────────────────────────────────┘
@@ -142,6 +155,8 @@ local function toggleFly(v)
             hum.PlatformStand = false
             hum:ChangeState(Enum.HumanoidStateType.GettingUp)
             hum.WalkSpeed = State.Move.ws
+            hum.UseJumpPower = true
+            hum.JumpPower = State.Move.jp
         end
         Library:Notification("Fly", "✈️ Fly OFF", 2)
         return
@@ -470,7 +485,11 @@ end)
 
 PLM:Slider("🦘 JumpPower", "jp", 50, 500, 50, function(v)
     State.Move.jp = v
-    if getHum() then getHum().JumpPower = v end
+    local hum = getHum()
+    if hum then 
+        hum.UseJumpPower = true
+        hum.JumpPower = v 
+    end
 end)
 
 PLM:Toggle("∞  Inf Jump", "ij", false, "Lompat terus", function(v)
@@ -659,6 +678,7 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
         end
         if hum then
             hum.WalkSpeed = State.Move.ws
+            hum.UseJumpPower = true
             hum.JumpPower = State.Move.jp
             hum:ChangeState(Enum.HumanoidStateType.GettingUp)
         end
