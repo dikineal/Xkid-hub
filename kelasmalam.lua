@@ -1404,4 +1404,3 @@ RS.Stepped:Connect(function()
 end)
 
 Library:Notification("✦ XKID HUB", "FINAL V.1 — Ready! Let's Go! 🚀", 5)
-
