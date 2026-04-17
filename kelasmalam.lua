@@ -1,7 +1,7 @@
 --[[
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║        ✦  X  K  I  D     H  U  B  ✦   FINAL  V.2           ║
+║        ✦  X  K  I  D     H  U  B  ✦   FINAL  V.3           ║
 ║                                                              ║
 ╠══════════════════════════════════════════════════════════════╣
 ║                                                              ║
@@ -9,9 +9,9 @@
 ║   🗺️  Teleport       ⚡  Player        🛡️  Security         ║
 ║                                                              ║
 ╠══════════════════════════════════════════════════════════════╣
-║   ✦  Fly Freecam Style   ✦  Lock Rotasi & Kamera            ║
-║   ✦  God Mode + Respawn  ✦  All +/- → Sliders              ║
-║   ✦  Auto Reset Karakter ✦  Kembali Posisi Terakhir         ║
+║   ✦  Fly Third Person Freecam  ✦  Lock Rotasi Ikut Kamera   ║
+║   ✦  God Mode + Respawn        ✦  All +/- → Sliders         ║
+║   ✦  Reset Karakter (Klik)     ✦  Kembali Posisi Terakhir   ║
 ╚══════════════════════════════════════════════════════════════╝
 ]]
 
@@ -30,11 +30,11 @@ local Cam        = workspace.CurrentCamera
 -- Global State
 local State = {
     Move = {ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60},
-    Fly  = {active = false, bv = nil, bg = nil},
+    Fly  = {active = false},
     Fling= {active = false, power = 1000000},
     Teleport = {selectedTarget = ""},
-    Security = {afkConn = nil, lastPos = nil, posConn = nil},
-    Cinema   = {active = false, speed = 1, fov = 70, lastPos = nil}
+    Security = {afkConn = nil},
+    Cinema   = {active = false, speed = 1, fov = 70}
 }
 
 -- Helpers
@@ -65,49 +65,46 @@ end
 local onMobile = not UIS.KeyboardEnabled
 
 -- ┌─────────────────────────────────────────────────────────┐
--- │     ➤  FLY ENGINE  (FIXED JOYSTICK ARAH KAMERA)         │
+-- │     ➤  FLY ENGINE V3 - THIRD PERSON FREECAM             │
 -- └─────────────────────────────────────────────────────────┘
-local flyRotTouch  = nil
-local flyMoveTouch = nil
-local flyMoveSt    = nil
-local flyRotLast   = nil
-local flyJoy       = Vector2.zero
-local flyYaw       = 0
-local flyPitch     = 0
-local flyConns     = {}
-local flyLastPos   = nil
+local flyYaw = 0
+local flyPitch = 0
+local flySpeed = 60
+local flyActive = false
+local flyConns = {}
+local flyKeys = {}
+local flyJoy = Vector2.zero
+local flyRotTouch, flyMoveTouch, flyMoveSt, flyRotLast = nil, nil, nil, nil
+local flyMouseRot = false
 
-local function startFlyCapture()
-    local keysHeld = {}
+local function startFlyInput()
     table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         local k = inp.KeyCode
-        if k == Enum.KeyCode.W or k == Enum.KeyCode.A or
-           k == Enum.KeyCode.S or k == Enum.KeyCode.D or
-           k == Enum.KeyCode.E or k == Enum.KeyCode.Q then
-            keysHeld[k] = true
+        if k == Enum.KeyCode.W or k == Enum.KeyCode.A or k == Enum.KeyCode.S or k == Enum.KeyCode.D or k == Enum.KeyCode.E or k == Enum.KeyCode.Q then
+            flyKeys[k] = true
         end
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            State.Fly._mouseRot = true
+            flyMouseRot = true
             UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
         end
     end))
     table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
-        keysHeld[inp.KeyCode] = false
+        flyKeys[inp.KeyCode] = false
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            State.Fly._mouseRot = false
+            flyMouseRot = false
             UIS.MouseBehavior = Enum.MouseBehavior.Default
         end
     end))
     table.insert(flyConns, UIS.InputChanged:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseMovement and State.Fly._mouseRot then
-            flyYaw   = flyYaw   - inp.Delta.X * 0.3
+        if inp.UserInputType == Enum.UserInputType.MouseMovement and flyMouseRot then
+            flyYaw = flyYaw - inp.Delta.X * 0.3
             flyPitch = math.clamp(flyPitch - inp.Delta.Y * 0.3, -80, 80)
         end
     end))
+
     table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
         local half = Cam.ViewportSize.X / 2
         if inp.Position.X > half then
             if not flyRotTouch then flyRotTouch = inp; flyRotLast = inp.Position end
@@ -117,44 +114,97 @@ local function startFlyCapture()
     end))
     table.insert(flyConns, UIS.TouchMoved:Connect(function(inp)
         if inp == flyRotTouch and flyRotLast then
-            flyYaw   = flyYaw   - (inp.Position.X - flyRotLast.X) * 0.3
+            flyYaw = flyYaw - (inp.Position.X - flyRotLast.X) * 0.3
             flyPitch = math.clamp(flyPitch - (inp.Position.Y - flyRotLast.Y) * 0.3, -80, 80)
             flyRotLast = inp.Position
         end
         if inp == flyMoveTouch and flyMoveSt then
             local dx = inp.Position.X - flyMoveSt.X
             local dy = inp.Position.Y - flyMoveSt.Y
-            local nx = math.abs(dx) > 25 and math.clamp((dx - math.sign(dx)*25)/80,-1,1) or 0
-            local ny = math.abs(dy) > 20 and math.clamp((dy - math.sign(dy)*20)/80,-1,1) or 0
+            local nx = math.abs(dx) > 25 and math.clamp((dx - math.sign(dx)*25)/80, -1, 1) or 0
+            local ny = math.abs(dy) > 20 and math.clamp((dy - math.sign(dy)*20)/80, -1, 1) or 0
             flyJoy = Vector2.new(nx, ny)
         end
     end))
     table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp == flyRotTouch  then flyRotTouch  = nil; flyRotLast  = nil end
-        if inp == flyMoveTouch then flyMoveTouch = nil; flyMoveSt   = nil; flyJoy = Vector2.zero end
+        if inp == flyRotTouch then flyRotTouch = nil; flyRotLast = nil end
+        if inp == flyMoveTouch then flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero end
     end))
-    State.Fly._keys = keysHeld
 end
 
-local function stopFlyCapture()
+local function stopFlyInput()
     for _, c in ipairs(flyConns) do c:Disconnect() end
     flyConns = {}
-    flyRotTouch = nil; flyMoveTouch = nil
-    flyMoveSt   = nil; flyRotLast   = nil
+    flyKeys = {}
+    flyMouseRot = false
+    flyRotTouch = nil; flyMoveTouch = nil; flyMoveSt = nil; flyRotLast = nil
     flyJoy = Vector2.zero
-    State.Fly._mouseRot = false
-    State.Fly._keys = {}
     UIS.MouseBehavior = Enum.MouseBehavior.Default
 end
 
-local function toggleFly(v)
-    if not v then
-        State.Fly.active = false
-        stopFlyCapture()
-        RS:UnbindFromRenderStep("XKIDFly")
-        if State.Fly.bv then State.Fly.bv:Destroy(); State.Fly.bv = nil end
-        if State.Fly.bg then State.Fly.bg:Destroy(); State.Fly.bg = nil end
+local function setFly(active)
+    if active == flyActive then return end
+    flyActive = active
+
+    if active then
+        local hrp = getRoot()
+        local hum = getHum()
+        if not hrp or not hum then
+            Library:Notification("Fly", "❌ Karakter gak ada!", 2)
+            flyActive = false
+            return
+        end
+
+        hrp.Anchored = false
+        hum.PlatformStand = true
+        State.Move.ncp = true
+
+        local _, ry = Cam.CFrame:ToEulerAnglesYXZ()
+        flyYaw = math.deg(ry)
+        flyPitch = 0
+
+        startFlyInput()
+
+        RS:BindToRenderStep("FlyThirdPerson", Enum.RenderPriority.Camera.Value + 1, function(dt)
+            if not flyActive then return end
+            local r = getRoot()
+            local h = getHum()
+            if not r or not h then return end
+
+            local camDir = CFrame.new(r.Position)
+                * CFrame.Angles(0, math.rad(flyYaw), 0)
+                * CFrame.Angles(math.rad(flyPitch), 0, 0)
+
+            local spd = flySpeed * dt * 60
+            local moveVec = Vector3.zero
+
+            if onMobile then
+                moveVec = camDir.LookVector * (-flyJoy.Y) * spd + camDir.RightVector * flyJoy.X * spd
+            else
+                if flyKeys[Enum.KeyCode.W] then moveVec = moveVec + camDir.LookVector * spd end
+                if flyKeys[Enum.KeyCode.S] then moveVec = moveVec - camDir.LookVector * spd end
+                if flyKeys[Enum.KeyCode.D] then moveVec = moveVec + camDir.RightVector * spd end
+                if flyKeys[Enum.KeyCode.A] then moveVec = moveVec - camDir.RightVector * spd end
+                if flyKeys[Enum.KeyCode.E] then moveVec = moveVec + Vector3.new(0, 1, 0) * spd end
+                if flyKeys[Enum.KeyCode.Q] then moveVec = moveVec - Vector3.new(0, 1, 0) * spd end
+            end
+
+            r.Velocity = moveVec
+
+            local offset = CFrame.new(0, 1.5, 8)
+            local camCF = r.CFrame
+                * CFrame.Angles(0, math.rad(flyYaw), 0)
+                * CFrame.Angles(math.rad(flyPitch), 0, 0)
+                * offset
+            Cam.CameraType = Enum.CameraType.Scriptable
+            Cam.CFrame = camCF
+        end)
+
+        Library:Notification("Fly", "✈️ Fly ON — Kontrol kayak freecam (Third Person)", 3)
+    else
+        RS:UnbindFromRenderStep("FlyThirdPerson")
+        stopFlyInput()
         local hum = getHum()
         if hum then
             hum.PlatformStand = false
@@ -163,84 +213,9 @@ local function toggleFly(v)
             hum.JumpPower = State.Move.jp
         end
         State.Move.ncp = false
+        Cam.CameraType = Enum.CameraType.Custom
         Library:Notification("Fly", "✈️ Fly OFF", 2)
-        return
     end
-
-    local hrp = getRoot()
-    local hum = getHum()
-    if not hrp or not hum then
-        Library:Notification("Fly", "❌ Karakter tidak ditemukan!", 2)
-        return
-    end
-
-    State.Fly.active = true
-    hum.PlatformStand = true
-    State.Move.ncp = true
-
-    flyLastPos = hrp.CFrame
-
-    if State.Fly.bv then State.Fly.bv:Destroy() end
-    if State.Fly.bg then State.Fly.bg:Destroy() end
-
-    State.Fly.bv = Instance.new("BodyVelocity")
-    State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    State.Fly.bv.Velocity  = Vector3.zero
-    State.Fly.bv.Parent    = hrp
-
-    State.Fly.bg = Instance.new("BodyGyro")
-    State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    State.Fly.bg.P = 1e5
-    State.Fly.bg.Parent    = hrp
-
-    local _, ry = Cam.CFrame:ToEulerAnglesYXZ()
-    flyYaw   = math.deg(ry)
-    flyPitch = 0
-
-    startFlyCapture()
-
-    RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function(dt)
-        if not State.Fly.active then return end
-        local r = getRoot()
-        local h = getHum()
-        if not r or not h then return end
-
-        flyLastPos = r.CFrame
-        if State.Security.lastPos ~= nil then
-            State.Security.lastPos = r.CFrame
-        end
-
-        -- PERBAIKAN: arah berdasarkan kamera (sama kaya freecam)
-        local camDir = CFrame.new(r.Position)
-            * CFrame.Angles(0, math.rad(flyYaw), 0)
-            * CFrame.Angles(math.rad(flyPitch), 0, 0)
-
-        local spd  = State.Move.flyS * dt * 60
-        local move = Vector3.zero
-        local keys = State.Fly._keys or {}
-
-        if onMobile then
-            -- Joystick sesuai arah kamera
-            move = camDir.LookVector * (-flyJoy.Y) * spd
-                 + camDir.RightVector * flyJoy.X * spd
-        else
-            if keys[Enum.KeyCode.W] then move = move + camDir.LookVector  * spd end
-            if keys[Enum.KeyCode.S] then move = move - camDir.LookVector  * spd end
-            if keys[Enum.KeyCode.D] then move = move + camDir.RightVector * spd end
-            if keys[Enum.KeyCode.A] then move = move - camDir.RightVector * spd end
-            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) * spd end
-            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) * spd end
-        end
-
-        if State.Fly.bv and State.Fly.bv.Parent then
-            State.Fly.bv.Velocity = move
-        end
-        if State.Fly.bg and State.Fly.bg.Parent then
-            State.Fly.bg.CFrame = camDir
-        end
-    end)
-
-    Library:Notification("Fly", "✈️ Fly ON — Kiri gerak | Kanan rotate", 3)
 end
 
 -- ┌─────────────────────────────────────────────────────────┐
@@ -383,7 +358,7 @@ end
 -- ┌─────────────────────────────────────────────────────────┐
 -- │              ➤  UI CONSTRUCTION                         │
 -- └─────────────────────────────────────────────────────────┘
-local Win = Library:Window("✦ XKID HUB — FINAL V.2 ✦", "star", "FREECAM", false)
+local Win = Library:Window("✦ XKID HUB — FINAL V.3 ✦", "star", "FREECAM", false)
 
 -- ═══════════════════════════════════════════════════════════
 -- TAB 1: TELEPORT
@@ -480,8 +455,8 @@ PLM:Toggle("∞  Inf Jump", "ij", false, "Lompat terus", function(v)
     end
 end)
 
-PLH:Toggle("✈️  Native Fly", "nf", false, "Freecam style", function(v) toggleFly(v) end)
-PLH:Slider("✈️ Fly Speed", "flyspd", 10, 300, 60, function(v) State.Move.flyS = v end)
+PLH:Toggle("✈️  Third Person Fly", "fly", false, "Kontrol kayak freecam", function(v) setFly(v) end)
+PLH:Slider("✈️ Fly Speed", "flyspd", 10, 300, 60, function(v) flySpeed = v end)
 PLH:Toggle("👻 NoClip", "nc", false, "Tembus dinding", function(v) State.Move.ncp = v end)
 PLH:Toggle("💥 IY Fling", "ffm", false, "Tabrak!", function(v) State.Fling.active = v; State.Move.ncp = v end)
 
@@ -522,47 +497,25 @@ PLH:Toggle("🛡️ God Mode", "god", false, "HP Infinite + Respawn", function(v
     end
 end)
 
--- PAGE 2: LOCK (DENGAN FITUR UNLOCK SEMENTARA)
+-- PAGE 2: LOCK (ROTASI IKUT KAMERA)
 local PLPage2 = T_PL:Page("Lock", "lock")
 local PLLock  = PLPage2:Section("🔒 Lock Karakter", "Left")
 local PLLockR = PLPage2:Section("📷 Lock Kamera", "Right")
 
-local lockRotConn = nil
-local lockedYaw = 0
-local tempUnlock = false
-
-PLLock:Toggle("🔒 Lock Rotasi", "lockrot", false, "Karakter tidak berputar", function(v)
+local lockCamRotConn = nil
+PLLock:Toggle("🔒 Lock Rotasi (Ikut Kamera)", "lockrotcam", false, "Karakter selalu menghadap arah kamera", function(v)
     if v then
-        local hrp = getRoot()
-        if not hrp then Library:Notification("Lock", "❌ Karakter tidak ditemukan!", 2); return end
-        local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ()
-        lockedYaw = ry
-        lockRotConn = RS.Heartbeat:Connect(function()
+        lockCamRotConn = RS.RenderStepped:Connect(function()
             local r = getRoot()
-            if r and not tempUnlock then
-                r.CFrame = CFrame.new(r.Position) * CFrame.Angles(0, lockedYaw, 0)
+            if r then
+                local _, yaw = Cam.CFrame:ToEulerAnglesYXZ()
+                r.CFrame = CFrame.new(r.Position) * CFrame.Angles(0, yaw, 0)
             end
         end)
-        Library:Notification("Lock", "🔒 Rotasi dikunci!", 2)
+        Library:Notification("Lock", "🔒 Karakter ikut arah kamera!", 2)
     else
-        if lockRotConn then lockRotConn:Disconnect(); lockRotConn = nil end
+        if lockCamRotConn then lockCamRotConn:Disconnect(); lockCamRotConn = nil end
         Library:Notification("Lock", "🔓 Rotasi bebas", 2)
-    end
-end)
-
-PLLock:Button("🔓 UNLOCK SEMENTARA (Tekan buat muter)", "Sementara buka lock", function()
-    tempUnlock = true
-    task.wait(0.5)
-    tempUnlock = false
-    Library:Notification("Lock", "🔓 Unlock 0.5 detik, sekarang lock lagi!", 1)
-end)
-
-PLLock:Button("📌 Simpan Arah Lock Sekarang", "Update arah kunci", function()
-    local hrp = getRoot()
-    if hrp then
-        local _, ry, _ = hrp.CFrame:ToEulerAnglesYXZ()
-        lockedYaw = ry
-        Library:Notification("Lock", "📌 Arah lock di-update!", 2)
     end
 end)
 
@@ -951,7 +904,7 @@ WOGF:Button("🔄 Cek Level Sekarang", "", function()
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- TAB 6: SECURITY (DENGAN RESET KARAKTER LANGSUNG)
+-- TAB 6: SECURITY
 -- ═══════════════════════════════════════════════════════════
 local T_SC  = Win:Tab("Security", "shield")
 local SCPage= T_SC:Page("Guard", "shield")
@@ -994,16 +947,15 @@ SCR:Button("💀 RESET KARAKTER (Kembali ke posisi)", "", function()
 
     local targetPos = savedPos
 
-    LP.CharacterAdded:Wait()
+    if flyActive then setFly(false) end
+
     LP:LoadCharacter()
+    local char = LP.CharacterAdded:Wait()
+    task.wait(0.15)
 
-    task.wait(0.1)
-    local char = LP.Character
-    if not char then
-        char = LP.CharacterAdded:Wait()
-    end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
 
-    local hum = char:WaitForChild("Humanoid", 5)
     if hum then
         local animator = hum:FindFirstChildOfClass("Animator")
         if animator then animator:Destroy() end
@@ -1013,10 +965,9 @@ SCR:Button("💀 RESET KARAKTER (Kembali ke posisi)", "", function()
         hum.PlatformStand = true
     end
 
-    local hrp = char:WaitForChild("HumanoidRootPart", 5)
-    task.wait(0.05)
     if hrp then
         hrp.CFrame = targetPos
+        hrp.Velocity = Vector3.zero
     end
 
     task.wait(0.1)
@@ -1076,4 +1027,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-Library:Notification("✦ XKID HUB", "FINAL V.2 — Ready! Let's Go! 🚀", 5)
+Library:Notification("✦ XKID HUB", "FINAL V.3 — Ready! Let's Go! 🚀", 5)
