@@ -11,7 +11,7 @@
 ╠══════════════════════════════════════════════════════════════╣
 ║   ✦  Fly V29 + Freecam Input  ✦  Mobile Shift Lock          ║
 ║   ✦  Aurora Sliders           ✦  Fast Respawn ke Posisi      ║
-║   ✦  Preset Cinematic Pro     ✦  Fine-Tune Sliders           ║
+║   ✦  Preset Cinematic Pro     ✦  Player ESP & Anti Lag      ║
 ╚══════════════════════════════════════════════════════════════╝
 ]]
 
@@ -35,7 +35,8 @@ local State = {
     SoftFling = {active = false, power = 4000},
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil},
-    Cinema = {active = false, speed = 1, fov = 70, lastPos = nil}
+    Cinema = {active = false, speed = 1, fov = 70, lastPos = nil},
+    ESP = {active = false, cache = {}}
 }
 
 -- Helpers
@@ -508,6 +509,21 @@ PLH:Toggle("👻 NoClip", "nc", false, "Tembus dinding", function(v) State.Move.
 PLH:Toggle("💥 IY Fling (Brutal)", "ffm", false, "Tabrak terbang!", function(v) State.Fling.active = v; State.Move.ncp = v end)
 PLH:Toggle("💫 Soft Fling", "sfm", false, "Tabrak pelan (jatuh)", function(v) State.SoftFling.active = v; State.Move.ncp = v end)
 
+-- No Fall Damage
+local noFallConn = nil
+PLH:Toggle("🛡️ No Fall Damage", "nofall", false, "Anti mati saat jatuh", function(v)
+    if v then
+        noFallConn = RS.Heartbeat:Connect(function()
+            local hrp = getRoot()
+            if hrp and hrp.Velocity.Y < -30 then
+                hrp.Velocity = Vector3.new(hrp.Velocity.X, -10, hrp.Velocity.Z)
+            end
+        end)
+    else
+        if noFallConn then noFallConn:Disconnect(); noFallConn = nil end
+    end
+end)
+
 -- God Mode: HealthChanged lebih reaktif + auto respawn ke posisi fly/jalan
 local godConn    = nil
 local godRespawn = nil
@@ -957,6 +973,78 @@ SPS:Slider("Jarak Orbit", "specdist", 3, 30, 8, function(v)
     Spec.dist = v
 end)
 
+-- ── ESP PLAYER ──────────────────────────────────────────────
+local function clearESP()
+    for _, v in pairs(State.ESP.cache) do
+        if v.hl then v.hl:Destroy() end
+        if v.bg then v.bg:Destroy() end
+    end
+    State.ESP.cache = {}
+end
+
+local function updateESP()
+    if not State.ESP.active then return end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local char = p.Character
+            if not State.ESP.cache[p] then State.ESP.cache[p] = {} end
+            local cache = State.ESP.cache[p]
+
+            if not cache.hl or cache.hl.Parent ~= char then
+                if cache.hl then cache.hl:Destroy() end
+                local h = Instance.new("Highlight")
+                h.Parent = char
+                h.FillColor = Color3.fromRGB(255, 0, 0)
+                h.OutlineColor = Color3.fromRGB(255, 255, 255)
+                h.FillTransparency = 0.5
+                h.OutlineTransparency = 0
+                h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                cache.hl = h
+            end
+            
+            if not cache.bg or cache.bg.Parent ~= char:FindFirstChild("Head") then
+                if cache.bg then cache.bg:Destroy() end
+                local head = char:FindFirstChild("Head")
+                if head then
+                    local bg = Instance.new("BillboardGui")
+                    bg.Parent = head
+                    bg.AlwaysOnTop = true
+                    bg.Size = UDim2.new(0, 100, 0, 50)
+                    bg.StudsOffset = Vector3.new(0, 2, 0)
+                    
+                    local txt = Instance.new("TextLabel")
+                    txt.Parent = bg
+                    txt.BackgroundTransparency = 1
+                    txt.Size = UDim2.new(1, 0, 1, 0)
+                    txt.Text = p.DisplayName
+                    txt.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    txt.TextStrokeTransparency = 0
+                    txt.TextScaled = true
+                    
+                    cache.bg = bg
+                end
+            end
+        end
+    end
+end
+
+Players.PlayerRemoving:Connect(function(p)
+    if State.ESP.cache[p] then
+        if State.ESP.cache[p].hl then State.ESP.cache[p].hl:Destroy() end
+        if State.ESP.cache[p].bg then State.ESP.cache[p].bg:Destroy() end
+        State.ESP.cache[p] = nil
+    end
+end)
+
+RS.RenderStepped:Connect(function()
+    if State.ESP.active then updateESP() end
+end)
+
+SPS:Toggle("🔴 ESP Player", "esp", false, "Lihat player tembus dinding", function(v)
+    State.ESP.active = v
+    if not v then clearESP() end
+end)
+
 -- FOV Zoom — tombol +/- lebih mudah disentuh di mobile
 SPF:Button("🔭 Zoom In  [ FOV - ]", "Makin sempit", function()
     local newFov = math.clamp(Cam.FieldOfView - 10, 10, 120)
@@ -1089,6 +1177,27 @@ local function setGfx(level)
         end)
     end
 end
+
+WOG:Button("🚀 Max FPS (999)", "Unlock frame rate", function()
+    if setfpscap then
+        setfpscap(999)
+        Library:Notification("FPS", "FPS Cap diatur ke 999!", 2)
+    else
+        Library:Notification("FPS", "Executor tidak support setfpscap!", 2)
+    end
+end)
+
+WOG:Button("🗑️ Anti Lag", "Hapus tekstur agar ringan", function()
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") then
+            v.Material = Enum.Material.SmoothPlastic
+        elseif v:IsA("Texture") or v:IsA("Decal") then
+            v:Destroy()
+        end
+    end
+    Lighting.GlobalShadows = false
+    Library:Notification("Anti Lag", "Tekstur & shadow dihapus!", 2)
+end)
 
 WOG:Button("🥔 Potato (Level 1)", "Paling hemat", function()
     setGfx(Enum.QualityLevel.Level01)
