@@ -1,7 +1,7 @@
 --[[
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║        ✦  X  K  I  D     H  U  B  ✦   FINAL  V.2          ║
+║        ✦  X  K  I  D     H  U  B  ✦   FINAL  V.1           ║
 ║                                                              ║
 ╠══════════════════════════════════════════════════════════════╣
 ║                                                              ║
@@ -9,7 +9,7 @@
 ║   🗺️  Teleport       ⚡  Player        🛡️  Security         ║
 ║                                                              ║
 ╠══════════════════════════════════════════════════════════════╣
-║   ✦  Fly V29 + Freecam Input  ✦  Lock AutoRotate & Follow   ║
+║   ✦  Fly V29 + Freecam Input  ✦  Mobile Shift Lock          ║
 ║   ✦  Aurora Sliders           ✦  Fast Respawn ke Posisi      ║
 ║   ✦  Preset Cinematic Pro     ✦  Fine-Tune Sliders           ║
 ╚══════════════════════════════════════════════════════════════╝
@@ -32,6 +32,7 @@ local State = {
     Move = {ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60},
     Fly = {active = false, bv = nil, bg = nil},
     Fling = {active = false, power = 1000000},
+    SoftFling = {active = false, power = 4000},
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil},
     Cinema = {active = false, speed = 1, fov = 70, lastPos = nil}
@@ -141,7 +142,6 @@ local function toggleFly(v)
             hum:ChangeState(Enum.HumanoidStateType.GettingUp)
             hum.WalkSpeed = State.Move.ws
         end
-        State.Move.ncp = false
         Library:Notification("Fly", "✈️ Fly OFF", 2)
         return
     end
@@ -152,7 +152,6 @@ local function toggleFly(v)
 
     State.Fly.active = true
     hum.PlatformStand = true
-    State.Move.ncp = true
 
     State.Fly.bv = Instance.new("BodyVelocity", hrp)
     State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
@@ -506,7 +505,8 @@ PLH:Slider("✈️ Fly Speed", "flyspd", 10, 300, 60, function(v)
     State.Move.flyS = v
 end)
 PLH:Toggle("👻 NoClip", "nc", false, "Tembus dinding", function(v) State.Move.ncp = v end)
-PLH:Toggle("💥 IY Fling", "ffm", false, "Tabrak!", function(v) State.Fling.active = v; State.Move.ncp = v end)
+PLH:Toggle("💥 IY Fling (Brutal)", "ffm", false, "Tabrak terbang!", function(v) State.Fling.active = v; State.Move.ncp = v end)
+PLH:Toggle("💫 Soft Fling", "sfm", false, "Tabrak pelan (jatuh)", function(v) State.SoftFling.active = v; State.Move.ncp = v end)
 
 -- God Mode: HealthChanged lebih reaktif + auto respawn ke posisi fly/jalan
 local godConn    = nil
@@ -561,38 +561,42 @@ PLH:Toggle("🛡️ God Mode", "god", false, "HP Infinite + Respawn", function(v
     end
 end)
 
--- PAGE 2: LOCK
+-- PAGE 2: LOCK (Modified to Shift Lock)
 local PLPage2 = T_PL:Page("Lock", "lock")
-local PLLock  = PLPage2:Section("🔒 Lock Karakter", "Left")
+local PLLock  = PLPage2:Section("🎯 Shift Lock", "Left")
 
--- Lock Rotasi: pakai AutoRotate = false (cara resmi Roblox)
-PLLock:Toggle("🔒 Lock Rotasi", "lockrot", false, "Karakter tidak berputar", function(v)
+local shiftLockConn = nil
+PLLock:Toggle("🎯 Enable Shift Lock", "shiftlock", false, "Karakter hadap kamera", function(v)
     local hum = getHum()
-    if not hum then
-        Library:Notification("Lock", "❌ Karakter tidak ditemukan!", 2)
-        return
-    end
-    hum.AutoRotate = not v
-    if v then
-        Library:Notification("Lock", "🔒 Rotasi dikunci!", 2)
-    else
-        Library:Notification("Lock", "🔓 Rotasi bebas", 2)
-    end
-end)
-
--- Lock Posisi: anchor karakter di tempat
-PLLock:Toggle("📍 Lock Posisi", "lockpos", false, "Karakter diam total", function(v)
     local hrp = getRoot()
-    if not hrp then
-        Library:Notification("Lock", "❌ Karakter tidak ditemukan!", 2)
+    
+    if not hum or not hrp then
+        Library:Notification("Shift Lock", "❌ Karakter tidak ditemukan!", 2)
         return
     end
+
     if v then
-        hrp.Anchored = true
-        Library:Notification("Lock", "📍 Posisi dikunci!", 2)
+        -- Geser kamera sedikit ke kanan seperti shift lock asli
+        hum.CameraOffset = Vector3.new(1.75, 0, 0)
+        hum.AutoRotate = false
+        
+        shiftLockConn = RS.RenderStepped:Connect(function()
+            local currentHrp = getRoot()
+            if currentHrp then
+                local camLook = Cam.CFrame.LookVector
+                -- Mengunci orientasi di sumbu X dan Z (mengabaikan Y agar karakter tidak menunduk)
+                currentHrp.CFrame = CFrame.new(currentHrp.Position, currentHrp.Position + Vector3.new(camLook.X, 0, camLook.Z))
+            end
+        end)
+        Library:Notification("Shift Lock", "🎯 Aktif!", 2)
     else
-        hrp.Anchored = false
-        Library:Notification("Lock", "🔓 Posisi bebas", 2)
+        if shiftLockConn then shiftLockConn:Disconnect(); shiftLockConn = nil end
+        local curHum = getHum()
+        if curHum then
+            curHum.CameraOffset = Vector3.zero
+            curHum.AutoRotate = true
+        end
+        Library:Notification("Shift Lock", "🔓 Nonaktif", 2)
     end
 end)
 
@@ -1189,20 +1193,26 @@ SCR:Button("💀 Fast Respawn", "Mati & balik ke posisi terakhir", function()
     end)
 end)
 
--- IY FLING LOOP
+-- IY FLING & SOFT FLING LOOP
 task.spawn(function()
     while true do
-        if State.Fling.active and getRoot() then
+        if (State.Fling.active or State.SoftFling.active) and getRoot() then
             local r = getRoot()
+            local isBrutal = State.Fling.active
+            local pwr = isBrutal and State.Fling.power or State.SoftFling.power
             local ok = pcall(function()
-                r.AssemblyAngularVelocity = Vector3.new(0, State.Fling.power, 0)
-                r.AssemblyLinearVelocity  = Vector3.new(State.Fling.power, State.Fling.power, State.Fling.power)
+                r.AssemblyAngularVelocity = Vector3.new(0, pwr, 0)
+                if isBrutal then
+                    r.AssemblyLinearVelocity  = Vector3.new(pwr, pwr, pwr)
+                end
             end)
             if not ok then
                 -- fallback legacy
                 pcall(function()
-                    r.RotVelocity = Vector3.new(0, State.Fling.power, 0)
-                    r.Velocity    = Vector3.new(State.Fling.power, State.Fling.power, State.Fling.power)
+                    r.RotVelocity = Vector3.new(0, pwr, 0)
+                    if isBrutal then
+                        r.Velocity    = Vector3.new(pwr, pwr, pwr)
+                    end
                 end)
             end
         end
@@ -1212,7 +1222,7 @@ end)
 
 -- NOCLIP LOOP
 RS.Stepped:Connect(function()
-    if (State.Move.ncp or State.Fling.active) and LP.Character then
+    if (State.Move.ncp or State.Fling.active or State.SoftFling.active) and LP.Character then
         for _, v in pairs(LP.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
     end
 end)
