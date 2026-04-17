@@ -463,23 +463,6 @@ local PLPage1 = T_PL:Page("Movement", "zap")
 local PLM = PLPage1:Section("⚡ Movement", "Left")
 local PLH = PLPage1:Section("🚀 Abilities", "Right")
 
--- Fix Refresh POV: pcall + sequence reset
-PLM:Button("🔄 Refresh POV", "Reset kamera & karakter", function()
-    local r = getRoot()
-    local h = getHum()
-    if not r or not h then
-        Library:Notification("Refresh", "❌ Karakter tidak ditemukan!", 2)
-        return
-    end
-    Cam.CameraType = Enum.CameraType.Custom
-    task.wait(0.05)
-    Cam.CameraType = Enum.CameraType.Scriptable
-    task.wait(0.05)
-    Cam.CameraType = Enum.CameraType.Custom
-    pcall(function() h:ChangeState(Enum.HumanoidStateType.GettingUp) end)
-    Library:Notification("✅ Refresh", "POV & kamera sudah di-reset!", 2)
-end)
-
 PLM:Slider("🏃 WalkSpeed", "ws", 16, 500, 16, function(v)
     State.Move.ws = v
     if getHum() then getHum().WalkSpeed = v end
@@ -630,9 +613,6 @@ local CIPage1 = T_CI:Page("Freecam", "video")
 local CIM   = CIPage1:Section("🎬 Freecam", "Left")
 local CIW   = CIPage1:Section("📱 Display", "Right")
 
--- Simpan transparency karakter saat freecam aktif
-local fcInvisSaved = {}
-
 CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", function(v)
     FC.active = v
     State.Cinema.active = v
@@ -646,7 +626,7 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
         FC._keys    = {}
         FC._mouseRotate = false
 
-        -- ── FREEZE KARAKTER (3 lapis) ──────────────────────────
+        -- ── FREEZE KARAKTER ────────────────────────────────────
         local hrp = getRoot()
         local hum = getHum()
         if hrp then
@@ -659,18 +639,6 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
             hum:ChangeState(Enum.HumanoidStateType.Physics)
         end
 
-        -- ── SEMBUNYIKAN KARAKTER ───────────────────────────────
-        fcInvisSaved = {}
-        local char = LP.Character
-        if char then
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    fcInvisSaved[part] = part.Transparency
-                    part.Transparency = 1
-                end
-            end
-        end
-
         startFCCapture()
         startFCLoop()
         Library:Notification("Freecam", "ON — Kiri gerak | Kanan rotate", 3)
@@ -679,16 +647,11 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
         stopFCCapture()
 
         -- ── RESTORE KARAKTER ───────────────────────────────────
-        for part, t in pairs(fcInvisSaved) do
-            if part and part.Parent then part.Transparency = t end
-        end
-        fcInvisSaved = {}
-
         local hrp = getRoot()
         local hum = getHum()
         if hrp then
             hrp.Anchored = false
-            -- Kembalikan karakter ke posisi sebelum freecam ON (bukan posisi kamera)
+            -- Kembalikan karakter ke posisi sebelum freecam ON
             if FC.savedCharCFrame then
                 hrp.CFrame = FC.savedCharCFrame
                 FC.savedCharCFrame = nil
@@ -702,7 +665,7 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
 
         Cam.FieldOfView = 70
         Cam.CameraType  = Enum.CameraType.Custom
-        Library:Notification("Freecam", "OFF — Balik ke posisi kamera", 3)
+        Library:Notification("Freecam", "OFF — Balik ke posisi karakter", 3)
     end
 end)
 
@@ -757,7 +720,7 @@ CIFine:Slider("📊 Grafik Level","ftgfx",     1,   10,  5,    function(v) pcall
 local T_SP = Win:Tab("Spectate", "eye")
 local SPP  = T_SP:Page("Viewer", "eye")
 local SPS  = SPP:Section("👁️ Spectate Player", "Left")
-local SPF  = SPP:Section("🔍 FOV Zoom", "Right")
+local SPF  = SPP:Section("🔍 Camera / Zoom", "Right")
 
 -- Helper cek area joystick (dipakai spectate touch)
 local function inJoystickArea(pos)
@@ -973,76 +936,21 @@ SPS:Slider("Jarak Orbit", "specdist", 3, 30, 8, function(v)
     Spec.dist = v
 end)
 
--- ── ESP PLAYER ──────────────────────────────────────────────
-local function clearESP()
-    for _, v in pairs(State.ESP.cache) do
-        if v.hl then v.hl:Destroy() end
-        if v.bg then v.bg:Destroy() end
+-- Fix Refresh POV (Kembalikan Camera Reset ke sini)
+SPF:Button("🔄 Refresh POV Camera", "Reset bug kamera/karakter", function()
+    local r = getRoot()
+    local h = getHum()
+    if not r or not h then
+        Library:Notification("Refresh", "❌ Karakter tidak ditemukan!", 2)
+        return
     end
-    State.ESP.cache = {}
-end
-
-local function updateESP()
-    if not State.ESP.active then return end
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            local char = p.Character
-            if not State.ESP.cache[p] then State.ESP.cache[p] = {} end
-            local cache = State.ESP.cache[p]
-
-            if not cache.hl or cache.hl.Parent ~= char then
-                if cache.hl then cache.hl:Destroy() end
-                local h = Instance.new("Highlight")
-                h.Parent = char
-                h.FillColor = Color3.fromRGB(255, 0, 0)
-                h.OutlineColor = Color3.fromRGB(255, 255, 255)
-                h.FillTransparency = 0.5
-                h.OutlineTransparency = 0
-                h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                cache.hl = h
-            end
-            
-            if not cache.bg or cache.bg.Parent ~= char:FindFirstChild("Head") then
-                if cache.bg then cache.bg:Destroy() end
-                local head = char:FindFirstChild("Head")
-                if head then
-                    local bg = Instance.new("BillboardGui")
-                    bg.Parent = head
-                    bg.AlwaysOnTop = true
-                    bg.Size = UDim2.new(0, 100, 0, 50)
-                    bg.StudsOffset = Vector3.new(0, 2, 0)
-                    
-                    local txt = Instance.new("TextLabel")
-                    txt.Parent = bg
-                    txt.BackgroundTransparency = 1
-                    txt.Size = UDim2.new(1, 0, 1, 0)
-                    txt.Text = p.DisplayName
-                    txt.TextColor3 = Color3.fromRGB(255, 0, 0)
-                    txt.TextStrokeTransparency = 0
-                    txt.TextScaled = true
-                    
-                    cache.bg = bg
-                end
-            end
-        end
-    end
-end
-
-Players.PlayerRemoving:Connect(function(p)
-    if State.ESP.cache[p] then
-        if State.ESP.cache[p].hl then State.ESP.cache[p].hl:Destroy() end
-        if State.ESP.cache[p].bg then State.ESP.cache[p].bg:Destroy() end
-        State.ESP.cache[p] = nil
-    end
-end)
-
-RS.RenderStepped:Connect(function()
-    if State.ESP.active then updateESP() end
-end)
-
-SPS:Toggle("🔴 ESP Player", "esp", false, "Lihat player tembus dinding", function(v)
-    State.ESP.active = v
-    if not v then clearESP() end
+    Cam.CameraType = Enum.CameraType.Custom
+    task.wait(0.05)
+    Cam.CameraType = Enum.CameraType.Scriptable
+    task.wait(0.05)
+    Cam.CameraType = Enum.CameraType.Custom
+    pcall(function() h:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+    Library:Notification("✅ Refresh", "Kamera sudah di-reset normal!", 2)
 end)
 
 -- FOV Zoom — tombol +/- lebih mudah disentuh di mobile
@@ -1178,27 +1086,6 @@ local function setGfx(level)
     end
 end
 
-WOG:Button("🚀 Max FPS (999)", "Unlock frame rate", function()
-    if setfpscap then
-        setfpscap(999)
-        Library:Notification("FPS", "FPS Cap diatur ke 999!", 2)
-    else
-        Library:Notification("FPS", "Executor tidak support setfpscap!", 2)
-    end
-end)
-
-WOG:Button("🗑️ Anti Lag", "Hapus tekstur agar ringan", function()
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") then
-            v.Material = Enum.Material.SmoothPlastic
-        elseif v:IsA("Texture") or v:IsA("Decal") then
-            v:Destroy()
-        end
-    end
-    Lighting.GlobalShadows = false
-    Library:Notification("Anti Lag", "Tekstur & shadow dihapus!", 2)
-end)
-
 WOG:Button("🥔 Potato (Level 1)", "Paling hemat", function()
     setGfx(Enum.QualityLevel.Level01)
     Library:Notification("Graphics", "🥔 Potato — Level 1", 2)
@@ -1245,11 +1132,13 @@ end)
 
 -- --- TAB 6: SECURITY ---
 local T_SC  = Win:Tab("Security", "shield")
+
+-- PAGE 1: GUARD (Protection & Respawn)
 local SCPage = T_SC:Page("Guard", "shield")
 local SCP   = SCPage:Section("🛡️ Protection", "Left")
 local SCR   = SCPage:Section("💀 Respawn", "Right")
 
-SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
+SCP:Toggle("Anti-AFK", "afk", false, "Cegah kick diam", function(v)
     if v then
         State.Security.afkConn = LP.Idled:Connect(function()
             VirtualUser:CaptureController()
@@ -1259,7 +1148,80 @@ SCP:Toggle("Anti-AFK", "afk", false, "", function(v)
         if State.Security.afkConn then State.Security.afkConn:Disconnect() end
     end
 end)
-SCP:Button("🔄 Rejoin Server", "", function()
+
+-- ── ESP PLAYER (Pindah ke Security) ──
+local function clearESP()
+    for _, v in pairs(State.ESP.cache) do
+        if v.hl then v.hl:Destroy() end
+        if v.bg then v.bg:Destroy() end
+    end
+    State.ESP.cache = {}
+end
+
+local function updateESP()
+    if not State.ESP.active then return end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local char = p.Character
+            if not State.ESP.cache[p] then State.ESP.cache[p] = {} end
+            local cache = State.ESP.cache[p]
+
+            if not cache.hl or cache.hl.Parent ~= char then
+                if cache.hl then cache.hl:Destroy() end
+                local h = Instance.new("Highlight")
+                h.Parent = char
+                h.FillColor = Color3.fromRGB(255, 0, 0)
+                h.OutlineColor = Color3.fromRGB(255, 255, 255)
+                h.FillTransparency = 0.5
+                h.OutlineTransparency = 0
+                h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                cache.hl = h
+            end
+            
+            if not cache.bg or cache.bg.Parent ~= char:FindFirstChild("Head") then
+                if cache.bg then cache.bg:Destroy() end
+                local head = char:FindFirstChild("Head")
+                if head then
+                    local bg = Instance.new("BillboardGui")
+                    bg.Parent = head
+                    bg.AlwaysOnTop = true
+                    bg.Size = UDim2.new(0, 100, 0, 50)
+                    bg.StudsOffset = Vector3.new(0, 2, 0)
+                    
+                    local txt = Instance.new("TextLabel")
+                    txt.Parent = bg
+                    txt.BackgroundTransparency = 1
+                    txt.Size = UDim2.new(1, 0, 1, 0)
+                    txt.Text = p.DisplayName
+                    txt.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    txt.TextStrokeTransparency = 0
+                    txt.TextScaled = true
+                    
+                    cache.bg = bg
+                end
+            end
+        end
+    end
+end
+
+Players.PlayerRemoving:Connect(function(p)
+    if State.ESP.cache[p] then
+        if State.ESP.cache[p].hl then State.ESP.cache[p].hl:Destroy() end
+        if State.ESP.cache[p].bg then State.ESP.cache[p].bg:Destroy() end
+        State.ESP.cache[p] = nil
+    end
+end)
+
+RS.RenderStepped:Connect(function()
+    if State.ESP.active then updateESP() end
+end)
+
+SCP:Toggle("🔴 ESP Player", "esp", false, "Tembus pandang target", function(v)
+    State.ESP.active = v
+    if not v then clearESP() end
+end)
+
+SCP:Button("🔄 Rejoin Server", "Masuk ulang", function()
     TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
 end)
 
@@ -1301,6 +1263,70 @@ SCR:Button("💀 Fast Respawn", "Mati & balik ke posisi terakhir", function()
         end
     end)
 end)
+
+-- PAGE 2: PERFORMANCE (FPS & Anti Lag)
+local SCPerf = T_SC:Page("Performance", "zap")
+local SCFPS  = SCPerf:Section("🚀 FPS Cap", "Left")
+local SCLAG  = SCPerf:Section("🗑️ Anti Lag", "Right")
+
+SCFPS:Button("🚀 60 FPS", "Standard", function()
+    if setfpscap then setfpscap(60); Library:Notification("FPS", "Cap: 60 FPS", 2) else Library:Notification("Error", "Executor tidak support setfpscap!", 2) end
+end)
+SCFPS:Button("🚀 90 FPS", "Smooth", function()
+    if setfpscap then setfpscap(90); Library:Notification("FPS", "Cap: 90 FPS", 2) else Library:Notification("Error", "Executor tidak support setfpscap!", 2) end
+end)
+SCFPS:Button("🚀 120 FPS", "Pro Player", function()
+    if setfpscap then setfpscap(120); Library:Notification("FPS", "Cap: 120 FPS", 2) else Library:Notification("Error", "Executor tidak support setfpscap!", 2) end
+end)
+SCFPS:Button("🚀 Max FPS (999)", "Unlock", function()
+    if setfpscap then setfpscap(999); Library:Notification("FPS", "FPS Terbuka Maksimal (999)", 2) else Library:Notification("Error", "Executor tidak support setfpscap!", 2) end
+end)
+SCFPS:Button("🔄 Reset FPS", "Balik Normal", function()
+    if setfpscap then setfpscap(0); Library:Notification("FPS", "Reset ke Default Roblox", 2) else Library:Notification("Error", "Executor tidak support setfpscap!", 2) end
+end)
+
+-- Anti Lag dengan sistem Restore Cache (Bisa di reset)
+local AntiLagState = {
+    materials = {},
+    textures = {},
+    shadows = true
+}
+
+SCLAG:Toggle("🗑️ Anti Lag Mode", "antilag", false, "Hapus tekstur", function(v)
+    if v then
+        AntiLagState.shadows = Lighting.GlobalShadows
+        Lighting.GlobalShadows = false
+        
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                AntiLagState.materials[obj] = obj.Material
+                obj.Material = Enum.Material.SmoothPlastic
+            elseif obj:IsA("Texture") or obj:IsA("Decal") then
+                AntiLagState.textures[obj] = obj.Parent
+                obj.Parent = nil
+            end
+        end
+        Library:Notification("Anti Lag", "🚀 Aktif! Tekstur & Shadow dihilangkan.", 3)
+    else
+        Lighting.GlobalShadows = AntiLagState.shadows
+        
+        for obj, mat in pairs(AntiLagState.materials) do
+            if obj and obj.Parent then
+                obj.Material = mat
+            end
+        end
+        for obj, parent in pairs(AntiLagState.textures) do
+            if obj and parent and parent.Parent then
+                obj.Parent = parent
+            end
+        end
+        
+        AntiLagState.materials = {}
+        AntiLagState.textures = {}
+        Library:Notification("Anti Lag", "🔄 Reset! Grafik kembali normal.", 3)
+    end
+end)
+
 
 -- IY FLING & SOFT FLING LOOP
 task.spawn(function()
