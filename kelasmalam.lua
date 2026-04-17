@@ -626,7 +626,7 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
         FC._keys    = {}
         FC._mouseRotate = false
 
-        -- ── FREEZE KARAKTER ────────────────────────────────────
+        -- ── FREEZE KARAKTER (Tanpa menghilangkannya) ───────────
         local hrp = getRoot()
         local hum = getHum()
         if hrp then
@@ -1138,14 +1138,34 @@ local SCPage = T_SC:Page("Guard", "shield")
 local SCP   = SCPage:Section("🛡️ Protection", "Left")
 local SCR   = SCPage:Section("💀 Respawn", "Right")
 
-SCP:Toggle("Anti-AFK", "afk", false, "Cegah kick diam", function(v)
+SCP:Toggle("Anti-AFK", "afk", false, "Cegah kick diam (Bypass)", function(v)
     if v then
+        -- Fallback VirtualUser
         State.Security.afkConn = LP.Idled:Connect(function()
             VirtualUser:CaptureController()
             VirtualUser:ClickButton2(Vector2.new())
+            VirtualUser:Button2Down(Vector2.new(0,0), Cam.CFrame)
+            task.wait(1)
+            VirtualUser:Button2Up(Vector2.new(0,0), Cam.CFrame)
         end)
+        -- Primary Bypass
+        pcall(function()
+            for _, conn in pairs(getconnections(LP.Idled)) do
+                conn:Disable()
+            end
+        end)
+        Library:Notification("Anti-AFK", "🛡️ Bypass aktif, aman AFK lama!", 2)
     else
-        if State.Security.afkConn then State.Security.afkConn:Disconnect() end
+        if State.Security.afkConn then 
+            State.Security.afkConn:Disconnect() 
+            State.Security.afkConn = nil
+        end
+        pcall(function()
+            for _, conn in pairs(getconnections(LP.Idled)) do
+                conn:Enable()
+            end
+        end)
+        Library:Notification("Anti-AFK", "❌ Bypass mati", 2)
     end
 end)
 
