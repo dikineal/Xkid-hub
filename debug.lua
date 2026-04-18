@@ -1,17 +1,18 @@
 --[[
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║    ✦  X K I D     H U B  ✦   FINAL WINDUI UPDATE            ║
+║    ✦  X K I D     H U B  ✦   WINDUI FINAL STABLE            ║
 ║                                                              ║
-║   ✅ WindUI Template Asli (Profil, Settings, Acrylic Aman)   ║
-║   ✅ ESP Highlight Only (Tanpa Teks/Nama)                    ║
+║   ✅ WindUI 100% Fix (No Blank/Empty Tabs)                   ║
+║   ✅ ESP Highlight Only (Clean, No Text)                     ║
 ║   ✅ Smooth Freecam & Native Fly                             ║
-║   ✅ No Crash / Blank Black Screen                           ║
+║   ✅ Auto Suspect Detection (Anti-Glitcher)                  ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 ]]
 
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
 local Players = game:GetService("Players")
 local RS = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -65,7 +66,7 @@ LP.CharacterAdded:Connect(function(char)
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- ESP HIGHLIGHT ONLY (ANTI-GLITCHER)
+-- ESP PURE HIGHLIGHT (NO TEXT/NAME)
 -- ═══════════════════════════════════════════════════════════
 
 local function isSuspectPlayer(player)
@@ -414,58 +415,53 @@ end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec"); specLoop = nil end
 
 -- ═══════════════════════════════════════════════════════════
--- WINDOW CREATION (WINDUI TEMPLATE)
+-- WINDOW CREATION (WINDUI TEMPLATE ASLI)
 -- ═══════════════════════════════════════════════════════════
 
 local Window = WindUI:CreateWindow({
     Title   = "✦ XKID HUB ✦",
     Author  = "by XKIDB4D",
     Folder  = "xkid_hub_v4",
-    Icon    = "paint-bucket",
+    Icon    = "house",
     Theme   = "Dark",
-    Acrylic = true,
-    Transparent = true,
     Size    = UDim2.fromOffset(680, 460),
     MinSize = Vector2.new(560, 350),
     MaxSize = Vector2.new(850, 560),
+
     ToggleKey  = Enum.KeyCode.RightShift,
     Resizable  = true,
     AutoScale  = true,
     NewElements = true,
+
     HideSearchBar = false,
     ScrollBarEnabled = false,
     SideBarWidth = 200,
+
     Topbar = {
         Height      = 44,
-        ButtonsType = "Default",
+        ButtonsType = "Mac",
     },
+
     OpenButton = {
-        Title = "My Hub",
-        Icon = "zap",
-        CornerRadius = UDim.new(1, 0),
-        StrokeThickness = 3,
-        Enabled = true,
+        Title    = "Open Hub",
+        Enabled  = true,
         Draggable = true,
-        OnlyMobile = false,
-        Scale = 1,
-        Color = ColorSequence.new(
-            Color3.fromHex("#000000"),
-            Color3.fromHex("#000000")
-        ),
     },
+
     User = {
         Enabled  = true,
         Anonymous = false,
         Callback = function()
-            print("user panel clicked")
+            print("User panel clicked")
         end,
     },
 })
 
--- ==================== TAB: MAIN / TELEPORT ====================
+-- ==================== TAB: TELEPORT ====================
 local MainTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 
-MainTab:TextBox({
+-- Menggunakan :Input() bukan TextBox agar tidak error
+MainTab:Input({
     Title = "Search Player (2-3 Huruf)",
     Callback = function(v) State.Teleport.selectedTarget = v end
 })
@@ -737,16 +733,22 @@ ThemeTab:Dropdown({
     Callback = function(selected) WindUI:SetTheme(selected) end,
 })
 
+-- Handle Toggle Acrylic di WindUI versi baru
 ThemeTab:Toggle({
     Title = "Acrylic Mode",
-    Value = WindUI.Window.Acrylic,
-    Callback = function() WindUI:ToggleAcrylic(not WindUI.Window.Acrylic) end,
+    Value = true,
+    Callback = function(state) 
+        pcall(function() WindUI:ToggleAcrylic(state) end) 
+    end,
 })
 
+-- Handle Transparansi di WindUI versi baru
 ThemeTab:Toggle({
     Title = "Transparent Background",
-    Value = WindUI:GetTransparency(),
-    Callback = function(state) Window:ToggleTransparency(state) end
+    Value = true,
+    Callback = function(state) 
+        pcall(function() Window:ToggleTransparency(state) end) 
+    end
 })
 
 local currentKey = Enum.KeyCode.RightShift
@@ -755,11 +757,16 @@ ThemeTab:Keybind({
     Value = currentKey,
     Callback = function(v)
         currentKey = (typeof(v) == "EnumItem") and v or Enum.KeyCode[v]
-        Window:SetToggleKey(currentKey)
+        pcall(function() Window:SetToggleKey(currentKey) end)
     end,
 })
 
-UIS.InputBegan:Connect(function(input) if input.KeyCode == currentKey then Window:Toggle() end end)
+-- Handle toggle via UIS fallback jika SetToggleKey gagal
+UIS.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == currentKey then 
+        pcall(function() Window:Toggle() end) 
+    end 
+end)
 
 -- ═══════════════════════════════════════════════════════════
 -- BACKGROUND LOOPS (FLING & NOCLIP)
@@ -783,4 +790,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-WindUI:Notify({Title = "PlayerHub", Content = "Welcome to XKID HUB!", Duration = 5})
+WindUI:Notify({Title = "✦ XKID HUB ✦", Content = "Welcome back, XKIDB4D!", Duration = 5})
