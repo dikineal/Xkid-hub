@@ -68,6 +68,7 @@ local State = {
         boxColor_S      = Color3.fromRGB(255, 0, 100),
         tracerColor_N   = Color3.fromRGB(0, 200, 255),
         tracerColor_S   = Color3.fromRGB(255, 50, 50),
+        nameColor       = Color3.fromRGB(255, 255, 255), -- [REVISI]: Variabel baru untuk warna nama
     },
 }
 
@@ -102,13 +103,18 @@ local function findPlayerByDisplay(str)
     end
     return nil
 end
+
+-- [REVISI]: Fix Bug Beda Map (Robust Root Matcher)
 local function getCharRoot(char)
     if not char then return nil end
-    return char.PrimaryPart
-        or char:FindFirstChild("HumanoidRootPart")
+    return char:FindFirstChild("HumanoidRootPart")
+        or char.PrimaryPart
+        or char:FindFirstChild("Head")
         or char:FindFirstChild("Torso")
         or char:FindFirstChild("UpperTorso")
+        or char:FindFirstChildWhichIsA("BasePart") -- Fallback mutlak jika custom rig aneh
 end
+
 local function notify(title, content, dur)
     WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 })
 end
@@ -279,7 +285,7 @@ local function renderESP(player)
         if on then
             local lbl = Instance.new("TextLabel")
             lbl.BackgroundTransparency = 1
-            lbl.TextColor3             = boxColor
+            lbl.TextColor3             = suspect and State.ESP.boxColor_S or State.ESP.nameColor -- [REVISI]: Menggunakan State.ESP.nameColor
             lbl.TextStrokeColor3       = Color3.new(0, 0, 0)
             lbl.TextStrokeTransparency = 0.4
             lbl.Font                   = Enum.Font.GothamBold
@@ -589,6 +595,7 @@ local Window = WindUI:CreateWindow({
     },
 })
 
+-- [Sisa UI Tabs: Teleport, Player, Cinematic, Spectate, World tetap sama tanpa perubahan...]
 -- ══════════════════════════════════════════════════════════════
 --  TAB: TELEPORT
 -- ══════════════════════════════════════════════════════════════
@@ -1282,7 +1289,7 @@ secESP:Dropdown({
     Callback = function(v) State.ESP.tracerMode=v end,
 })
 secESP:Dropdown({
-    Title    = "ESP Color",
+    Title    = "ESP Box Color",
     Desc     = "Warna ESP normal",
     Values   = {"Green","Red","Blue","White","Yellow","Purple"},
     Value    = "Green",
@@ -1297,6 +1304,24 @@ secESP:Dropdown({
         notify("ESP Color","Warna: "..v, 2)
     end,
 })
+
+-- [REVISI]: Penambahan opsi UI khusus untuk Warna Text/Name ESP
+secESP:Dropdown({
+    Title    = "Text / Name Color",
+    Desc     = "Warna untuk Nama & Jarak Player",
+    Values   = {"White","Green","Red","Blue","Yellow","Purple"},
+    Value    = "White",
+    Callback = function(v)
+        local colors = {
+            White=Color3.fromRGB(255,255,255), Green=Color3.fromRGB(0,255,150),
+            Red=Color3.fromRGB(255,50,50),     Blue=Color3.fromRGB(0,150,255),
+            Yellow=Color3.fromRGB(255,255,0),  Purple=Color3.fromRGB(150,0,255),
+        }
+        State.ESP.nameColor = colors[v] or colors.White
+        notify("Text Color","Warna Text: "..v, 2)
+    end,
+})
+
 secESP:Toggle({ Title="Show Distance", Desc="Tampilkan jarak ke player", Value=true,  Callback=function(v) State.ESP.showDistance=v end })
 secESP:Toggle({ Title="Show Name",     Desc="Tampilkan nama player",     Value=true,  Callback=function(v) State.ESP.showNickname=v end })
 secESP:Slider({ Title="Draw Distance", Desc="Jarak maksimal ESP", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
@@ -1368,8 +1393,9 @@ task.spawn(function()
             for _,s in ipairs(fpsSamples) do avg=avg+s end
             avg = avg / #fpsSamples
             local fps = math.floor(1/avg)
-            local bar, pct = "", math.clamp(fps/120,0,1)
+            local bar, pct = math.clamp(fps/120,0,1)
             local filled = math.floor(pct*10)
+            bar = ""
             for i=1,10 do bar=bar..(i<=filled and "█" or "░") end
             local color = fps>=60 and "🟢" or fps>=30 and "🟡" or "🔴"
             if fpsLabel then
