@@ -1,12 +1,12 @@
 --[[
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║    ✦  X K I D     H U B  ✦   FINAL WIND-UI UPDATE           ║
+║    ✦  X K I D     H U B  ✦   FINAL WINDUI UPDATE            ║
 ║                                                              ║
-║   ✅ UI Modern (WindUI) Acrylic & Smooth                     ║
-║   ✅ Modern ESP (Corner/Box) + BillboardGui Name (FIXED)     ║
-║   ✅ Smooth Freecam (Damping + Velocity)                     ║
-║   ✅ Auto Suspect Detection (Anti-Glitcher)                  ║
+║   ✅ WindUI Template Asli (Profil, Settings, Acrylic Aman)   ║
+║   ✅ ESP Highlight Only (Tanpa Teks/Nama)                    ║
+║   ✅ Smooth Freecam & Native Fly                             ║
+║   ✅ No Crash / Blank Black Screen                           ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 ]]
@@ -24,25 +24,17 @@ local Cam = workspace.CurrentCamera
 -- Global State
 local State = {
     Move = {ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60},
-    Fly = {active = false, bv = nil, bg = nil},
+    Fly = {active = false, bv = nil, bg = nil, _keys = {}},
     Fling = {active = false, power = 1000000},
     SoftFling = {active = false, power = 4000},
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil},
-    Cinema = {active = false, speed = 1, fov = 70, lastPos = nil},
     Spectate = {hideName = false},
     ESP = {
         active = false, 
         cache = {},
-        boxMode = "Corner", -- Corner, 2D Box, HIGHLIGHT, OFF
-        tracerMode = "Bottom", -- Bottom, Center, Mouse, OFF
-        maxDrawDistance = 300,
-        showDistance = true,
-        showNickname = true,
-        boxColor_Normal = Color3.fromRGB(0, 255, 150),
-        boxColor_Suspect = Color3.fromRGB(255, 0, 100),
-        tracerColor_Normal = Color3.fromRGB(0, 200, 255),
-        tracerColor_Suspect = Color3.fromRGB(255, 50, 50),
+        colorNormal = Color3.fromRGB(0, 255, 150),
+        colorSuspect = Color3.fromRGB(255, 0, 100),
     }
 }
 
@@ -61,10 +53,6 @@ local function findPlayerByDisplay(str)
     for _, p in pairs(Players:GetPlayers()) do if str == p.DisplayName .. " (@" .. p.Name .. ")" then return p end end
     return nil
 end
-local function getCharRoot(char)
-    if not char then return nil end
-    return char.PrimaryPart or char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
-end
 
 -- Persistent Movement
 LP.CharacterAdded:Connect(function(char)
@@ -77,75 +65,8 @@ LP.CharacterAdded:Connect(function(char)
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- MODERN ESP ENGINE (CORNER, TRACER, BILLBOARDGUI NAME)
+-- ESP HIGHLIGHT ONLY (ANTI-GLITCHER)
 -- ═══════════════════════════════════════════════════════════
-
-local function worldToScreen(worldPos)
-    local screenPos, onScreen = Cam:WorldToScreenPoint(worldPos)
-    return Vector2.new(screenPos.X, screenPos.Y), onScreen
-end
-
-local function drawLine2D(p1, p2, thickness, color)
-    local distance = (p1 - p2).Magnitude
-    if distance == 0 then return nil end
-    local direction = (p2 - p1).Unit
-    local angle = math.atan2(direction.Y, direction.X)
-    local line = Instance.new("Frame")
-    line.Name = "ESPLine"
-    line.BackgroundColor3 = color
-    line.BorderSizePixel = 0
-    local midpoint = (p1 + p2) / 2
-    line.Position = UDim2.new(0, midpoint.X - distance / 2, 0, midpoint.Y - thickness / 2)
-    line.Size = UDim2.new(0, distance, 0, thickness)
-    line.Rotation = math.deg(angle)
-    local sg = LP.PlayerGui:FindFirstChild("XKID_ESP_GUI") or (function()
-        local sg = Instance.new("ScreenGui")
-        sg.Name = "XKID_ESP_GUI"
-        sg.ResetOnSpawn = false
-        sg.Parent = LP.PlayerGui
-        return sg
-    end)()
-    line.Parent = sg
-    return line
-end
-
-local function drawBox2D(hrp, color, thickness, isCorner)
-    if not hrp then return {} end
-    local topPos = hrp.Position + Vector3.new(0, 2.5, 0)
-    local botPos = hrp.Position - Vector3.new(0, 3, 0)
-    local topScreen, topOn = worldToScreen(topPos)
-    local botScreen, botOn = worldToScreen(botPos)
-    if not topOn and not botOn then return {} end
-    
-    local height = math.abs(botScreen.Y - topScreen.Y)
-    local width = height * 0.6
-    local tl = Vector2.new(botScreen.X - width/2, topScreen.Y)
-    local tr = Vector2.new(botScreen.X + width/2, topScreen.Y)
-    local bl = Vector2.new(botScreen.X - width/2, botScreen.Y)
-    local br = Vector2.new(botScreen.X + width/2, botScreen.Y)
-    
-    local lines = {}
-    if isCorner then
-        local len = width / 3.5
-        table.insert(lines, drawLine2D(tl, tl + Vector2.new(len, 0), thickness, color))
-        table.insert(lines, drawLine2D(tl, tl + Vector2.new(0, len), thickness, color))
-        table.insert(lines, drawLine2D(tr, tr - Vector2.new(len, 0), thickness, color))
-        table.insert(lines, drawLine2D(tr, tr + Vector2.new(0, len), thickness, color))
-        table.insert(lines, drawLine2D(bl, bl + Vector2.new(len, 0), thickness, color))
-        table.insert(lines, drawLine2D(bl, bl - Vector2.new(0, len), thickness, color))
-        table.insert(lines, drawLine2D(br, br - Vector2.new(len, 0), thickness, color))
-        table.insert(lines, drawLine2D(br, br - Vector2.new(0, len), thickness, color))
-    else
-        table.insert(lines, drawLine2D(tl, tr, thickness, color))
-        table.insert(lines, drawLine2D(tr, br, thickness, color))
-        table.insert(lines, drawLine2D(br, bl, thickness, color))
-        table.insert(lines, drawLine2D(bl, tl, thickness, color))
-    end
-    
-    local res = {}
-    for _, l in ipairs(lines) do if l then table.insert(res, l) end end
-    return res
-end
 
 local function isSuspectPlayer(player)
     local char = player.Character
@@ -160,155 +81,55 @@ local function isSuspectPlayer(player)
     return false
 end
 
-local function renderESP(player)
-    if not State.ESP.active or player == LP then return end
-    local char = player.Character
-    if not char then return end
-    local hrp = getCharRoot(char)
-    if not hrp then return end
-    
-    local lpRoot = getCharRoot(LP.Character)
-    if lpRoot and (lpRoot.Position - hrp.Position).Magnitude > State.ESP.maxDrawDistance then
-        -- Hide BillboardGui jika diluar jarak
-        if State.ESP.cache[player] and State.ESP.cache[player].bg then
-            State.ESP.cache[player].bg.Enabled = false
-        end
-        return
+local function clearESP()
+    for _, cache in pairs(State.ESP.cache) do
+        if cache.highlight then cache.highlight:Destroy() end
     end
-    
-    local isSuspect = isSuspectPlayer(player)
-    local boxColor = isSuspect and State.ESP.boxColor_Suspect or State.ESP.boxColor_Normal
-    local tracerColor = isSuspect and State.ESP.tracerColor_Suspect or State.ESP.tracerColor_Normal
-    
-    if not State.ESP.cache[player] then
-        State.ESP.cache[player] = {renders = {}, highlight = nil, bg = nil}
-    end
-    
-    local cache = State.ESP.cache[player]
-    -- Clear 2D renders from last frame
-    for _, render in pairs(cache.renders) do
-        if render and render.Parent then render:Destroy() end
-    end
-    cache.renders = {}
-    
-    -- 1. Box / Highlight Rendering
-    if State.ESP.boxMode == "Corner" or State.ESP.boxMode == "2D Box" then
-        if cache.highlight then cache.highlight.Enabled = false end
-        local isCorner = (State.ESP.boxMode == "Corner")
-        local lines = drawBox2D(hrp, boxColor, 1.5, isCorner)
-        for _, l in ipairs(lines) do table.insert(cache.renders, l) end
-        
-    elseif State.ESP.boxMode == "HIGHLIGHT" then
-        if not cache.highlight or cache.highlight.Parent ~= char then
-            if cache.highlight then cache.highlight:Destroy() end
-            local hl = Instance.new("Highlight")
-            hl.Parent = char
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            cache.highlight = hl
-        end
-        cache.highlight.FillColor = boxColor
-        cache.highlight.OutlineColor = Color3.new(1, 1, 1)
-        cache.highlight.FillTransparency = 0.5
-        cache.highlight.OutlineTransparency = 0
-        cache.highlight.Enabled = true
-    else
-        if cache.highlight then cache.highlight.Enabled = false end
-    end
-    
-    -- 2. Tracer Rendering
-    if State.ESP.tracerMode ~= "OFF" then
-        local targetPos = hrp.Position - Vector3.new(0, 2.5, 0)
-        local screenPos, onScreen = worldToScreen(targetPos)
-        if onScreen then
-            local origin
-            if State.ESP.tracerMode == "Bottom" then
-                origin = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y)
-            elseif State.ESP.tracerMode == "Center" then
-                origin = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y / 2)
-            elseif State.ESP.tracerMode == "Mouse" then
-                local ms = UIS:GetMouseLocation()
-                origin = Vector2.new(ms.X, ms.Y)
-            end
-            if origin then
-                local line = drawLine2D(origin, screenPos, 1.5, tracerColor)
-                if line then table.insert(cache.renders, line) end
-            end
-        end
-    end
-    
-    -- 3. BillboardGui Info (FIXED: Lebih Stabil dari Teks 2D biasa)
-    local head = char:FindFirstChild("Head") or hrp
-    local showText = State.ESP.showNickname or State.ESP.showDistance or isSuspect
-    
-    if not cache.bg or cache.bg.Parent ~= head then
-        if cache.bg then cache.bg:Destroy() end
-        local bg = Instance.new("BillboardGui")
-        bg.Name = "XKID_ESP_Name"
-        bg.Adornee = head
-        bg.Size = UDim2.new(0, 200, 0, 50)
-        bg.StudsOffset = Vector3.new(0, 2, 0)
-        bg.AlwaysOnTop = true
-        bg.Parent = head
-        
-        local txt = Instance.new("TextLabel")
-        txt.Name = "Info"
-        txt.Parent = bg
-        txt.BackgroundTransparency = 1
-        txt.Size = UDim2.new(1, 0, 1, 0)
-        txt.Font = Enum.Font.GothamBold
-        txt.TextSize = 10
-        txt.TextColor3 = boxColor
-        txt.TextStrokeTransparency = 0.2
-        txt.TextStrokeColor3 = Color3.new(0,0,0)
-        txt.TextYAlignment = Enum.TextYAlignment.Bottom
-        txt.RichText = true
-        
-        cache.bg = bg
-    end
-    
-    if cache.bg then
-        cache.bg.Enabled = showText
-        if showText then
-            local infoText = ""
-            if State.ESP.showNickname then
-                infoText = "<b>" .. player.DisplayName .. "</b>"
-            end
-            if State.ESP.showDistance and lpRoot then
-                local dist = math.floor((lpRoot.Position - hrp.Position).Magnitude)
-                infoText = infoText .. (infoText ~= "" and "\n" or "") .. "📍 " .. dist .. "m"
-            end
-            if isSuspect then
-                infoText = infoText .. (infoText ~= "" and "\n" or "") .. "<font color='#ff0055'>⚠️ GLITCHER</font>"
+    State.ESP.cache = {}
+end
+
+local function updateESP()
+    if not State.ESP.active then return end
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local char = player.Character
+            if not State.ESP.cache[player] then State.ESP.cache[player] = {highlight = nil} end
+            local cache = State.ESP.cache[player]
+            
+            local isSuspect = isSuspectPlayer(player)
+            local color = isSuspect and State.ESP.colorSuspect or State.ESP.colorNormal
+            
+            if not cache.highlight or cache.highlight.Parent ~= char then
+                if cache.highlight then cache.highlight:Destroy() end
+                local hl = Instance.new("Highlight")
+                hl.Parent = char
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                cache.highlight = hl
             end
             
-            cache.bg.Info.Text = infoText
-            cache.bg.Info.TextColor3 = boxColor
+            cache.highlight.FillColor = color
+            cache.highlight.OutlineColor = Color3.new(1, 1, 1)
+            cache.highlight.FillTransparency = 0.5
+            cache.highlight.OutlineTransparency = 0
+            cache.highlight.Enabled = true
         end
     end
 end
 
 RS.RenderStepped:Connect(function()
-    if State.ESP.active then
-        for _, player in pairs(Players:GetPlayers()) do
-            renderESP(player)
-        end
-    end
+    if State.ESP.active then updateESP() end
 end)
 
 Players.PlayerRemoving:Connect(function(player)
     if State.ESP.cache[player] then
-        for _, render in pairs(State.ESP.cache[player].renders) do
-            if render and render.Parent then render:Destroy() end
-        end
         if State.ESP.cache[player].highlight then State.ESP.cache[player].highlight:Destroy() end
-        if State.ESP.cache[player].bg then State.ESP.cache[player].bg:Destroy() end
         State.ESP.cache[player] = nil
     end
 end)
 
--- ┌─────────────────────────────────────────────────────────┐
--- │        ➤  FLY ENGINE  (LOCK CAMERA DIRECTION)           │
--- └─────────────────────────────────────────────────────────┘
+-- ═══════════════════════════════════════════════════════════
+-- FLY ENGINE
+-- ═══════════════════════════════════════════════════════════
 
 local onMobile = not UIS.KeyboardEnabled
 local flyMoveTouch, flyMoveSt, flyJoy = nil, nil, Vector2.zero
@@ -364,8 +185,7 @@ local function toggleFly(v)
         return
     end
 
-    local hrp = getRoot()
-    local hum = getHum()
+    local hrp, hum = getRoot(), getHum()
     if not hrp or not hum then return end
 
     State.Fly.active = true
@@ -382,7 +202,6 @@ local function toggleFly(v)
         if not State.Fly.active then return end
         local r, h = getRoot(), getHum()
         if not r or not h then return end
-
         local camCF = Cam.CFrame
         local spd  = State.Move.flyS
         local move = Vector3.zero
@@ -403,19 +222,18 @@ local function toggleFly(v)
         State.Fly.bv.Velocity = move
         State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector)
     end)
-    WindUI:Notify({Title = "Fly", Content = "✈️ Fly ON — Ikut arah kamera", Duration = 3})
+    WindUI:Notify({Title = "Fly", Content = "✈️ Fly ON", Duration = 3})
 end
 
--- ┌─────────────────────────────────────────────────────────┐
--- │     ➤  FREECAM ENGINE (SMOOTH + MOBILE READY)           │
--- └─────────────────────────────────────────────────────────┘
+-- ═══════════════════════════════════════════════════════════
+-- FREECAM ENGINE
+-- ═══════════════════════════════════════════════════════════
 
 local FC = {
     active = false, pos = Vector3.zero, vel = Vector3.zero,
     pitchDeg = 0, yawDeg = 0, speed = 1, sens = 0.25,
     savedCharCFrame = nil, damping = 0.85, acceleration = 0.15,
 }
-
 local fcRotTouch, fcMoveTouch, fcMoveSt, fcRotLast = nil, nil, nil, nil
 local fcJoy = Vector2.zero
 local DEAD_X, DEAD_Y = 25, 20
@@ -503,7 +321,6 @@ local function startFCLoop()
         FC.vel = FC.vel:Lerp(desiredVel, FC.acceleration * dt * 60)
         FC.vel = FC.vel * (FC.damping ^ (dt * 60))
         FC.pos = FC.pos + FC.vel * dt
-
         Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
 
         local hrp, hum = getRoot(), getHum()
@@ -517,13 +334,92 @@ end
 
 local function stopFCLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 
--- ┌─────────────────────────────────────────────────────────┐
--- │                   ➤  WIND-UI CREATION                   │
--- └─────────────────────────────────────────────────────────┘
+-- ═══════════════════════════════════════════════════════════
+-- SPECTATE ENGINE
+-- ═══════════════════════════════════════════════════════════
+
+local Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, fpYaw = 0, fpPitch = 0 }
+local specTouchMain, specTouchPinch, specPinchDist = nil, {}, nil
+local specPanDelta = Vector2.zero
+local specConns = {}
+
+local function inJoystickArea(pos)
+    local ctrl = LP and LP.PlayerGui and LP.PlayerGui:FindFirstChild("TouchGui")
+    if ctrl then
+        local thumb = ctrl:FindFirstChild("TouchControlFrame") and ctrl.TouchControlFrame:FindFirstChild("DynamicThumbstickFrame")
+        if thumb then
+            local ap, as = thumb.AbsolutePosition, thumb.AbsoluteSize
+            if pos.X >= ap.X and pos.Y >= ap.Y and pos.X <= ap.X+as.X and pos.Y <= ap.Y+as.Y then return true end
+        end
+    end
+    return false
+end
+
+local function startSpecCapture()
+    table.insert(specConns, UIS.InputBegan:Connect(function(inp, gp)
+        if gp or not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch or inJoystickArea(inp.Position) then return end
+        table.insert(specTouchPinch, inp)
+        specTouchMain = (#specTouchPinch == 1) and inp or nil
+    end))
+    table.insert(specConns, UIS.InputChanged:Connect(function(inp)
+        if not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        if #specTouchPinch == 1 and inp == specTouchMain then
+            specPanDelta = specPanDelta + Vector2.new(inp.Delta.X, inp.Delta.Y)
+        elseif #specTouchPinch >= 2 then
+            local d = (specTouchPinch[1].Position - specTouchPinch[2].Position).Magnitude
+            if specPinchDist then
+                local diff = d - specPinchDist
+                Cam.FieldOfView = math.clamp(Cam.FieldOfView - diff * 0.15, 10, 120)
+                if Spec.mode == "third" then Spec.dist = math.clamp(Spec.dist - diff * 0.03, 3, 30) end
+            end
+            specPinchDist = d
+        end
+    end))
+    table.insert(specConns, UIS.InputEnded:Connect(function(inp)
+        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        for i, v in ipairs(specTouchPinch) do if v == inp then table.remove(specTouchPinch, i); break end end
+        specPinchDist = nil
+        specTouchMain = (#specTouchPinch == 1) and specTouchPinch[1] or nil
+    end))
+end
+
+local function stopSpecCapture()
+    for _, c in ipairs(specConns) do c:Disconnect() end
+    specConns = {}; specTouchMain = nil; specTouchPinch = {}; specPinchDist = nil; specPanDelta = Vector2.zero
+end
+
+local specLoop = nil
+local function startSpecLoop()
+    RS:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value + 1, function(dt)
+        if not Spec.active then return end
+        Cam.CameraType = Enum.CameraType.Scriptable
+        local char = Spec.target and Spec.target.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        local pan = specPanDelta; specPanDelta = Vector2.zero
+        if Spec.mode == "third" then
+            Spec.orbitYaw = Spec.orbitYaw + pan.X * 0.3
+            Spec.orbitPitch = math.clamp(Spec.orbitPitch + pan.Y * 0.3, -75, 75)
+            local orbitCF = CFrame.new(hrp.Position) * CFrame.Angles(0, math.rad(-Spec.orbitYaw), 0) * CFrame.Angles(math.rad(-Spec.orbitPitch), 0, 0) * CFrame.new(0, 0, Spec.dist)
+            Cam.CFrame = CFrame.new(orbitCF.Position, hrp.Position + Vector3.new(0, 1, 0))
+        else
+            local origin = (char:FindFirstChild("Head") and char.Head.Position) or (hrp.Position + Vector3.new(0, 1.5, 0))
+            Spec.fpYaw = Spec.fpYaw - pan.X * 0.3
+            Spec.fpPitch = math.clamp(Spec.fpPitch - pan.Y * 0.3, -85, 85)
+            Cam.CFrame = CFrame.new(origin) * CFrame.Angles(0, math.rad(Spec.fpYaw), 0) * CFrame.Angles(math.rad(Spec.fpPitch), 0, 0)
+        end
+    end)
+    specLoop = true
+end
+local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec"); specLoop = nil end
+
+-- ═══════════════════════════════════════════════════════════
+-- WINDOW CREATION (WINDUI TEMPLATE)
+-- ═══════════════════════════════════════════════════════════
 
 local Window = WindUI:CreateWindow({
     Title   = "✦ XKID HUB ✦",
-    Author  = "Final Version v4",
+    Author  = "by XKIDB4D",
     Folder  = "xkid_hub_v4",
     Icon    = "paint-bucket",
     Theme   = "Dark",
@@ -539,23 +435,43 @@ local Window = WindUI:CreateWindow({
     HideSearchBar = false,
     ScrollBarEnabled = false,
     SideBarWidth = 200,
-    Topbar = { Height = 44, ButtonsType = "Default" },
+    Topbar = {
+        Height      = 44,
+        ButtonsType = "Default",
+    },
     OpenButton = {
-        Title = "My Hub", Icon = "zap", CornerRadius = UDim.new(1, 0), StrokeThickness = 3,
-        Enabled = true, Draggable = true, OnlyMobile = false, Scale = 1,
-        Color = ColorSequence.new(Color3.fromHex("#000000"), Color3.fromHex("#000000")),
+        Title = "My Hub",
+        Icon = "zap",
+        CornerRadius = UDim.new(1, 0),
+        StrokeThickness = 3,
+        Enabled = true,
+        Draggable = true,
+        OnlyMobile = false,
+        Scale = 1,
+        Color = ColorSequence.new(
+            Color3.fromHex("#000000"),
+            Color3.fromHex("#000000")
+        ),
+    },
+    User = {
+        Enabled  = true,
+        Anonymous = false,
+        Callback = function()
+            print("user panel clicked")
+        end,
     },
 })
 
--- ==================== TAB: TELEPORT ====================
-local T_TP = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
-T_TP:Section({Title = "🎯 Smart Search"})
-T_TP:TextBox({
-    Title = "Ketik 2-3 Huruf Nama",
+-- ==================== TAB: MAIN / TELEPORT ====================
+local MainTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
+
+MainTab:TextBox({
+    Title = "Search Player (2-3 Huruf)",
     Callback = function(v) State.Teleport.selectedTarget = v end
 })
-T_TP:Button({
-    Title = "🚀 Teleport Now",
+
+MainTab:Button({
+    Title = "🚀 Teleport To Target",
     Callback = function()
         local snippet = State.Teleport.selectedTarget
         if snippet == "" then return end
@@ -569,29 +485,30 @@ T_TP:Button({
         end
     end
 })
-local pDropList = T_TP:Dropdown({
-    Title = "Manual List",
+
+local pDropList = MainTab:Dropdown({
+    Title = "Manual Player List",
     Values = getPNames(),
     Value = "",
     Callback = function(v) State.Teleport.selectedTarget = v end
 })
-T_TP:Button({
-    Title = "🔄 Refresh List",
+
+MainTab:Button({
+    Title = "🔄 Refresh Player List",
     Callback = function() pcall(function() pDropList:Refresh(getPNames()) end) end
 })
 
-T_TP:Section({Title = "💾 Locations"})
 local SavedLocs = {}
 for i = 1, 3 do
-    T_TP:Button({
-        Title = "💾 Save Position -> Slot " .. i,
+    MainTab:Button({
+        Title = "💾 Save Location to Slot " .. i,
         Callback = function()
             local r = getRoot()
             if r then SavedLocs[i] = r.CFrame; WindUI:Notify({Title="Saved", Content="Slot "..i, Duration=2}) end
         end
     })
-    T_TP:Button({
-        Title = "📍 Load Position -> Slot " .. i,
+    MainTab:Button({
+        Title = "📍 Load Location Slot " .. i,
         Callback = function()
             if SavedLocs[i] and getRoot() then getRoot().CFrame = SavedLocs[i]; WindUI:Notify({Title="Loaded", Content="Slot "..i, Duration=2}) end
         end
@@ -599,12 +516,12 @@ for i = 1, 3 do
 end
 
 -- ==================== TAB: PLAYER ====================
-local T_PL = Window:Tab({ Title = "Player", Icon = "user" })
+local PlayerTab = Window:Tab({ Title = "Player", Icon = "user" })
 
-T_PL:Section({Title = "⚡ Movement"})
-T_PL:Slider({ Title = "🏃 WalkSpeed", Min = 16, Max = 500, Value = 16, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
-T_PL:Slider({ Title = "🦘 JumpPower", Min = 50, Max = 500, Value = 50, Callback = function(v) State.Move.jp = v; local hum = getHum(); if hum then hum.UseJumpPower = true; hum.JumpPower = v end end })
-T_PL:Toggle({
+PlayerTab:Slider({ Title = "🏃 WalkSpeed", Min = 16, Max = 500, Value = 16, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
+PlayerTab:Slider({ Title = "🦘 JumpPower", Min = 50, Max = 500, Value = 50, Callback = function(v) State.Move.jp = v; local hum = getHum(); if hum then hum.UseJumpPower = true; hum.JumpPower = v end end })
+
+PlayerTab:Toggle({
     Title = "∞ Inf Jump", Value = false,
     Callback = function(v)
         if v then State.Move.infJ = UIS.JumpRequest:Connect(function() if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end end)
@@ -612,45 +529,12 @@ T_PL:Toggle({
     end
 })
 
-T_PL:Section({Title = "🚀 Abilities"})
-T_PL:Toggle({ Title = "✈️ Native Fly", Value = false, Callback = toggleFly })
-T_PL:Slider({ Title = "✈️ Fly Speed", Min = 10, Max = 300, Value = 60, Callback = function(v) State.Move.flyS = v end })
-T_PL:Toggle({ Title = "👻 NoClip", Value = false, Callback = function(v) State.Move.ncp = v end })
-T_PL:Toggle({ Title = "💥 IY Fling (Brutal)", Value = false, Callback = function(v) State.Fling.active = v; State.Move.ncp = v end })
-T_PL:Toggle({ Title = "💫 Soft Fling", Value = false, Callback = function(v) State.SoftFling.active = v; State.Move.ncp = v end })
+PlayerTab:Toggle({ Title = "✈️ Native Fly", Value = false, Callback = toggleFly })
+PlayerTab:Slider({ Title = "✈️ Fly Speed", Min = 10, Max = 300, Value = 60, Callback = function(v) State.Move.flyS = v end })
+PlayerTab:Toggle({ Title = "👻 NoClip", Value = false, Callback = function(v) State.Move.ncp = v end })
 
-local noFallConn = nil
-T_PL:Toggle({
-    Title = "🛡️ No Fall Damage", Value = false,
-    Callback = function(v)
-        if v then noFallConn = RS.Heartbeat:Connect(function() local hrp = getRoot(); if hrp and hrp.Velocity.Y < -30 then hrp.Velocity = Vector3.new(hrp.Velocity.X, -10, hrp.Velocity.Z) end end)
-        else if noFallConn then noFallConn:Disconnect(); noFallConn = nil end end
-    end
-})
-
-local godConn, godRespawn, godLastPos = nil, nil, nil
-T_PL:Toggle({
-    Title = "🛡️ God Mode (Auto Respawn)", Value = false,
-    Callback = function(v)
-        if v then
-            local hum = getHum(); if hum then hum.MaxHealth = math.huge; hum.Health = math.huge end
-            godLastPos = getRoot() and getRoot().CFrame
-            godRespawn = RS.Heartbeat:Connect(function() local r = getRoot(); if r then godLastPos = r.CFrame end end)
-            godConn = RS.Heartbeat:Connect(function() local h = getHum(); if h then if h.Health < h.MaxHealth then h.Health = h.MaxHealth end; if h.MaxHealth ~= math.huge then h.MaxHealth = math.huge end end end)
-            WindUI:Notify({Title="God Mode", Content="Aktif!", Duration=3})
-        else
-            if godConn then godConn:Disconnect(); godConn = nil end
-            if godRespawn then godRespawn:Disconnect(); godRespawn = nil end
-            local hum = getHum(); if hum then hum.MaxHealth = 100; hum.Health = 100 end
-            WindUI:Notify({Title="God Mode", Content="Nonaktif", Duration=2})
-        end
-    end
-})
--- Listener God Mode untuk auto respawn di inject di main script
-
-T_PL:Section({Title = "🎯 Lock"})
 local shiftLockConn = nil
-T_PL:Toggle({
+PlayerTab:Toggle({
     Title = "🎯 Enable Shift Lock", Value = false,
     Callback = function(v)
         local hum, hrp = getHum(), getRoot()
@@ -665,11 +549,40 @@ T_PL:Toggle({
     end
 })
 
--- ==================== TAB: CINEMATIC ====================
-local T_CI = Window:Tab({ Title = "Cinematic", Icon = "video" })
+PlayerTab:Toggle({ Title = "💥 IY Fling (Brutal)", Value = false, Callback = function(v) State.Fling.active = v; State.Move.ncp = v end })
+PlayerTab:Toggle({ Title = "💫 Soft Fling (Jatuh)", Value = false, Callback = function(v) State.SoftFling.active = v; State.Move.ncp = v end })
 
-T_CI:Section({Title = "🎬 Smooth Freecam"})
-T_CI:Toggle({
+local noFallConn = nil
+PlayerTab:Toggle({
+    Title = "🛡️ No Fall Damage", Value = false,
+    Callback = function(v)
+        if v then noFallConn = RS.Heartbeat:Connect(function() local hrp = getRoot(); if hrp and hrp.Velocity.Y < -30 then hrp.Velocity = Vector3.new(hrp.Velocity.X, -10, hrp.Velocity.Z) end end)
+        else if noFallConn then noFallConn:Disconnect(); noFallConn = nil end end
+    end
+})
+
+local godConn, godRespawn, godLastPos = nil, nil, nil
+PlayerTab:Toggle({
+    Title = "🛡️ God Mode (Auto Respawn)", Value = false,
+    Callback = function(v)
+        if v then
+            local hum = getHum(); if hum then hum.MaxHealth = math.huge; hum.Health = math.huge end
+            godLastPos = getRoot() and getRoot().CFrame
+            godRespawn = RS.Heartbeat:Connect(function() local r = getRoot(); if r then godLastPos = r.CFrame end end)
+            godConn = RS.Heartbeat:Connect(function() local h = getHum(); if h then if h.Health < h.MaxHealth then h.Health = h.MaxHealth end; if h.MaxHealth ~= math.huge then h.MaxHealth = math.huge end end end)
+            WindUI:Notify({Title="God Mode", Content="Aktif!", Duration=3})
+        else
+            if godConn then godConn:Disconnect(); godConn = nil end
+            if godRespawn then godRespawn:Disconnect(); godRespawn = nil end
+            local hum = getHum(); if hum then hum.MaxHealth = 100; hum.Health = 100 end
+        end
+    end
+})
+
+-- ==================== TAB: CINEMATIC ====================
+local CineTab = Window:Tab({ Title = "Cinematic", Icon = "video" })
+
+CineTab:Toggle({
     Title = "🎬 Freecam ON/OFF", Value = false,
     Callback = function(v)
         FC.active = v; State.Cinema.active = v
@@ -691,82 +604,81 @@ T_CI:Toggle({
         end
     end
 })
-T_CI:Slider({ Title = "⚡ Speed", Min = 1, Max = 30, Value = 5, Callback = function(v) FC.speed = v end })
-T_CI:Slider({ Title = "🎯 Sensitivity", Min = 1, Max = 20, Value = 5, Callback = function(v) FC.sens = v * 0.05 end })
-T_CI:Slider({ Title = "📊 Damping (Smoothness)", Min = 0.5, Max = 1, Value = 0.85, Callback = function(v) FC.damping = v end })
-T_CI:Slider({ Title = "⚙️ Acceleration", Min = 0.05, Max = 0.5, Value = 0.15, Callback = function(v) FC.acceleration = v end })
-T_CI:Slider({ Title = "🔍 FOV", Min = 10, Max = 120, Value = 70, Callback = function(v) Cam.FieldOfView = v end })
 
-T_CI:Section({Title = "📱 Display"})
-T_CI:Button({ Title = "📱 Screen: Portrait", Callback = function() pcall(function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end) end })
-T_CI:Button({ Title = "📺 Screen: Landscape", Callback = function() pcall(function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end) end })
+CineTab:Slider({ Title = "⚡ Freecam Speed", Min = 1, Max = 30, Value = 5, Callback = function(v) FC.speed = v end })
+CineTab:Slider({ Title = "🎯 Sensitivity", Min = 1, Max = 20, Value = 5, Callback = function(v) FC.sens = v * 0.05 end })
+CineTab:Slider({ Title = "📊 Damping (Smoothness)", Min = 0.5, Max = 1, Value = 0.85, Callback = function(v) FC.damping = v end })
+CineTab:Slider({ Title = "⚙️ Acceleration", Min = 0.05, Max = 0.5, Value = 0.15, Callback = function(v) FC.acceleration = v end })
+CineTab:Slider({ Title = "🔍 Camera FOV", Min = 10, Max = 120, Value = 70, Callback = function(v) Cam.FieldOfView = v end })
 
-T_CI:Section({Title = "🎬 Presets"})
-local function applyPreset(fov, speed, clock, bright, fogEnd, fogR, fogG, fogB, ambR, ambG, ambB, density, offset, glare, halo, gfxLevel)
-    Cam.FieldOfView = fov; FC.speed = speed; Lighting.ClockTime = clock; Lighting.Brightness = bright; Lighting.FogEnd = fogEnd
-    Lighting.FogColor = Color3.fromRGB(fogR, fogG, fogB); Lighting.Ambient = Color3.fromRGB(ambR, ambG, ambB)
-    local atm = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere", Lighting)
-    atm.Density = density; atm.Offset = offset; atm.Glare = glare; atm.Halo = halo
-    pcall(function() settings().Rendering.QualityLevel = gfxLevel end)
-end
-T_CI:Button({ Title = "☀️ Cinematic Day", Callback = function() applyPreset(50,3,14,2,10000,200,220,255,120,120,120,0.05,0.1,0.3,0.2,Enum.QualityLevel.Level10) end })
-T_CI:Button({ Title = "🌃 Night Cinematic", Callback = function() applyPreset(45,2,0,0.3,20000,10,10,30,20,20,40,0.02,0.0,0.0,0.1,Enum.QualityLevel.Level10) end })
-T_CI:Button({ Title = "🔄 Reset Semua Default", Callback = function() applyPreset(70,5,14,1,100000,191,191,191,70,70,70,0.35,0.0,0.0,0.25,Enum.QualityLevel.Level05) end })
+CineTab:Button({ Title = "📱 Screen: Portrait", Callback = function() pcall(function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.Portrait end) end })
+CineTab:Button({ Title = "📺 Screen: Landscape", Callback = function() pcall(function() LP.PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeRight end) end })
 
 -- ==================== TAB: SPECTATE ====================
-local T_SP = Window:Tab({ Title = "Spectate", Icon = "eye" })
+local SpecTab = Window:Tab({ Title = "Spectate", Icon = "eye" })
 
-T_SP:Section({Title = "👁️ Target Selection"})
-local specDrop = T_SP:Dropdown({ Title = "Pilih Target", Values = getDisplayNames(), Value = "", Callback = function(v)
-    local p = findPlayerByDisplay(v)
-    if p then Spec.target = p; if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ(); Spec.orbitYaw = math.deg(ry); Spec.orbitPitch = 20; Spec.fpYaw = math.deg(ry); Spec.fpPitch = 0 end end
-end})
-T_SP:Button({ Title = "🔄 Refresh List", Callback = function() Spec.target = nil; pcall(function() specDrop:Refresh(getDisplayNames()) end) end })
-
-T_SP:Section({Title = "⚙️ Controls"})
-T_SP:Toggle({ Title = "🙈 Hide Target Name", Value = false, Callback = function(v) State.Spectate.hideName = v end })
-T_SP:Toggle({ Title = "👁️ Spectate ON/OFF", Value = false, Callback = function(v)
-    Spec.active = v
-    if v then
-        if not Spec.target then WindUI:Notify({Title="Error", Content="Pilih target dulu!", Duration=2}); Spec.active = false; return end
-        Spec.origFov = Cam.FieldOfView; startSpecCapture(); startSpecLoop()
-        local dispName = State.Spectate.hideName and "[HIDDEN]" or Spec.target.DisplayName
-        WindUI:Notify({Title="Spectating", Content="Nonton: " .. dispName, Duration=3})
-    else
-        stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov
+local specDrop = SpecTab:Dropdown({
+    Title = "Pilih Target",
+    Values = getDisplayNames(),
+    Value = "",
+    Callback = function(v)
+        local p = findPlayerByDisplay(v)
+        if p then Spec.target = p; if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ(); Spec.orbitYaw = math.deg(ry); Spec.orbitPitch = 20; Spec.fpYaw = math.deg(ry); Spec.fpPitch = 0 end end
     end
-end})
-T_SP:Toggle({ Title = "🎥 First Person Drone", Value = false, Callback = function(v)
+})
+
+SpecTab:Button({ Title = "🔄 Refresh List Target", Callback = function() Spec.target = nil; pcall(function() specDrop:Refresh(getDisplayNames()) end) end })
+
+SpecTab:Toggle({ Title = "🙈 Hide Name in Notification", Value = false, Callback = function(v) State.Spectate.hideName = v end })
+
+SpecTab:Toggle({
+    Title = "👁️ Spectate ON/OFF", Value = false,
+    Callback = function(v)
+        Spec.active = v
+        if v then
+            if not Spec.target then WindUI:Notify({Title="Error", Content="Pilih target dulu!", Duration=2}); Spec.active = false; return end
+            Spec.origFov = Cam.FieldOfView; startSpecCapture(); startSpecLoop()
+            local dispName = State.Spectate.hideName and "[HIDDEN]" or Spec.target.DisplayName
+            WindUI:Notify({Title="Spectate", Content="Nonton: " .. dispName, Duration=3})
+        else
+            stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov
+        end
+    end
+})
+
+SpecTab:Toggle({ Title = "🎥 Mode Drone (First Person)", Value = false, Callback = function(v)
     Spec.mode = v and "first" or "third"
     if v and Spec.target and Spec.target.Character then local _, ry, _ = Cam.CFrame:ToEulerAnglesYXZ(); local rx = math.asin(Cam.CFrame.LookVector.Y); Spec.fpYaw = math.deg(ry); Spec.fpPitch = math.deg(rx) end
 end})
-T_SP:Slider({ Title = "📏 Jarak Orbit", Min = 3, Max = 30, Value = 8, Callback = function(v) Spec.dist = v end })
-T_SP:Button({ Title = "🔄 Reset POV Camera (Fix Bug)", Callback = function()
+
+SpecTab:Slider({ Title = "📏 Jarak Orbit", Min = 3, Max = 30, Value = 8, Callback = function(v) Spec.dist = v end })
+
+SpecTab:Button({ Title = "🔄 Fix POV / Reset Camera", Callback = function()
     local r, h = getRoot(), getHum()
     if not r or not h then return end
     Cam.CameraType = Enum.CameraType.Custom; task.wait(0.05); Cam.CameraType = Enum.CameraType.Scriptable; task.wait(0.05); Cam.CameraType = Enum.CameraType.Custom
     pcall(function() h:ChangeState(Enum.HumanoidStateType.GettingUp) end)
 end})
 
--- ==================== TAB: WORLD & PERFORMANCE ====================
-local T_WO = Window:Tab({ Title = "World & Perf", Icon = "globe" })
+-- ==================== TAB: WORLD & PERF ====================
+local WorldTab = Window:Tab({ Title = "World", Icon = "globe" })
 
-T_WO:Section({Title = "🌦️ Weather & Light"})
 local function setWeather(clock, bright, fogStart, fogEnd, fogR, fogG, fogB, ambR, ambG, ambB, density, offset, glare, halo)
     Lighting.ClockTime = clock; Lighting.Brightness = bright; Lighting.FogStart = fogStart; Lighting.FogEnd = fogEnd
     Lighting.FogColor = Color3.fromRGB(fogR, fogG, fogB); Lighting.Ambient = Color3.fromRGB(ambR, ambG, ambB)
     local atm = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere", Lighting)
     atm.Density = density; atm.Offset = offset; atm.Glare = glare; atm.Halo = halo
 end
-T_WO:Button({ Title = "☀️ Cerah", Callback = function() setWeather(14, 2, 1000, 10000, 200,220,255, 120,120,120, 0.05, 0.1, 0.3, 0.2) end })
-T_WO:Button({ Title = "🌃 Malam Bintang", Callback = function() setWeather(0, 0.3, 2000, 20000, 10,10,30, 20,20,40, 0.02, 0.0, 0.0, 0.1) end })
-T_WO:Slider({ Title = "🕐 ClockTime", Min = 0, Max = 24, Value = 14, Callback = function(v) Lighting.ClockTime = v end })
 
-T_WO:Section({Title = "🚀 Performance"})
-T_WO:Button({ Title = "🚀 60 FPS", Callback = function() if setfpscap then setfpscap(60) end end })
-T_WO:Button({ Title = "🚀 Max FPS (999)", Callback = function() if setfpscap then setfpscap(999) end end })
+WorldTab:Button({ Title = "☀️ Set Cuaca: Cerah", Callback = function() setWeather(14, 2, 1000, 10000, 200,220,255, 120,120,120, 0.05, 0.1, 0.3, 0.2) end })
+WorldTab:Button({ Title = "🌃 Set Cuaca: Malam", Callback = function() setWeather(0, 0.3, 2000, 20000, 10,10,30, 20,20,40, 0.02, 0.0, 0.0, 0.1) end })
+WorldTab:Slider({ Title = "🕐 Set Waktu (ClockTime)", Min = 0, Max = 24, Value = 14, Callback = function(v) Lighting.ClockTime = v end })
+
+WorldTab:Button({ Title = "🚀 Unlock FPS (999)", Callback = function() if setfpscap then setfpscap(999) end end })
+WorldTab:Button({ Title = "🚀 Default FPS (60)", Callback = function() if setfpscap then setfpscap(60) end end })
+
 local AntiLagState = { materials = {}, textures = {}, shadows = true }
-T_WO:Toggle({ Title = "🗑️ Anti Lag Mode (Delete Textures)", Value = false, Callback = function(v)
+WorldTab:Toggle({ Title = "🗑️ Anti Lag Mode (Hapus Tekstur)", Value = false, Callback = function(v)
     if v then
         AntiLagState.shadows = Lighting.GlobalShadows; Lighting.GlobalShadows = false
         for _, obj in pairs(workspace:GetDescendants()) do
@@ -782,10 +694,9 @@ T_WO:Toggle({ Title = "🗑️ Anti Lag Mode (Delete Textures)", Value = false, 
 end})
 
 -- ==================== TAB: SECURITY & ESP ====================
-local T_SC = Window:Tab({ Title = "Security & ESP", Icon = "shield" })
+local SecTab = Window:Tab({ Title = "Security", Icon = "shield" })
 
-T_SC:Section({Title = "🛡️ Protection"})
-T_SC:Toggle({ Title = "Anti-AFK (Bypass)", Value = false, Callback = function(v)
+SecTab:Toggle({ Title = "🛡️ Anti-AFK (Bypass Kick)", Value = false, Callback = function(v)
     if v then
         State.Security.afkConn = LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); VirtualUser:Button2Down(Vector2.new(0,0), Cam.CFrame); task.wait(1); VirtualUser:Button2Up(Vector2.new(0,0), Cam.CFrame) end)
         pcall(function() for _, conn in pairs(getconnections(LP.Idled)) do conn:Disable() end end)
@@ -795,54 +706,65 @@ T_SC:Toggle({ Title = "Anti-AFK (Bypass)", Value = false, Callback = function(v)
     end
 end})
 
+SecTab:Button({ Title = "🔄 Rejoin Server", Callback = function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end })
+
 local respawnLastPos = nil
 task.spawn(function() while true do task.wait(1); local r = getRoot(); local h = getHum(); if r and h and h.Health > 0 then respawnLastPos = r.CFrame end end end)
-T_SC:Button({ Title = "💀 Fast Respawn", Callback = function()
+SecTab:Button({ Title = "💀 Fast Respawn ke Posisi", Callback = function()
     if not respawnLastPos or not getHum() then return end
     local savedCF = respawnLastPos; getHum().Health = 0
     task.spawn(function() local char = LP.CharacterAdded:Wait(); task.wait(0.3); local hrp = char:WaitForChild("HumanoidRootPart", 10); if hrp then hrp.CFrame = savedCF end end)
 end})
 
-T_SC:Section({Title = "🎯 Modern ESP Tracker"})
-T_SC:Toggle({ Title = "🎬 ESP Master ON/OFF", Value = false, Callback = function(v)
+SecTab:Toggle({ Title = "🎯 ESP Highlight ON/OFF", Value = false, Callback = function(v)
     State.ESP.active = v
-    if not v then
-        for _, cache in pairs(State.ESP.cache) do
-            for _, render in pairs(cache.renders) do if render and render.Parent then render:Destroy() end end
-            if cache.highlight then cache.highlight:Destroy() end
-            if cache.bg then cache.bg:Destroy() end
-        end; State.ESP.cache = {}
-    end
+    if not v then clearESP() end
 end})
-T_SC:Dropdown({ Title = "📦 Box Mode", Values = {"Corner", "2D Box", "HIGHLIGHT", "OFF"}, Value = "Corner", Callback = function(v) State.ESP.boxMode = v end })
-T_SC:Dropdown({ Title = "🔴 Tracer Mode", Values = {"Bottom", "Center", "Mouse", "OFF"}, Value = "Bottom", Callback = function(v) State.ESP.tracerMode = v end })
-T_SC:Toggle({ Title = "📍 Show Distance", Value = true, Callback = function(v) State.ESP.showDistance = v end })
-T_SC:Toggle({ Title = "👤 Show Nickname", Value = true, Callback = function(v) State.ESP.showNickname = v end })
-T_SC:Slider({ Title = "📏 Draw Distance", Min = 50, Max = 1000, Value = 300, Callback = function(v) State.ESP.maxDrawDistance = v end })
 
-T_SC:Section({Title = "💾 ESP Presets"})
-T_SC:Button({ Title = "🕵️ Legit (Text Only)", Callback = function() State.ESP.boxMode="OFF"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=true; State.ESP.showNickname=true end })
-T_SC:Button({ Title = "🧼 Clean (Corner Only)", Callback = function() State.ESP.boxMode="Corner"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=false; State.ESP.showNickname=false end })
-T_SC:Button({ Title = "🚨 Anti-Glitcher (Highlight)", Callback = function() State.ESP.boxMode="HIGHLIGHT"; State.ESP.tracerMode="Bottom"; State.ESP.showDistance=true; State.ESP.showNickname=true end })
+SecTab:Dropdown({ Title = "🎨 Highlight Color", Values = {"Green", "Red", "Blue", "White", "Yellow", "Purple"}, Value = "Green", Callback = function(v)
+    local c = Color3.fromRGB(0, 255, 150)
+    if v == "Green" then c = Color3.fromRGB(0, 255, 150) elseif v == "Red" then c = Color3.fromRGB(255, 50, 50) elseif v == "Blue" then c = Color3.fromRGB(0, 150, 255) elseif v == "White" then c = Color3.fromRGB(255, 255, 255) elseif v == "Yellow" then c = Color3.fromRGB(255, 255, 0) elseif v == "Purple" then c = Color3.fromRGB(150, 0, 255) end
+    State.ESP.colorNormal = c
+end})
 
--- ==================== TAB: SETTINGS (WINDUI) ====================
+-- ==================== TAB: SETTINGS ====================
 local ThemeTab = Window:Tab({ Title = "Settings", Icon = "settings" })
+
 ThemeTab:Dropdown({
     Title  = "Theme",
     Values = (function() local names = {}; for name in pairs(WindUI:GetThemes()) do table.insert(names, name) end; table.sort(names); return names end)(),
     Value    = WindUI:GetCurrentTheme(),
     Callback = function(selected) WindUI:SetTheme(selected) end,
 })
-ThemeTab:Toggle({ Title = "Acrylic Glass", Value = WindUI:GetTransparency(), Callback = function() WindUI:ToggleAcrylic(not WindUI.Window.Acrylic) end })
-ThemeTab:Toggle({ Title = "Transparent Background", Value = WindUI:GetTransparency(), Callback = function(state) Window:ToggleTransparency(state) end })
+
+ThemeTab:Toggle({
+    Title = "Acrylic Mode",
+    Value = WindUI.Window.Acrylic,
+    Callback = function() WindUI:ToggleAcrylic(not WindUI.Window.Acrylic) end,
+})
+
+ThemeTab:Toggle({
+    Title = "Transparent Background",
+    Value = WindUI:GetTransparency(),
+    Callback = function(state) Window:ToggleTransparency(state) end
+})
+
 local currentKey = Enum.KeyCode.RightShift
 ThemeTab:Keybind({
-    Title = "Toggle UI Key", Value = currentKey,
-    Callback = function(v) currentKey = (typeof(v) == "EnumItem") and v or Enum.KeyCode[v]; Window:SetToggleKey(currentKey) end,
+    Title = "Toggle UI Key",
+    Value = currentKey,
+    Callback = function(v)
+        currentKey = (typeof(v) == "EnumItem") and v or Enum.KeyCode[v]
+        Window:SetToggleKey(currentKey)
+    end,
 })
+
 UIS.InputBegan:Connect(function(input) if input.KeyCode == currentKey then Window:Toggle() end end)
 
--- BACKGROUND LOOPS (Fling, Noclip)
+-- ═══════════════════════════════════════════════════════════
+-- BACKGROUND LOOPS (FLING & NOCLIP)
+-- ═══════════════════════════════════════════════════════════
+
 task.spawn(function()
     while true do
         if (State.Fling.active or State.SoftFling.active) and getRoot() then
@@ -861,4 +783,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-WindUI:Notify({Title = "✦ XKID HUB v4 ✦", Content = "Modern Update & ESP Fixed. Ready! 🚀", Duration = 5})
+WindUI:Notify({Title = "PlayerHub", Content = "Welcome to XKID HUB!", Duration = 5})
