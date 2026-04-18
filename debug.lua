@@ -6,7 +6,7 @@
 ║   ✅ Modern 3D ESP + Tracer Real-Time                        ║
 ║   ✅ Smooth Freecam (Damping + Velocity)                     ║
 ║   ✅ All Features Kept (Teleport, Player, Cinema, etc)       ║
-║   ✅ Auto Suspect Detection                                  ║
+║   ✅ Auto Suspect Detection (Glitcher/Laser Outfit Fix)      ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 ]]
@@ -74,6 +74,11 @@ local function findPlayerByDisplay(str)
     return nil
 end
 
+local function getCharRoot(char)
+    if not char then return nil end
+    return char.PrimaryPart or char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+end
+
 -- Persistent Movement
 LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
@@ -88,7 +93,7 @@ LP.CharacterAdded:Connect(function(char)
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- MODERN 3D ESP ENGINE
+-- MODERN 3D ESP ENGINE (GLITCHER DETECT V2)
 -- ═══════════════════════════════════════════════════════════
 
 local function worldToScreen(worldPos)
@@ -204,13 +209,15 @@ end
 local function isSuspectPlayer(player)
     local char = player.Character
     if not char then return false end
-    local neonCount = 0
     for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") and part.Material == Enum.Material.Neon then
-            neonCount = neonCount + 1
+        if part:IsA("BasePart") then
+            -- Deteksi outfit laser/glitch: ukuran lebih dari 15 studs
+            if part.Size.X > 15 or part.Size.Y > 15 or part.Size.Z > 15 then
+                return true
+            end
         end
     end
-    return neonCount > 5
+    return false
 end
 
 local function renderESP(player)
@@ -219,10 +226,10 @@ local function renderESP(player)
     local char = player.Character
     if not char then return end
     
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hrp = getCharRoot(char)
     if not hrp then return end
     
-    local lpRoot = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    local lpRoot = getCharRoot(LP.Character)
     if lpRoot and (lpRoot.Position - hrp.Position).Magnitude > State.ESP.maxDrawDistance then
         return
     end
@@ -232,7 +239,7 @@ local function renderESP(player)
     local tracerColor = isSuspect and State.ESP.tracerColor_Suspect or State.ESP.tracerColor_Normal
     
     if not State.ESP.cache[player] then
-        State.ESP.cache[player] = {renders = {}, tracer = {}}
+        State.ESP.cache[player] = {renders = {}, highlight = nil}
     end
     
     local cache = State.ESP.cache[player]
@@ -241,21 +248,41 @@ local function renderESP(player)
     end
     cache.renders = {}
     
-    -- Render Box / Skeleton
+    -- Render Box / Skeleton / Highlight
     if State.ESP.boxMode == "3D" then
+        if cache.highlight then cache.highlight.Enabled = false end
         local lines = draw3DBox(hrp, Vector3.new(2, 5, 2), boxColor, 2)
         for _, l in ipairs(lines) do table.insert(cache.renders, l) end
+        
     elseif State.ESP.boxMode == "SKELETON" then
+        if cache.highlight then cache.highlight.Enabled = false end
         local lines = drawSkeleton(char, boxColor, 2)
         for _, l in ipairs(lines) do table.insert(cache.renders, l) end
+        
+    elseif State.ESP.boxMode == "HIGHLIGHT" then
+        if not cache.highlight or cache.highlight.Parent ~= char then
+            if cache.highlight then cache.highlight:Destroy() end
+            local hl = Instance.new("Highlight")
+            hl.Parent = char
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            cache.highlight = hl
+        end
+        cache.highlight.FillColor = boxColor
+        cache.highlight.OutlineColor = Color3.new(1, 1, 1)
+        cache.highlight.FillTransparency = 0.5
+        cache.highlight.OutlineTransparency = 0
+        cache.highlight.Enabled = true
+        
+    else
+        if cache.highlight then cache.highlight.Enabled = false end
     end
     
     -- Render Tracer (Line)
     if State.ESP.tracerMode ~= "OFF" then
-        local targetPos = hrp.Position - Vector3.new(0, 2.5, 0) -- Target ke area kaki
+        local targetPos = hrp.Position - Vector3.new(0, 2.5, 0)
         local screenPos, onScreen = worldToScreen(targetPos)
         if onScreen then
-            local origin = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y) -- Dari bawah tengah layar
+            local origin = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y)
             local line = drawLine2D(origin, screenPos, 1.5, tracerColor)
             if line then table.insert(cache.renders, line) end
         end
@@ -269,7 +296,7 @@ local function renderESP(player)
             label.Name = "ESPInfo"
             label.BackgroundTransparency = 1
             label.TextColor3 = boxColor
-            label.TextSize = 11 -- DIBUAT LEBIH KECIL sesuai request
+            label.TextSize = 11
             label.Font = Enum.Font.GothamBold
             label.Position = UDim2.new(0, screenPos.X + 10, 0, screenPos.Y - 20)
             label.Size = UDim2.new(0, 150, 0, 40)
@@ -286,7 +313,7 @@ local function renderESP(player)
                 infoText = infoText .. (infoText ~= "" and "\n" or "") .. "📍 " .. dist .. "m"
             end
             if isSuspect then
-                infoText = infoText .. (infoText ~= "" and "\n" or "") .. "⚠️ SUSPECT"
+                infoText = infoText .. (infoText ~= "" and "\n" or "") .. "⚠️ GLITCHER / SUSPECT"
             end
             
             label.Text = infoText
@@ -315,6 +342,9 @@ Players.PlayerRemoving:Connect(function(player)
     if State.ESP.cache[player] then
         for _, render in pairs(State.ESP.cache[player].renders) do
             if render and render.Parent then render:Destroy() end
+        end
+        if State.ESP.cache[player].highlight then
+            State.ESP.cache[player].highlight:Destroy()
         end
         State.ESP.cache[player] = nil
     end
@@ -1373,12 +1403,13 @@ ESPM:Toggle("🎬 ESP ON/OFF", "esp_toggle", false, "Master toggle", function(v)
             for _, render in pairs(cache.renders) do
                 if render and render.Parent then render:Destroy() end
             end
+            if cache.highlight then cache.highlight:Destroy() end
         end
         State.ESP.cache = {}
     end
 end)
 
-ESPM:Dropdown("📦 Box Mode", "esp_boxmode", {"3D", "SKELETON", "OFF"}, function(v)
+ESPM:Dropdown("📦 Box Mode", "esp_boxmode", {"3D", "SKELETON", "HIGHLIGHT", "OFF"}, function(v)
     State.ESP.boxMode = v
     Library:Notification("ESP", "Box Mode: " .. v, 2)
 end)
@@ -1429,6 +1460,13 @@ ESPPreset:Button("💀 Skeleton", "Bones only", function()
     State.ESP.tracerMode = "SIMPLE"
     State.ESP.maxDrawDistance = 200
     Library:Notification("ESP", "💀 Skeleton", 2)
+end)
+
+ESPPreset:Button("🚨 Anti-Glitcher", "Highlight mode", function()
+    State.ESP.boxMode = "HIGHLIGHT"
+    State.ESP.tracerMode = "ADVANCED"
+    State.ESP.maxDrawDistance = 500
+    Library:Notification("ESP", "🚨 Anti-Glitcher", 2)
 end)
 
 ESPPreset:Button("🔍 Scout", "Far range", function()
@@ -1574,4 +1612,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-Library:Notification("✦ XKID HUB v3", "Modern 3D ESP + Tracer Ready! 🚀", 5)
+Library:Notification("✦ XKID HUB v3", "Modern 3D ESP + Anti Glitcher Ready! 🚀", 5)
