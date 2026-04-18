@@ -1,12 +1,12 @@
 --[[
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║    ✦  X K I D     H U B  ✦   v3 WITH SMOOTH ESP             ║
+║    ✦  X K I D     H U B  ✦   FINAL UPDATE (MODERN ESP)       ║
 ║                                                              ║
-║   ✅ Modern 3D ESP + Tracer Real-Time                        ║
+║   ✅ Modern ESP (Corner/2D Box) + Dynamic Origin Tracer      ║
 ║   ✅ Smooth Freecam (Damping + Velocity)                     ║
-║   ✅ All Features Kept (Teleport, Player, Cinema, etc)       ║
-║   ✅ Auto Suspect Detection (Glitcher/Laser Outfit Fix)      ║
+║   ✅ Clean UI Logic & Privacy Modes                          ║
+║   ✅ Auto Suspect Detection (Anti-Glitcher)                  ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 ]]
@@ -32,11 +32,12 @@ local State = {
     Teleport = {selectedTarget = ""},
     Security = {afkConn = nil},
     Cinema = {active = false, speed = 1, fov = 70, lastPos = nil},
+    Spectate = {hideName = false},
     ESP = {
         active = false, 
         cache = {},
-        boxMode = "3D",
-        tracerMode = "ADVANCED",
+        boxMode = "Corner", -- Corner, 2D Box, HIGHLIGHT, OFF
+        tracerMode = "Bottom", -- Bottom, Center, Mouse, OFF
         maxDrawDistance = 300,
         showDistance = true,
         showNickname = true,
@@ -93,7 +94,7 @@ LP.CharacterAdded:Connect(function(char)
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- MODERN 3D ESP ENGINE (GLITCHER DETECT V2)
+-- MODERN ESP ENGINE (CORNER, 2D BOX, DYNAMIC TRACER)
 -- ═══════════════════════════════════════════════════════════
 
 local function worldToScreen(worldPos)
@@ -130,80 +131,45 @@ local function drawLine2D(p1, p2, thickness, color)
     return line
 end
 
-local function draw3DBox(hrp, size, color, thickness)
+local function drawBox2D(hrp, color, thickness, isCorner)
     if not hrp then return {} end
+    local topPos = hrp.Position + Vector3.new(0, 2.5, 0)
+    local botPos = hrp.Position - Vector3.new(0, 3, 0)
     
-    local cf = hrp.CFrame
-    local lines = {}
+    local topScreen, topOn = worldToScreen(topPos)
+    local botScreen, botOn = worldToScreen(botPos)
     
-    local corners = {
-        Vector3.new(-1, -1, -1), Vector3.new(1, -1, -1),
-        Vector3.new(1, 1, -1), Vector3.new(-1, 1, -1),
-        Vector3.new(-1, -1, 1), Vector3.new(1, -1, 1),
-        Vector3.new(1, 1, 1), Vector3.new(-1, 1, 1),
-    }
+    if not topOn and not botOn then return {} end
     
-    for i = 1, 8 do corners[i] = corners[i] * size / 2 end
+    local height = math.abs(botScreen.Y - topScreen.Y)
+    local width = height * 0.6
     
-    local worldCorners = {}
-    for i, c in ipairs(corners) do
-        worldCorners[i] = cf * c
-    end
-    
-    local edges = {
-        {1,2}, {2,3}, {3,4}, {4,1},
-        {5,6}, {6,7}, {7,8}, {8,5},
-        {1,5}, {2,6}, {3,7}, {4,8},
-    }
-    
-    for _, edge in ipairs(edges) do
-        local p1, p2 = worldCorners[edge[1]], worldCorners[edge[2]]
-        local screen1, onScreen1 = worldToScreen(p1)
-        local screen2, onScreen2 = worldToScreen(p2)
-        
-        if onScreen1 or onScreen2 then
-            local line = drawLine2D(screen1, screen2, thickness, color)
-            if line then table.insert(lines, line) end
-        end
-    end
-    
-    return lines
-end
-
-local function drawSkeleton(char, color, thickness)
-    if not char then return {} end
+    local tl = Vector2.new(botScreen.X - width/2, topScreen.Y)
+    local tr = Vector2.new(botScreen.X + width/2, topScreen.Y)
+    local bl = Vector2.new(botScreen.X - width/2, botScreen.Y)
+    local br = Vector2.new(botScreen.X + width/2, botScreen.Y)
     
     local lines = {}
-    local bones = {
-        {"HumanoidRootPart", "Head"},
-        {"UpperTorso", "Head"},
-        {"UpperTorso", "LeftUpperArm"},
-        {"LeftUpperArm", "LeftLowerArm"},
-        {"LeftLowerArm", "LeftHand"},
-        {"UpperTorso", "RightUpperArm"},
-        {"RightUpperArm", "RightLowerArm"},
-        {"RightLowerArm", "RightHand"},
-        {"HumanoidRootPart", "LeftUpperLeg"},
-        {"LeftUpperLeg", "LeftLowerLeg"},
-        {"LeftLowerLeg", "LeftFoot"},
-        {"HumanoidRootPart", "RightUpperLeg"},
-        {"RightUpperLeg", "RightLowerLeg"},
-        {"RightLowerLeg", "RightFoot"},
-    }
-    
-    for _, bone in ipairs(bones) do
-        local p1, p2 = char:FindFirstChild(bone[1]), char:FindFirstChild(bone[2])
-        if p1 and p2 then
-            local screen1, onScreen1 = worldToScreen(p1.Position)
-            local screen2, onScreen2 = worldToScreen(p2.Position)
-            if onScreen1 or onScreen2 then
-                local line = drawLine2D(screen1, screen2, thickness, color)
-                if line then table.insert(lines, line) end
-            end
-        end
+    if isCorner then
+        local len = width / 3.5
+        table.insert(lines, drawLine2D(tl, tl + Vector2.new(len, 0), thickness, color))
+        table.insert(lines, drawLine2D(tl, tl + Vector2.new(0, len), thickness, color))
+        table.insert(lines, drawLine2D(tr, tr - Vector2.new(len, 0), thickness, color))
+        table.insert(lines, drawLine2D(tr, tr + Vector2.new(0, len), thickness, color))
+        table.insert(lines, drawLine2D(bl, bl + Vector2.new(len, 0), thickness, color))
+        table.insert(lines, drawLine2D(bl, bl - Vector2.new(0, len), thickness, color))
+        table.insert(lines, drawLine2D(br, br - Vector2.new(len, 0), thickness, color))
+        table.insert(lines, drawLine2D(br, br - Vector2.new(0, len), thickness, color))
+    else
+        table.insert(lines, drawLine2D(tl, tr, thickness, color))
+        table.insert(lines, drawLine2D(tr, br, thickness, color))
+        table.insert(lines, drawLine2D(br, bl, thickness, color))
+        table.insert(lines, drawLine2D(bl, tl, thickness, color))
     end
     
-    return lines
+    local res = {}
+    for _, l in ipairs(lines) do if l then table.insert(res, l) end end
+    return res
 end
 
 local function isSuspectPlayer(player)
@@ -211,7 +177,6 @@ local function isSuspectPlayer(player)
     if not char then return false end
     for _, part in pairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
-            -- Deteksi outfit laser/glitch: ukuran lebih dari 15 studs
             if part.Size.X > 15 or part.Size.Y > 15 or part.Size.Z > 15 then
                 return true
             end
@@ -248,15 +213,11 @@ local function renderESP(player)
     end
     cache.renders = {}
     
-    -- Render Box / Skeleton / Highlight
-    if State.ESP.boxMode == "3D" then
+    -- Render Box / Highlight
+    if State.ESP.boxMode == "Corner" or State.ESP.boxMode == "2D Box" then
         if cache.highlight then cache.highlight.Enabled = false end
-        local lines = draw3DBox(hrp, Vector3.new(2, 5, 2), boxColor, 2)
-        for _, l in ipairs(lines) do table.insert(cache.renders, l) end
-        
-    elseif State.ESP.boxMode == "SKELETON" then
-        if cache.highlight then cache.highlight.Enabled = false end
-        local lines = drawSkeleton(char, boxColor, 2)
+        local isCorner = (State.ESP.boxMode == "Corner")
+        local lines = drawBox2D(hrp, boxColor, 2, isCorner)
         for _, l in ipairs(lines) do table.insert(cache.renders, l) end
         
     elseif State.ESP.boxMode == "HIGHLIGHT" then
@@ -277,19 +238,31 @@ local function renderESP(player)
         if cache.highlight then cache.highlight.Enabled = false end
     end
     
-    -- Render Tracer (Line)
+    -- Render Dynamic Tracer
     if State.ESP.tracerMode ~= "OFF" then
         local targetPos = hrp.Position - Vector3.new(0, 2.5, 0)
         local screenPos, onScreen = worldToScreen(targetPos)
         if onScreen then
-            local origin = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y)
-            local line = drawLine2D(origin, screenPos, 1.5, tracerColor)
-            if line then table.insert(cache.renders, line) end
+            local origin
+            if State.ESP.tracerMode == "Bottom" then
+                origin = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y)
+            elseif State.ESP.tracerMode == "Center" then
+                origin = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y / 2)
+            elseif State.ESP.tracerMode == "Mouse" then
+                local ms = UIS:GetMouseLocation()
+                origin = Vector2.new(ms.X, ms.Y)
+            end
+            
+            if origin then
+                local line = drawLine2D(origin, screenPos, 1.5, tracerColor)
+                if line then table.insert(cache.renders, line) end
+            end
         end
     end
     
-    -- Render Text Info
-    if State.ESP.showDistance or State.ESP.showNickname then
+    -- Render Text Info Properly
+    local showText = State.ESP.showNickname or State.ESP.showDistance or isSuspect
+    if showText then
         local screenPos, onScreen = worldToScreen(hrp.Position)
         if onScreen then
             local label = Instance.new("TextLabel")
@@ -313,7 +286,7 @@ local function renderESP(player)
                 infoText = infoText .. (infoText ~= "" and "\n" or "") .. "📍 " .. dist .. "m"
             end
             if isSuspect then
-                infoText = infoText .. (infoText ~= "" and "\n" or "") .. "⚠️ GLITCHER / SUSPECT"
+                infoText = infoText .. (infoText ~= "" and "\n" or "") .. "⚠️ GLITCHER"
             end
             
             label.Text = infoText
@@ -661,7 +634,7 @@ end
 -- │                   ➤  UI CONSTRUCTION                    │
 -- └─────────────────────────────────────────────────────────┘
 
-local Win = Library:Window("✦ XKID HUB — v3 ✦", "star", "FREECAM", false)
+local Win = Library:Window("✦ XKID HUB — FINAL ✦", "star", "FREECAM", false)
 
 -- TAB 1: TELEPORT
 local T_TP = Win:Tab("Teleport", "map-pin")
@@ -1131,6 +1104,10 @@ SPS:Button("🔄 Refresh", "", function()
     Library:Notification("Spectate", "List diperbarui!", 2)
 end)
 
+SPS:Toggle("🙈 Hide Target Name", "spec_hidename", false, "Sensor nama di notif", function(v)
+    State.Spectate.hideName = v
+end)
+
 SPS:Toggle("👁️ Spectate ON/OFF", "spec", false, "Nonton target", function(v)
     Spec.active = v
     if v then
@@ -1142,7 +1119,8 @@ SPS:Toggle("👁️ Spectate ON/OFF", "spec", false, "Nonton target", function(v
         Spec.origFov = Cam.FieldOfView
         startSpecCapture()
         startSpecLoop()
-        Library:Notification("Spectate", "Nonton: " .. Spec.target.DisplayName, 3)
+        local dispName = State.Spectate.hideName and "[HIDDEN]" or Spec.target.DisplayName
+        Library:Notification("Spectate", "Nonton: " .. dispName, 3)
     else
         stopSpecLoop()
         stopSpecCapture()
@@ -1350,7 +1328,7 @@ WOGF:Button("🔄 Cek Level Sekarang", "", function()
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- TAB 6: SECURITY (dengan Modern 3D ESP)
+-- TAB 6: SECURITY (MODERN ESP TRACKER & PERF)
 -- ═══════════════════════════════════════════════════════════
 
 local T_SC  = Win:Tab("Security", "shield")
@@ -1386,94 +1364,6 @@ SCP:Toggle("Anti-AFK", "afk", false, "Cegah kick diam (Bypass)", function(v)
         end)
         Library:Notification("Anti-AFK", "❌ Bypass mati", 2)
     end
-end)
-
--- ESP TRACKER PAGE
-local ESPTracker = T_SC:Page("ESP Tracker", "radar")
-local ESPM = ESPTracker:Section("🎯 Mode", "Left")
-local ESPO = ESPTracker:Section("⚙️ Options", "Right")
-
-ESPM:Toggle("🎬 ESP ON/OFF", "esp_toggle", false, "Master toggle", function(v)
-    State.ESP.active = v
-    if v then
-        Library:Notification("ESP", "🎬 ESP Enabled!", 2)
-    else
-        Library:Notification("ESP", "🎬 ESP Disabled", 2)
-        for _, cache in pairs(State.ESP.cache) do
-            for _, render in pairs(cache.renders) do
-                if render and render.Parent then render:Destroy() end
-            end
-            if cache.highlight then cache.highlight:Destroy() end
-        end
-        State.ESP.cache = {}
-    end
-end)
-
-ESPM:Dropdown("📦 Box Mode", "esp_boxmode", {"3D", "SKELETON", "HIGHLIGHT", "OFF"}, function(v)
-    State.ESP.boxMode = v
-    Library:Notification("ESP", "Box Mode: " .. v, 2)
-end)
-
-ESPM:Dropdown("🔴 Tracer Type", "esp_tracer", {"ADVANCED", "SIMPLE", "OFF"}, function(v)
-    State.ESP.tracerMode = v
-    Library:Notification("ESP", "Tracer: " .. v, 2)
-end)
-
-ESPO:Dropdown("🎨 ESP Color", "esp_color", {"Green", "Red", "Blue", "White", "Yellow", "Purple"}, function(v)
-    local c = Color3.fromRGB(0, 255, 150)
-    if v == "Green" then c = Color3.fromRGB(0, 255, 150)
-    elseif v == "Red" then c = Color3.fromRGB(255, 50, 50)
-    elseif v == "Blue" then c = Color3.fromRGB(0, 150, 255)
-    elseif v == "White" then c = Color3.fromRGB(255, 255, 255)
-    elseif v == "Yellow" then c = Color3.fromRGB(255, 255, 0)
-    elseif v == "Purple" then c = Color3.fromRGB(150, 0, 255)
-    end
-    State.ESP.boxColor_Normal = c
-    State.ESP.tracerColor_Normal = c
-    Library:Notification("ESP Color", "Berubah jadi " .. v, 2)
-end)
-
-ESPO:Toggle("📍 Show Distance", "esp_dist", true, "Tampilkan jarak", function(v)
-    State.ESP.showDistance = v
-end)
-
-ESPO:Toggle("👤 Show Nickname", "esp_nick", true, "Tampilkan nama", function(v)
-    State.ESP.showNickname = v
-end)
-
-ESPO:Slider("🎯 Draw Distance", "esp_maxdist", 50, 500, 300, function(v)
-    State.ESP.maxDrawDistance = v
-    Library:Notification("ESP", "Distance: " .. v, 1)
-end)
-
-local ESPPreset = ESPTracker:Section("💾 Presets", "Left")
-
-ESPPreset:Button("🎮 Gameplay", "3D+Tracer", function()
-    State.ESP.boxMode = "3D"
-    State.ESP.tracerMode = "ADVANCED"
-    State.ESP.maxDrawDistance = 300
-    Library:Notification("ESP", "🎮 Gameplay Mode", 2)
-end)
-
-ESPPreset:Button("💀 Skeleton", "Bones only", function()
-    State.ESP.boxMode = "SKELETON"
-    State.ESP.tracerMode = "SIMPLE"
-    State.ESP.maxDrawDistance = 200
-    Library:Notification("ESP", "💀 Skeleton", 2)
-end)
-
-ESPPreset:Button("🚨 Anti-Glitcher", "Highlight mode", function()
-    State.ESP.boxMode = "HIGHLIGHT"
-    State.ESP.tracerMode = "ADVANCED"
-    State.ESP.maxDrawDistance = 500
-    Library:Notification("ESP", "🚨 Anti-Glitcher", 2)
-end)
-
-ESPPreset:Button("🔍 Scout", "Far range", function()
-    State.ESP.boxMode = "OFF"
-    State.ESP.tracerMode = "SIMPLE"
-    State.ESP.maxDrawDistance = 500
-    Library:Notification("ESP", "🔍 Scout", 2)
 end)
 
 SCP:Button("🔄 Rejoin Server", "Masuk ulang", function()
@@ -1515,6 +1405,102 @@ SCR:Button("💀 Fast Respawn", "Mati & balik ke posisi terakhir", function()
             Library:Notification("Respawn", "✅ Balik ke posisi terakhir!", 3)
         end
     end)
+end)
+
+-- ESP TRACKER PAGE
+local ESPTracker = T_SC:Page("ESP Tracker", "radar")
+local ESPM = ESPTracker:Section("🎯 Mode", "Left")
+local ESPO = ESPTracker:Section("⚙️ Options", "Right")
+
+ESPM:Toggle("🎬 ESP ON/OFF", "esp_toggle", false, "Master toggle", function(v)
+    State.ESP.active = v
+    if v then
+        Library:Notification("ESP", "🎬 ESP Enabled!", 2)
+    else
+        Library:Notification("ESP", "🎬 ESP Disabled", 2)
+        for _, cache in pairs(State.ESP.cache) do
+            for _, render in pairs(cache.renders) do
+                if render and render.Parent then render:Destroy() end
+            end
+            if cache.highlight then cache.highlight:Destroy() end
+        end
+        State.ESP.cache = {}
+    end
+end)
+
+ESPM:Dropdown("📦 Box Mode", "esp_boxmode", {"Corner", "2D Box", "HIGHLIGHT", "OFF"}, function(v)
+    State.ESP.boxMode = v
+    Library:Notification("ESP", "Box Mode: " .. v, 2)
+end)
+
+ESPM:Dropdown("🔴 Tracer Mode", "esp_tracer", {"Bottom", "Center", "Mouse", "OFF"}, function(v)
+    State.ESP.tracerMode = v
+    Library:Notification("ESP", "Tracer: " .. v, 2)
+end)
+
+ESPO:Dropdown("🎨 ESP Color", "esp_color", {"Green", "Red", "Blue", "White", "Yellow", "Purple"}, function(v)
+    local c = Color3.fromRGB(0, 255, 150)
+    if v == "Green" then c = Color3.fromRGB(0, 255, 150)
+    elseif v == "Red" then c = Color3.fromRGB(255, 50, 50)
+    elseif v == "Blue" then c = Color3.fromRGB(0, 150, 255)
+    elseif v == "White" then c = Color3.fromRGB(255, 255, 255)
+    elseif v == "Yellow" then c = Color3.fromRGB(255, 255, 0)
+    elseif v == "Purple" then c = Color3.fromRGB(150, 0, 255)
+    end
+    State.ESP.boxColor_Normal = c
+    State.ESP.tracerColor_Normal = c
+    Library:Notification("ESP Color", "Berubah jadi " .. v, 2)
+end)
+
+ESPO:Toggle("📍 Show Distance", "esp_dist", true, "Tampilkan jarak", function(v)
+    State.ESP.showDistance = v
+end)
+
+ESPO:Toggle("👤 Show Nickname", "esp_nick", true, "Tampilkan nama", function(v)
+    State.ESP.showNickname = v
+end)
+
+ESPO:Slider("🎯 Draw Distance", "esp_maxdist", 50, 500, 300, function(v)
+    State.ESP.maxDrawDistance = v
+    Library:Notification("ESP", "Distance: " .. v, 1)
+end)
+
+local ESPPreset = ESPTracker:Section("💾 Presets", "Left")
+
+ESPPreset:Button("🕵️ Legit", "Text only", function()
+    State.ESP.boxMode = "OFF"
+    State.ESP.tracerMode = "OFF"
+    State.ESP.showDistance = true
+    State.ESP.showNickname = true
+    State.ESP.maxDrawDistance = 250
+    Library:Notification("ESP", "🕵️ Legit Preset", 2)
+end)
+
+ESPPreset:Button("💢 Rage", "Corner + Center Tracer", function()
+    State.ESP.boxMode = "Corner"
+    State.ESP.tracerMode = "Center"
+    State.ESP.showDistance = true
+    State.ESP.showNickname = true
+    State.ESP.maxDrawDistance = 400
+    Library:Notification("ESP", "💢 Rage Preset", 2)
+end)
+
+ESPPreset:Button("🧼 Clean", "Minimalist Corner Box", function()
+    State.ESP.boxMode = "Corner"
+    State.ESP.tracerMode = "OFF"
+    State.ESP.showDistance = false
+    State.ESP.showNickname = false
+    State.ESP.maxDrawDistance = 200
+    Library:Notification("ESP", "🧼 Clean Preset", 2)
+end)
+
+ESPPreset:Button("🚨 Anti-Glitcher", "Find Exploiters", function()
+    State.ESP.boxMode = "HIGHLIGHT"
+    State.ESP.tracerMode = "Bottom"
+    State.ESP.showDistance = true
+    State.ESP.showNickname = true
+    State.ESP.maxDrawDistance = 500
+    Library:Notification("ESP", "🚨 Anti-Glitcher Preset", 2)
 end)
 
 -- PERFORMANCE PAGE
@@ -1612,4 +1598,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-Library:Notification("✦ XKID HUB v3", "Modern 3D ESP + Anti Glitcher Ready! 🚀", 5)
+Library:Notification("✦ XKID HUB FINAL", "Modern ESP & Features Ready! 🚀", 5)
