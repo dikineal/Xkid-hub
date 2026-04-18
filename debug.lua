@@ -431,10 +431,11 @@ end
 -- ══════════════════════════════════════════════════════════════
 --  FREECAM ENGINE  (Smooth + Mobile)
 -- ══════════════════════════════════════════════════════════════
+-- [REVISI] Mengubah damping dan accel agar lebih responsif dan tidak melayang
 local FC = {
     active=false, pos=Vector3.zero, vel=Vector3.zero,
     pitchDeg=0, yawDeg=0, speed=1, sens=0.25,
-    savedCF=nil, damping=0.85, accel=0.15,
+    savedCF=nil, damping=0.40, accel=0.50,
 }
 local fcRotT,fcMoveT,fcMoveSt,fcRotLast = nil,nil,nil,nil
 local fcJoy   = Vector2.zero
@@ -559,7 +560,7 @@ local Window = WindUI:CreateWindow({
     Author      = "by XKID",
     Folder      = "XKIDScript",
     Icon        = "shield",
-    Theme       = "Rose", -- [FIXED] Default diubah ke Rose
+    Theme       = "Rose",
     Acrylic     = true,
     Transparent = true,
     Size        = UDim2.fromOffset(700, 480),
@@ -593,6 +594,9 @@ local Window = WindUI:CreateWindow({
         end,
     },
 })
+
+-- [FIXED] Force apply theme immediately
+WindUI:SetTheme("Rose")
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB: TELEPORT
@@ -907,8 +911,9 @@ secFC:Toggle({
 })
 secFC:Slider({ Title="Speed",        Desc="Kecepatan freecam",  Step=1,    Value={Min=1,  Max=30,  Default=5 },  Callback=function(v) FC.speed   = tonumber(v) or 5              end })
 secFC:Slider({ Title="Sensitivity",  Desc="Kepekaan rotasi",    Step=1,    Value={Min=1,  Max=20,  Default=5 },  Callback=function(v) FC.sens    = (tonumber(v) or 5)*0.05       end })
-secFC:Slider({ Title="Damping",      Desc="Rem pergerakan",     Step=1,    Value={Min=50, Max=100, Default=85},  Callback=function(v) FC.damping = (tonumber(v) or 85)*0.01      end })
-secFC:Slider({ Title="Acceleration", Desc="Akselerasi awal",    Step=1,    Value={Min=5,  Max=50,  Default=15},  Callback=function(v) FC.accel   = (tonumber(v) or 15)*0.01      end })
+-- [REVISI] Mengganti default value pada slider UI agar cocok dengan setting responsif yang baru
+secFC:Slider({ Title="Damping",      Desc="Rem pergerakan (kecil = responsif)",  Step=1, Value={Min=10, Max=100, Default=40}, Callback=function(v) FC.damping = (tonumber(v) or 40)*0.01      end })
+secFC:Slider({ Title="Acceleration", Desc="Akselerasi awal (besar = responsif)", Step=1, Value={Min=5,  Max=100, Default=50}, Callback=function(v) FC.accel   = (tonumber(v) or 50)*0.01      end })
 secFC:Slider({ Title="FOV",          Desc="Field of View",      Step=1,    Value={Min=10, Max=120, Default=70},  Callback=function(v) Cam.FieldOfView = tonumber(v) or 70        end })
 
 local secDisp = T_CI:Section({ Title = "Display", Opened = false })
@@ -1375,7 +1380,7 @@ local fpsLabel = secInfo:Paragraph({
     Desc  = "Menghitung...",
 })
 
--- [FIXED] FPS update loop (setiap 0.5 detik)
+-- FPS update loop (setiap 0.5 detik)
 local fpsSamples = {}
 RS.RenderStepped:Connect(function(dt)
     table.insert(fpsSamples, dt)
@@ -1415,7 +1420,7 @@ secTheme:Dropdown({
         for name in pairs(WindUI:GetThemes()) do table.insert(names,name) end
         table.sort(names); return names
     end)(),
-    Value    = WindUI:GetCurrentTheme(),
+    Value    = "Rose", -- [FIXED] Default value dropdown juga diganti
     Callback = function(selected) WindUI:SetTheme(selected) end,
 })
 secTheme:Toggle({
