@@ -229,6 +229,7 @@ local function renderESP(player)
     
     local isSuspect = isSuspectPlayer(player)
     local boxColor = isSuspect and State.ESP.boxColor_Suspect or State.ESP.boxColor_Normal
+    local tracerColor = isSuspect and State.ESP.tracerColor_Suspect or State.ESP.tracerColor_Normal
     
     if not State.ESP.cache[player] then
         State.ESP.cache[player] = {renders = {}, tracer = {}}
@@ -240,12 +241,27 @@ local function renderESP(player)
     end
     cache.renders = {}
     
+    -- Render Box / Skeleton
     if State.ESP.boxMode == "3D" then
-        cache.renders = draw3DBox(hrp, Vector3.new(2, 5, 2), boxColor, 2)
+        local lines = draw3DBox(hrp, Vector3.new(2, 5, 2), boxColor, 2)
+        for _, l in ipairs(lines) do table.insert(cache.renders, l) end
     elseif State.ESP.boxMode == "SKELETON" then
-        cache.renders = drawSkeleton(char, Color3.fromRGB(100, 255, 200), 2)
+        local lines = drawSkeleton(char, boxColor, 2)
+        for _, l in ipairs(lines) do table.insert(cache.renders, l) end
     end
     
+    -- Render Tracer (Line)
+    if State.ESP.tracerMode ~= "OFF" then
+        local targetPos = hrp.Position - Vector3.new(0, 2.5, 0) -- Target ke area kaki
+        local screenPos, onScreen = worldToScreen(targetPos)
+        if onScreen then
+            local origin = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y) -- Dari bawah tengah layar
+            local line = drawLine2D(origin, screenPos, 1.5, tracerColor)
+            if line then table.insert(cache.renders, line) end
+        end
+    end
+    
+    -- Render Text Info
     if State.ESP.showDistance or State.ESP.showNickname then
         local screenPos, onScreen = worldToScreen(hrp.Position)
         if onScreen then
@@ -253,10 +269,13 @@ local function renderESP(player)
             label.Name = "ESPInfo"
             label.BackgroundTransparency = 1
             label.TextColor3 = boxColor
-            label.TextSize = 14
+            label.TextSize = 11 -- DIBUAT LEBIH KECIL sesuai request
             label.Font = Enum.Font.GothamBold
             label.Position = UDim2.new(0, screenPos.X + 10, 0, screenPos.Y - 20)
             label.Size = UDim2.new(0, 150, 0, 40)
+            label.TextXAlignment = Enum.TextXAlignment.Left
+            label.TextStrokeTransparency = 0.5
+            label.TextStrokeColor3 = Color3.new(0, 0, 0)
             
             local infoText = ""
             if State.ESP.showNickname then
@@ -264,7 +283,7 @@ local function renderESP(player)
             end
             if State.ESP.showDistance and lpRoot then
                 local dist = math.floor((lpRoot.Position - hrp.Position).Magnitude)
-                infoText = infoText .. (infoText ~= "" and "\n" or "") .. "📍 " .. dist .. " studs"
+                infoText = infoText .. (infoText ~= "" and "\n" or "") .. "📍 " .. dist .. "m"
             end
             if isSuspect then
                 infoText = infoText .. (infoText ~= "" and "\n" or "") .. "⚠️ SUSPECT"
@@ -434,14 +453,14 @@ end
 local FC = {
     active          = false,
     pos             = Vector3.zero,
-    vel             = Vector3.zero,        -- Velocity untuk smooth movement
+    vel             = Vector3.zero,
     pitchDeg        = 0,
     yawDeg          = 0,
     speed           = 1,
     sens            = 0.25,
     savedCharCFrame = nil,
-    damping         = 0.85,                -- Friction coefficient (0-1)
-    acceleration    = 0.15,                -- Acceleration multiplier
+    damping         = 0.85,
+    acceleration    = 0.15,
 }
 
 local fcRotTouch   = nil
@@ -563,12 +582,10 @@ local function startFCLoop()
         if not FC.active then return end
         Cam.CameraType = Enum.CameraType.Scriptable
 
-        -- Build CFrame with smooth rotation
         local cf = CFrame.new(FC.pos)
             * CFrame.Angles(0, math.rad(FC.yawDeg), 0)
             * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
 
-        -- Calculate desired velocity dari input
         local spd  = FC.speed * 32
         local desiredVel = Vector3.zero
         local keys = FC._keys or {}
@@ -585,21 +602,14 @@ local function startFCLoop()
             if keys[Enum.KeyCode.Q] then desiredVel = desiredVel - Vector3.new(0,1,0) * spd end
         end
 
-        -- Smooth acceleration (tidak langsung jump ke target velocity)
         FC.vel = FC.vel:Lerp(desiredVel, FC.acceleration * dt * 60)
-        
-        -- Apply damping (smooth deceleration saat input release)
         FC.vel = FC.vel * (FC.damping ^ (dt * 60))
-        
-        -- Update position with smoothed velocity
         FC.pos = FC.pos + FC.vel * dt
 
-        -- Apply camera
         Cam.CFrame = CFrame.new(FC.pos)
             * CFrame.Angles(0, math.rad(FC.yawDeg), 0)
             * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
 
-        -- Freeze karakter (3 lapis)
         local hrp = getRoot()
         local hum = getHum()
         if hrp and not hrp.Anchored then hrp.Anchored = true end
@@ -834,7 +844,7 @@ CIM:Toggle("🎬 Freecam ON/OFF", "fc", false, "Kiri=Gerak | Kanan=Rotate", func
     if v then
         local cf = Cam.CFrame
         FC.pos = cf.Position
-        FC.vel = Vector3.zero  -- Reset velocity saat mulai
+        FC.vel = Vector3.zero
         local rx, ry = cf:ToEulerAnglesYXZ()
         FC.pitchDeg = math.deg(rx)
         FC.yawDeg   = math.deg(ry)
@@ -1378,6 +1388,20 @@ ESPM:Dropdown("🔴 Tracer Type", "esp_tracer", {"ADVANCED", "SIMPLE", "OFF"}, f
     Library:Notification("ESP", "Tracer: " .. v, 2)
 end)
 
+ESPO:Dropdown("🎨 ESP Color", "esp_color", {"Green", "Red", "Blue", "White", "Yellow", "Purple"}, function(v)
+    local c = Color3.fromRGB(0, 255, 150)
+    if v == "Green" then c = Color3.fromRGB(0, 255, 150)
+    elseif v == "Red" then c = Color3.fromRGB(255, 50, 50)
+    elseif v == "Blue" then c = Color3.fromRGB(0, 150, 255)
+    elseif v == "White" then c = Color3.fromRGB(255, 255, 255)
+    elseif v == "Yellow" then c = Color3.fromRGB(255, 255, 0)
+    elseif v == "Purple" then c = Color3.fromRGB(150, 0, 255)
+    end
+    State.ESP.boxColor_Normal = c
+    State.ESP.tracerColor_Normal = c
+    Library:Notification("ESP Color", "Berubah jadi " .. v, 2)
+end)
+
 ESPO:Toggle("📍 Show Distance", "esp_dist", true, "Tampilkan jarak", function(v)
     State.ESP.showDistance = v
 end)
@@ -1550,4 +1574,4 @@ RS.Stepped:Connect(function()
     end
 end)
 
-Library:Notification("✦ XKID HUB v3", "Modern 3D ESP + Smooth Freecam Ready! 🚀", 5)
+Library:Notification("✦ XKID HUB v3", "Modern 3D ESP + Tracer Ready! 🚀", 5)
