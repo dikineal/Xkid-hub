@@ -68,7 +68,7 @@ local State = {
         boxColor_S      = Color3.fromRGB(255, 0, 100),
         tracerColor_N   = Color3.fromRGB(0, 200, 255),
         tracerColor_S   = Color3.fromRGB(255, 50, 50),
-        nameColor       = Color3.fromRGB(255, 255, 255), -- [REVISI]: Variabel baru untuk warna nama
+        nameColor       = Color3.fromRGB(255, 255, 255),
     },
 }
 
@@ -104,7 +104,6 @@ local function findPlayerByDisplay(str)
     return nil
 end
 
--- [REVISI]: Fix Bug Beda Map (Robust Root Matcher)
 local function getCharRoot(char)
     if not char then return nil end
     return char:FindFirstChild("HumanoidRootPart")
@@ -112,7 +111,7 @@ local function getCharRoot(char)
         or char:FindFirstChild("Head")
         or char:FindFirstChild("Torso")
         or char:FindFirstChild("UpperTorso")
-        or char:FindFirstChildWhichIsA("BasePart") -- Fallback mutlak jika custom rig aneh
+        or char:FindFirstChildWhichIsA("BasePart")
 end
 
 local function notify(title, content, dur)
@@ -285,7 +284,7 @@ local function renderESP(player)
         if on then
             local lbl = Instance.new("TextLabel")
             lbl.BackgroundTransparency = 1
-            lbl.TextColor3             = suspect and State.ESP.boxColor_S or State.ESP.nameColor -- [REVISI]: Menggunakan State.ESP.nameColor
+            lbl.TextColor3             = suspect and State.ESP.boxColor_S or State.ESP.nameColor
             lbl.TextStrokeColor3       = Color3.new(0, 0, 0)
             lbl.TextStrokeTransparency = 0.4
             lbl.Font                   = Enum.Font.GothamBold
@@ -560,7 +559,7 @@ local Window = WindUI:CreateWindow({
     Author      = "by XKID",
     Folder      = "XKIDScript",
     Icon        = "shield",
-    Theme       = "Dark",
+    Theme       = "Rose", -- [FIXED] Default diubah ke Rose
     Acrylic     = true,
     Transparent = true,
     Size        = UDim2.fromOffset(700, 480),
@@ -595,7 +594,6 @@ local Window = WindUI:CreateWindow({
     },
 })
 
--- [Sisa UI Tabs: Teleport, Player, Cinematic, Spectate, World tetap sama tanpa perubahan...]
 -- ══════════════════════════════════════════════════════════════
 --  TAB: TELEPORT
 -- ══════════════════════════════════════════════════════════════
@@ -1304,8 +1302,6 @@ secESP:Dropdown({
         notify("ESP Color","Warna: "..v, 2)
     end,
 })
-
--- [REVISI]: Penambahan opsi UI khusus untuk Warna Text/Name ESP
 secESP:Dropdown({
     Title    = "Text / Name Color",
     Desc     = "Warna untuk Nama & Jarak Player",
@@ -1379,7 +1375,7 @@ local fpsLabel = secInfo:Paragraph({
     Desc  = "Menghitung...",
 })
 
--- FPS update loop (setiap 0.5 detik)
+-- [FIXED] FPS update loop (setiap 0.5 detik)
 local fpsSamples = {}
 RS.RenderStepped:Connect(function(dt)
     table.insert(fpsSamples, dt)
@@ -1393,10 +1389,12 @@ task.spawn(function()
             for _,s in ipairs(fpsSamples) do avg=avg+s end
             avg = avg / #fpsSamples
             local fps = math.floor(1/avg)
-            local bar, pct = math.clamp(fps/120,0,1)
-            local filled = math.floor(pct*10)
-            bar = ""
-            for i=1,10 do bar=bar..(i<=filled and "█" or "░") end
+            
+            local pct = math.clamp(fps/120, 0, 1)
+            local filled = math.floor(pct * 10)
+            local bar = ""
+            for i = 1, 10 do bar = bar .. (i <= filled and "█" or "░") end
+            
             local color = fps>=60 and "🟢" or fps>=30 and "🟡" or "🔴"
             if fpsLabel then
                 pcall(function()
