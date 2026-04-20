@@ -986,29 +986,7 @@ local secDisp = T_CI:Section({ Title = "Display", Opened = false })
 secDisp:Button({ Title="Portrait",  Desc="Orientasi tegak",    Callback=function() LP.PlayerGui.ScreenOrientation=Enum.ScreenOrientation.Portrait       end })
 secDisp:Button({ Title="Landscape", Desc="Orientasi mendatar", Callback=function() LP.PlayerGui.ScreenOrientation=Enum.ScreenOrientation.LandscapeRight end })
 
--- Cinematic Presets
-local secPre = T_CI:Section({ Title = "Cinematic Presets", Opened = false })
-
-local function applyPreset(fov,spd,clock,bright,fogEnd,fogR,fogG,fogB,ambR,ambG,ambB,density,offset,glare,halo,gfxLevel)
-    Cam.FieldOfView=fov; FC.speed=spd
-    Lighting.ClockTime=clock; Lighting.Brightness=bright; Lighting.FogEnd=fogEnd
-    Lighting.FogColor=Color3.fromRGB(fogR,fogG,fogB)
-    Lighting.Ambient =Color3.fromRGB(ambR,ambG,ambB)
-    local atm=Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere",Lighting)
-    atm.Density=density; atm.Offset=offset; atm.Glare=glare; atm.Halo=halo
-    pcall(function() settings().Rendering.QualityLevel=gfxLevel end)
-end
-
-secPre:Button({ Title="☀  Cinematic Day",    Callback=function() applyPreset(50,3,14,2,10000,200,220,255,120,120,120,0.05,0.1,0.3,0.2,Enum.QualityLevel.Level10);  notify("Preset","☀  Cinematic Day",3)   end })
-secPre:Button({ Title="🌆  Golden Hour",      Callback=function() applyPreset(55,3,18,1.5,4000,255,180,100,180,100,60,0.2,0.3,0.8,0.5,Enum.QualityLevel.Level10);  notify("Preset","🌆  Golden Hour",3)    end })
-secPre:Button({ Title="🌃  Night Cinematic",  Callback=function() applyPreset(45,2,0,0.3,20000,10,10,30,20,20,40,0.02,0,0,0.1,Enum.QualityLevel.Level10);           notify("Preset","🌃  Night Cinematic",3) end })
-secPre:Button({ Title="🌫  Fog Drama",        Callback=function() applyPreset(55,2,12,0.8,300,200,200,200,150,150,150,0.6,0.5,0,0.1,Enum.QualityLevel.Level08);     notify("Preset","🌫  Fog Drama",3)      end })
-secPre:Button({ Title="❄  Snow Scene",        Callback=function() applyPreset(50,2,10,1.2,500,220,230,255,180,190,210,0.4,0.4,0,0.3,Enum.QualityLevel.Level10);     notify("Preset","❄  Snow Scene",3)      end })
-secPre:Button({ Title="🎭  Dark Thriller",    Callback=function() applyPreset(40,2,12,0.1,200,40,40,50,30,30,40,0.8,0.1,0,0,Enum.QualityLevel.Level08);             notify("Preset","🎭  Dark Thriller",3)  end })
-secPre:Button({ Title="📺  Vlog Style",       Callback=function() applyPreset(75,5,14,1.5,8000,210,225,255,110,110,110,0.1,0.1,0.1,0.15,Enum.QualityLevel.Level05); notify("Preset","📺  Vlog Style",3)     end })
-secPre:Button({ Title="↺  Reset Default",     Callback=function() applyPreset(70,5,14,1,100000,191,191,191,70,70,70,0.35,0,0,0.25,Enum.QualityLevel.Level05);       notify("Preset","↺  Reset Default",2)   end })
-
--- Fine Tune
+-- Fine Tune (Preset dihapus dari tab Cinematic)
 local secFine = T_CI:Section({ Title = "Fine Tune", Opened = false })
 local function getA() return Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere",Lighting) end
 secFine:Slider({ Title="Brightness",  Step=0.1, Value={Min=0,  Max=5,   Default=1 }, Callback=function(v) Lighting.Brightness=tonumber(v) or 1 end })
@@ -1629,7 +1607,6 @@ end))
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "XKID SCRIPT",
-    Content = "Premium Edition V5 siap digunakan!  🚀",
+    Content = "Premium Edition V6 siap digunakan!  🚀",
     Duration = 5,
 })
-
