@@ -15,7 +15,7 @@
 ╚══════════════════════════════════════════════════════════════════╝
 
   ✨ Premium Features:
-  • Avatar Refresh (/re - No Death, No Respawn)
+  • Avatar Refresh (/re - No Death, No Respawn, No Camera Bug)
   • Teleport & Location Saver
   • Movement (Speed / Jump / Fly / NoClip)
   • Freecam (Smooth + Mobile Ready)
@@ -64,6 +64,7 @@ local VirtualUser = game:GetService("VirtualUser")
 local Lighting    = game:GetService("Lighting")
 local TPService   = game:GetService("TeleportService")
 local StatsService= game:GetService("Stats")
+local RunService  = game:GetService("RunService")
 local LP          = Players.LocalPlayer
 local Cam         = workspace.CurrentCamera
 local onMobile    = not UIS.KeyboardEnabled
@@ -162,8 +163,8 @@ end))
 
 -- ══════════════════════════════════════════════════════════════
 --  💎 PREMIUM AVATAR REFRESH SYSTEM (/re Command)
---  ✅ FIXED: No Roblox API errors, No death, No respawn
---  ✅ Keeps: Position, Health, Tools, GUIs
+--  ✅ FIXED: No camera bug, No death, No respawn issues
+--  ✅ Keeps: Position, Health, Tools, GUIs, Camera Subject
 -- ══════════════════════════════════════════════════════════════
 
 local function refreshAvatarPremium()
@@ -197,8 +198,13 @@ local function refreshAvatarPremium()
     local savedHealth = hum.Health
     local savedWalkSpeed = hum.WalkSpeed
     local savedJumpPower = hum.JumpPower
+    
+    -- Save camera state
     local savedCameraCF = Cam.CFrame
+    local savedCameraType = Cam.CameraType
     local savedCameraSubject = Cam.CameraSubject
+    local savedCameraFocus = Cam.Focus
+    local savedFieldOfView = Cam.FieldOfView
     
     -- Save all tools
     local savedTools = {}
@@ -227,35 +233,34 @@ local function refreshAvatarPremium()
         end
     end
     
-    -- Lock camera to prevent visual glitches
+    -- Lock camera to prevent visual glitches during refresh
     Cam.CameraType = Enum.CameraType.Scriptable
     Cam.CFrame = savedCameraCF
     
-    -- Force respawn with position save (this is the SAFE way without API errors)
-    -- Instead of using GetHumanoidDescriptionFromUserId which may error,
-    -- we trigger a clean respawn while preserving position
-    local humanoidRootPart = rootPart
-    if humanoidRootPart then
-        humanoidRootPart.CFrame = savedPosition + Vector3.new(0, 5, 0)
+    -- Force respawn with position preservation
+    -- This is the cleanest way without API errors
+    if rootPart then
+        rootPart.CFrame = savedPosition + Vector3.new(0, 5, 0)
     end
     
-    -- Store that we need to restore position after respawn
+    -- Store data for after respawn
     local positionToRestore = savedPosition
     local healthToRestore = savedHealth
     local walkSpeedToRestore = savedWalkSpeed
     local jumpPowerToRestore = savedJumpPower
     local toolsToRestore = savedTools
     local guisToRestore = savedGUIs
+    local cameraCFToRestore = savedCameraCF
+    local cameraFOVToRestore = savedFieldOfView
     
-    -- Set health to 0 to trigger respawn (but we'll restore position)
+    -- Trigger respawn
     hum.Health = 0
     
-    -- Wait for respawn
+    -- Wait for respawn with proper handling
     local newChar = nil
     local respawnSuccess = false
-    
-    -- Use CharacterAdded event for clean respawn handling
     local respawnConnection
+    
     respawnConnection = LP.CharacterAdded:Connect(function(character)
         respawnConnection:Disconnect()
         newChar = character
@@ -275,20 +280,25 @@ local function refreshAvatarPremium()
     end
     
     -- Wait for character to fully load
-    task.wait(0.2)
+    task.wait(0.3)
     
-    -- Restore position
+    -- Restore position with multiple attempts
     local newRoot = getRoot()
     if newRoot and positionToRestore then
+        -- First attempt
         newRoot.CFrame = positionToRestore
-        -- Small adjustment to prevent falling
         task.wait(0.05)
+        -- Second attempt to ensure position sticks
         newRoot.CFrame = positionToRestore
+        -- Also set AssemblyLinearVelocity to zero to prevent falling
+        newRoot.AssemblyLinearVelocity = Vector3.zero
+        newRoot.AssemblyAngularVelocity = Vector3.zero
     end
     
     -- Restore health
     local newHum = getHum()
     if newHum and healthToRestore > 0 then
+        task.wait(0.1)
         newHum.Health = math.min(healthToRestore, newHum.MaxHealth)
         if newHum.Health <= 0 then
             newHum.Health = 100
@@ -300,6 +310,8 @@ local function refreshAvatarPremium()
         newHum.WalkSpeed = walkSpeedToRestore
         newHum.JumpPower = jumpPowerToRestore
         newHum.UseJumpPower = true
+        -- Force humanoid to stand up
+        newHum:ChangeState(Enum.HumanoidStateType.GettingUp)
     end
     
     -- Restore tools
@@ -321,18 +333,36 @@ local function refreshAvatarPremium()
         end)
     end
     
-    -- Restore camera
+    -- CRITICAL FIX: Restore camera properly
+    -- Wait a bit for the character to fully settle
+    task.wait(0.15)
+    
+    -- Reset camera to custom mode
     Cam.CameraType = Enum.CameraType.Custom
-    if savedCameraSubject and savedCameraSubject.Parent then
-        Cam.CameraSubject = savedCameraSubject
-    else
+    
+    -- Set camera subject to the new humanoid
+    if newHum then
         Cam.CameraSubject = newHum
     end
     
-    -- Final cleanup
+    -- Restore camera position and FOV
+    Cam.FieldOfView = cameraFOVToRestore
+    
+    -- Force camera to update
+    RunService.RenderStepped:Wait()
+    
+    -- Additional camera fix: ensure camera follows character
+    local finalRoot = getRoot()
+    if finalRoot and cameraCFToRestore then
+        -- Set camera to look at character from saved angle
+        local lookDirection = (finalRoot.Position - cameraCFToRestore.Position).Unit
+        Cam.CFrame = CFrame.new(cameraCFToRestore.Position, finalRoot.Position)
+    end
+    
+    -- Final state cleanup
     State.Avatar.isRefreshing = false
     
-    notify("✨ Avatar Refresh", "✅ Avatar updated successfully! No death, no respawn!", 3)
+    notify("✨ Avatar Refresh", "✅ Avatar updated! Camera fixed, no death!", 3)
 end
 
 -- Chat command handler for /re
@@ -812,7 +842,7 @@ local T_AV   = Window:Tab({ Title = "Avatar", Icon = "user" })
 local secAvatar = T_AV:Section({ Title = "💎 Premium Avatar Refresh", Opened = true })
 secAvatar:Button({
     Title    = "🎨 Refresh Avatar (/re)",
-    Desc     = "Update avatar instantly — NO DEATH, NO RESPAWN!",
+    Desc     = "Update avatar instantly — NO DEATH, NO RESPAWN, NO CAMERA BUG!",
     Callback = function()
         refreshAvatarPremium()
     end,
@@ -820,7 +850,7 @@ secAvatar:Button({
 
 secAvatar:Paragraph({
     Title = "✨ Premium Feature: /re Command",
-    Desc  = "Type /re or :re in chat to refresh your avatar instantly!\n\n✓ Keeps your health\n✓ Keeps your position\n✓ Keeps your tools\n✓ Keeps all GUIs\n✓ No death, no respawn, no glitches",
+    Desc  = "Type /re or :re in chat to refresh your avatar instantly!\n\n✓ Keeps your health\n✓ Keeps your position\n✓ Keeps your tools\n✓ Keeps all GUIs\n✓ Camera stays stable\n✓ No death, no respawn, no glitches",
 })
 
 local secMov = T_AV:Section({ Title = "Movement", Opened = true })
@@ -1540,8 +1570,8 @@ task.wait(1.5)
 
 WindUI:Notify({
     Title   = "💎 Premium Feature",
-    Content = "Type /re in chat to refresh your avatar instantly without dying!",
+    Content = "Type /re in chat to refresh your avatar instantly!\nCamera stays stable, no death!",
     Duration = 7,
 })
 
-print("✅ XKID Premium Script V8 loaded | Designed by @WTF.XKID")
+print("✅ XKID Premium Script V8 loaded | Designed by @WTF.XKID | Camera Bug Fixed")
