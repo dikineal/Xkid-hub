@@ -19,7 +19,7 @@
   • Spectate (Orbit & First Person)
   • Modern ESP (Corner / Box / Highlight / Tracer)
   • World (Weather / Atmosphere / Graphics)
-  • Security (Anti-AFK / Advanced Respawn / ESP Tracker / Anti-Glitcher)
+  • Security (Anti-AFK / Ultra-Seamless Respawn / Anti-Glitcher)
   • Live FPS & PING Counter
   • Settings (Theme / Keybind)
 ]]
@@ -151,7 +151,7 @@ TrackC(LP.CharacterAdded:Connect(function(char)
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  CHAT COMMAND (:re) - ADVANCED RECOVERY
+--  CHAT COMMAND (:re) - ULTRA-SEAMLESS RECOVERY (UNIVERSAL EXPLOIT)
 -- ══════════════════════════════════════════════════════════════
 TrackC(LP.Chatted:Connect(function(msg)
     local cmd = string.lower(msg)
@@ -162,9 +162,14 @@ TrackC(LP.Chatted:Connect(function(msg)
         local head = char and char:FindFirstChild("Head")
 
         if hrp and hum then
-            -- Save position + velocity
+            -- Save position, velocity, and camera
             local savedCF = hrp.CFrame
             local savedVel = hrp.AssemblyLinearVelocity
+            local savedCamCF = Cam.CFrame
+            
+            -- Lock camera to prevent screen flicker during death
+            Cam.CameraType = Enum.CameraType.Scriptable
+            Cam.CFrame = savedCamCF
             
             -- Save GUIs
             local savedGUIs = {}
@@ -179,10 +184,12 @@ TrackC(LP.Chatted:Connect(function(msg)
             hum.Health = 0
             task.spawn(function()
                 local newChar = LP.CharacterAdded:Wait()
-                task.wait(0.3) -- Tunggu physics aktif
-                
                 local newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
+                local newHum = newChar:WaitForChild("Humanoid", 5)
                 local newHead = newChar:WaitForChild("Head", 5)
+                
+                -- Wait 1 frame for physics to initialize
+                RS.RenderStepped:Wait()
 
                 if newHrp then
                     newHrp.CFrame = savedCF
@@ -194,14 +201,21 @@ TrackC(LP.Chatted:Connect(function(msg)
                         gui.Parent = newHead
                     end
                 end
-                notify("Command", "✅ Auto-Respawn (Advanced) Executed", 2)
+                
+                -- Restore camera
+                if newHum then
+                    Cam.CameraSubject = newHum
+                    Cam.CameraType = Enum.CameraType.Custom
+                end
+                
+                notify("Command", "✅ Avatar Refreshed (Seamless)", 2)
             end)
         end
     end
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  ESP ENGINE  (DisplayOrder=999 — tidak tertimpa WindUI)
+--  ESP ENGINE  (DisplayOrder=999)
 -- ══════════════════════════════════════════════════════════════
 local function getESPGui()
     local sg = LP.PlayerGui:FindFirstChild("_XKIDEsp")
@@ -209,7 +223,7 @@ local function getESPGui()
         sg = Instance.new("ScreenGui")
         sg.Name            = "_XKIDEsp"
         sg.ResetOnSpawn    = false
-        sg.DisplayOrder    = 999          -- di atas WindUI
+        sg.DisplayOrder    = 999
         sg.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
         sg.Parent          = LP.PlayerGui
     end
@@ -301,13 +315,11 @@ local function renderESP(player)
     end
     local cache = State.ESP.cache[player]
 
-    -- Clear previous frame renders
     for _, r in pairs(cache.renders) do
         if r and r.Parent then r:Destroy() end
     end
     cache.renders = {}
 
-    -- Box
     if State.ESP.boxMode == "Corner" or State.ESP.boxMode == "2D Box" then
         if cache.hl then cache.hl.Enabled = false end
         local lines = drawBox(hrp, boxColor, 2, State.ESP.boxMode == "Corner")
@@ -330,7 +342,6 @@ local function renderESP(player)
         if cache.hl then cache.hl.Enabled = false end
     end
 
-    -- Tracer
     if State.ESP.tracerMode ~= "OFF" then
         local sp, on = w2s(hrp.Position - Vector3.new(0, 2.5, 0))
         if on then
@@ -346,7 +357,6 @@ local function renderESP(player)
         end
     end
 
-    -- Name + Distance label
     local showText = State.ESP.showNickname or State.ESP.showDistance or suspect
     if showText then
         local sp, on = w2s(hrp.Position + Vector3.new(0, 3.2, 0))
@@ -498,7 +508,7 @@ local function toggleFly(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE  (Smooth + Mobile + Responsive default)
+--  FREECAM ENGINE
 -- ══════════════════════════════════════════════════════════════
 local FC = {
     active=false, pos=Vector3.zero, vel=Vector3.zero,
@@ -752,7 +762,6 @@ end
 -- ══════════════════════════════════════════════════════════════
 local T_PL   = Window:Tab({ Title = "Player", Icon = "user" })
 
--- Movement
 local secMov = T_PL:Section({ Title = "Movement", Opened = true })
 secMov:Button({
     Title    = "Refresh POV",
@@ -803,7 +812,6 @@ secMov:Toggle({
     end,
 })
 
--- Abilities
 local secAbi = T_PL:Section({ Title = "Abilities", Opened = true })
 secAbi:Toggle({
     Title    = "Fly",
@@ -894,7 +902,6 @@ secAbi:Toggle({
     end,
 })
 
--- Shift Lock
 local secLock = T_PL:Section({ Title = "Shift Lock", Opened = false })
 local shiftConn = nil
 secLock:Toggle({
@@ -922,18 +929,6 @@ secLock:Toggle({
         end
     end,
 })
-
--- Atmosphere (Player tab)
-local secAtm = T_PL:Section({ Title = "Atmosphere", Opened = false })
-secAtm:Slider({
-    Title = "Clock Time",
-    Desc  = "0 = tengah malam  /  12 = siang",
-    Step  = 1,
-    Value = { Min = 0, Max = 24, Default = 12 },
-    Callback = function(v) Lighting.ClockTime = tonumber(v) or 12 end,
-})
-secAtm:Button({ Title="Set Siang",  Callback=function() Lighting.ClockTime=14 end })
-secAtm:Button({ Title="Set Malam",  Callback=function() Lighting.ClockTime=0  end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB: CINEMATIC
@@ -985,17 +980,6 @@ secFC:Slider({ Title="FOV",          Desc="Field of View",      Step=1,    Value
 local secDisp = T_CI:Section({ Title = "Display", Opened = false })
 secDisp:Button({ Title="Portrait",  Desc="Orientasi tegak",    Callback=function() LP.PlayerGui.ScreenOrientation=Enum.ScreenOrientation.Portrait       end })
 secDisp:Button({ Title="Landscape", Desc="Orientasi mendatar", Callback=function() LP.PlayerGui.ScreenOrientation=Enum.ScreenOrientation.LandscapeRight end })
-
--- Fine Tune (Preset dihapus dari tab Cinematic)
-local secFine = T_CI:Section({ Title = "Fine Tune", Opened = false })
-local function getA() return Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere",Lighting) end
-secFine:Slider({ Title="Brightness",  Step=0.1, Value={Min=0,  Max=5,   Default=1 }, Callback=function(v) Lighting.Brightness=tonumber(v) or 1 end })
-secFine:Slider({ Title="Clock Time",  Step=1,   Value={Min=0,  Max=24,  Default=14}, Callback=function(v) Lighting.ClockTime =tonumber(v) or 14 end })
-secFine:Slider({ Title="Fog Density", Step=0.01,Value={Min=0,  Max=1,   Default=0 }, Callback=function(v) getA().Density=tonumber(v) or 0 end })
-secFine:Slider({ Title="Haze Offset", Step=0.01,Value={Min=0,  Max=1,   Default=0 }, Callback=function(v) getA().Offset =tonumber(v) or 0 end })
-secFine:Slider({ Title="Glare",       Step=0.01,Value={Min=0,  Max=1,   Default=0 }, Callback=function(v) getA().Glare  =tonumber(v) or 0 end })
-secFine:Slider({ Title="Halo",        Step=0.01,Value={Min=0,  Max=1,   Default=0 }, Callback=function(v) getA().Halo   =tonumber(v) or 0 end })
-secFine:Slider({ Title="Quality Level",Step=1,  Value={Min=1,  Max=10,  Default=5 }, Callback=function(v) pcall(function() settings().Rendering.QualityLevel=math.floor(tonumber(v) or 5) end) end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB: SPECTATE
@@ -1314,17 +1298,22 @@ secResp:Button({
         local savedCF = respawnLastPos
         local savedVel = respawnLastVel
         local savedGUIs = respawnLastGUIs
+        local savedCamCF = Cam.CFrame
         
         local hum=getHum()
         if not hum then notify("Respawn","❌  Karakter tidak ditemukan"); return end
         
+        Cam.CameraType = Enum.CameraType.Scriptable
+        Cam.CFrame = savedCamCF
         hum.Health=0
+        
         task.spawn(function()
             local char = LP.CharacterAdded:Wait()
-            task.wait(0.3)
-            
             local newHrp = char:WaitForChild("HumanoidRootPart", 5)
+            local newHum = char:WaitForChild("Humanoid", 5)
             local newHead = char:WaitForChild("Head", 5)
+            
+            RS.RenderStepped:Wait()
             
             if newHrp then
                 newHrp.CFrame = savedCF
@@ -1334,6 +1323,10 @@ secResp:Button({
                 for _, gui in ipairs(savedGUIs) do
                     gui.Parent = newHead
                 end
+            end
+            if newHum then
+                Cam.CameraSubject = newHum
+                Cam.CameraType = Enum.CameraType.Custom
             end
             notify("Respawn","✅  Berhasil Fast Respawn!", 3)
         end)
@@ -1607,6 +1600,6 @@ end))
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "XKID SCRIPT",
-    Content = "Premium Edition V6 siap digunakan!  🚀",
+    Content = "Premium Edition V7 siap digunakan!  🚀",
     Duration = 5,
 })
