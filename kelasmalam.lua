@@ -15,7 +15,7 @@
 ╚══════════════════════════════════════════════════════════════════╝
 
   ✨ Premium Features:
-  • Avatar Refresh (/re - No Death, No Respawn, No Camera Bug)
+  • Avatar Refresh (/re - Reset ke Avatar Asli Roblox, No Death)
   • Teleport & Location Saver
   • Movement (Speed / Jump / Fly / NoClip)
   • Freecam (Smooth + Mobile Ready)
@@ -81,7 +81,7 @@ local State = {
     Security = { afkConn = nil },
     Cinema   = { active = false },
     Spectate = { hideName = false },
-    Avatar   = { isRefreshing = false },
+    Avatar   = { isRefreshing = false, originalDescription = nil },
     ESP = {
         active          = false,
         cache           = {},
@@ -163,212 +163,144 @@ end))
 
 -- ══════════════════════════════════════════════════════════════
 --  💎 PREMIUM AVATAR REFRESH SYSTEM (/re Command)
---  ✅ FIXED: No camera bug, No death, No respawn issues
---  ✅ Keeps: Position, Health, Tools, GUIs, Camera Subject
+--  ✅ Reset FULL AVATAR ke asli Roblox (pakaian, accessories, body, dll)
+--  ✅ No death, No respawn, No camera bug
+--  ✅ Menggunakan GetHumanoidDescriptionFromUserId dan ApplyDescription
 -- ══════════════════════════════════════════════════════════════
 
+-- Simpan avatar asli saat pertama kali spawn (otomatis di semua map)
+local function saveOriginalAvatar(char)
+    if State.Avatar.originalDescription then return end
+    task.wait(1.5) -- Tunggu character fully loaded
+    
+    local success, desc = pcall(function()
+        return Players:GetHumanoidDescriptionFromUserId(LP.UserId)
+    end)
+    
+    if success and desc then
+        State.Avatar.originalDescription = desc:Clone()
+        print("✅ Original Avatar disimpan! (@WTF.XKID)")
+        notify("Avatar System", "💾 Original avatar saved!", 2)
+    else
+        print("⚠️ Gagal menyimpan avatar asli (@WTF.XKID)")
+    end
+end
+
+-- Connect ke CharacterAdded untuk menyimpan avatar asli
+TrackC(LP.CharacterAdded:Connect(saveOriginalAvatar))
+
+-- Fungsi refresh avatar utama
 local function refreshAvatarPremium()
     if State.Avatar.isRefreshing then 
         notify("🔄 Avatar Refresh", "Refresh already in progress...", 1)
         return 
     end
+    
+    local character = LP.Character
+    if not character then
+        notify("❌ Avatar Refresh", "Character not found, please spawn first!", 2)
+        return
+    end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then
+        notify("❌ Avatar Refresh", "Humanoid not found!", 2)
+        return
+    end
+    
+    -- Jika original description belum ada, coba ambil sekarang
+    if not State.Avatar.originalDescription then
+        local success, desc = pcall(function()
+            return Players:GetHumanoidDescriptionFromUserId(LP.UserId)
+        end)
+        if success and desc then
+            State.Avatar.originalDescription = desc:Clone()
+        else
+            notify("❌ Avatar Refresh", "Failed to get avatar data!", 2)
+            return
+        end
+    end
+    
     State.Avatar.isRefreshing = true
     
-    local char = LP.Character
-    if not char then
-        notify("❌ Avatar Refresh", "Character not found!", 2)
-        State.Avatar.isRefreshing = false
-        return
-    end
-    
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then
-        notify("❌ Avatar Refresh", "Humanoid not found!", 2)
-        State.Avatar.isRefreshing = false
-        return
-    end
-    
-    -- Save ALL critical data before refresh
+    -- Save posisi sebelum refresh
     local savedPosition = nil
     local rootPart = getRoot()
     if rootPart then
         savedPosition = rootPart.CFrame
     end
     
-    local savedHealth = hum.Health
-    local savedWalkSpeed = hum.WalkSpeed
-    local savedJumpPower = hum.JumpPower
+    -- Save health
+    local savedHealth = humanoid.Health
     
     -- Save camera state
     local savedCameraCF = Cam.CFrame
     local savedCameraType = Cam.CameraType
     local savedCameraSubject = Cam.CameraSubject
-    local savedCameraFocus = Cam.Focus
     local savedFieldOfView = Cam.FieldOfView
     
-    -- Save all tools
-    local savedTools = {}
-    for _, tool in ipairs(char:GetChildren()) do
-        if tool:IsA("Tool") then
-            tool.Parent = LP.Backpack
-            table.insert(savedTools, tool)
-        end
-    end
-    
-    -- Save all BillboardGuis and SurfaceGuis
-    local savedGUIs = {}
-    local function saveGUIsFromDescendants(part)
-        if not part then return end
-        for _, gui in ipairs(part:GetChildren()) do
-            if gui:IsA("BillboardGui") or gui:IsA("SurfaceGui") then
-                gui.Parent = nil
-                table.insert(savedGUIs, {gui = gui, originalName = part.Name, originalClass = part.ClassName})
-            end
-        end
-    end
-    
-    for _, descendant in ipairs(char:GetDescendants()) do
-        if descendant:IsA("BasePart") then
-            saveGUIsFromDescendants(descendant)
-        end
-    end
-    
-    -- Lock camera to prevent visual glitches during refresh
+    -- Lock camera to prevent visual glitches
     Cam.CameraType = Enum.CameraType.Scriptable
     Cam.CFrame = savedCameraCF
     
-    -- Force respawn with position preservation
-    -- This is the cleanest way without API errors
-    if rootPart then
-        rootPart.CFrame = savedPosition + Vector3.new(0, 5, 0)
-    end
-    
-    -- Store data for after respawn
-    local positionToRestore = savedPosition
-    local healthToRestore = savedHealth
-    local walkSpeedToRestore = savedWalkSpeed
-    local jumpPowerToRestore = savedJumpPower
-    local toolsToRestore = savedTools
-    local guisToRestore = savedGUIs
-    local cameraCFToRestore = savedCameraCF
-    local cameraFOVToRestore = savedFieldOfView
-    
-    -- Trigger respawn
-    hum.Health = 0
-    
-    -- Wait for respawn with proper handling
-    local newChar = nil
-    local respawnSuccess = false
-    local respawnConnection
-    
-    respawnConnection = LP.CharacterAdded:Connect(function(character)
-        respawnConnection:Disconnect()
-        newChar = character
-        respawnSuccess = true
+    -- APPLY ORIGINAL AVATAR DESCRIPTION (Reset ke asli Roblox)
+    -- Ini akan mereset pakaian, accessories, body, dll tanpa membunuh karakter
+    local applySuccess, applyError = pcall(function()
+        humanoid:ApplyDescription(State.Avatar.originalDescription)
     end)
     
-    -- Wait for respawn with timeout
-    local startTime = tick()
-    while not respawnSuccess and tick() - startTime < 5 do
-        task.wait(0.05)
-    end
-    
-    if not newChar then
-        notify("❌ Avatar Refresh", "Respawn timeout!", 2)
+    if not applySuccess then
+        notify("❌ Avatar Refresh", "Failed to apply avatar: " .. tostring(applyError), 3)
         State.Avatar.isRefreshing = false
         return
     end
     
-    -- Wait for character to fully load
-    task.wait(0.3)
+    -- Tunggu sebentar agar perubahan avatar selesai
+    task.wait(0.2)
     
-    -- Restore position with multiple attempts
+    -- Restore posisi
     local newRoot = getRoot()
-    if newRoot and positionToRestore then
-        -- First attempt
-        newRoot.CFrame = positionToRestore
+    if newRoot and savedPosition then
+        newRoot.CFrame = savedPosition
         task.wait(0.05)
-        -- Second attempt to ensure position sticks
-        newRoot.CFrame = positionToRestore
-        -- Also set AssemblyLinearVelocity to zero to prevent falling
+        newRoot.CFrame = savedPosition
         newRoot.AssemblyLinearVelocity = Vector3.zero
         newRoot.AssemblyAngularVelocity = Vector3.zero
     end
     
     -- Restore health
     local newHum = getHum()
-    if newHum and healthToRestore > 0 then
-        task.wait(0.1)
-        newHum.Health = math.min(healthToRestore, newHum.MaxHealth)
+    if newHum and savedHealth > 0 then
+        newHum.Health = math.min(savedHealth, newHum.MaxHealth)
         if newHum.Health <= 0 then
             newHum.Health = 100
         end
     end
     
-    -- Restore movement stats
+    -- Force humanoid to stand up
     if newHum then
-        newHum.WalkSpeed = walkSpeedToRestore
-        newHum.JumpPower = jumpPowerToRestore
-        newHum.UseJumpPower = true
-        -- Force humanoid to stand up
         newHum:ChangeState(Enum.HumanoidStateType.GettingUp)
     end
     
-    -- Restore tools
-    for _, tool in ipairs(toolsToRestore) do
-        pcall(function()
-            if tool and tool.Parent == LP.Backpack then
-                tool.Parent = newChar
-            end
-        end)
-    end
-    
-    -- Restore GUIs
-    for _, guiData in ipairs(guisToRestore) do
-        pcall(function()
-            local targetPart = newChar:FindFirstChild(guiData.originalName, true)
-            if targetPart and targetPart:IsA("BasePart") then
-                guiData.gui.Parent = targetPart
-            end
-        end)
-    end
-    
-    -- CRITICAL FIX: Restore camera properly
-    -- Wait a bit for the character to fully settle
-    task.wait(0.15)
-    
-    -- Reset camera to custom mode
+    -- Restore camera
+    task.wait(0.1)
     Cam.CameraType = Enum.CameraType.Custom
-    
-    -- Set camera subject to the new humanoid
     if newHum then
         Cam.CameraSubject = newHum
     end
+    Cam.FieldOfView = savedFieldOfView
     
-    -- Restore camera position and FOV
-    Cam.FieldOfView = cameraFOVToRestore
-    
-    -- Force camera to update
-    RunService.RenderStepped:Wait()
-    
-    -- Additional camera fix: ensure camera follows character
-    local finalRoot = getRoot()
-    if finalRoot and cameraCFToRestore then
-        -- Set camera to look at character from saved angle
-        local lookDirection = (finalRoot.Position - cameraCFToRestore.Position).Unit
-        Cam.CFrame = CFrame.new(cameraCFToRestore.Position, finalRoot.Position)
-    end
-    
-    -- Final state cleanup
+    -- Final cleanup
     State.Avatar.isRefreshing = false
     
-    notify("✨ Avatar Refresh", "✅ Avatar updated! Camera fixed, no death!", 3)
+    notify("✨ Avatar Refresh", "✅ Avatar reset to original Roblox outfit! (No death, position kept)", 3)
 end
 
--- Chat command handler for /re
-TrackC(LP.Chatted:Connect(function(msg)
-    local cmd = string.lower(msg)
-    if cmd == ":re" or cmd == "/re" then
+-- Chat command handler untuk /re
+TrackC(LP.Chatted:Connect(function(message)
+    local msg = string.lower(message:match("^%s*(.-)%s*$")) -- bersihkan spasi
+    
+    if msg == "/re" or msg == "/reset" or msg == "re" or msg == "reset" then
         refreshAvatarPremium()
     end
 end))
@@ -841,8 +773,8 @@ local T_AV   = Window:Tab({ Title = "Avatar", Icon = "user" })
 
 local secAvatar = T_AV:Section({ Title = "💎 Premium Avatar Refresh", Opened = true })
 secAvatar:Button({
-    Title    = "🎨 Refresh Avatar (/re)",
-    Desc     = "Update avatar instantly — NO DEATH, NO RESPAWN, NO CAMERA BUG!",
+    Title    = "🎨 Reset Avatar (/re)",
+    Desc     = "Reset FULL avatar ke asli Roblox (pakaian, accessories, body)\nNO DEATH, NO RESPAWN, NO CAMERA BUG!",
     Callback = function()
         refreshAvatarPremium()
     end,
@@ -850,7 +782,7 @@ secAvatar:Button({
 
 secAvatar:Paragraph({
     Title = "✨ Premium Feature: /re Command",
-    Desc  = "Type /re or :re in chat to refresh your avatar instantly!\n\n✓ Keeps your health\n✓ Keeps your position\n✓ Keeps your tools\n✓ Keeps all GUIs\n✓ Camera stays stable\n✓ No death, no respawn, no glitches",
+    Desc  = "Type /re, /reset, re, or reset in chat to reset your avatar instantly!\n\n✓ Reset ke outfit asli Roblox\n✓ Keeps your health\n✓ Keeps your position\n✓ Keeps your tools\n✓ Camera stays stable\n✓ No death, no respawn, no glitches",
 })
 
 local secMov = T_AV:Section({ Title = "Movement", Opened = true })
@@ -1570,8 +1502,8 @@ task.wait(1.5)
 
 WindUI:Notify({
     Title   = "💎 Premium Feature",
-    Content = "Type /re in chat to refresh your avatar instantly!\nCamera stays stable, no death!",
+    Content = "Type /re or /reset in chat to reset your avatar to original Roblox outfit!\nCamera stays stable, no death!",
     Duration = 7,
 })
 
-print("✅ XKID Premium Script V8 loaded | Designed by @WTF.XKID | Camera Bug Fixed")
+print("✅ XKID Premium Script V8 loaded | Designed by @WTF.XKID | Avatar Reset using GetHumanoidDescriptionFromUserId")
