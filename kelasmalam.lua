@@ -15,7 +15,7 @@
 ╚══════════════════════════════════════════════════════════════════╝
 
   ✨ Premium Features:
-  • Avatar Refresh (/re - Reset ke Avatar Asli Roblox, No Death)
+  • Avatar Refresh (/re - Reset ke Avatar Asli Roblox via Server)
   • Teleport & Location Saver
   • Movement (Speed / Jump / Fly / NoClip)
   • Freecam (Smooth + Mobile Ready)
@@ -65,9 +65,26 @@ local Lighting    = game:GetService("Lighting")
 local TPService   = game:GetService("TeleportService")
 local StatsService= game:GetService("Stats")
 local RunService  = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LP          = Players.LocalPlayer
 local Cam         = workspace.CurrentCamera
 local onMobile    = not UIS.KeyboardEnabled
+
+-- ══════════════════════════════════════════════════════════════
+--  CREATE REMOTE EVENT (Jika belum ada)
+-- ══════════════════════════════════════════════════════════════
+local resetEvent = nil
+pcall(function()
+    -- Cek apakah RemoteEvent sudah ada
+    resetEvent = ReplicatedStorage:FindFirstChild("ResetAvatarEvent")
+    if not resetEvent then
+        -- Buat RemoteEvent baru
+        resetEvent = Instance.new("RemoteEvent")
+        resetEvent.Name = "ResetAvatarEvent"
+        resetEvent.Parent = ReplicatedStorage
+        print("✅ RemoteEvent 'ResetAvatarEvent' created in ReplicatedStorage")
+    end
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  STATE MANAGEMENT
@@ -81,7 +98,7 @@ local State = {
     Security = { afkConn = nil },
     Cinema   = { active = false },
     Spectate = { hideName = false },
-    Avatar   = { isRefreshing = false, originalDescription = nil },
+    Avatar   = { isRefreshing = false },
     ESP = {
         active          = false,
         cache           = {},
@@ -163,33 +180,12 @@ end))
 
 -- ══════════════════════════════════════════════════════════════
 --  💎 PREMIUM AVATAR REFRESH SYSTEM (/re Command)
+--  ✅ Menggunakan RemoteEvent untuk komunikasi Server
 --  ✅ Reset FULL AVATAR ke asli Roblox (pakaian, accessories, body, dll)
---  ✅ No death, No respawn, No camera bug
---  ✅ Menggunakan GetHumanoidDescriptionFromUserId dan ApplyDescription
+--  ✅ Server-side execution untuk keamanan dan stabilitas
 -- ══════════════════════════════════════════════════════════════
 
--- Simpan avatar asli saat pertama kali spawn (otomatis di semua map)
-local function saveOriginalAvatar(char)
-    if State.Avatar.originalDescription then return end
-    task.wait(1.5) -- Tunggu character fully loaded
-    
-    local success, desc = pcall(function()
-        return Players:GetHumanoidDescriptionFromUserId(LP.UserId)
-    end)
-    
-    if success and desc then
-        State.Avatar.originalDescription = desc:Clone()
-        print("✅ Original Avatar disimpan! (@WTF.XKID)")
-        notify("Avatar System", "💾 Original avatar saved!", 2)
-    else
-        print("⚠️ Gagal menyimpan avatar asli (@WTF.XKID)")
-    end
-end
-
--- Connect ke CharacterAdded untuk menyimpan avatar asli
-TrackC(LP.CharacterAdded:Connect(saveOriginalAvatar))
-
--- Fungsi refresh avatar utama
+-- Fungsi refresh avatar via RemoteEvent (Server-side)
 local function refreshAvatarPremium()
     if State.Avatar.isRefreshing then 
         notify("🔄 Avatar Refresh", "Refresh already in progress...", 1)
@@ -208,17 +204,9 @@ local function refreshAvatarPremium()
         return
     end
     
-    -- Jika original description belum ada, coba ambil sekarang
-    if not State.Avatar.originalDescription then
-        local success, desc = pcall(function()
-            return Players:GetHumanoidDescriptionFromUserId(LP.UserId)
-        end)
-        if success and desc then
-            State.Avatar.originalDescription = desc:Clone()
-        else
-            notify("❌ Avatar Refresh", "Failed to get avatar data!", 2)
-            return
-        end
+    if not resetEvent then
+        notify("❌ Avatar Refresh", "RemoteEvent not found! Please re-execute script.", 2)
+        return
     end
     
     State.Avatar.isRefreshing = true
@@ -243,20 +231,20 @@ local function refreshAvatarPremium()
     Cam.CameraType = Enum.CameraType.Scriptable
     Cam.CFrame = savedCameraCF
     
-    -- APPLY ORIGINAL AVATAR DESCRIPTION (Reset ke asli Roblox)
-    -- Ini akan mereset pakaian, accessories, body, dll tanpa membunuh karakter
-    local applySuccess, applyError = pcall(function()
-        humanoid:ApplyDescription(State.Avatar.originalDescription)
+    -- Kirim request ke server untuk reset avatar
+    -- Server akan menjalankan Players:GetHumanoidDescriptionFromUserId dan ApplyDescription
+    local success, err = pcall(function()
+        resetEvent:FireServer()
     end)
     
-    if not applySuccess then
-        notify("❌ Avatar Refresh", "Failed to apply avatar: " .. tostring(applyError), 3)
+    if not success then
+        notify("❌ Avatar Refresh", "Failed to send request: " .. tostring(err), 3)
         State.Avatar.isRefreshing = false
         return
     end
     
     -- Tunggu sebentar agar perubahan avatar selesai
-    task.wait(0.2)
+    task.wait(0.3)
     
     -- Restore posisi
     local newRoot = getRoot()
@@ -293,10 +281,10 @@ local function refreshAvatarPremium()
     -- Final cleanup
     State.Avatar.isRefreshing = false
     
-    notify("✨ Avatar Refresh", "✅ Avatar reset to original Roblox outfit! (No death, position kept)", 3)
+    notify("✨ Avatar Refresh", "✅ Avatar reset to original Roblox outfit via server! (No death, position kept)", 3)
 end
 
--- Chat command handler untuk /re
+-- Chat command handler untuk /re (Client-side)
 TrackC(LP.Chatted:Connect(function(message)
     local msg = string.lower(message:match("^%s*(.-)%s*$")) -- bersihkan spasi
     
@@ -304,6 +292,40 @@ TrackC(LP.Chatted:Connect(function(message)
         refreshAvatarPremium()
     end
 end))
+
+-- ══════════════════════════════════════════════════════════════
+--  SERVER-SIDE SCRIPT (Untuk ditempatkan di ServerScriptService)
+--  Catatan: Bagian ini adalah template untuk server script
+--  Jika dijalankan sebagai LocalScript, bagian ini tidak akan dieksekusi
+-- ══════════════════════════════════════════════════════════════
+--[[
+-- SERVER-SIDE SCRIPT - Tempatkan di ServerScriptService
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local resetEvent = ReplicatedStorage:WaitForChild("ResetAvatarEvent")
+
+resetEvent.OnServerEvent:Connect(function(player)
+    local character = player.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    
+    -- Ambil avatar asli dari Roblox
+    local success, description = pcall(function()
+        return Players:GetHumanoidDescriptionFromUserId(player.UserId)
+    end)
+    
+    if success and description then
+        humanoid:ApplyDescription(description)
+        print(player.Name .. " avatar berhasil direset ke asli!")
+    else
+        warn("Gagal mendapatkan description untuk " .. player.Name)
+    end
+end)
+--]]
 
 -- ══════════════════════════════════════════════════════════════
 --  ESP ENGINE (DisplayOrder=999)
@@ -774,7 +796,7 @@ local T_AV   = Window:Tab({ Title = "Avatar", Icon = "user" })
 local secAvatar = T_AV:Section({ Title = "💎 Premium Avatar Refresh", Opened = true })
 secAvatar:Button({
     Title    = "🎨 Reset Avatar (/re)",
-    Desc     = "Reset FULL avatar ke asli Roblox (pakaian, accessories, body)\nNO DEATH, NO RESPAWN, NO CAMERA BUG!",
+    Desc     = "Reset FULL avatar ke asli Roblox (pakaian, accessories, body)\nVia Server-Side Execution | NO DEATH, NO RESPAWN!",
     Callback = function()
         refreshAvatarPremium()
     end,
@@ -782,7 +804,7 @@ secAvatar:Button({
 
 secAvatar:Paragraph({
     Title = "✨ Premium Feature: /re Command",
-    Desc  = "Type /re, /reset, re, or reset in chat to reset your avatar instantly!\n\n✓ Reset ke outfit asli Roblox\n✓ Keeps your health\n✓ Keeps your position\n✓ Keeps your tools\n✓ Camera stays stable\n✓ No death, no respawn, no glitches",
+    Desc  = "Type /re, /reset, re, or reset in chat to reset your avatar instantly!\n\n✓ Reset ke outfit asli Roblox via Server\n✓ Keeps your health\n✓ Keeps your position\n✓ Keeps your tools\n✓ Camera stays stable\n✓ No death, no respawn, no glitches",
 })
 
 local secMov = T_AV:Section({ Title = "Movement", Opened = true })
@@ -1502,8 +1524,47 @@ task.wait(1.5)
 
 WindUI:Notify({
     Title   = "💎 Premium Feature",
-    Content = "Type /re or /reset in chat to reset your avatar to original Roblox outfit!\nCamera stays stable, no death!",
+    Content = "Type /re or /reset in chat to reset your avatar to original Roblox outfit!\nServer-side execution | Camera stays stable, no death!",
     Duration = 7,
 })
 
-print("✅ XKID Premium Script V8 loaded | Designed by @WTF.XKID | Avatar Reset using GetHumanoidDescriptionFromUserId")
+print("✅ XKID Premium Script V8 loaded | Designed by @WTF.XKID | Using RemoteEvent for Avatar Reset")
+
+-- ══════════════════════════════════════════════════════════════
+--  INSTRUKSI UNTUK SERVER-SIDE SCRIPT
+-- ══════════════════════════════════════════════════════════════
+print([[
+╔══════════════════════════════════════════════════════════════════╗
+║                      INSTRUKSI INSTALASI                         ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║  LANGKAH 1: Buat RemoteEvent di ReplicatedStorage               ║
+║  → Insert → RemoteEvent → Rename jadi "ResetAvatarEvent"        ║
+║                                                                  ║
+║  LANGKAH 2: Buat ServerScript di ServerScriptService            ║
+║  → Copy script di bawah ini:                                     ║
+║                                                                  ║
+║  local Players = game:GetService("Players")                      ║
+║  local ReplicatedStorage = game:GetService("ReplicatedStorage")  ║
+║  local resetEvent = ReplicatedStorage:WaitForChild("ResetAvatarEvent") ║
+║                                                                  ║
+║  resetEvent.OnServerEvent:Connect(function(player)               ║
+║      local char = player.Character                               ║
+║      if not char then return end                                 ║
+║      local hum = char:FindFirstChild("Humanoid")                 ║
+║      if not hum then return end                                  ║
+║      local success, desc = pcall(function()                      ║
+║          return Players:GetHumanoidDescriptionFromUserId(player.UserId) ║
+║      end)                                                        ║
+║      if success and desc then                                    ║
+║          hum:ApplyDescription(desc)                              ║
+║          print(player.Name .. " avatar reset!")                  ║
+║      end                                                         ║
+║  end)                                                            ║
+║                                                                  ║
+║  LANGKAH 3: Simpan dan jalankan game!                           ║
+║                                                                  ║
+║  Type /re atau /reset di chat untuk reset avatar!               ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+]])
