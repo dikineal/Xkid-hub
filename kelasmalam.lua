@@ -124,7 +124,19 @@ TrackC(LP.Chatted:Connect(function(msg)
     end
 end))
 
-local ZWS = "\226\128\140"
+local function SpoofChat(str)
+    local cyrillic = {
+        ["a"] = "а", ["c"] = "с", ["e"] = "е", ["o"] = "о", ["p"] = "р", ["x"] = "х", ["y"] = "у",
+        ["A"] = "А", ["B"] = "В", ["C"] = "С", ["E"] = "Е", ["H"] = "Н", ["M"] = "М", ["O"] = "О", ["P"] = "Р", ["T"] = "Т", ["X"] = "Х", ["Y"] = "У"
+    }
+    local result = ""
+    for i = 1, #str do
+        local c = str:sub(i,i)
+        result = result .. (cyrillic[c] or c) .. "\226\128\140"
+    end
+    return result
+end
+
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
 setreadonly(mt, false)
@@ -133,14 +145,10 @@ mt.__namecall = newcclosure(function(self, ...)
     local args = {...}
     if State.Security.antiFilter and not checkcaller() then
         if method == "FireServer" and self.Name == "SayMessageRequest" and type(args[1]) == "string" then
-            local res = ""
-            for i=1, #args[1] do res = res .. string.sub(args[1],i,i) .. ZWS end
-            args[1] = res
+            args[1] = SpoofChat(args[1])
             return oldNamecall(self, unpack(args))
         elseif method == "SendAsync" and self.ClassName == "TextChannel" and type(args[1]) == "string" then
-            local res = ""
-            for i=1, #args[1] do res = res .. string.sub(args[1],i,i) .. ZWS end
-            args[1] = res
+            args[1] = SpoofChat(args[1])
             return oldNamecall(self, unpack(args))
         end
     end
@@ -414,7 +422,7 @@ end
 -- ══════════════════════════════════════════════════════════════
 --  FREECAM ENGINE (Smooth + Mobile)
 -- ══════════════════════════════════════════════════════════════
-local FC = { active=false, pos=Vector3.zero, vel=Vector3.zero, pitchDeg=0, yawDeg=0, speed=1, sens=0.25, savedCF=nil, damping=0.40, accel=0.50 }
+local FC = { active=false, pos=Vector3.zero, vel=Vector3.zero, pitchDeg=0, yawDeg=0, speed=2, sens=0.25, savedCF=nil, damping=0.20, accel=0.80 }
 local fcRotT,fcMoveT,fcMoveSt,fcRotLast = nil,nil,nil,nil
 local fcJoy   = Vector2.zero; local DEAD_X  = 25; local DEAD_Y = 20
 local fcConns = {}
@@ -586,7 +594,6 @@ secLock:Toggle({ Title="Shift Lock", Desc="Karakter selalu hadap kamera", Value=
         notify("Shift Lock","🔓  Nonaktif", 2)
     end
 end})
--- (HAPUS secAtm di sini sesuai permintaan)
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB: CINEMATIC
@@ -608,10 +615,10 @@ secFC:Toggle({ Title="Freecam", Desc="PC: RMB rotate  |  Mobile: Kiri gerak / Ka
         Cam.FieldOfView=70; Cam.CameraType=Enum.CameraType.Custom; notify("Freecam","🎬  OFF", 2)
     end
 end})
-secFC:Slider({ Title="Speed", Step=1, Value={Min=1,Max=30,Default=5}, Callback=function(v) FC.speed=v end })
+secFC:Slider({ Title="Speed", Step=1, Value={Min=1,Max=30,Default=2}, Callback=function(v) FC.speed=v end })
 secFC:Slider({ Title="Sensitivity", Step=1, Value={Min=1,Max=20,Default=5}, Callback=function(v) FC.sens=v*0.05 end })
-secFC:Slider({ Title="Damping", Step=1, Value={Min=10,Max=100,Default=40}, Callback=function(v) FC.damping=v*0.01 end })
-secFC:Slider({ Title="Acceleration", Step=1, Value={Min=5,Max=100,Default=50}, Callback=function(v) FC.accel=v*0.01 end })
+secFC:Slider({ Title="Damping", Step=1, Value={Min=1,Max=100,Default=20}, Callback=function(v) FC.damping=v*0.01 end })
+secFC:Slider({ Title="Acceleration", Step=1, Value={Min=5,Max=100,Default=80}, Callback=function(v) FC.accel=v*0.01 end })
 secFC:Slider({ Title="FOV", Step=1, Value={Min=10,Max=120,Default=70}, Callback=function(v) Cam.FieldOfView=v end })
 
 local secDisp = T_CI:Section({ Title = "Display", Opened = false })
@@ -672,13 +679,12 @@ secSP:Dropdown({ Title="Target Player", Values=specDropOpts, Callback=function(v
     if p then Spec.target=p; if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local _,ry,_=p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ(); Spec.orbitYaw=math.deg(ry); Spec.orbitPitch=20; Spec.fpYaw=math.deg(ry); Spec.fpPitch=0 end end
 end})
 secSP:Button({ Title="Refresh List", Callback=function() Spec.target=nil; specDropOpts=getDisplayNames(); notify("Spectate","Daftar diperbarui!", 2) end })
--- (HAPUS Hide Target Name di sini sesuai permintaan)
 secSP:Toggle({ Title="Spectate  ON / OFF", Value=false, Callback=function(v)
     Spec.active=v
     if v then
         if not Spec.target then notify("Spectate","Pilih target dulu!", 3); Spec.active=false; return end
         Spec.origFov=Cam.FieldOfView; startSpecCapture(); startSpecLoop()
-        local name=Spec.target.DisplayName -- Fixed notification text (No sensor)
+        local name=Spec.target.DisplayName
         notify("Spectate","👁  Menonton: "..name, 3)
     else
         stopSpecLoop(); stopSpecCapture(); Cam.CameraType=Enum.CameraType.Custom; Cam.FieldOfView=Spec.origFov; notify("Spectate","Spectate off", 2)
@@ -697,8 +703,15 @@ secCam:Slider({ Title="FOV Zoom", Step=1, Value={Min=10,Max=120,Default=70}, Cal
 local T_WO   = Window:Tab({ Title = "World", Icon = "globe" })
 local function getAtm() return Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere",Lighting) end
 local function setWeather(c,b,fs,fe,fr,fg,fb,ar,ag,ab,d,o,gl,h) Lighting.ClockTime=c; Lighting.Brightness=b; Lighting.FogStart=fs; Lighting.FogEnd=fe; Lighting.FogColor=Color3.fromRGB(fr,fg,fb); Lighting.Ambient=Color3.fromRGB(ar,ag,ab); local atm=getAtm(); atm.Density=d; atm.Offset=o; atm.Glare=gl; atm.Halo=h end
-local secWea = T_WO:Section({ Title = "Weather Presets", Opened = true })
+
+local secAtmos = T_WO:Section({ Title = "Atmosphere & Time", Opened = true })
+secAtmos:Slider({ Title="Clock Time (Waktu)", Step=1, Value={Min=0,Max=24,Default=14}, Callback=function(v) Lighting.ClockTime=v end })
+
+local secWea = T_WO:Section({ Title = "Weather & Aesthetic Presets", Opened = true })
 secWea:Button({ Title="☀  Cerah", Callback=function() setWeather(14,2,1000,10000,200,220,255,120,120,120,0.05,0.1,0.3,0.2) end })
+secWea:Button({ Title="🌸  Soft Aesthetic", Callback=function() setWeather(15,1.5,500,3000,255,200,220,200,180,200,0.1,0.2,0.5,0.3) end })
+secWea:Button({ Title="🌴  Vaporwave", Callback=function() setWeather(18,2,200,2000,255,100,255,50,0,100,0.2,0.3,0.8,0.6) end })
+secWea:Button({ Title="📜  Dark Academia", Callback=function() setWeather(17,0.8,300,1500,150,130,110,80,70,60,0.4,0.1,0,0.1) end })
 secWea:Button({ Title="↺  Reset Default", Callback=function() setWeather(14,1,0,100000,191,191,191,70,70,70,0.35,0,0,0.25) end })
 
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
@@ -712,7 +725,7 @@ secGfx:Button({ Title="💎  Ultra  (Lv10)", Callback=function() setGfx(Enum.Qua
 local T_SC   = Window:Tab({ Title = "Security", Icon = "shield" })
 
 local secProt = T_SC:Section({ Title = "Protection & Chat", Opened = true })
-secProt:Toggle({ Title="Anti Chat Filter (Pro 2026)", Desc="Bypass tags (####) memakai Zero-Width Obfuscation", Value=false, Callback=function(v) State.Security.antiFilter = v end })
+secProt:Toggle({ Title="Anti Chat Filter (Pro 2026)", Desc="Bypass tags memakai Cyrillic Spoofing + Break", Value=false, Callback=function(v) State.Security.antiFilter = v end })
 secProt:Toggle({ Title="Anti-AFK", Desc="Cegah kick saat AFK (Bypass mode)", Value=false, Callback=function(v)
     if v then
         State.Security.afkConn = TrackC(LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); VirtualUser:Button2Down(Vector2.new(0,0),Cam.CFrame); task.wait(1); VirtualUser:Button2Up(Vector2.new(0,0),Cam.CFrame) end))
