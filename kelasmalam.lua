@@ -19,10 +19,28 @@
   • Spectate (Orbit & First Person)
   • Modern ESP (Corner / Box / Highlight / Tracer)
   • World (Weather / Atmosphere / Graphics)
-  • Security (Anti-AFK / Respawn / ESP Tracker / Performance)
+  • Security (Anti-AFK / Advanced Respawn / ESP Tracker / Anti-Glitcher)
   • Live FPS & PING Counter
   • Settings (Theme / Keybind)
 ]]
+
+-- ══════════════════════════════════════════════════════════════
+--  0. AUTO CLEANUP & MEMORY PLUG
+-- ══════════════════════════════════════════════════════════════
+if getgenv()._XKID_LOADED then
+    pcall(function()
+        for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
+            if v.Name == "WindUI" or v.Name == "_XKIDEsp" then v:Destroy() end
+        end
+        if getgenv()._XKID_CONNS then
+            for _, c in pairs(getgenv()._XKID_CONNS) do pcall(function() c:Disconnect() end) end
+        end
+    end)
+    collectgarbage("collect") -- Force GPU/RAM memory sweep
+end
+getgenv()._XKID_LOADED = true
+getgenv()._XKID_CONNS = {}
+local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
 -- ══════════════════════════════════════════════════════════════
 --  LOAD
@@ -120,7 +138,7 @@ local function notify(title, content, dur)
 end
 
 -- Persistent stats on respawn
-LP.CharacterAdded:Connect(function(char)
+TrackC(LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
@@ -130,7 +148,57 @@ LP.CharacterAdded:Connect(function(char)
             hum.JumpPower    = State.Move.jp
         end
     end
-end)
+end))
+
+-- ══════════════════════════════════════════════════════════════
+--  CHAT COMMAND (:re) - ADVANCED RECOVERY
+-- ══════════════════════════════════════════════════════════════
+TrackC(LP.Chatted:Connect(function(msg)
+    local cmd = string.lower(msg)
+    if cmd == ":re" or cmd == "/re" then
+        local char = LP.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local head = char and char:FindFirstChild("Head")
+
+        if hrp and hum then
+            -- Save position + velocity
+            local savedCF = hrp.CFrame
+            local savedVel = hrp.AssemblyLinearVelocity
+            
+            -- Save GUIs
+            local savedGUIs = {}
+            if head then
+                for _, gui in ipairs(head:GetChildren()) do
+                    if gui:IsA("BillboardGui") or gui:IsA("SurfaceGui") then
+                        table.insert(savedGUIs, gui:Clone())
+                    end
+                end
+            end
+
+            hum.Health = 0
+            task.spawn(function()
+                local newChar = LP.CharacterAdded:Wait()
+                task.wait(0.3) -- Tunggu physics aktif
+                
+                local newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
+                local newHead = newChar:WaitForChild("Head", 5)
+
+                if newHrp then
+                    newHrp.CFrame = savedCF
+                    newHrp.AssemblyLinearVelocity = savedVel
+                end
+
+                if newHead then
+                    for _, gui in ipairs(savedGUIs) do
+                        gui.Parent = newHead
+                    end
+                end
+                notify("Command", "✅ Auto-Respawn (Advanced) Executed", 2)
+            end)
+        end
+    end
+end))
 
 -- ══════════════════════════════════════════════════════════════
 --  ESP ENGINE  (DisplayOrder=999 — tidak tertimpa WindUI)
@@ -313,20 +381,20 @@ local function renderESP(player)
     end
 end
 
-RS.RenderStepped:Connect(function()
+TrackC(RS.RenderStepped:Connect(function()
     if State.ESP.active then
         for _, p in pairs(Players:GetPlayers()) do renderESP(p) end
     end
-end)
+end))
 
-Players.PlayerRemoving:Connect(function(p)
+TrackC(Players.PlayerRemoving:Connect(function(p)
     local c = State.ESP.cache[p]
     if c then
         for _, r in pairs(c.renders) do if r and r.Parent then r:Destroy() end end
         if c.hl then c.hl:Destroy() end
         State.ESP.cache[p] = nil
     end
-end)
+end))
 
 -- ══════════════════════════════════════════════════════════════
 --  FLY ENGINE
@@ -430,11 +498,11 @@ local function toggleFly(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE  (Smooth + Mobile)
+--  FREECAM ENGINE  (Smooth + Mobile + Responsive default)
 -- ══════════════════════════════════════════════════════════════
 local FC = {
     active=false, pos=Vector3.zero, vel=Vector3.zero,
-    pitchDeg=0, yawDeg=0, speed=2, sens=0.25,
+    pitchDeg=0, yawDeg=0, speed=5, sens=0.25,
     savedCF=nil, damping=0.20, accel=0.80,
 }
 local fcRotT,fcMoveT,fcMoveSt,fcRotLast = nil,nil,nil,nil
@@ -726,9 +794,9 @@ secMov:Toggle({
     Value    = false,
     Callback = function(v)
         if v then
-            State.Move.infJ = UIS.JumpRequest:Connect(function()
+            State.Move.infJ = TrackC(UIS.JumpRequest:Connect(function()
                 if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end
-            end)
+            end))
         else
             if State.Move.infJ then State.Move.infJ:Disconnect(); State.Move.infJ=nil end
         end
@@ -776,12 +844,12 @@ secAbi:Toggle({
     Value    = false,
     Callback = function(v)
         if v then
-            noFallConn = RS.Heartbeat:Connect(function()
+            noFallConn = TrackC(RS.Heartbeat:Connect(function()
                 local hrp=getRoot()
                 if hrp and hrp.Velocity.Y < -30 then
                     hrp.Velocity=Vector3.new(hrp.Velocity.X,-10,hrp.Velocity.Z)
                 end
-            end)
+            end))
         else
             if noFallConn then noFallConn:Disconnect(); noFallConn=nil end
         end
@@ -798,23 +866,23 @@ secAbi:Toggle({
             local hum=getHum()
             if hum then hum.MaxHealth=math.huge; hum.Health=math.huge end
             godLastPos  = getRoot() and getRoot().CFrame
-            godRespConn = RS.Heartbeat:Connect(function()
+            godRespConn = TrackC(RS.Heartbeat:Connect(function()
                 local r=getRoot(); if r then godLastPos=r.CFrame end
-            end)
-            godConn = RS.Heartbeat:Connect(function()
+            end))
+            godConn = TrackC(RS.Heartbeat:Connect(function()
                 local h=getHum()
                 if h then
                     if h.Health<h.MaxHealth then h.Health=h.MaxHealth end
                     if h.MaxHealth~=math.huge then h.MaxHealth=math.huge end
                 end
-            end)
-            LP.CharacterAdded:Connect(function(char)
+            end))
+            TrackC(LP.CharacterAdded:Connect(function(char)
                 task.wait(0.2)
                 local hrp=char:WaitForChild("HumanoidRootPart",5)
                 if hrp and godLastPos then hrp.CFrame=godLastPos end
                 local h=char:WaitForChild("Humanoid",5)
                 if h then h.MaxHealth=math.huge; h.Health=math.huge end
-            end)
+            end))
             notify("God Mode","🛡  HP Infinite aktif!", 3)
         else
             if godConn     then godConn:Disconnect();     godConn=nil end
@@ -838,13 +906,13 @@ secLock:Toggle({
         if not hum or not hrp then notify("Shift Lock","❌  Karakter tidak ditemukan"); return end
         if v then
             hum.CameraOffset=Vector3.new(1.75,0,0); hum.AutoRotate=false
-            shiftConn = RS.RenderStepped:Connect(function()
+            shiftConn = TrackC(RS.RenderStepped:Connect(function()
                 local r=getRoot()
                 if r then
                     local cl=Cam.CFrame.LookVector
                     r.CFrame=CFrame.new(r.Position, r.Position+Vector3.new(cl.X,0,cl.Z))
                 end
-            end)
+            end))
             notify("Shift Lock","🎯  Aktif!", 2)
         else
             if shiftConn then shiftConn:Disconnect(); shiftConn=nil end
@@ -908,7 +976,7 @@ secFC:Toggle({
         end
     end,
 })
-secFC:Slider({ Title="Speed",        Desc="Kecepatan freecam",  Step=1,    Value={Min=1,  Max=30,  Default=10 }, Callback=function(v) FC.speed   = tonumber(v) or 10             end })
+secFC:Slider({ Title="Speed",        Desc="Kecepatan freecam",  Step=1,    Value={Min=1,  Max=30,  Default=5 },  Callback=function(v) FC.speed   = tonumber(v) or 5              end })
 secFC:Slider({ Title="Sensitivity",  Desc="Kepekaan rotasi",    Step=1,    Value={Min=1,  Max=20,  Default=5 },  Callback=function(v) FC.sens    = (tonumber(v) or 5)*0.05       end })
 secFC:Slider({ Title="Damping",      Desc="Rem pergerakan (kecil = responsif)",  Step=1, Value={Min=10, Max=100, Default=20}, Callback=function(v) FC.damping = (tonumber(v) or 20)*0.01      end })
 secFC:Slider({ Title="Acceleration", Desc="Akselerasi awal (besar = responsif)", Step=1, Value={Min=5,  Max=100, Default=80}, Callback=function(v) FC.accel   = (tonumber(v) or 80)*0.01      end })
@@ -1154,6 +1222,9 @@ end
 
 local secWea = T_WO:Section({ Title = "Weather Presets", Opened = true })
 secWea:Button({ Title="☀  Cerah",              Callback=function() setWeather(14,2,1000,10000,200,220,255,120,120,120,0.05,0.1,0.3,0.2);  notify("Weather","☀  Cerah!",2)         end })
+secWea:Button({ Title="🌸  Soft Aesthetic",     Callback=function() setWeather(15,1.5,500,3000,255,200,220,200,180,200,0.1,0.2,0.5,0.3);  notify("Weather","🌸  Soft Aesthetic",2) end })
+secWea:Button({ Title="🌴  Vaporwave",          Callback=function() setWeather(18,2,200,2000,255,100,255,50,0,100,0.2,0.3,0.8,0.6);       notify("Weather","🌴  Vaporwave",2)      end })
+secWea:Button({ Title="📜  Dark Academia",      Callback=function() setWeather(17,0.8,300,1500,150,130,110,80,70,60,0.4,0.1,0,0.1);       notify("Weather","📜  Dark Academia",2)  end })
 secWea:Button({ Title="🌅  Sunset",             Callback=function() setWeather(18,1.5,500,4000,255,180,100,180,100,60,0.2,0.3,0.8,0.5);   notify("Weather","🌅  Golden Hour!",2)   end })
 secWea:Button({ Title="🌃  Malam Bintang",       Callback=function() setWeather(0,0.3,2000,20000,10,10,30,20,20,40,0.02,0,0,0.1);          notify("Weather","🌃  Malam Bintang!",2) end })
 secWea:Button({ Title="🌫  Berkabut",            Callback=function() setWeather(12,0.8,20,300,200,200,200,150,150,150,0.6,0.5,0,0.1);      notify("Weather","🌫  Berkabut!",2)      end })
@@ -1201,13 +1272,13 @@ secProt:Toggle({
     Value    = false,
     Callback = function(v)
         if v then
-            State.Security.afkConn = LP.Idled:Connect(function()
+            State.Security.afkConn = TrackC(LP.Idled:Connect(function()
                 VirtualUser:CaptureController()
                 VirtualUser:ClickButton2(Vector2.new())
                 VirtualUser:Button2Down(Vector2.new(0,0),Cam.CFrame)
                 task.wait(1)
                 VirtualUser:Button2Up(Vector2.new(0,0),Cam.CFrame)
-            end)
+            end))
             pcall(function()
                 for _,conn in pairs(getconnections(LP.Idled)) do conn:Disable() end
             end)
@@ -1230,27 +1301,63 @@ secProt:Button({
 -- Fast Respawn
 local secResp = T_SC:Section({ Title = "Fast Respawn", Opened = true })
 local respawnLastPos = nil
+local respawnLastVel = Vector3.new()
+local respawnLastGUIs = {}
+
 task.spawn(function()
     while true do
         task.wait(1)
-        local r=getRoot(); local h=getHum()
-        if r and h and h.Health>0 then respawnLastPos=r.CFrame end
+        local char = LP.Character
+        local r = char and char:FindFirstChild("HumanoidRootPart")
+        local h = char and char:FindFirstChildOfClass("Humanoid")
+        local head = char and char:FindFirstChild("Head")
+
+        if r and h and h.Health > 0 then
+            respawnLastPos = r.CFrame
+            respawnLastVel = r.AssemblyLinearVelocity
+            
+            respawnLastGUIs = {}
+            if head then
+                for _, gui in ipairs(head:GetChildren()) do
+                    if gui:IsA("BillboardGui") or gui:IsA("SurfaceGui") then
+                        table.insert(respawnLastGUIs, gui:Clone())
+                    end
+                end
+            end
+        end
     end
 end)
 secResp:Button({
     Title    = "Fast Respawn",
-    Desc     = "Mati & kembali ke posisi terakhir",
+    Desc     = "Mati & kembali dengan CFrame & GUI asli",
     Callback = function()
         if not respawnLastPos then notify("Respawn","❌  Posisi belum direkam!"); return end
-        local savedCF=respawnLastPos
+        
+        local savedCF = respawnLastPos
+        local savedVel = respawnLastVel
+        local savedGUIs = respawnLastGUIs
+        
         local hum=getHum()
         if not hum then notify("Respawn","❌  Karakter tidak ditemukan"); return end
+        
         hum.Health=0
         task.spawn(function()
-            local char=LP.CharacterAdded:Wait()
+            local char = LP.CharacterAdded:Wait()
             task.wait(0.3)
-            local hrp=char:WaitForChild("HumanoidRootPart",10)
-            if hrp then hrp.CFrame=savedCF; notify("Respawn","✅  Kembali ke posisi terakhir!", 3) end
+            
+            local newHrp = char:WaitForChild("HumanoidRootPart", 5)
+            local newHead = char:WaitForChild("Head", 5)
+            
+            if newHrp then
+                newHrp.CFrame = savedCF
+                newHrp.AssemblyLinearVelocity = savedVel
+            end
+            if newHead then
+                for _, gui in ipairs(savedGUIs) do
+                    gui.Parent = newHead
+                end
+            end
+            notify("Respawn","✅  Berhasil Fast Respawn!", 3)
         end)
     end,
 })
@@ -1330,8 +1437,35 @@ secESPPre:Button({ Title="Rage",          Desc="Corner + Center Tracer", Callbac
 secESPPre:Button({ Title="Clean",         Desc="Corner, tanpa text",     Callback=function() State.ESP.boxMode="Corner";    State.ESP.tracerMode="OFF";    State.ESP.showDistance=false; State.ESP.showNickname=false; State.ESP.maxDrawDistance=200; notify("ESP","Clean Preset",2)      end })
 secESPPre:Button({ Title="Anti-Glitcher", Desc="Highlight + Tracer 500", Callback=function() State.ESP.boxMode="HIGHLIGHT"; State.ESP.tracerMode="Bottom"; State.ESP.showDistance=true; State.ESP.showNickname=true; State.ESP.maxDrawDistance=500; notify("ESP","Anti-Glitcher",2)      end })
 
--- Performance
-local secPerf = T_SC:Section({ Title = "Performance", Opened = false })
+-- Performance & Anti-Glitch
+local secPerf = T_SC:Section({ Title = "Performance & CleanUp", Opened = false })
+
+local antiGlitchConn = nil
+secPerf:Toggle({
+    Title    = "Anti Screen-Block (Glitcher)",
+    Desc     = "Otomatis hapus part/aksesoris raksasa dari player lain",
+    Value    = false,
+    Callback = function(v)
+        if v then
+            antiGlitchConn = TrackC(RS.Heartbeat:Connect(function()
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p ~= LP and p.Character then
+                        for _, part in pairs(p.Character:GetDescendants()) do
+                            if part:IsA("BasePart") and (part.Size.X > 50 or part.Size.Y > 50 or part.Size.Z > 50) then
+                                part:Destroy() 
+                            end
+                        end
+                    end
+                end
+            end))
+            notify("Anti-Glitch","🛡  Screen-Block Remover Aktif!", 2)
+        else
+            if antiGlitchConn then antiGlitchConn:Disconnect(); antiGlitchConn=nil end
+            notify("Anti-Glitch","❌  Nonaktif", 2)
+        end
+    end,
+})
+
 secPerf:Button({ Title="60 FPS",     Callback=function() if setfpscap then setfpscap(60);  notify("FPS","60 FPS",2)          else notify("Error","setfpscap tidak support",2) end end })
 secPerf:Button({ Title="90 FPS",     Callback=function() if setfpscap then setfpscap(90);  notify("FPS","90 FPS",2)          else notify("Error","setfpscap tidak support",2) end end })
 secPerf:Button({ Title="120 FPS",    Callback=function() if setfpscap then setfpscap(120); notify("FPS","120 FPS",2)         else notify("Error","setfpscap tidak support",2) end end })
@@ -1369,19 +1503,19 @@ secPerf:Toggle({
 -- ══════════════════════════════════════════════════════════════
 local T_SET  = Window:Tab({ Title = "Settings", Icon = "settings" })
 
--- Info + FPS & PING Counter (live via Paragraph:SetDesc)
+-- Info + FPS Counter (live via Paragraph:SetDesc)
 local secInfo = T_SET:Section({ Title = "System Info", Opened = true })
 local statsLabel = secInfo:Paragraph({
     Title = "Network & Performance",
-    Desc  = "Menghitung..."
+    Desc  = "Menghitung...",
 })
 
 -- Stats update loop (setiap 0.5 detik)
 local fpsSamples = {}
-RS.RenderStepped:Connect(function(dt)
+TrackC(RS.RenderStepped:Connect(function(dt)
     table.insert(fpsSamples, dt)
     if #fpsSamples > 30 then table.remove(fpsSamples,1) end
-end)
+end))
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -1424,7 +1558,7 @@ secTheme:Dropdown({
         for name in pairs(WindUI:GetThemes()) do table.insert(names,name) end
         table.sort(names); return names
     end)(),
-    Value    = "Rose", 
+    Value    = "Rose",
     Callback = function(selected) WindUI:SetTheme(selected) end,
 })
 secTheme:Toggle({
@@ -1481,13 +1615,13 @@ task.spawn(function()
 end)
 
 -- NoClip loop
-RS.Stepped:Connect(function()
+TrackC(RS.Stepped:Connect(function()
     if (State.Move.ncp or State.Fling.active or State.SoftFling.active) and LP.Character then
         for _,v in pairs(LP.Character:GetDescendants()) do
             if v:IsA("BasePart") then v.CanCollide=false end
         end
     end
-end)
+end))
 
 -- ══════════════════════════════════════════════════════════════
 --  READY
@@ -1495,6 +1629,7 @@ end)
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "XKID SCRIPT",
-    Content = "Premium Edition siap digunakan!  🚀",
+    Content = "Premium Edition V5 siap digunakan!  🚀",
     Duration = 5,
 })
+
