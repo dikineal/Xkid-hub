@@ -19,7 +19,7 @@
   • Spectate (Orbit & First Person)
   • Modern ESP (Corner / Box / Highlight / Tracer)
   • World (Weather / Atmosphere / Graphics)
-  • Security (Anti-AFK / SDF Respawn / Anti-Glitcher)
+  • Security (Anti-AFK / Premium SDF Respawn / Anti-Glitcher)
   • Live FPS & PING Counter
   • Settings (Theme / Keybind)
   • Branding & Code: @WTF.XKID
@@ -152,66 +152,80 @@ TrackC(LP.CharacterAdded:Connect(function(char)
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  CHAT COMMAND (:re) - INSTANT AVATAR REFRESH (NO DEATH)
+--  PREMIUM AVATAR REFRESH SYSTEM (@WTF.XKID)
 -- ══════════════════════════════════════════════════════════════
+local function refreshAvatarPremium()
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local head = char and char:FindFirstChild("Head")
+
+    if not hum then return end
+
+    -- UI Notification Indicator
+    notify("🔄 Premium Refresh", "Memuat data avatar... (@WTF.XKID)", 2)
+    
+    -- Task spawn prevents the game from freezing while waiting for Roblox API
+    task.spawn(function()
+        local success, err = pcall(function()
+            -- 1. Save state (Position, Health, Tools, GUIs)
+            local savedHealth = hum.Health
+            local hrp = getRoot()
+            local savedCF = hrp and hrp.CFrame
+            
+            -- Mengambil data tampilan terbaru
+            local newDescription = Players:GetHumanoidDescriptionFromUserId(LP.UserId)
+            
+            -- Mengamankan Tool
+            local currentTool = char:FindFirstChildOfClass("Tool")
+            if currentTool then
+                currentTool.Parent = LP.Backpack
+            end
+            
+            -- Mengamankan Custom UI
+            local savedGuis = {}
+            if head then
+                for _, item in ipairs(head:GetChildren()) do
+                    if item:IsA("BillboardGui") or item:IsA("SurfaceGui") then
+                        item.Parent = nil
+                        table.insert(savedGuis, item)
+                    end
+                end
+            end
+            
+            -- 2. Apply new avatar (Character never dies/respawns)
+            hum:ApplyDescription(newDescription)
+            
+            -- 3. Restore state
+            local newHead = char:WaitForChild("Head", 5)
+            if newHead then
+                for _, gui in ipairs(savedGuis) do
+                    gui.Parent = newHead
+                end
+            end
+            
+            -- Restore Tool
+            if currentTool then
+                currentTool.Parent = char
+            end
+            
+            -- Restore Health & Position strictly
+            if savedHealth then hum.Health = savedHealth end
+            if savedCF and getRoot() then getRoot().CFrame = savedCF end
+        end)
+
+        if success then
+            notify("✨ Premium Success", "Avatar berhasil diperbarui!", 2.5)
+        else
+            notify("❌ Error", "Gagal memuat avatar (Roblox API Error).", 3)
+        end
+    end)
+end
+
+-- Chat Command Handler for /re
 TrackC(LP.Chatted:Connect(function(msg)
     local cmd = string.lower(msg)
     if cmd == ":re" or cmd == "/re" then
-        local char = LP.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local head = char and char:FindFirstChild("Head")
-
-        if hum then
-            -- UI Notification Indicator
-            notify("🔄 Refreshing", "Memuat data avatar... (@WTF.XKID)", 2)
-            
-            -- Task spawn prevents the game from freezing while waiting for Roblox API
-            task.spawn(function()
-                local success, err = pcall(function()
-                    -- 1. Mengambil data tampilan terbaru
-                    local newDescription = Players:GetHumanoidDescriptionFromUserId(LP.UserId)
-                    
-                    -- 2. Mengamankan Tool
-                    local currentTool = char:FindFirstChildOfClass("Tool")
-                    if currentTool then
-                        currentTool.Parent = LP.Backpack
-                    end
-                    
-                    -- 3. Mengamankan Custom UI
-                    local savedGuis = {}
-                    if head then
-                        for _, item in ipairs(head:GetChildren()) do
-                            if item:IsA("BillboardGui") or item:IsA("SurfaceGui") then
-                                item.Parent = nil
-                                table.insert(savedGuis, item)
-                            end
-                        end
-                    end
-                    
-                    -- 4. Terapkan tampilan baru
-                    hum:ApplyDescription(newDescription)
-                    
-                    -- 5. Kembalikan UI
-                    local newHead = char:WaitForChild("Head", 5)
-                    if newHead then
-                        for _, gui in ipairs(savedGuis) do
-                            gui.Parent = newHead
-                        end
-                    end
-                    
-                    -- 6. Kembalikan Tool
-                    if currentTool then
-                        currentTool.Parent = char
-                    end
-                end)
-
-                if success then
-                    notify("✨ Success", "Avatar berhasil diperbarui!", 2.5)
-                else
-                    notify("❌ Error", "Gagal memuat avatar (Roblox API Error).", 3)
-                end
-            end)
-        end
+        refreshAvatarPremium()
     end
 end))
 
@@ -1596,11 +1610,19 @@ TrackC(RS.Stepped:Connect(function()
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  READY
+--  READY & NOTIFICATIONS
 -- ══════════════════════════════════════════════════════════════
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
-    Title   = "XKID SCRIPT",
-    Content = "Premium Edition V9 siap digunakan! 🚀\nCode by @WTF.XKID",
+    Title   = "XKID PREMIUM",
+    Content = "Welcome to Premium Edition!\nCode by @WTF.XKID",
     Duration = 5,
+})
+
+task.wait(1.5)
+
+WindUI:Notify({
+    Title   = "✨ Premium Feature",
+    Content = "Type /re in chat to refresh your avatar instantly without dying!",
+    Duration = 7,
 })
