@@ -777,6 +777,15 @@ end
 -- ══════════════════════════════════════════════════════════════
 local T_PL   = Window:Tab({ Title = "Player", Icon = "user" })
 
+local secAvatar = T_PL:Section({ Title = "Avatar", Opened = true })
+secAvatar:Button({
+    Title    = "Premium Avatar Refresh (/re)",
+    Desc     = "Perbarui avatar secara instan tanpa mati",
+    Callback = function()
+        refreshAvatarPremium()
+    end,
+})
+
 local secMov = T_PL:Section({ Title = "Movement", Opened = true })
 secMov:Button({
     Title    = "Refresh POV",
