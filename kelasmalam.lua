@@ -9,22 +9,17 @@
 ║      ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═════╝     ╚══════╝ ╚═════╝           ║
 ║                                                                  ║
 ║                  P R E M I U M   E D I T I O N                  ║
-║                     Powered by WindUI                            ║
+║                     V3.2 - CINEMATIC & HUB                      ║
 ╚══════════════════════════════════════════════════════════════════╝
-
-  Optimasi v3.1:
-  • Anti Re-Execute (Mencegah UI Ganda)
-  • Manajemen Koneksi (Mencegah Lag Akumulatif)
-  • Peningkatan Validasi Karakter & Humanoid
 ]]
 
 -- ══════════════════════════════════════════════════════════════
---  ANTI RE-EXECUTE & CLEANUP (Mencegah duplikasi sistem)
+--  ANTI RE-EXECUTE & CLEANUP
 -- ══════════════════════════════════════════════════════════════
 if getgenv().XKID_Init then
     pcall(function()
         if game.CoreGui:FindFirstChild("WindUI") then game.CoreGui.WindUI:Destroy() end
-        if game.Players.LocalPlayer.PlayerGui:FindFirstChild("_XKIDEsp") then game.Players.LocalPlayer.PlayerGui._XKIDEsp:Destroy() end
+        if game.CoreGui:FindFirstChild("_XKID_Highlight") then game.CoreGui._XKID_Highlight:Destroy() end
         for _, conn in pairs(getgenv().XKID_Connections or {}) do conn:Disconnect() end
     end)
 end
@@ -44,206 +39,218 @@ local Lighting    = game:GetService("Lighting")
 local TPService   = game:GetService("TeleportService")
 local LP          = Players.LocalPlayer
 local Cam         = workspace.CurrentCamera
-local onMobile    = not UIS.KeyboardEnabled
 
 -- ══════════════════════════════════════════════════════════════
---  STATE
+--  STATE (Penyimpanan Data)
 -- ══════════════════════════════════════════════════════════════
 local State = {
-    Move     = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
-    Fly      = { active = false, bv = nil, bg = nil, _keys = {} },
-    Fling    = { active = false, power = 1000000 },
-    SoftFling= { active = false, power = 4000 },
-    Teleport = { selectedTarget = "" },
-    Security = { afkConn = nil },
-    Cinema   = { active = false },
-    Spectate = { hideName = false },
-    ESP = {
-        active          = false,
-        cache           = {},
-        boxMode         = "Corner",
-        tracerMode      = "Bottom",
-        maxDrawDistance = 300,
-        showDistance    = true,
-        showNickname    = true,
-        boxColor_N      = Color3.fromRGB(0, 255, 150),
-        boxColor_S      = Color3.fromRGB(255, 0, 100),
-        tracerColor_N   = Color3.fromRGB(0, 200, 255),
-        tracerColor_S   = Color3.fromRGB(255, 50, 50),
-        nameColor       = Color3.fromRGB(255, 255, 255),
-    },
+    Move     = { ws = 16, jp = 50, ncp = false, infJ = false },
+    Fly      = { active = false, speed = 60, inc = 0 },
+    Ghost    = { active = false },
+    Dance    = { currentAnim = nil, speed = 1.0, list = {} },
+    Visual   = { fullBright = false, noFog = false, colorBoost = false },
+    ESP      = { active = false, highlights = {}, tracers = {}, skyTracers = false },
+    Chat     = { bypass = false }
 }
 
 -- ══════════════════════════════════════════════════════════════
---  HELPERS (Ditambahkan proteksi nil-check)
+--  FUNCTIONS & UTILITIES
 -- ══════════════════════════════════════════════════════════════
-local function getRoot()
-    local char = LP.Character
-    return char and char:FindFirstChild("HumanoidRootPart")
-end
-
-local function getHum()
-    local char = LP.Character
-    return char and char:FindFirstChildOfClass("Humanoid")
-end
-
 local function notify(title, content, dur)
     WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 })
 end
 
--- ══════════════════════════════════════════════════════════════
---  ESP ENGINE (Optimal & Clean)
--- ══════════════════════════════════════════════════════════════
-local function getESPGui()
-    local sg = LP.PlayerGui:FindFirstChild("_XKIDEsp")
-    if not sg then
-        sg = Instance.new("ScreenGui")
-        sg.Name            = "_XKIDEsp"
-        sg.ResetOnSpawn    = false
-        sg.DisplayOrder    = 999
-        sg.Parent          = LP.PlayerGui
+-- Chat Commands Listener (:re, ;re, /re, !rejoin)
+local chatConn = LP.Chatted:Connect(function(msg)
+    local cmd = msg:lower()
+    if cmd == ";re" or cmd == "/re" or cmd == ":re" then
+        if LP.Character then LP.Character:BreakJoints() end
+    elseif cmd == "!rejoin" then
+        TPService:Teleport(game.PlaceId, LP)
     end
-    return sg
+end)
+table.insert(getgenv().XKID_Connections, chatConn)
+
+-- Anti-AFK (VirtualUser)
+local afkConn = LP.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+table.insert(getgenv().XKID_Connections, afkConn)
+
+-- ══════════════════════════════════════════════════════════════
+--  DANCE & CINEMATIC ENGINE
+-- ══════════════════════════════════════════════════════════════
+local function scanAnims()
+    State.Dance.list = {}
+    -- Mencari animasi di ReplicatedStorage atau Character (Universal)
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("Animation") and v.Name ~= "Animation" then
+            table.insert(State.Dance.list, v)
+        end
+    end
+    notify("Scanner", "Ditemukan " .. #State.Dance.list .. " Animasi!", 2)
 end
 
-local function drawLine(p1, p2, thick, color)
-    local dist = (p1 - p2).Magnitude
-    if dist < 1 then return nil end
-    local f = Instance.new("Frame")
-    f.BackgroundColor3 = color
-    f.BorderSizePixel  = 0
-    f.Position  = UDim2.new(0, (p1.X + p2.X)/2 - dist/2, 0, (p1.Y + p2.Y)/2 - thick/2)
-    f.Size      = UDim2.new(0, dist, 0, thick)
-    f.Rotation  = math.deg(math.atan2(p2.Y - p1.Y, p2.X - p1.X))
-    f.ZIndex    = 10
-    f.Parent    = getESPGui()
-    return f
-end
-
-local function renderESP(player)
-    if not State.ESP.active or player == LP then return end
-    local char = player.Character
-    if not char then return end
-    
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    local myRoot = getRoot()
-    if not myRoot then return end
-    if (myRoot.Position - hrp.Position).Magnitude > State.ESP.maxDrawDistance then return end
-
-    local sp, on = Cam:WorldToViewportPoint(hrp.Position)
-    if not on then return end
-
-    if not State.ESP.cache[player] then
-        State.ESP.cache[player] = { renders = {} }
-    end
-    local cache = State.ESP.cache[player]
-
-    -- Hapus render lama
-    for _, r in pairs(cache.renders) do if r.Parent then r:Destroy() end end
-    cache.renders = {}
-
-    -- Logika Box & Text Sederhana (Untuk Performa)
-    if State.ESP.boxMode ~= "OFF" then
-        local top = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
-        local bot = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
-        local h = math.abs(top.Y - bot.Y)
-        local w = h * 0.6
-        
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0, 200, 0, 20)
-        label.Position = UDim2.new(0, sp.X - 100, 0, sp.Y - (h/2) - 20)
-        label.BackgroundTransparency = 1
-        label.TextColor3 = State.ESP.nameColor
-        label.Text = State.ESP.showNickname and player.DisplayName or ""
-        label.Font = Enum.Font.GothamBold
-        label.TextSize = 12
-        label.Parent = getESPGui()
-        table.insert(cache.renders, label)
+local function syncBeat()
+    local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if hum then
+        local anims = hum:GetPlayingAnimationTracks()
+        for _, track in pairs(anims) do
+            track:TimePosition(0)
+        end
     end
 end
 
 -- ══════════════════════════════════════════════════════════════
---  WINDOW & TABS
+--  GHOST MODE (Server-Side Logic)
+-- ══════════════════════════════════════════════════════════════
+local function toggleGhost(val)
+    State.Ghost.active = val
+    local char = LP.Character
+    if char then
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") or v:IsA("Decal") then
+                v.Transparency = val and 1 or 0
+            end
+        end
+        -- Sembunyikan Nama (Server-Side nametag if exists)
+        if char:FindFirstChild("Head") and char.Head:FindFirstChildOfClass("BillboardGui") then
+            char.Head:FindFirstChildOfClass("BillboardGui").Enabled = not val
+        end
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  UI WINDOW & TABS
 -- ══════════════════════════════════════════════════════════════
 local Window = WindUI:CreateWindow({
-    Title       = "XKID PREMIUM V3.1",
+    Title       = "XKID PREMIUM V3.2",
     Author      = "by XKID",
     Folder      = "XKID_V3",
-    Icon        = "shield",
+    Icon        = "music",
     Theme       = "Rose",
-    Size        = UDim2.fromOffset(650, 450),
+    Size        = UDim2.fromOffset(600, 400),
     OpenButton  = { Enabled = true, Draggable = true }
 })
 
-local T_PL = Window:Tab({ Title = "Karakter", Icon = "user" })
-local secMov = T_PL:Section({ Title = "Pergerakan", Opened = true })
+-- TAB KARAKTER (Movement & Fly)
+local T_Main = Window:Tab({ Title = "Karakter", Icon = "user" })
+local secMove = T_Main:Section({ Title = "Movement", Opened = true })
 
-secMov:Slider({
-    Title = "Kecepatan Jalan",
-    Value = { Min = 16, Max = 500, Default = 16 },
-    Callback = function(v)
-        State.Move.ws = v
-        local hum = getHum()
-        if hum then hum.WalkSpeed = v end
-    end,
+secMove:Slider({
+    Title = "Fly Speed",
+    Value = { Min = 10, Max = 300, Default = 60 },
+    Callback = function(v) State.Fly.speed = v end
 })
 
-secMov:Toggle({
-    Title = "Noclip",
-    Desc = "Tembus objek/tembok",
+secMove:Toggle({
+    Title = "Fly (Original Logic)",
     Value = false,
-    Callback = function(v) State.Move.ncp = v end
+    Callback = function(v) State.Fly.active = v end
+})
+
+secMove:Toggle({
+    Title = "Ghost Mode (Non-Visual)",
+    Value = false,
+    Callback = function(v) toggleGhost(v) end
+})
+
+-- TAB DANCE (Lead Dance System)
+local T_Dance = Window:Tab({ Title = "Dance", Icon = "music" })
+T_Dance:Button({
+    Title = "Auto Scan Map Animations",
+    Callback = function() scanAnims() end
+})
+
+T_Dance:Button({
+    Title = "Sync Beat (Reset Position)",
+    Callback = function() syncBeat() end
+})
+
+T_Dance:Slider({
+    Title = "Animation Speed",
+    Value = { Min = 0, Max = 3, Default = 1 },
+    Callback = function(v)
+        State.Dance.speed = v
+        local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            for _, t in pairs(hum:GetPlayingAnimationTracks()) do t:AdjustSpeed(v) end
+        end
+    end
+})
+
+-- TAB HUNTER (ESP & DETECTION)
+local T_Hunter = Window:Tab({ Title = "Hunter", Icon = "eye" })
+T_Hunter:Toggle({
+    Title = "Highlight ESP (Neon Body)",
+    Value = false,
+    Callback = function(v) State.ESP.active = v end
+})
+
+T_Hunter:Toggle({
+    Title = "Sky Tracers (Garis Langit)",
+    Value = false,
+    Callback = function(v) State.ESP.skyTracers = v end
+})
+
+-- TAB VISUAL (Cinematic Tools)
+local T_Vis = Window:Tab({ Title = "Visual", Icon = "camera" })
+T_Vis:Toggle({
+    Title = "Full Bright",
+    Value = false,
+    Callback = function(v)
+        State.Visual.fullBright = v
+        Lighting.Brightness = v and 2 or 1
+        Lighting.GlobalShadows = not v
+    end
+})
+
+T_Vis:Toggle({
+    Title = "No Fog",
+    Value = false,
+    Callback = function(v) Lighting.FogEnd = v and 100000 or 1000 end
+})
+
+T_Vis:Button({
+    Title = "Hide UI (Rec Mode)",
+    Callback = function()
+        if game.CoreGui:FindFirstChild("WindUI") then
+            game.CoreGui.WindUI.Enabled = false
+            notify("REC MODE", "Tekan tombol toggle untuk munculkan kembali", 3)
+        end
+    end
 })
 
 -- ══════════════════════════════════════════════════════════════
---  BACKEND LOOPS (Pusat Logika)
+--  MAIN LOOP ENGINE (Heartbeat)
 -- ══════════════════════════════════════════════════════════════
-
--- Loop Pergerakan & Fisika
 local mainLoop = RS.Heartbeat:Connect(function()
     local char = LP.Character
-    local hum = getHum()
-    local hrp = getRoot()
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    
+    -- Optimal Fly (Snappy)
+    if State.Fly.active and hrp then
+        hrp.Velocity = Vector3.new(0, 0.1, 0)
+        local moveDir = char:FindFirstChildOfClass("Humanoid").MoveDirection
+        hrp.CFrame = hrp.CFrame + (moveDir * State.Fly.speed / 10)
+    end
 
-    if hum and hrp then
-        -- Konsistensi Speed
-        if hum.WalkSpeed ~= State.Move.ws then hum.WalkSpeed = State.Move.ws end
-        
-        -- Noclip
-        if State.Move.ncp then
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = false end
+    -- ESP Highlight Engine
+    if State.ESP.active then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LP and p.Character then
+                if not p.Character:FindFirstChild("_XKID_High") then
+                    local h = Instance.new("Highlight")
+                    h.Name = "_XKID_High"
+                    h.FillTransparency = 0.5
+                    h.OutlineColor = Color3.fromRGB(255, 0, 0)
+                    h.Parent = p.Character
+                end
             end
-        end
-        
-        -- Fling Logic (Hanya jika aktif)
-        if State.Fling.active then
-            hrp.AssemblyAngularVelocity = Vector3.new(0, State.Fling.power, 0)
         end
     end
 end)
 table.insert(getgenv().XKID_Connections, mainLoop)
 
--- Loop ESP
-local espLoop = RS.RenderStepped:Connect(function()
-    if State.ESP.active then
-        for _, p in pairs(Players:GetPlayers()) do
-            renderESP(p)
-        end
-    end
-end)
-table.insert(getgenv().XKID_Connections, espLoop)
-
--- Anti-AFK
-local antiAfk = LP.Idled:Connect(function()
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new())
-end)
-table.insert(getgenv().XKID_Connections, antiAfk)
-
--- ══════════════════════════════════════════════════════════════
---  FINISH
--- ══════════════════════════════════════════════════════════════
-notify("XKID SCRIPT", "Optimasi v3.1 Berhasil Dimuat!", 3)
+notify("XKID PREMIUM", "V3.2 Berhasil Dimuat (Balikpapan Edition)", 4)
