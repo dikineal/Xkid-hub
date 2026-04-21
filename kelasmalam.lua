@@ -21,7 +21,7 @@
   • Movement (Speed / Jump / Fly / NoClip / Fling)
   • Freecam (Smooth + Mobile Ready)
   • Spectate (Orbit & First Person)
-  • Modern ESP (Corner / Box / Highlight / Tracer + Colors)
+  • Modern ESP (Corner / Box / Highlight / Tracer + Color Picker)
   • World Control (Weather / Atmosphere / Graphics)
   • Security (Anti-AFK / Fast Respawn / Anti-Glitcher / Anti-Lag)
   • Live FPS & PING Counter
@@ -96,6 +96,20 @@ local State = {
         tracerColor_S   = Color3.fromRGB(255, 50, 50),
         nameColor       = Color3.fromRGB(255, 255, 255),
     },
+}
+
+-- Color mapping untuk dropdown
+local colorMap = {
+    ["Merah"] = Color3.fromRGB(255, 0, 0),
+    ["Hijau"] = Color3.fromRGB(0, 255, 0),
+    ["Biru"] = Color3.fromRGB(0, 0, 255),
+    ["Kuning"] = Color3.fromRGB(255, 255, 0),
+    ["Ungu"] = Color3.fromRGB(255, 0, 255),
+    ["Cyan"] = Color3.fromRGB(0, 255, 255),
+    ["Orange"] = Color3.fromRGB(255, 165, 0),
+    ["Pink"] = Color3.fromRGB(255, 105, 180),
+    ["Putih"] = Color3.fromRGB(255, 255, 255),
+    ["Hitam"] = Color3.fromRGB(0, 0, 0),
 }
 
 -- ══════════════════════════════════════════════════════════════
@@ -657,7 +671,7 @@ end
 -- ══════════════════════════════════════════════════════════════
 local Window = WindUI:CreateWindow({
     Title       = "@WTF.XKID",
-    Subtitle    = "Version 1.0",
+    Subtitle    = "Luxury Script",
     Author      = "by @WTF.XKID",
     Folder      = "XKIDScript",
     Icon        = "zap",
@@ -1157,7 +1171,7 @@ secGfx:Button({ Title="📊 Medium (Lv5)", Callback=function() setGfx(Enum.Quali
 secGfx:Button({ Title="💎 Ultra (Lv10)", Callback=function() setGfx(Enum.QualityLevel.Level10); notify("Graphics","Ultra Lv10",2) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: ESP (LENGKAP)
+--  TAB 5: ESP (LENGKAP DENGAN DROPDOWN WARNA)
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "ESP", Icon = "radar" })
 
@@ -1194,27 +1208,77 @@ secESP:Toggle({ Title="Show Distance", Value=true, Callback=function(v) State.ES
 secESP:Toggle({ Title="Show Name", Value=true, Callback=function(v) State.ESP.showNickname=v end })
 secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
 
-local secESPColor = T_ESP:Section({ Title = "ESP Colors", Opened = true })
-secESPColor:Paragraph({ Title = "🎨 Normal Player Color", Desc = "Box & tracer color for normal players" })
-secESPColor:Slider({ Title="Red (R)", Step=1, Value={Min=0,Max=255,Default=0}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(v, State.ESP.boxColor_N.G*255, State.ESP.boxColor_N.B*255); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
-secESPColor:Slider({ Title="Green (G)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(State.ESP.boxColor_N.R*255, v, State.ESP.boxColor_N.B*255); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
-secESPColor:Slider({ Title="Blue (B)", Step=1, Value={Min=0,Max=255,Default=150}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(State.ESP.boxColor_N.R*255, State.ESP.boxColor_N.G*255, v); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
+-- ESP Colors dengan Dropdown
+local secESPColor = T_ESP:Section({ Title = "🎨 ESP Colors", Opened = true })
 
+-- Normal Player Color
+secESPColor:Paragraph({ Title = "👤 Normal Player Color", Desc = "Box & tracer color for normal players" })
+local normalColorDropdown = secESPColor:Dropdown({
+    Title    = "Normal Color",
+    Values   = {"Hijau", "Merah", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"},
+    Value    = "Hijau",
+    Callback = function(v)
+        local color = colorMap[v]
+        if color then
+            State.ESP.boxColor_N = color
+            State.ESP.tracerColor_N = color
+            notify("ESP Color", "Normal color: " .. v, 1)
+        end
+    end,
+})
+
+-- Enemy/Suspect Color
 secESPColor:Paragraph({ Title = "⚠ Enemy/Suspect Color", Desc = "Box & tracer color for enemies/suspects" })
-secESPColor:Slider({ Title="Red (R)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(v, State.ESP.boxColor_S.G*255, State.ESP.boxColor_S.B*255); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
-secESPColor:Slider({ Title="Green (G)", Step=1, Value={Min=0,Max=255,Default=0}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(State.ESP.boxColor_S.R*255, v, State.ESP.boxColor_S.B*255); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
-secESPColor:Slider({ Title="Blue (B)", Step=1, Value={Min=0,Max=255,Default=100}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(State.ESP.boxColor_S.R*255, State.ESP.boxColor_S.G*255, v); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
+local enemyColorDropdown = secESPColor:Dropdown({
+    Title    = "Enemy Color",
+    Values   = {"Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"},
+    Value    = "Merah",
+    Callback = function(v)
+        local color = colorMap[v]
+        if color then
+            State.ESP.boxColor_S = color
+            State.ESP.tracerColor_S = color
+            notify("ESP Color", "Enemy color: " .. v, 1)
+        end
+    end,
+})
 
+-- Text/Name Color
 secESPColor:Paragraph({ Title = "📝 Text/Name Color", Desc = "Color for player names and distance text" })
-secESPColor:Slider({ Title="Red (R)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.nameColor=Color3.fromRGB(v, State.ESP.nameColor.G*255, State.ESP.nameColor.B*255) end })
-secESPColor:Slider({ Title="Green (G)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.nameColor=Color3.fromRGB(State.ESP.nameColor.R*255, v, State.ESP.nameColor.B*255) end })
-secESPColor:Slider({ Title="Blue (B)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.nameColor=Color3.fromRGB(State.ESP.nameColor.R*255, State.ESP.nameColor.G*255, v) end })
+local textColorDropdown = secESPColor:Dropdown({
+    Title    = "Text Color",
+    Values   = {"Putih", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Hitam"},
+    Value    = "Putih",
+    Callback = function(v)
+        local color = colorMap[v]
+        if color then
+            State.ESP.nameColor = color
+            notify("ESP Color", "Text color: " .. v, 1)
+        end
+    end,
+})
 
-local secESPPreset = T_ESP:Section({ Title = "Quick Presets", Opened = false })
-secESPPreset:Button({ Title="Legit Mode", Callback=function() State.ESP.boxMode="OFF"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=true; State.ESP.showNickname=true; notify("ESP","Legit Mode",2) end })
-secESPPreset:Button({ Title="Rage Mode", Callback=function() State.ESP.boxMode="Corner"; State.ESP.tracerMode="Center"; State.ESP.showDistance=true; State.ESP.showNickname=true; notify("ESP","Rage Mode",2) end })
-secESPPreset:Button({ Title="Clean Mode", Callback=function() State.ESP.boxMode="Corner"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=false; State.ESP.showNickname=false; notify("ESP","Clean Mode",2) end })
-secESPPreset:Button({ Title="Highlight Mode", Callback=function() State.ESP.boxMode="HIGHLIGHT"; State.ESP.tracerMode="Bottom"; State.ESP.showDistance=true; State.ESP.showNickname=true; notify("ESP","Highlight Mode",2) end })
+-- Quick Presets
+local secESPPreset = T_ESP:Section({ Title = "⚡ Quick Presets", Opened = false })
+secESPPreset:Button({ Title="Legit Mode", Callback=function() 
+    State.ESP.boxMode="OFF"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=true; State.ESP.showNickname=true
+    normalColorDropdown:SetValue("Hijau"); enemyColorDropdown:SetValue("Merah"); textColorDropdown:SetValue("Putih")
+    notify("ESP","Legit Mode",2) 
+end })
+secESPPreset:Button({ Title="Rage Mode", Callback=function() 
+    State.ESP.boxMode="Corner"; State.ESP.tracerMode="Center"; State.ESP.showDistance=true; State.ESP.showNickname=true
+    normalColorDropdown:SetValue("Cyan"); enemyColorDropdown:SetValue("Merah"); textColorDropdown:SetValue("Kuning")
+    notify("ESP","Rage Mode",2) 
+end })
+secESPPreset:Button({ Title="Clean Mode", Callback=function() 
+    State.ESP.boxMode="Corner"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=false; State.ESP.showNickname=false
+    notify("ESP","Clean Mode",2) 
+end })
+secESPPreset:Button({ Title="Highlight Mode", Callback=function() 
+    State.ESP.boxMode="HIGHLIGHT"; State.ESP.tracerMode="Bottom"; State.ESP.showDistance=true; State.ESP.showNickname=true
+    normalColorDropdown:SetValue("Hijau"); enemyColorDropdown:SetValue("Merah"); textColorDropdown:SetValue("Putih")
+    notify("ESP","Highlight Mode",2) 
+end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 6: SECURITY
@@ -1247,7 +1311,7 @@ secProt:Button({
 
 local antiGlitchConn = nil
 secProt:Toggle({
-    Title    = "Anti Screen-Block (Glitcher)",
+    Title    = "Anti Screen-Block",
     Desc     = "Auto remove giant parts from other players",
     Value    = false,
     Callback = function(v)
@@ -1298,7 +1362,7 @@ secProt:Toggle({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: SETTINGS (LENGKAP)
+--  TAB 7: SETTINGS
 -- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
 
@@ -1382,11 +1446,11 @@ secCredit:Paragraph({
 })
 secCredit:Paragraph({
     Title = "Powered by",
-    Desc  = "👻 WindUI",
+    Desc  = "⚡ WindUI",
 })
 secCredit:Paragraph({
     Title = "Version",
-    Desc  = "V.1 -",
+    Desc  = "V.1 - Luxury Edition",
 })
 
 -- ══════════════════════════════════════════════════════════════
@@ -1435,4 +1499,4 @@ WindUI:Notify({
     Duration = 5,
 })
 
-print("✅ @WTF.XKID Script Loaded")
+print("✅ @WTF.XKID Luxury Script Loaded")
