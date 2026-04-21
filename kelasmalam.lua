@@ -1216,27 +1216,15 @@ secESP:Toggle({ Title="Show Name",     Value=true, Callback=function(v) State.ES
 secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
 
 local secESPColor = T_ESP:Section({ Title = "Colors", Opened = false })
-secESPColor:ColorPicker({
-    Title    = "Normal",
-    Value    = State.ESP.boxColor_N,
-    Callback = function(v)
-        State.ESP.boxColor_N    = v
-        State.ESP.tracerColor_N = v
-    end,
-})
-secESPColor:ColorPicker({
-    Title    = "Enemy",
-    Value    = State.ESP.boxColor_S,
-    Callback = function(v)
-        State.ESP.boxColor_S    = v
-        State.ESP.tracerColor_S = v
-    end,
-})
-secESPColor:ColorPicker({
-    Title    = "Name",
-    Value    = State.ESP.nameColor,
-    Callback = function(v) State.ESP.nameColor = v end,
-})
+secESPColor:Paragraph({ Title = "Normal Color (RGB)", Desc = "Box & tracer color for normal players" })
+secESPColor:Slider({ Title="R", Step=1, Value={Min=0,Max=255,Default=0},   Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(v, math.floor(State.ESP.boxColor_N.G*255), math.floor(State.ESP.boxColor_N.B*255)); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
+secESPColor:Slider({ Title="G", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(math.floor(State.ESP.boxColor_N.R*255), v, math.floor(State.ESP.boxColor_N.B*255)); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
+secESPColor:Slider({ Title="B", Step=1, Value={Min=0,Max=255,Default=150}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(math.floor(State.ESP.boxColor_N.R*255), math.floor(State.ESP.boxColor_N.G*255), v); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
+
+secESPColor:Paragraph({ Title = "Enemy Color (RGB)", Desc = "Box & tracer color for enemies" })
+secESPColor:Slider({ Title="R", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(v, math.floor(State.ESP.boxColor_S.G*255), math.floor(State.ESP.boxColor_S.B*255)); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
+secESPColor:Slider({ Title="G", Step=1, Value={Min=0,Max=255,Default=0},   Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(math.floor(State.ESP.boxColor_S.R*255), v, math.floor(State.ESP.boxColor_S.B*255)); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
+secESPColor:Slider({ Title="B", Step=1, Value={Min=0,Max=255,Default=100}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(math.floor(State.ESP.boxColor_S.R*255), math.floor(State.ESP.boxColor_S.G*255), v); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB: SECURITY
