@@ -16,16 +16,16 @@
 ╚══════════════════════════════════════════════════════════════════╝
 
   ✨ Premium Features:
-  • Avatar Refresh (/re - Ultra Seamless Recovery, 100% Executor Safe)
-  • Teleport & Location Saver
-  • Movement (Speed / Jump / Fly / NoClip)
+  • Avatar Refresh (/re - Ultra Seamless Recovery)
+  • Teleport & Location Saver (5 Slots)
+  • Movement (Speed / Jump / Fly / NoClip / Fling)
   • Freecam (Smooth + Mobile Ready)
   • Spectate (Orbit & First Person)
-  • Modern ESP (Corner / Box / Highlight / Tracer)
+  • Modern ESP (Corner / Box / Highlight / Tracer + Colors)
   • World Control (Weather / Atmosphere / Graphics)
-  • Security (Anti-AFK / Fast Respawn / Anti-Glitcher)
+  • Security (Anti-AFK / Fast Respawn / Anti-Glitcher / Anti-Lag)
   • Live FPS & PING Counter
-  • Premium Settings (Theme / Keybind)
+  • Premium Settings (Theme / Keybind / Acrylic)
   
   💎 Created by @WTF.XKID
 ]]
@@ -163,8 +163,6 @@ end))
 
 -- ══════════════════════════════════════════════════════════════
 --  💎 PREMIUM AVATAR REFRESH SYSTEM (/re Command)
---  ✅ Ultra-Seamless Recovery Method (100% Safe untuk Client-side)
---  ✅ No screen flickering, position kept exactly
 -- ══════════════════════════════════════════════════════════════
 
 local function refreshAvatarPremium()
@@ -176,7 +174,7 @@ local function refreshAvatarPremium()
     local head = char and char:FindFirstChild("Head")
 
     if not hum or not hrp then
-        notify("❌ Avatar Refresh", "Character/Humanoid not found!", 2)
+        notify("❌ Avatar Refresh", "Character not found!", 2)
         return 
     end
 
@@ -187,7 +185,6 @@ local function refreshAvatarPremium()
     local savedVel = hrp.AssemblyLinearVelocity
     local savedCamCF = Cam.CFrame
     
-    -- Mengamankan Custom UI (NameTags, dll)
     local savedGuis = {}
     if head then
         for _, item in ipairs(head:GetChildren()) do
@@ -197,11 +194,8 @@ local function refreshAvatarPremium()
         end
     end
 
-    -- Lock Camera agar layar tidak berkedip ke spawn point
     Cam.CameraType = Enum.CameraType.Scriptable
     Cam.CFrame = savedCamCF
-    
-    -- Force kill to regenerate character with original outfit
     hum.Health = 0
 
     task.spawn(function()
@@ -210,7 +204,6 @@ local function refreshAvatarPremium()
         local newHum = newChar:WaitForChild("Humanoid", 5)
         local newHead = newChar:WaitForChild("Head", 5)
         
-        -- Tunggu 1 frame agar physics engine merespons CFrame baru
         RS.RenderStepped:Wait()
 
         if newHrp then
@@ -230,7 +223,7 @@ local function refreshAvatarPremium()
         end
 
         State.Avatar.isRefreshing = false
-        notify("Avatar", "Done.", 2)
+        notify("Avatar", "✅ Refresh complete!", 2)
     end)
 end
 
@@ -533,7 +526,7 @@ local function toggleFly(v)
         State.Fly.bv.Velocity = move
         State.Fly.bg.CFrame   = CFrame.new(r.Position, r.Position+camCF.LookVector)
     end)
-    notify("Fly","✈ Fly ON — Follow camera direction", 3)
+    notify("Fly","✈ Fly ON", 2)
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -664,15 +657,16 @@ end
 -- ══════════════════════════════════════════════════════════════
 local Window = WindUI:CreateWindow({
     Title       = "@WTF.XKID",
-    Author      = "Luxury Script",
+    Subtitle    = "Version 1.0",
+    Author      = "by @WTF.XKID",
     Folder      = "XKIDScript",
     Icon        = "zap",
     Theme       = "Rose",
     Acrylic     = true,
     Transparent = true,
-    Size        = UDim2.fromOffset(720, 520),
-    MinSize     = Vector2.new(580, 400),
-    MaxSize     = Vector2.new(880, 600),
+    Size        = UDim2.fromOffset(720, 560),
+    MinSize     = Vector2.new(580, 420),
+    MaxSize     = Vector2.new(880, 620),
     ToggleKey   = Enum.KeyCode.RightShift,
     Resizable   = true,
     AutoScale   = true,
@@ -705,17 +699,15 @@ local Window = WindUI:CreateWindow({
 WindUI:SetTheme("Rose")
 
 -- ══════════════════════════════════════════════════════════════
---  TAB: AVATAR & PLAYER (Premium /re Feature)
+--  TAB 1: AVATAR & PLAYER
 -- ══════════════════════════════════════════════════════════════
-local T_AV   = Window:Tab({ Title = "Avatar", Icon = "user" })
+local T_AV = Window:Tab({ Title = "Player", Icon = "user" })
 
 local secAvatar = T_AV:Section({ Title = "Avatar Refresh", Opened = true })
 secAvatar:Button({
-    Title    = "Reset Avatar  —  /re",
+    Title    = "Reset Avatar — /re",
     Desc     = "Seamless outfit reset. Position & camera stay locked.",
-    Callback = function()
-        refreshAvatarPremium()
-    end,
+    Callback = function() refreshAvatarPremium() end,
 })
 
 local secMov = T_AV:Section({ Title = "Movement", Opened = true })
@@ -859,12 +851,13 @@ secAbi:Toggle({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB: TELEPORT
+--  TAB 2: TELEPORT
 -- ══════════════════════════════════════════════════════════════
-local T_TP   = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
-local secTP  = T_TP:Section({ Title = "Quick Teleport", Opened = true })
+local T_TP = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 
+local secTP = T_TP:Section({ Title = "Quick Teleport", Opened = true })
 local tpTarget = ""
+
 secTP:Input({
     Title       = "Search Player",
     Desc        = "Type player name",
@@ -941,11 +934,11 @@ for i = 1, 5 do
 end
 
 -- ══════════════════════════════════════════════════════════════
---  TAB: CAMERA & SPECTATE
+--  TAB 3: CAMERA & SPECTATE
 -- ══════════════════════════════════════════════════════════════
-local T_CAM  = Window:Tab({ Title = "Camera", Icon = "eye" })
+local T_CAM = Window:Tab({ Title = "Camera", Icon = "eye" })
 
-local secFC  = T_CAM:Section({ Title = "Freecam", Opened = true })
+local secFC = T_CAM:Section({ Title = "Freecam", Opened = true })
 secFC:Toggle({
     Title    = "Freecam",
     Desc     = "PC: RMB rotate | Mobile: Left move / Right rotate",
@@ -962,7 +955,7 @@ secFC:Toggle({
             if hrp then FC.savedCF=hrp.CFrame; hrp.Anchored=true end
             if hum then hum.WalkSpeed=0; hum.JumpPower=0; hum:ChangeState(Enum.HumanoidStateType.Physics) end
             startFCCapture(); startFCLoop()
-            notify("Freecam","🎬 ON — Left move | Right rotate", 3)
+            notify("Freecam","🎬 ON", 2)
         else
             stopFCLoop(); stopFCCapture()
             local hrp=getRoot(); local hum=getHum()
@@ -981,11 +974,11 @@ secFC:Toggle({
         end
     end,
 })
-secFC:Slider({ Title="Speed",        Desc="Freecam speed",  Step=1,    Value={Min=1,  Max=30,  Default=5 },  Callback=function(v) FC.speed   = tonumber(v) or 5 end })
-secFC:Slider({ Title="Sensitivity",  Desc="Rotation sensitivity", Step=1, Value={Min=1,  Max=20,  Default=5 }, Callback=function(v) FC.sens    = (tonumber(v) or 5)*0.05 end })
-secFC:Slider({ Title="FOV",          Desc="Field of View", Step=1, Value={Min=10, Max=120, Default=70}, Callback=function(v) Cam.FieldOfView = tonumber(v) or 70 end })
+secFC:Slider({ Title="Speed", Step=1, Value={Min=1, Max=30, Default=5}, Callback=function(v) FC.speed = tonumber(v) or 5 end })
+secFC:Slider({ Title="Sensitivity", Step=1, Value={Min=1, Max=20, Default=5}, Callback=function(v) FC.sens = (tonumber(v) or 5)*0.05 end })
+secFC:Slider({ Title="FOV", Step=1, Value={Min=10, Max=120, Default=70}, Callback=function(v) Cam.FieldOfView = tonumber(v) or 70 end })
 
-local secSP  = T_CAM:Section({ Title = "Spectate Player", Opened = true })
+local secSP = T_CAM:Section({ Title = "Spectate Player", Opened = true })
 
 local function inJoystick(pos)
     local ctrl = LP and LP.PlayerGui and LP.PlayerGui:FindFirstChild("TouchGui")
@@ -1079,7 +1072,6 @@ end
 local specDropOpts = getDisplayNames()
 secSP:Dropdown({
     Title    = "Target Player",
-    Desc     = "Select player to spectate",
     Values   = specDropOpts,
     Callback = function(v)
         local p=findPlayerByDisplay(v)
@@ -1101,46 +1093,36 @@ secSP:Button({
     end,
 })
 secSP:Toggle({
-    Title    = "Spectate ON / OFF",
-    Desc     = "Enable spectator mode",
+    Title    = "Spectate ON",
     Value    = false,
     Callback = function(v)
         Spec.active=v
         if v then
-            if not Spec.target then notify("Spectate","Select target first!", 3); Spec.active=false; return end
+            if not Spec.target then notify("Spectate","Select target first!", 2); Spec.active=false; return end
             Spec.origFov=Cam.FieldOfView
             startSpecCapture(); startSpecLoop()
-            notify("Spectate","👁 Spectating: "..Spec.target.DisplayName, 3)
+            notify("Spectate","👁 Spectating: "..Spec.target.DisplayName, 2)
         else
             stopSpecLoop(); stopSpecCapture()
             Cam.CameraType=Enum.CameraType.Custom; Cam.FieldOfView=Spec.origFov
-            notify("Spectate","Spectate off", 2)
+            notify("Spectate","Off", 2)
         end
     end,
 })
 secSP:Toggle({
     Title    = "First Person Mode",
-    Desc     = "ON = First Person | OFF = Orbit",
     Value    = false,
-    Callback = function(v)
-        Spec.mode=v and "first" or "third"
-        if v and Spec.target and Spec.target.Character then
-            local _,ry,_=Cam.CFrame:ToEulerAnglesYXZ()
-            local rx=math.asin(Cam.CFrame.LookVector.Y)
-            Spec.fpYaw=math.deg(ry); Spec.fpPitch=math.deg(rx)
-        end
-    end,
+    Callback = function(v) Spec.mode=v and "first" or "third" end,
 })
 secSP:Slider({
-    Title="Orbit Distance", Desc="Camera distance from target",
-    Step=1, Value={Min=3,Max=30,Default=8},
+    Title="Orbit Distance", Step=1, Value={Min=3,Max=30,Default=8},
     Callback=function(v) Spec.dist=tonumber(v) or 8 end,
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB: WORLD
+--  TAB 4: WORLD
 -- ══════════════════════════════════════════════════════════════
-local T_WO   = Window:Tab({ Title = "World", Icon = "globe" })
+local T_WO = Window:Tab({ Title = "World", Icon = "globe" })
 
 local function getAtm()
     return Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere",Lighting)
@@ -1155,36 +1137,33 @@ local function setWeather(c,b,fs,fe,fr,fg,fb,ar,ag,ab,d,o,gl,h)
 end
 
 local secWea = T_WO:Section({ Title = "Weather Presets", Opened = true })
-secWea:Button({ Title="☀ Clear",       Callback=function() setWeather(14,2,1000,10000,200,220,255,120,120,120,0.05,0.1,0.3,0.2);  notify("Weather","☀ Clear!",2) end })
-secWea:Button({ Title="🌸 Soft Aesthetic", Callback=function() setWeather(15,1.5,500,3000,255,200,220,200,180,200,0.1,0.2,0.5,0.3); notify("Weather","🌸 Soft Aesthetic",2) end })
-secWea:Button({ Title="🌴 Vaporwave",  Callback=function() setWeather(18,2,200,2000,255,100,255,50,0,100,0.2,0.3,0.8,0.6);   notify("Weather","🌴 Vaporwave",2) end })
-secWea:Button({ Title="🌅 Sunset",     Callback=function() setWeather(18,1.5,500,4000,255,180,100,180,100,60,0.2,0.3,0.8,0.5); notify("Weather","🌅 Sunset!",2) end })
-secWea:Button({ Title="🌃 Starry Night", Callback=function() setWeather(0,0.3,2000,20000,10,10,30,20,20,40,0.02,0,0,0.1);    notify("Weather","🌃 Starry Night!",2) end })
-secWea:Button({ Title="↺ Reset Default", Callback=function() setWeather(14,1,0,100000,191,191,191,70,70,70,0.35,0,0,0.25);     notify("Weather","↺ Reset!",2) end })
+secWea:Button({ Title="☀ Clear", Callback=function() setWeather(14,2,1000,10000,200,220,255,120,120,120,0.05,0.1,0.3,0.2); notify("Weather","Clear",2) end })
+secWea:Button({ Title="🌸 Soft Aesthetic", Callback=function() setWeather(15,1.5,500,3000,255,200,220,200,180,200,0.1,0.2,0.5,0.3); notify("Weather","Soft Aesthetic",2) end })
+secWea:Button({ Title="🌴 Vaporwave", Callback=function() setWeather(18,2,200,2000,255,100,255,50,0,100,0.2,0.3,0.8,0.6); notify("Weather","Vaporwave",2) end })
+secWea:Button({ Title="🌅 Sunset", Callback=function() setWeather(18,1.5,500,4000,255,180,100,180,100,60,0.2,0.3,0.8,0.5); notify("Weather","Sunset",2) end })
+secWea:Button({ Title="🌃 Starry Night", Callback=function() setWeather(0,0.3,2000,20000,10,10,30,20,20,40,0.02,0,0,0.1); notify("Weather","Starry Night",2) end })
+secWea:Button({ Title="↺ Reset", Callback=function() setWeather(14,1,0,100000,191,191,191,70,70,70,0.35,0,0,0.25); notify("Weather","Reset",2) end })
 
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
-secAtmos:Slider({ Title="Clock Time",  Step=1,   Value={Min=0,  Max=24,  Default=14}, Callback=function(v) Lighting.ClockTime =tonumber(v) or 14 end })
-secAtmos:Slider({ Title="Brightness",  Step=0.1, Value={Min=0,  Max=5,   Default=1 }, Callback=function(v) Lighting.Brightness=tonumber(v) or 1 end })
-secAtmos:Slider({ Title="Fog End",     Step=10,  Value={Min=0,  Max=5000,Default=500}, Callback=function(v) Lighting.FogEnd   =tonumber(v) or 500 end })
-secAtmos:Slider({ Title="Density",     Step=0.01,Value={Min=0,  Max=1,   Default=0 }, Callback=function(v) getAtm().Density  =tonumber(v) or 0 end })
-
-local function setGfx(level)
-    pcall(function() settings().Rendering.QualityLevel=level end)
-end
+secAtmos:Slider({ Title="Clock Time", Step=1, Value={Min=0, Max=24, Default=14}, Callback=function(v) Lighting.ClockTime = tonumber(v) or 14 end })
+secAtmos:Slider({ Title="Brightness", Step=0.1, Value={Min=0, Max=5, Default=1}, Callback=function(v) Lighting.Brightness = tonumber(v) or 1 end })
+secAtmos:Slider({ Title="Fog End", Step=10, Value={Min=0, Max=5000, Default=500}, Callback=function(v) Lighting.FogEnd = tonumber(v) or 500 end })
+secAtmos:Slider({ Title="Density", Step=0.01, Value={Min=0, Max=1, Default=0}, Callback=function(v) getAtm().Density = tonumber(v) or 0 end })
 
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
-secGfx:Button({ Title="🥔 Potato (Lv1)",  Callback=function() setGfx(Enum.QualityLevel.Level01); notify("Graphics","Potato Lv1",2) end })
-secGfx:Button({ Title="📊 Medium (Lv5)",  Callback=function() setGfx(Enum.QualityLevel.Level05); notify("Graphics","Medium Lv5",2) end })
+local function setGfx(level) pcall(function() settings().Rendering.QualityLevel=level end) end
+secGfx:Button({ Title="🥔 Potato (Lv1)", Callback=function() setGfx(Enum.QualityLevel.Level01); notify("Graphics","Potato Lv1",2) end })
+secGfx:Button({ Title="📊 Medium (Lv5)", Callback=function() setGfx(Enum.QualityLevel.Level05); notify("Graphics","Medium Lv5",2) end })
 secGfx:Button({ Title="💎 Ultra (Lv10)", Callback=function() setGfx(Enum.QualityLevel.Level10); notify("Graphics","Ultra Lv10",2) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB: ESP
+--  TAB 5: ESP (LENGKAP)
 -- ══════════════════════════════════════════════════════════════
-local T_ESP  = Window:Tab({ Title = "ESP", Icon = "radar" })
+local T_ESP = Window:Tab({ Title = "ESP", Icon = "radar" })
 
-local secESP = T_ESP:Section({ Title = "ESP", Opened = true })
+local secESP = T_ESP:Section({ Title = "ESP Settings", Opened = true })
 secESP:Toggle({
-    Title    = "Enable",
+    Title    = "Enable ESP",
     Desc     = "Show all player positions",
     Value    = false,
     Callback = function(v)
@@ -1196,7 +1175,7 @@ secESP:Toggle({
             end
             State.ESP.cache={}
         end
-        notify("ESP", v and "On" or "Off", 2)
+        notify("ESP", v and "ON" or "OFF", 2)
     end,
 })
 secESP:Dropdown({
@@ -1206,30 +1185,41 @@ secESP:Dropdown({
     Callback = function(v) State.ESP.boxMode=v end,
 })
 secESP:Dropdown({
-    Title    = "Tracer",
+    Title    = "Tracer Mode",
     Values   = {"Bottom","Center","Mouse","OFF"},
     Value    = "Bottom",
     Callback = function(v) State.ESP.tracerMode=v end,
 })
 secESP:Toggle({ Title="Show Distance", Value=true, Callback=function(v) State.ESP.showDistance=v end })
-secESP:Toggle({ Title="Show Name",     Value=true, Callback=function(v) State.ESP.showNickname=v end })
+secESP:Toggle({ Title="Show Name", Value=true, Callback=function(v) State.ESP.showNickname=v end })
 secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
 
-local secESPColor = T_ESP:Section({ Title = "Colors", Opened = false })
-secESPColor:Paragraph({ Title = "Normal Color (RGB)", Desc = "Box & tracer color for normal players" })
-secESPColor:Slider({ Title="R", Step=1, Value={Min=0,Max=255,Default=0},   Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(v, math.floor(State.ESP.boxColor_N.G*255), math.floor(State.ESP.boxColor_N.B*255)); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
-secESPColor:Slider({ Title="G", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(math.floor(State.ESP.boxColor_N.R*255), v, math.floor(State.ESP.boxColor_N.B*255)); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
-secESPColor:Slider({ Title="B", Step=1, Value={Min=0,Max=255,Default=150}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(math.floor(State.ESP.boxColor_N.R*255), math.floor(State.ESP.boxColor_N.G*255), v); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
+local secESPColor = T_ESP:Section({ Title = "ESP Colors", Opened = true })
+secESPColor:Paragraph({ Title = "🎨 Normal Player Color", Desc = "Box & tracer color for normal players" })
+secESPColor:Slider({ Title="Red (R)", Step=1, Value={Min=0,Max=255,Default=0}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(v, State.ESP.boxColor_N.G*255, State.ESP.boxColor_N.B*255); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
+secESPColor:Slider({ Title="Green (G)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(State.ESP.boxColor_N.R*255, v, State.ESP.boxColor_N.B*255); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
+secESPColor:Slider({ Title="Blue (B)", Step=1, Value={Min=0,Max=255,Default=150}, Callback=function(v) State.ESP.boxColor_N=Color3.fromRGB(State.ESP.boxColor_N.R*255, State.ESP.boxColor_N.G*255, v); State.ESP.tracerColor_N=State.ESP.boxColor_N end })
 
-secESPColor:Paragraph({ Title = "Enemy Color (RGB)", Desc = "Box & tracer color for enemies" })
-secESPColor:Slider({ Title="R", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(v, math.floor(State.ESP.boxColor_S.G*255), math.floor(State.ESP.boxColor_S.B*255)); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
-secESPColor:Slider({ Title="G", Step=1, Value={Min=0,Max=255,Default=0},   Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(math.floor(State.ESP.boxColor_S.R*255), v, math.floor(State.ESP.boxColor_S.B*255)); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
-secESPColor:Slider({ Title="B", Step=1, Value={Min=0,Max=255,Default=100}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(math.floor(State.ESP.boxColor_S.R*255), math.floor(State.ESP.boxColor_S.G*255), v); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
+secESPColor:Paragraph({ Title = "⚠ Enemy/Suspect Color", Desc = "Box & tracer color for enemies/suspects" })
+secESPColor:Slider({ Title="Red (R)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(v, State.ESP.boxColor_S.G*255, State.ESP.boxColor_S.B*255); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
+secESPColor:Slider({ Title="Green (G)", Step=1, Value={Min=0,Max=255,Default=0}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(State.ESP.boxColor_S.R*255, v, State.ESP.boxColor_S.B*255); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
+secESPColor:Slider({ Title="Blue (B)", Step=1, Value={Min=0,Max=255,Default=100}, Callback=function(v) State.ESP.boxColor_S=Color3.fromRGB(State.ESP.boxColor_S.R*255, State.ESP.boxColor_S.G*255, v); State.ESP.tracerColor_S=State.ESP.boxColor_S end })
+
+secESPColor:Paragraph({ Title = "📝 Text/Name Color", Desc = "Color for player names and distance text" })
+secESPColor:Slider({ Title="Red (R)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.nameColor=Color3.fromRGB(v, State.ESP.nameColor.G*255, State.ESP.nameColor.B*255) end })
+secESPColor:Slider({ Title="Green (G)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.nameColor=Color3.fromRGB(State.ESP.nameColor.R*255, v, State.ESP.nameColor.B*255) end })
+secESPColor:Slider({ Title="Blue (B)", Step=1, Value={Min=0,Max=255,Default=255}, Callback=function(v) State.ESP.nameColor=Color3.fromRGB(State.ESP.nameColor.R*255, State.ESP.nameColor.G*255, v) end })
+
+local secESPPreset = T_ESP:Section({ Title = "Quick Presets", Opened = false })
+secESPPreset:Button({ Title="Legit Mode", Callback=function() State.ESP.boxMode="OFF"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=true; State.ESP.showNickname=true; notify("ESP","Legit Mode",2) end })
+secESPPreset:Button({ Title="Rage Mode", Callback=function() State.ESP.boxMode="Corner"; State.ESP.tracerMode="Center"; State.ESP.showDistance=true; State.ESP.showNickname=true; notify("ESP","Rage Mode",2) end })
+secESPPreset:Button({ Title="Clean Mode", Callback=function() State.ESP.boxMode="Corner"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=false; State.ESP.showNickname=false; notify("ESP","Clean Mode",2) end })
+secESPPreset:Button({ Title="Highlight Mode", Callback=function() State.ESP.boxMode="HIGHLIGHT"; State.ESP.tracerMode="Bottom"; State.ESP.showDistance=true; State.ESP.showNickname=true; notify("ESP","Highlight Mode",2) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB: SECURITY
+--  TAB 6: SECURITY
 -- ══════════════════════════════════════════════════════════════
-local T_SEC  = Window:Tab({ Title = "Security", Icon = "shield" })
+local T_SEC = Window:Tab({ Title = "Security", Icon = "shield" })
 
 local secProt = T_SEC:Section({ Title = "Protection", Opened = true })
 secProt:Toggle({
@@ -1243,16 +1233,15 @@ secProt:Toggle({
                 VirtualUser:ClickButton2(Vector2.new())
                 task.wait(1)
             end))
-            notify("Anti-AFK","🛡 Active!", 2)
+            notify("Anti-AFK","Active", 2)
         else
             if State.Security.afkConn then State.Security.afkConn:Disconnect(); State.Security.afkConn=nil end
-            notify("Anti-AFK","❌ Disabled", 2)
+            notify("Anti-AFK","Disabled", 2)
         end
     end,
 })
 secProt:Button({
     Title    = "Rejoin Server",
-    Desc     = "Rejoin current server",
     Callback = function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end,
 })
 
@@ -1274,10 +1263,10 @@ secProt:Toggle({
                     end
                 end
             end))
-            notify("Anti-Glitch","🛡 Active!", 2)
+            notify("Anti-Glitch","Active", 2)
         else
             if antiGlitchConn then antiGlitchConn:Disconnect(); antiGlitchConn=nil end
-            notify("Anti-Glitch","❌ Disabled", 2)
+            notify("Anti-Glitch","Disabled", 2)
         end
     end,
 })
@@ -1297,21 +1286,21 @@ secProt:Toggle({
                     antiLag.texs[obj]=obj.Parent; obj.Parent=nil
                 end
             end
-            notify("Anti Lag","🚀 Active! Graphics reduced.", 3)
+            notify("Anti Lag","Active", 2)
         else
             Lighting.GlobalShadows=antiLag.shadows
             for obj,mat in pairs(antiLag.mats) do if obj and obj.Parent then obj.Material=mat end end
             for obj,par in pairs(antiLag.texs) do if obj and par and par.Parent then obj.Parent=par end end
             antiLag.mats={}; antiLag.texs={}
-            notify("Anti Lag","↺ Graphics restored.", 3)
+            notify("Anti Lag","Disabled", 2)
         end
     end,
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB: SETTINGS
+--  TAB 7: SETTINGS (LENGKAP)
 -- ══════════════════════════════════════════════════════════════
-local T_SET  = Window:Tab({ Title = "Settings", Icon = "settings" })
+local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
 
 local secInfo = T_SET:Section({ Title = "System Info", Opened = true })
 local statsLabel = secInfo:Paragraph({
@@ -1333,23 +1322,16 @@ task.spawn(function()
             for _,s in ipairs(fpsSamples) do avg=avg+s end
             avg = avg / #fpsSamples
             local fps = math.floor(1/avg)
-            
             local pct = math.clamp(fps/120, 0, 1)
             local filled = math.floor(pct * 10)
             local bar = ""
             for i = 1, 10 do bar = bar .. (i <= filled and "█" or "░") end
             local fpsColor = fps>=60 and "🟢" or fps>=30 and "🟡" or "🔴"
-            
             local ping = 0
-            pcall(function() 
-                ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()) 
-            end)
+            pcall(function() ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
             local pingColor = ping < 100 and "🟢" or ping < 200 and "🟡" or "🔴"
-            
             if statsLabel then
-                pcall(function()
-                    statsLabel:SetDesc(fpsColor.." "..fps.." FPS ["..bar.."]\n"..pingColor.." "..ping.." ms PING")
-                end)
+                pcall(function() statsLabel:SetDesc(fpsColor.." "..fps.." FPS ["..bar.."]\n"..pingColor.." "..ping.." ms PING") end)
             end
         end
     end
@@ -1358,7 +1340,6 @@ end)
 local secTheme = T_SET:Section({ Title = "Appearance", Opened = true })
 secTheme:Dropdown({
     Title    = "Theme",
-    Desc     = "Change UI theme",
     Values   = (function()
         local names={}
         for name in pairs(WindUI:GetThemes()) do table.insert(names,name) end
@@ -1368,13 +1349,19 @@ secTheme:Dropdown({
     Callback = function(selected) WindUI:SetTheme(selected) end,
 })
 secTheme:Toggle({
-    Title    = "Acrylic",
+    Title    = "Acrylic Background",
     Desc     = "Background blur effect",
     Value    = true,
     Callback = function()
         local isOn=WindUI.Window.Acrylic
         WindUI:ToggleAcrylic(not isOn)
     end,
+})
+secTheme:Toggle({
+    Title    = "Transparent Window",
+    Desc     = "Window transparency",
+    Value    = true,
+    Callback = function(state) Window:ToggleTransparency(state) end,
 })
 
 local currentKey = Enum.KeyCode.RightShift
@@ -1391,15 +1378,15 @@ secTheme:Keybind({
 local secCredit = T_SET:Section({ Title = "Credits", Opened = false })
 secCredit:Paragraph({
     Title = "Designed & Developed by",
-    Desc  = "@WTF.XKID",
+    Desc  = "💎 @WTF.XKID",
 })
 secCredit:Paragraph({
     Title = "Powered by",
-    Desc  = "⚡ WindUI - Modern Roblox UI Library",
+    Desc  = "👻 WindUI",
 })
 secCredit:Paragraph({
     Title = "Version",
-    Desc  = "V.1",
+    Desc  = "V.1 -",
 })
 
 -- ══════════════════════════════════════════════════════════════
@@ -1436,7 +1423,7 @@ WindUI:SetNotificationLower(true)
 
 WindUI:Notify({
     Title   = "@WTF.XKID",
-    Content = "Luxury Script — ready.",
+    Content = "Luxury Script — Ready.",
     Duration = 3,
 })
 
@@ -1448,4 +1435,4 @@ WindUI:Notify({
     Duration = 5,
 })
 
-print("✓ @WTF.XKID loaded")
+print("✅ @WTF.XKID Script Loaded")
