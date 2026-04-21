@@ -181,7 +181,7 @@ local function refreshAvatarPremium()
     end
 
     State.Avatar.isRefreshing = true
-    notify("🔄 Premium Refresh", "Memuat ulang avatar... (@WTF.XKID)", 2)
+    notify("Avatar", "Refreshing...", 2)
     
     local savedCF = hrp.CFrame
     local savedVel = hrp.AssemblyLinearVelocity
@@ -230,7 +230,7 @@ local function refreshAvatarPremium()
         end
 
         State.Avatar.isRefreshing = false
-        notify("✨ Premium Success", "Avatar berhasil diperbarui!", 2.5)
+        notify("Avatar", "Done.", 2)
     end)
 end
 
@@ -697,7 +697,7 @@ local Window = WindUI:CreateWindow({
         Enabled   = true,
         Anonymous = false,
         Callback  = function()
-            notify("@WTF.XKID PREMIUM", "Premium Edition — Designed by @WTF.XKID", 3)
+            notify("@WTF.XKID", "Designed by @WTF.XKID", 3)
         end,
     },
 })
@@ -1182,9 +1182,9 @@ secGfx:Button({ Title="💎 Ultra (Lv10)", Callback=function() setGfx(Enum.Quali
 -- ══════════════════════════════════════════════════════════════
 local T_ESP  = Window:Tab({ Title = "ESP", Icon = "radar" })
 
-local secESP = T_ESP:Section({ Title = "ESP Tracker", Opened = true })
+local secESP = T_ESP:Section({ Title = "ESP", Opened = true })
 secESP:Toggle({
-    Title    = "ESP ON / OFF",
+    Title    = "Enable",
     Desc     = "Show all player positions",
     Value    = false,
     Callback = function(v)
@@ -1196,26 +1196,47 @@ secESP:Toggle({
             end
             State.ESP.cache={}
         end
-        notify("ESP", v and "ESP ON" or "ESP OFF", 2)
+        notify("ESP", v and "On" or "Off", 2)
     end,
 })
 secESP:Dropdown({
     Title    = "Box Mode",
-    Desc     = "ESP box style",
     Values   = {"Corner","2D Box","HIGHLIGHT","OFF"},
     Value    = "Corner",
     Callback = function(v) State.ESP.boxMode=v end,
 })
 secESP:Dropdown({
-    Title    = "Tracer Mode",
-    Desc     = "Line style from screen",
+    Title    = "Tracer",
     Values   = {"Bottom","Center","Mouse","OFF"},
     Value    = "Bottom",
     Callback = function(v) State.ESP.tracerMode=v end,
 })
-secESP:Toggle({ Title="Show Distance", Desc="Show distance to player", Value=true, Callback=function(v) State.ESP.showDistance=v end })
-secESP:Toggle({ Title="Show Name",     Desc="Show player name", Value=true, Callback=function(v) State.ESP.showNickname=v end })
-secESP:Slider({ Title="Draw Distance", Desc="Max ESP distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
+secESP:Toggle({ Title="Show Distance", Value=true, Callback=function(v) State.ESP.showDistance=v end })
+secESP:Toggle({ Title="Show Name",     Value=true, Callback=function(v) State.ESP.showNickname=v end })
+secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
+
+local secESPColor = T_ESP:Section({ Title = "Colors", Opened = false })
+secESPColor:ColorPicker({
+    Title    = "Normal",
+    Value    = State.ESP.boxColor_N,
+    Callback = function(v)
+        State.ESP.boxColor_N    = v
+        State.ESP.tracerColor_N = v
+    end,
+})
+secESPColor:ColorPicker({
+    Title    = "Enemy",
+    Value    = State.ESP.boxColor_S,
+    Callback = function(v)
+        State.ESP.boxColor_S    = v
+        State.ESP.tracerColor_S = v
+    end,
+})
+secESPColor:ColorPicker({
+    Title    = "Name",
+    Value    = State.ESP.nameColor,
+    Callback = function(v) State.ESP.nameColor = v end,
+})
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB: SECURITY
@@ -1382,7 +1403,7 @@ secTheme:Keybind({
 local secCredit = T_SET:Section({ Title = "Credits", Opened = false })
 secCredit:Paragraph({
     Title = "Designed & Developed by",
-    Desc  = "💎 @WTF.XKID - Premium Script Creator",
+    Desc  = "@WTF.XKID",
 })
 secCredit:Paragraph({
     Title = "Powered by",
@@ -1390,7 +1411,7 @@ secCredit:Paragraph({
 })
 secCredit:Paragraph({
     Title = "Version",
-    Desc  = "📦 XKID Premium Ultra V12",
+    Desc  = "V.1",
 })
 
 -- ══════════════════════════════════════════════════════════════
@@ -1439,4 +1460,4 @@ WindUI:Notify({
     Duration = 5,
 })
 
-print("✅ XKID Premium Script V12 loaded | Designed by @WTF.XKID | Avatar Reset using Seamless Recovery")
+print("✓ @WTF.XKID loaded")
