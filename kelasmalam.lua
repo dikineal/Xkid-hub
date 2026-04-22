@@ -16,7 +16,7 @@
 ╚══════════════════════════════════════════════════════════════════╝
 
   ✨ Premium Features:
-  • Avatar Refresh (/re - Ultra Seamless Recovery)
+  • Avatar Refresh (/re - Ultra Seamless Fast Respawn)
   • Teleport & Location Saver (5 Slots)
   • Movement (Speed / Jump / Fly / NoClip / Fling)
   • Freecam (Smooth + Mobile Ready)
@@ -65,6 +65,8 @@ local VirtualUser = game:GetService("VirtualUser")
 local Lighting    = game:GetService("Lighting")
 local TPService   = game:GetService("TeleportService")
 local StatsService= game:GetService("Stats")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextChatService   = game:GetService("TextChatService")
 local LP          = Players.LocalPlayer
 local Cam         = workspace.CurrentCamera
 local onMobile    = not UIS.KeyboardEnabled
@@ -82,6 +84,8 @@ local State = {
     Cinema   = { active = false },
     Spectate = { hideName = false },
     Avatar   = { isRefreshing = false },
+    Ghost    = { active = false },
+    Chat     = { bypass = false },
     ESP = {
         active          = false,
         cache           = {},
@@ -176,88 +180,101 @@ TrackC(LP.CharacterAdded:Connect(function(char)
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  💎 PREMIUM AVATAR REFRESH SYSTEM (/re Command)
+--  💎 PREMIUM FAST RESPAWN SYSTEM (/re Command) -- FIXED
+--  ✅ SANGAT CEPAT, SMOOTH, MINIM DELAY, & ANTI-FALL
 -- ══════════════════════════════════════════════════════════════
-
-local function refreshAvatarPremium()
+local function fastRespawn()
     if State.Avatar.isRefreshing then return end
     
     local char = LP.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local hrp = getRoot()
-    local head = char and char:FindFirstChild("Head")
 
+    -- Aman dari nil error
     if not hum or not hrp then
-        notify("❌ Avatar Refresh", "Character not found!", 2)
+        notify("❌ Fast Respawn", "Character/HumanoidRootPart tidak ditemukan!", 2)
         return 
     end
 
     State.Avatar.isRefreshing = true
-    notify("Avatar", "Refreshing...", 2)
+    notify("🔄 Fast Respawn", "Respawning...", 1.5)
     
-    task.spawn(function()
-        local success, err = pcall(function()
-            -- 1. Menyimpan state CFrame & Health sebelum diubah
-            local savedCF = hrp.CFrame
-            local savedHealth = hum.Health
+    -- 1. Simpan Posisi & Velocity Terakhir
+    local savedCF = hrp.CFrame
+    local savedVel = hrp.AssemblyLinearVelocity
+    
+    -- 2. Setup connection untuk menangkap spawn karakter baru SECEPAT MUNGKIN
+    local charAddedConn
+    charAddedConn = TrackC(LP.CharacterAdded:Connect(function(newChar)
+        charAddedConn:Disconnect() -- Langsung matikan event agar tidak loop dan memory leak
+        
+        -- 3. Tunggu RootPart dan Humanoid dari karakter baru dengan timeout aman
+        local newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
+        local newHum = newChar:WaitForChild("Humanoid", 5)
+        
+        if newHrp and newHum then
+            -- Tunggu 0.05 detik agar engine fisika merender objek sepenuhnya (mencegah stuck/jatuh ke void)
+            task.wait(0.05)
             
-            -- 2. Mengambil data penampilan dari Roblox API
-            local newDesc = Players:GetHumanoidDescriptionFromUserId(LP.UserId)
+            -- Set ulang posisi dan velocity secara instan
+            newHrp.CFrame = savedCF
+            newHrp.AssemblyLinearVelocity = savedVel
             
-            -- 3. Mengamankan Tool
-            local currentTool = char:FindFirstChildOfClass("Tool")
-            if currentTool then
-                currentTool.Parent = LP.Backpack
-            end
+            -- 4. Kembalikan kontrol kamera agar normal mengikuti karakter baru
+            Cam.CameraSubject = newHum
+            Cam.CameraType = Enum.CameraType.Custom
             
-            -- 4. Mengamankan Custom GUIs (NameTags, Custom Chat, dll)
-            local savedGuis = {}
-            if head then
-                for _, item in ipairs(head:GetChildren()) do
-                    if item:IsA("BillboardGui") or item:IsA("SurfaceGui") then
-                        item.Parent = nil
-                        table.insert(savedGuis, item)
-                    end
-                end
-            end
-            
-            -- 5. Menerapkan Deskripsi Tampilan (TIDAK MATI)
-            hum:ApplyDescription(newDesc)
-            
-            -- 6. Mengembalikan semua GUIs ke Head yang baru (Mesh tergenerasi ulang)
-            local newHead = char:WaitForChild("Head", 5)
-            if newHead then
-                for _, gui in ipairs(savedGuis) do
-                    gui.Parent = newHead
-                end
-            end
-            
-            -- 7. Mengembalikan Tools
-            if currentTool then
-                currentTool.Parent = char
-            end
-            
-            -- 8. Menjaga Posisi dan Darah tetap presisi
-            local newHrp = getRoot()
-            if newHrp then newHrp.CFrame = savedCF end
-            hum.Health = savedHealth
-        end)
-
-        State.Avatar.isRefreshing = false
-        if success then
-            notify("Avatar", "✅ Refresh complete!", 2)
-        else
-            notify("Avatar", "❌ Error (API Roblox / Eksekutor Limit)", 3)
+            notify("✨ Success", "Fast Respawn Berhasil!", 2)
         end
+        State.Avatar.isRefreshing = false
+    end))
+
+    -- Kill karakter untuk memicu reset cepat (standar game roblox)
+    hum.Health = 0
+
+    -- Fallback timeout jika koneksi nyangkut (aman dari infinite loop)
+    task.delay(5, function()
+        State.Avatar.isRefreshing = false
     end)
 end
 
--- Chat command handler untuk /re
-TrackC(LP.Chatted:Connect(function(message)
-    local msg = string.lower(message:match("^%s*(.-)%s*$"))
+-- ══════════════════════════════════════════════════════════════
+--  CHAT COMMANDS & BYPASS ENGINE -- FIXED (Consolidated)
+-- ══════════════════════════════════════════════════════════════
+local function sendBypassMessage(msg)
+    local bypassed = ""
+    for i = 1, #msg do
+        bypassed = bypassed .. msg:sub(i, i) .. "󠀠" 
+    end
+
+    local DefaultChat = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    if DefaultChat and DefaultChat:FindFirstChild("SayMessageRequest") then
+        DefaultChat.SayMessageRequest:FireServer(bypassed, "All")
+    elseif TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        if channel then channel:SendAsync(bypassed) end
+    end
+end
+
+TrackC(LP.Chatted:Connect(function(msg)
+    local lowerMsg = msg:lower()
     
-    if msg == "/re" or msg == "/reset" or msg == "re" or msg == "reset" then
-        refreshAvatarPremium()
+    -- Fast Respawn Command
+    if lowerMsg == ";re" or lowerMsg == "/re" or lowerMsg == "/reset" or lowerMsg == ";reset" then
+        fastRespawn()
+        return
+    end
+    
+    -- Rejoin Command
+    if lowerMsg == "!rejoin" then
+        notify("Command", "Rejoining Server...", 2)
+        TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
+        return
+    end
+
+    -- Custom Chat Bypass Trigger
+    if State.Chat.bypass and not msg:match("^/") then
+        sendBypassMessage(msg)
     end
 end))
 
@@ -267,12 +284,8 @@ end))
 local function getESPGui()
     local sg = LP.PlayerGui:FindFirstChild("_XKIDEsp")
     if not sg then
-        sg = Instance.new("ScreenGui")
-        sg.Name            = "_XKIDEsp"
-        sg.ResetOnSpawn    = false
-        sg.DisplayOrder    = 999
-        sg.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
-        sg.Parent          = LP.PlayerGui
+        sg = Instance.new("ScreenGui", LP.PlayerGui)
+        sg.Name = "_XKIDEsp"; sg.ResetOnSpawn = false; sg.DisplayOrder = 999
     end
     return sg
 end
@@ -285,63 +298,12 @@ end
 local function drawLine(p1, p2, thick, color)
     local dist = (p1 - p2).Magnitude
     if dist < 1 then return nil end
-    local dir   = (p2 - p1).Unit
-    local angle = math.atan2(dir.Y, dir.X)
-    local mid   = (p1 + p2) / 2
-    local f = Instance.new("Frame")
-    f.BackgroundColor3 = color
-    f.BorderSizePixel  = 0
-    f.Position  = UDim2.new(0, mid.X - dist/2, 0, mid.Y - thick/2)
-    f.Size      = UDim2.new(0, dist, 0, thick)
-    f.Rotation  = math.deg(angle)
-    f.ZIndex    = 10
-    f.Parent    = getESPGui()
+    local f = Instance.new("Frame", getESPGui())
+    f.BackgroundColor3 = color; f.BorderSizePixel = 0
+    f.Position = UDim2.new(0, (p1.X + p2.X)/2 - dist/2, 0, (p1.Y + p2.Y)/2 - thick/2)
+    f.Size = UDim2.new(0, dist, 0, thick)
+    f.Rotation = math.deg(math.atan2(p2.Y - p1.Y, p2.X - p1.X))
     return f
-end
-
-local function drawBox(hrp, color, thick, isCorner)
-    if not hrp then return {} end
-    local top, ton = w2s(hrp.Position + Vector3.new(0,  2.5, 0))
-    local bot, bon = w2s(hrp.Position - Vector3.new(0,  3,   0))
-    if not ton and not bon then return {} end
-    local h   = math.abs(bot.Y - top.Y)
-    local w   = h * 0.6
-    local tl  = Vector2.new(bot.X - w/2, top.Y)
-    local tr  = Vector2.new(bot.X + w/2, top.Y)
-    local bl  = Vector2.new(bot.X - w/2, bot.Y)
-    local br  = Vector2.new(bot.X + w/2, bot.Y)
-    local out = {}
-    if isCorner then
-        local L = w / 3.5
-        for _, pair in ipairs({
-            {tl, tl+Vector2.new(L,0)}, {tl, tl+Vector2.new(0,L)},
-            {tr, tr-Vector2.new(L,0)}, {tr, tr+Vector2.new(0,L)},
-            {bl, bl+Vector2.new(L,0)}, {bl, bl-Vector2.new(0,L)},
-            {br, br-Vector2.new(L,0)}, {br, br-Vector2.new(0,L)},
-        }) do
-            local l = drawLine(pair[1], pair[2], thick, color)
-            if l then table.insert(out, l) end
-        end
-    else
-        for _, pair in ipairs({{tl,tr},{tr,br},{br,bl},{bl,tl}}) do
-            local l = drawLine(pair[1], pair[2], thick, color)
-            if l then table.insert(out, l) end
-        end
-    end
-    return out
-end
-
-local function isSuspect(player)
-    local char = player.Character
-    if not char then return false end
-    for _, p in pairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then
-            if p.Size.X > 15 or p.Size.Y > 15 or p.Size.Z > 15 then
-                return true
-            end
-        end
-    end
-    return false
 end
 
 local function renderESP(player)
@@ -353,88 +315,84 @@ local function renderESP(player)
     local myR  = getCharRoot(LP.Character)
     if myR and (myR.Position - hrp.Position).Magnitude > State.ESP.maxDrawDistance then return end
 
-    local suspect    = isSuspect(player)
+    local suspect    = false 
     local boxColor   = suspect and State.ESP.boxColor_S   or State.ESP.boxColor_N
     local tracerCol  = suspect and State.ESP.tracerColor_S or State.ESP.tracerColor_N
 
-    if not State.ESP.cache[player] then
-        State.ESP.cache[player] = { renders = {}, hl = nil }
-    end
+    if not State.ESP.cache[player] then State.ESP.cache[player] = { renders = {}, hl = nil } end
     local cache = State.ESP.cache[player]
 
-    for _, r in pairs(cache.renders) do
-        if r and r.Parent then r:Destroy() end
-    end
+    for _, r in pairs(cache.renders) do r:Destroy() end
     cache.renders = {}
 
+    local root2d, visible = w2s(hrp.Position)
+    if not visible then if cache.hl then cache.hl.Enabled = false end return end
+
+    -- Box
     if State.ESP.boxMode == "Corner" or State.ESP.boxMode == "2D Box" then
         if cache.hl then cache.hl.Enabled = false end
-        local lines = drawBox(hrp, boxColor, 2, State.ESP.boxMode == "Corner")
-        for _, l in ipairs(lines) do table.insert(cache.renders, l) end
-
+        local top = w2s(hrp.Position + Vector3.new(0, 3, 0))
+        local bottom = w2s(hrp.Position - Vector3.new(0, 3.5, 0))
+        local h = math.abs(top.Y - bottom.Y)
+        local w = h * 0.6
+        local tl = Vector2.new(root2d.X - w/2, root2d.Y - h/2)
+        local tr = Vector2.new(root2d.X + w/2, root2d.Y - h/2)
+        local bl = Vector2.new(root2d.X - w/2, root2d.Y + h/2)
+        local br = Vector2.new(root2d.X + w/2, root2d.Y + h/2)
+        
+        if State.ESP.boxMode == "Corner" then
+            local len = w/4
+            table.insert(cache.renders, drawLine(tl, tl + Vector2.new(len,0), 2, boxColor))
+            table.insert(cache.renders, drawLine(tl, tl + Vector2.new(0,len), 2, boxColor))
+            table.insert(cache.renders, drawLine(tr, tr - Vector2.new(len,0), 2, boxColor))
+            table.insert(cache.renders, drawLine(tr, tr + Vector2.new(0,len), 2, boxColor))
+        else
+            table.insert(cache.renders, drawLine(tl, tr, 2, boxColor))
+            table.insert(cache.renders, drawLine(tr, br, 2, boxColor))
+            table.insert(cache.renders, drawLine(br, bl, 2, boxColor))
+            table.insert(cache.renders, drawLine(bl, tl, 2, boxColor))
+        end
     elseif State.ESP.boxMode == "HIGHLIGHT" then
         if not cache.hl or cache.hl.Parent ~= char then
             if cache.hl then cache.hl:Destroy() end
-            local hl = Instance.new("Highlight")
+            local hl = Instance.new("Highlight", char)
             hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            hl.Parent    = char
-            cache.hl     = hl
+            cache.hl = hl
         end
-        cache.hl.FillColor           = boxColor
-        cache.hl.OutlineColor        = Color3.new(1, 1, 1)
-        cache.hl.FillTransparency    = 0.5
-        cache.hl.OutlineTransparency = 0
-        cache.hl.Enabled             = true
+        cache.hl.FillColor = boxColor; cache.hl.Enabled = true
     else
         if cache.hl then cache.hl.Enabled = false end
     end
 
+    -- Tracer
     if State.ESP.tracerMode ~= "OFF" then
         local sp, on = w2s(hrp.Position - Vector3.new(0, 2.5, 0))
         if on then
             local origin
-            if     State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
+            if State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
             elseif State.ESP.tracerMode == "Center" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
-            elseif State.ESP.tracerMode == "Mouse"  then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y)
-            end
-            if origin then
-                local l = drawLine(origin, sp, 1.5, tracerCol)
-                if l then table.insert(cache.renders, l) end
-            end
+            elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
+            if origin then table.insert(cache.renders, drawLine(origin, sp, 1.5, tracerCol)) end
         end
     end
 
-    local showText = State.ESP.showNickname or State.ESP.showDistance or suspect
-    if showText then
-        local sp, on = w2s(hrp.Position + Vector3.new(0, 3.2, 0))
-        if on then
-            local lbl = Instance.new("TextLabel")
-            lbl.BackgroundTransparency = 1
-            lbl.TextColor3             = suspect and State.ESP.boxColor_S or State.ESP.nameColor
-            lbl.TextStrokeColor3       = Color3.new(0, 0, 0)
-            lbl.TextStrokeTransparency = 0.4
-            lbl.Font                   = Enum.Font.GothamBold
-            lbl.TextSize               = 13
-            lbl.Size                   = UDim2.new(0, 180, 0, 50)
-            lbl.Position               = UDim2.new(0, sp.X - 90, 0, sp.Y - 25)
-            lbl.TextXAlignment         = Enum.TextXAlignment.Center
-            lbl.ZIndex                 = 11
-
-            local txt = ""
-            if State.ESP.showNickname then
-                txt = player.DisplayName
-            end
-            if State.ESP.showDistance and myR then
-                local dist = math.floor((myR.Position - hrp.Position).Magnitude)
-                txt = txt .. (txt ~= "" and "\n" or "") .. dist .. "m"
-            end
-            if suspect then
-                txt = txt .. (txt ~= "" and "\n" or "") .. "⚠ SUSPECT"
-            end
-            lbl.Text   = txt
-            lbl.Parent = getESPGui()
-            table.insert(cache.renders, lbl)
+    -- Name + Distance
+    if State.ESP.showNickname or State.ESP.showDistance then
+        local lbl = Instance.new("TextLabel", getESPGui())
+        lbl.BackgroundTransparency = 1
+        lbl.TextColor3 = State.ESP.nameColor
+        lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 12
+        lbl.Size = UDim2.new(0, 180, 0, 30)
+        lbl.Position = UDim2.new(0, root2d.X - 90, 0, root2d.Y - 50)
+        
+        local txt = ""
+        if State.ESP.showNickname then txt = player.DisplayName end
+        if State.ESP.showDistance and myR then
+            local dist = math.floor((myR.Position - hrp.Position).Magnitude)
+            txt = txt .. "\n[" .. dist .. "m]"
         end
+        lbl.Text = txt
+        table.insert(cache.renders, lbl)
     end
 end
 
@@ -447,14 +405,14 @@ end))
 TrackC(Players.PlayerRemoving:Connect(function(p)
     local c = State.ESP.cache[p]
     if c then
-        for _, r in pairs(c.renders) do if r and r.Parent then r:Destroy() end end
+        for _, r in pairs(c.renders) do r:Destroy() end
         if c.hl then c.hl:Destroy() end
         State.ESP.cache[p] = nil
     end
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  FLY ENGINE
+--  FLY ENGINE (Linear Version)
 -- ══════════════════════════════════════════════════════════════
 local flyMoveTouch, flyMoveSt = nil, nil
 local flyJoy   = Vector2.zero
@@ -517,18 +475,21 @@ local function toggleFly(v)
             hum.UseJumpPower=true
             hum.JumpPower=State.Move.jp
         end
-        notify("Fly","✈ Fly OFF", 2)
+        notify("Fly","✈  Fly OFF", 2)
         return
     end
     local hrp=getRoot(); local hum=getHum()
     if not hrp or not hum then return end
     State.Fly.active=true; hum.PlatformStand=true
+    
     State.Fly.bv=Instance.new("BodyVelocity",hrp)
     State.Fly.bv.MaxForce=Vector3.new(9e9,9e9,9e9)
     State.Fly.bv.Velocity=Vector3.zero
+    
     State.Fly.bg=Instance.new("BodyGyro",hrp)
     State.Fly.bg.MaxTorque=Vector3.new(9e9,9e9,9e9)
-    State.Fly.bg.P=1e5
+    State.Fly.bg.P=50000 
+    
     startFlyCapture()
     RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value+1, function()
         if not State.Fly.active then return end
@@ -538,7 +499,7 @@ local function toggleFly(v)
         local move=Vector3.zero
         local keys=State.Fly._keys or {}
         if onMobile then
-            move = camCF.LookVector*(-flyJoy.Y)*spd + camCF.RightVector*flyJoy.X*spd
+            move = camCF.LookVector*(-flyJoy.Y) + camCF.RightVector*flyJoy.X
         else
             if keys[Enum.KeyCode.W] then move=move+camCF.LookVector  end
             if keys[Enum.KeyCode.S] then move=move-camCF.LookVector  end
@@ -546,21 +507,26 @@ local function toggleFly(v)
             if keys[Enum.KeyCode.A] then move=move-camCF.RightVector end
             if keys[Enum.KeyCode.E] then move=move+Vector3.new(0,1,0) end
             if keys[Enum.KeyCode.Q] then move=move-Vector3.new(0,1,0) end
-            if move.Magnitude>0 then move=move.Unit*spd end
         end
-        State.Fly.bv.Velocity = move
+        
+        if move.Magnitude > 0 then 
+            State.Fly.bv.Velocity = move.Unit * spd 
+        else
+            State.Fly.bv.Velocity = Vector3.zero
+        end
+        
         State.Fly.bg.CFrame   = CFrame.new(r.Position, r.Position+camCF.LookVector)
     end)
-    notify("Fly","✈ Fly ON", 2)
+    notify("Fly","✈  Fly Linear ON", 3)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE
+--  FREECAM ENGINE (Instan / No Lerp)
 -- ══════════════════════════════════════════════════════════════
 local FC = {
-    active=false, pos=Vector3.zero, vel=Vector3.zero,
+    active=false, pos=Vector3.zero,
     pitchDeg=0, yawDeg=0, speed=5, sens=0.25,
-    savedCF=nil, damping=0.20, accel=0.80,
+    savedCF=nil
 }
 local fcRotT,fcMoveT,fcMoveSt,fcRotLast = nil,nil,nil,nil
 local fcJoy   = Vector2.zero
@@ -592,9 +558,6 @@ local function startFCCapture()
         if inp.UserInputType==Enum.UserInputType.MouseMovement and FC._mouseRot then
             FC.yawDeg   = FC.yawDeg   - inp.Delta.X*FC.sens
             FC.pitchDeg = math.clamp(FC.pitchDeg-inp.Delta.Y*FC.sens,-80,80)
-        end
-        if inp.UserInputType==Enum.UserInputType.MouseWheel then
-            Cam.FieldOfView=math.clamp(Cam.FieldOfView-inp.Position.Z*5,10,120)
         end
     end))
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp,gp)
@@ -640,36 +603,31 @@ local function startFCLoop()
     RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value+1, function(dt)
         if not FC.active then return end
         Cam.CameraType=Enum.CameraType.Scriptable
-        local cf = CFrame.new(FC.pos)
-            * CFrame.Angles(0,math.rad(FC.yawDeg),0)
-            * CFrame.Angles(math.rad(FC.pitchDeg),0,0)
-        local spd=FC.speed*32
-        local dv=Vector3.zero
-        local keys=FC._keys or {}
+        
+        local move = Vector3.zero
+        local keys = FC._keys or {}
+        
         if onMobile then
-            dv=cf.LookVector*(-fcJoy.Y)*spd + cf.RightVector*fcJoy.X*spd
+            move = Vector3.new(fcJoy.X, -fcJoy.Y, 0)
         else
-            if keys[Enum.KeyCode.W] then dv=dv+cf.LookVector *spd end
-            if keys[Enum.KeyCode.S] then dv=dv-cf.LookVector *spd end
-            if keys[Enum.KeyCode.D] then dv=dv+cf.RightVector*spd end
-            if keys[Enum.KeyCode.A] then dv=dv-cf.RightVector*spd end
-            if keys[Enum.KeyCode.E] then dv=dv+Vector3.new(0,1,0)*spd end
-            if keys[Enum.KeyCode.Q] then dv=dv-Vector3.new(0,1,0)*spd end
+            if keys[Enum.KeyCode.W] then move = move + Vector3.new(0, 0, -1) end
+            if keys[Enum.KeyCode.S] then move = move + Vector3.new(0, 0, 1)  end
+            if keys[Enum.KeyCode.A] then move = move + Vector3.new(-1, 0, 0) end
+            if keys[Enum.KeyCode.D] then move = move + Vector3.new(1, 0, 0)  end
+            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0, 1, 0)  end
+            if keys[Enum.KeyCode.Q] then move = move + Vector3.new(0, -1, 0) end
         end
-        FC.vel = FC.vel:Lerp(dv, FC.accel*dt*60)
-        FC.vel = FC.vel*(FC.damping^(dt*60))
-        FC.pos = FC.pos+FC.vel*dt
-        Cam.CFrame = CFrame.new(FC.pos)
-            * CFrame.Angles(0,math.rad(FC.yawDeg),0)
-            * CFrame.Angles(math.rad(FC.pitchDeg),0,0)
+        
+        if move.Magnitude > 0 then move = move.Unit end
+        
+        local cf = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
+        FC.pos = FC.pos + cf:VectorToWorldSpace(move * (FC.speed * dt * 60))
+        
+        Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
+        
         local hrp=getRoot(); local hum=getHum()
         if hrp and not hrp.Anchored then hrp.Anchored=true end
-        if hum then
-            if hum:GetState()~=Enum.HumanoidStateType.Physics then
-                hum:ChangeState(Enum.HumanoidStateType.Physics)
-            end
-            hum.WalkSpeed=0; hum.JumpPower=0
-        end
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Physics); hum.WalkSpeed=0; hum.JumpPower=0 end
     end)
 end
 
@@ -678,7 +636,7 @@ local function stopFCLoop()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  MAIN WINDOW - Premium Design by @WTF.XKID
+--  MAIN WINDOW 
 -- ══════════════════════════════════════════════════════════════
 local Window = WindUI:CreateWindow({
     Title       = "@WTF.XKID",
@@ -730,9 +688,9 @@ local T_AV = Window:Tab({ Title = "Player", Icon = "user" })
 
 local secAvatar = T_AV:Section({ Title = "Avatar Refresh", Opened = true })
 secAvatar:Button({
-    Title    = "Reset Avatar — /re",
-    Desc     = "Seamless outfit reset. Position & camera stay locked.",
-    Callback = function() refreshAvatarPremium() end,
+    Title    = "Fast Respawn — /re", -- FIXED
+    Desc     = "Respawn instan dan kembali ke titik semula tanpa delay.", -- FIXED
+    Callback = function() fastRespawn() end, -- FIXED
 })
 
 local secMov = T_AV:Section({ Title = "Movement", Opened = true })
@@ -1162,18 +1120,27 @@ local function setWeather(c,b,fs,fe,fr,fg,fb,ar,ag,ab,d,o,gl,h)
 end
 
 local secWea = T_WO:Section({ Title = "Weather Presets", Opened = true })
-secWea:Button({ Title="☀ Clear", Callback=function() setWeather(14,2,1000,10000,200,220,255,120,120,120,0.05,0.1,0.3,0.2); notify("Weather","Clear",2) end })
-secWea:Button({ Title="🌸 Soft Aesthetic", Callback=function() setWeather(15,1.5,500,3000,255,200,220,200,180,200,0.1,0.2,0.5,0.3); notify("Weather","Soft Aesthetic",2) end })
-secWea:Button({ Title="🌴 Vaporwave", Callback=function() setWeather(18,2,200,2000,255,100,255,50,0,100,0.2,0.3,0.8,0.6); notify("Weather","Vaporwave",2) end })
-secWea:Button({ Title="🌅 Sunset", Callback=function() setWeather(18,1.5,500,4000,255,180,100,180,100,60,0.2,0.3,0.8,0.5); notify("Weather","Sunset",2) end })
-secWea:Button({ Title="🌃 Starry Night", Callback=function() setWeather(0,0.3,2000,20000,10,10,30,20,20,40,0.02,0,0,0.1); notify("Weather","Starry Night",2) end })
-secWea:Button({ Title="↺ Reset", Callback=function() setWeather(14,1,0,100000,191,191,191,70,70,70,0.35,0,0,0.25); notify("Weather","Reset",2) end })
+secWea:Button({ Title="🌅 Pagi (Morning)", Callback = function() Lighting.ClockTime = 7; Lighting.Brightness = 1 end })
+secWea:Button({ Title="☀ Siang (Day)", Callback = function() Lighting.ClockTime = 14; Lighting.Brightness = 2 end })
+secWea:Button({ Title="🌇 Sore (Evening)", Callback = function() Lighting.ClockTime = 17.5; Lighting.Brightness = 1.5 end })
+secWea:Button({ Title="🌃 Malam (Night)", Callback = function() Lighting.ClockTime = 0; Lighting.Brightness = 0.5 end })
 
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
 secAtmos:Slider({ Title="Clock Time", Step=1, Value={Min=0, Max=24, Default=14}, Callback=function(v) Lighting.ClockTime = tonumber(v) or 14 end })
 secAtmos:Slider({ Title="Brightness", Step=0.1, Value={Min=0, Max=5, Default=1}, Callback=function(v) Lighting.Brightness = tonumber(v) or 1 end })
-secAtmos:Slider({ Title="Fog End", Step=10, Value={Min=0, Max=5000, Default=500}, Callback=function(v) Lighting.FogEnd = tonumber(v) or 500 end })
-secAtmos:Slider({ Title="Density", Step=0.01, Value={Min=0, Max=1, Default=0}, Callback=function(v) getAtm().Density = tonumber(v) or 0 end })
+
+secAtmos:Toggle({ Title = "Fullbright (Clear Vision)", Desc = "Terangkan tempat gelap & hapus kabut", Value = false, Callback = function(v)
+    State.Atmos.fullbright = v
+    if v then
+        Lighting.Ambient = Color3.new(1,1,1)
+        Lighting.ColorShift_Bottom = Color3.new(1,1,1)
+        Lighting.ColorShift_Top = Color3.new(1,1,1)
+        Lighting.FogEnd = 999999
+    else
+        Lighting.Ambient = State.Atmos.default.Ambient
+        Lighting.FogEnd = 1000
+    end
+end })
 
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
 local function setGfx(level) pcall(function() settings().Rendering.QualityLevel=level end) end
@@ -1182,7 +1149,7 @@ secGfx:Button({ Title="📊 Medium (Lv5)", Callback=function() setGfx(Enum.Quali
 secGfx:Button({ Title="💎 Ultra (Lv10)", Callback=function() setGfx(Enum.QualityLevel.Level10); notify("Graphics","Ultra Lv10",2) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: ESP (LENGKAP DENGAN DROPDOWN WARNA)
+--  TAB 5: ESP 
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "ESP", Icon = "radar" })
 
@@ -1219,10 +1186,8 @@ secESP:Toggle({ Title="Show Distance", Value=true, Callback=function(v) State.ES
 secESP:Toggle({ Title="Show Name", Value=true, Callback=function(v) State.ESP.showNickname=v end })
 secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
 
--- ESP Colors dengan Dropdown
 local secESPColor = T_ESP:Section({ Title = "🎨 ESP Colors", Opened = true })
 
--- Normal Player Color
 secESPColor:Paragraph({ Title = "👤 Normal Player Color", Desc = "Box & tracer color for normal players" })
 local normalColorDropdown = secESPColor:Dropdown({
     Title    = "Normal Color",
@@ -1238,7 +1203,6 @@ local normalColorDropdown = secESPColor:Dropdown({
     end,
 })
 
--- Enemy/Suspect Color
 secESPColor:Paragraph({ Title = "⚠ Enemy/Suspect Color", Desc = "Box & tracer color for enemies/suspects" })
 local enemyColorDropdown = secESPColor:Dropdown({
     Title    = "Enemy Color",
@@ -1254,7 +1218,6 @@ local enemyColorDropdown = secESPColor:Dropdown({
     end,
 })
 
--- Text/Name Color
 secESPColor:Paragraph({ Title = "📝 Text/Name Color", Desc = "Color for player names and distance text" })
 local textColorDropdown = secESPColor:Dropdown({
     Title    = "Text Color",
@@ -1269,7 +1232,6 @@ local textColorDropdown = secESPColor:Dropdown({
     end,
 })
 
--- Quick Presets
 local secESPPreset = T_ESP:Section({ Title = "⚡ Quick Presets", Opened = false })
 secESPPreset:Button({ Title="Legit Mode", Callback=function() 
     State.ESP.boxMode="OFF"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=true; State.ESP.showNickname=true
@@ -1505,9 +1467,9 @@ WindUI:Notify({
 task.wait(1.5)
 
 WindUI:Notify({
-    Title   = "Avatar Refresh",
-    Content = "Type /re to reset your outfit instantly.",
+    Title   = "Fast Respawn Active",
+    Content = "Type /re to instantly reset & teleport.",
     Duration = 5,
 })
 
-print("✅ @WTF.XKID Luxury Script Loaded")
+print("✅ @WTF.XKID Luxury Script Loaded | Fast Respawn System Online")
