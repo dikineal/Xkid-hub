@@ -20,7 +20,7 @@
   • Avatar Refresh (/re - Safe Fast Respawn)
   • Teleport & Location Saver (5 Slots)
   • Movement (Speed / Jump / Fly / NoClip / Fling)
-  • Freecam (Smooth + Mobile Ready)
+  • Freecam (Smooth + Mobile Ready - Joystick Fixed)
   • Spectate (Orbit & First Person)
   • Modern Hybrid ESP (Drawing API / Smart Detection)
   • World Control (Weather / Atmosphere / Graphics)
@@ -545,113 +545,142 @@ local function toggleFly(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE
+--  FREECAM ENGINE (FIXED: Joystick berfungsi seperti Fly)
 -- ══════════════════════════════════════════════════════════════
 local FC = {
     active=false, pos=Vector3.zero,
     pitchDeg=0, yawDeg=0, speed=5, sens=0.25,
     savedCF=nil
 }
-local fcRotT,fcMoveT,fcMoveSt,fcRotLast = nil,nil,nil,nil
-local fcJoy   = Vector2.zero
-local DEAD_X  = 25; local DEAD_Y = 20
+local fcRotT, fcMoveT, fcMoveSt, fcRotLast = nil, nil, nil, nil
+local fcJoy = Vector2.zero
+local DEAD_X = 25
+local DEAD_Y = 20
 local fcConns = {}
+local fcKeysHeld = {}  -- FIXED: untuk keyboard PC
 
 local function startFCCapture()
-    local keysHeld={}
-    table.insert(fcConns, UIS.InputBegan:Connect(function(inp,gp)
+    fcKeysHeld = {}
+    
+    -- Keyboard untuk PC
+    table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
-        local k=inp.KeyCode
-        if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S
-        or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then
-            keysHeld[k]=true
+        local k = inp.KeyCode
+        if k == Enum.KeyCode.W or k == Enum.KeyCode.A or k == Enum.KeyCode.S or k == Enum.KeyCode.D or k == Enum.KeyCode.E or k == Enum.KeyCode.Q then
+            fcKeysHeld[k] = true
         end
-        if inp.UserInputType==Enum.UserInputType.MouseButton2 then
-            FC._mouseRot=true
-            UIS.MouseBehavior=Enum.MouseBehavior.LockCurrentPosition
+        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+            FC._mouseRot = true
+            UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
         end
     end))
     table.insert(fcConns, UIS.InputEnded:Connect(function(inp)
-        keysHeld[inp.KeyCode]=false
-        if inp.UserInputType==Enum.UserInputType.MouseButton2 then
-            FC._mouseRot=false
-            UIS.MouseBehavior=Enum.MouseBehavior.Default
+        fcKeysHeld[inp.KeyCode] = false
+        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+            FC._mouseRot = false
+            UIS.MouseBehavior = Enum.MouseBehavior.Default
         end
     end))
     table.insert(fcConns, UIS.InputChanged:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseMovement and FC._mouseRot then
-            FC.yawDeg   = FC.yawDeg   - inp.Delta.X*FC.sens
-            FC.pitchDeg = math.clamp(FC.pitchDeg-inp.Delta.Y*FC.sens,-80,80)
+        if inp.UserInputType == Enum.UserInputType.MouseMovement and FC._mouseRot then
+            FC.yawDeg   = FC.yawDeg   - inp.Delta.X * FC.sens
+            FC.pitchDeg = math.clamp(FC.pitchDeg - inp.Delta.Y * FC.sens, -80, 80)
         end
     end))
-    table.insert(fcConns, UIS.InputBegan:Connect(function(inp,gp)
-        if gp or inp.UserInputType~=Enum.UserInputType.Touch then return end
-        local half=Cam.ViewportSize.X/2
-        if inp.Position.X>half then
-            if not fcRotT then fcRotT=inp; fcRotLast=inp.Position end
+    
+    -- Touch untuk mobile (SAMA PERSIS dengan Fly)
+    table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
+        if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        local half = Cam.ViewportSize.X / 2
+        if inp.Position.X > half then
+            -- Area kanan: rotasi
+            if not fcRotT then fcRotT = inp; fcRotLast = inp.Position end
         else
-            if not fcMoveT then fcMoveT=inp; fcMoveSt=inp.Position end
+            -- Area kiri: gerakan joystick
+            if not fcMoveT then fcMoveT = inp; fcMoveSt = inp.Position end
         end
     end))
     table.insert(fcConns, UIS.TouchMoved:Connect(function(inp)
-        if inp==fcRotT and fcRotLast then
-            FC.yawDeg   = FC.yawDeg  -(inp.Position.X-fcRotLast.X)*FC.sens
-            FC.pitchDeg = math.clamp(FC.pitchDeg-(inp.Position.Y-fcRotLast.Y)*FC.sens,-80,80)
-            fcRotLast=inp.Position
+        if inp == fcRotT and fcRotLast then
+            FC.yawDeg   = FC.yawDeg - (inp.Position.X - fcRotLast.X) * FC.sens
+            FC.pitchDeg = math.clamp(FC.pitchDeg - (inp.Position.Y - fcRotLast.Y) * FC.sens, -80, 80)
+            fcRotLast = inp.Position
         end
-        if inp==fcMoveT and fcMoveSt then
-            local dx=inp.Position.X-fcMoveSt.X
-            local dy=inp.Position.Y-fcMoveSt.Y
-            fcJoy=Vector2.new(
-                math.abs(dx)>DEAD_X and math.clamp((dx-math.sign(dx)*DEAD_X)/80,-1,1) or 0,
-                math.abs(dy)>DEAD_Y and math.clamp((dy-math.sign(dy)*DEAD_Y)/80,-1,1) or 0
+        if inp == fcMoveT and fcMoveSt then
+            local dx = inp.Position.X - fcMoveSt.X
+            local dy = inp.Position.Y - fcMoveSt.Y
+            fcJoy = Vector2.new(
+                math.abs(dx) > DEAD_X and math.clamp((dx - math.sign(dx) * DEAD_X) / 80, -1, 1) or 0,
+                math.abs(dy) > DEAD_Y and math.clamp((dy - math.sign(dy) * DEAD_Y) / 80, -1, 1) or 0
             )
         end
     end))
     table.insert(fcConns, UIS.InputEnded:Connect(function(inp)
-        if inp.UserInputType~=Enum.UserInputType.Touch then return end
-        if inp==fcRotT  then fcRotT=nil;  fcRotLast=nil end
-        if inp==fcMoveT then fcMoveT=nil; fcMoveSt=nil; fcJoy=Vector2.zero end
+        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        if inp == fcRotT then fcRotT = nil; fcRotLast = nil end
+        if inp == fcMoveT then fcMoveT = nil; fcMoveSt = nil; fcJoy = Vector2.zero end
     end))
-    FC._keys=keysHeld
 end
 
 local function stopFCCapture()
-    for _,c in ipairs(fcConns) do c:Disconnect() end
-    fcConns={}; fcRotT=nil; fcMoveT=nil; fcMoveSt=nil; fcRotLast=nil
-    fcJoy=Vector2.zero; FC._mouseRot=false; FC._keys={}
-    UIS.MouseBehavior=Enum.MouseBehavior.Default
+    for _, c in ipairs(fcConns) do c:Disconnect() end
+    fcConns = {}
+    fcRotT = nil; fcMoveT = nil; fcMoveSt = nil; fcRotLast = nil
+    fcJoy = Vector2.zero
+    fcKeysHeld = {}
+    FC._mouseRot = false
+    UIS.MouseBehavior = Enum.MouseBehavior.Default
 end
 
 local function startFCLoop()
-    RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value+1, function(dt)
+    RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not FC.active then return end
-        Cam.CameraType=Enum.CameraType.Scriptable
+        Cam.CameraType = Enum.CameraType.Scriptable
         
         local move = Vector3.zero
-        local keys = FC._keys or {}
         
         if onMobile then
-            move = Vector3.new(fcJoy.X, -fcJoy.Y, 0)
+            -- FIXED: Joystick movement sama seperti Fly
+            move = Vector3.new(fcJoy.X, 0, -fcJoy.Y)
         else
-            if keys[Enum.KeyCode.W] then move = move + Vector3.new(0, 0, -1) end
-            if keys[Enum.KeyCode.S] then move = move + Vector3.new(0, 0, 1)  end
-            if keys[Enum.KeyCode.A] then move = move + Vector3.new(-1, 0, 0) end
-            if keys[Enum.KeyCode.D] then move = move + Vector3.new(1, 0, 0)  end
-            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0, 1, 0)  end
-            if keys[Enum.KeyCode.Q] then move = move + Vector3.new(0, -1, 0) end
+            -- Keyboard PC
+            if fcKeysHeld[Enum.KeyCode.W] then move = move + Vector3.new(0, 0, -1) end
+            if fcKeysHeld[Enum.KeyCode.S] then move = move + Vector3.new(0, 0, 1) end
+            if fcKeysHeld[Enum.KeyCode.A] then move = move + Vector3.new(-1, 0, 0) end
+            if fcKeysHeld[Enum.KeyCode.D] then move = move + Vector3.new(1, 0, 0) end
+            if fcKeysHeld[Enum.KeyCode.E] then move = move + Vector3.new(0, 1, 0) end
+            if fcKeysHeld[Enum.KeyCode.Q] then move = move + Vector3.new(0, -1, 0) end
         end
         
         if move.Magnitude > 0 then move = move.Unit end
         
-        local cf = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
-        FC.pos = FC.pos + cf:VectorToWorldSpace(move * (FC.speed * dt * 60))
+        -- Rotasi kamera berdasarkan yaw/pitch
+        local camCF = CFrame.new(FC.pos) 
+            * CFrame.Angles(0, math.rad(FC.yawDeg), 0) 
+            * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
         
-        Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
+        -- Gerakan berdasarkan arah kamera (seperti Fly)
+        local forward = camCF.LookVector
+        local right = camCF.RightVector
+        local up = camCF.UpVector
         
-        local hrp=getRoot(); local hum=getHum()
-        if hrp and not hrp.Anchored then hrp.Anchored=true end
-        if hum then hum:ChangeState(Enum.HumanoidStateType.Physics); hum.WalkSpeed=0; hum.JumpPower=0 end
+        local worldMove = (right * move.X) + (forward * -move.Z) + (up * move.Y)
+        FC.pos = FC.pos + worldMove * (FC.speed * dt * 60)
+        
+        -- Update kamera
+        Cam.CFrame = CFrame.new(FC.pos) 
+            * CFrame.Angles(0, math.rad(FC.yawDeg), 0) 
+            * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
+        
+        -- Kunci karakter
+        local hrp = getRoot()
+        local hum = getHum()
+        if hrp and not hrp.Anchored then hrp.Anchored = true end
+        if hum then 
+            hum:ChangeState(Enum.HumanoidStateType.Physics)
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+        end
     end)
 end
 
@@ -760,7 +789,7 @@ local Window = WindUI:CreateWindow({
     Author      = "by @WTF.XKID",
     Folder      = "XKIDScript",
     Icon        = "zap",
-    Theme       = "Crimson",  -- NEW DEFAULT THEME
+    Theme       = "Crimson",
     Acrylic     = true,
     Transparent = true,
     Size        = UDim2.fromOffset(720, 560),
@@ -772,9 +801,9 @@ local Window = WindUI:CreateWindow({
     NewElements = true,
     SideBarWidth= 200,
     Topbar = { Height = 44, ButtonsType = "Default" },
-    OpenButton  = {  -- REDESIGNED: Branded XKID HUB
-        Title           = "⚡ 🛡 XKID HUB",
-        Icon            = "shield",
+    OpenButton  = {
+        Title           = "XKID HUB",
+        Icon            = "skull",
         CornerRadius    = UDim.new(1, 0),
         StrokeThickness = 3,
         Enabled         = true,
@@ -782,7 +811,7 @@ local Window = WindUI:CreateWindow({
         OnlyMobile      = false,
         Scale           = 1,
         Color = ColorSequence.new(
-            Color3.fromRGB(220, 20, 60),   -- Crimson
+            Color3.fromRGB(220, 20, 60),
             Color3.fromRGB(180, 10, 40)
         ),
     },
@@ -799,41 +828,36 @@ getgenv()._XKID_INSTANCE = Window.Instance
 WindUI:SetTheme("Crimson")
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: HOME SCREEN (NEW)
+--  TAB 1: HOME SCREEN
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "Home", Icon = "home" })
 
--- Welcome Panel
-local secWelcome = T_HOME:Section({ Title = "⚡ 🛡 XKID HUB", Opened = true })
+local secWelcome = T_HOME:Section({ Title = "⚡XKID HUB", Opened = true })
 secWelcome:Paragraph({
     Title = "Welcome Back",
     Desc  = "@WTF.XKID\nPremium Luxury Script Loaded Successfully."
 })
 
--- Status Panel (Live Stats)
 local secStatus = T_HOME:Section({ Title = "System Status", Opened = true })
 local statusLabel = secStatus:Paragraph({
     Title = "Live Metrics",
     Desc  = "Calculating...",
 })
 
--- Changelog Panel
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = true })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• New Crimson Theme (Default)\n• Redesigned OpenButton: ⚡ 🛡 XKID HUB\n• Home Screen with Live Stats\n• Optimized Performance & Memory\n• Improved UI Stability"
+    Desc  = "• Fixed Freecam Joystick (now matches Fly)\n• New Crimson Theme (Default)\n• Redesigned OpenButton: ⚡XKID HUB\n• Home Screen with Live Stats\n• Optimized Performance & Memory"
 })
 
--- Credits Panel
 local secCreditsHome = T_HOME:Section({ Title = "💎 Credits", Opened = false })
 secCreditsHome:Paragraph({
     Title = "Created by",
-    Desc  = "@WTF.XKID\nPowered by WindUI\nVersion: V.2 - Luxury Edition + Home"
+    Desc  = "@WTF.XKID\nPowered by WindUI\nVersion: V.2.1 - Fixed Freecam"
 })
 
 -- Live Stats Updater for Home Screen
 local fpsSamples = {}
-local lastPlayerCount = 0
 TrackC(RS.RenderStepped:Connect(function(dt)
     table.insert(fpsSamples, dt)
     if #fpsSamples > 30 then table.remove(fpsSamples,1) end
@@ -869,7 +893,7 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 2: AVATAR & PLAYER (Existing, fully preserved)
+--  TAB 2: AVATAR & PLAYER (Fully preserved)
 -- ══════════════════════════════════════════════════════════════
 local T_AV = Window:Tab({ Title = "Player", Icon = "user" })
 
@@ -1124,21 +1148,20 @@ local T_CAM = Window:Tab({ Title = "Camera", Icon = "eye" })
 local secFC = T_CAM:Section({ Title = "Freecam", Opened = true })
 secFC:Toggle({
     Title    = "Freecam",
-    Desc     = "PC: RMB rotate | Mobile: Left move / Right rotate",
+    Desc     = "PC: RMB rotate | Mobile: Left move / Right rotate (Joystick Fixed)",
     Value    = false,
     Callback = function(v)
         FC.active = v; State.Cinema.active = v
         if v then
             local cf=Cam.CFrame
-            FC.pos=cf.Position; FC.vel=Vector3.zero
+            FC.pos=cf.Position
             local rx,ry=cf:ToEulerAnglesYXZ()
             FC.pitchDeg=math.deg(rx); FC.yawDeg=math.deg(ry)
-            FC._keys={}; FC._mouseRot=false
             local hrp=getRoot(); local hum=getHum()
             if hrp then FC.savedCF=hrp.CFrame; hrp.Anchored=true end
             if hum then hum.WalkSpeed=0; hum.JumpPower=0; hum:ChangeState(Enum.HumanoidStateType.Physics) end
             startFCCapture(); startFCLoop()
-            notify("Freecam","🎬 ON", 2)
+            notify("Freecam","🎬 ON (Joystick Fixed)", 2)
         else
             stopFCLoop(); stopFCCapture()
             local hrp=getRoot(); local hum=getHum()
@@ -1391,7 +1414,7 @@ secProt:Toggle({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: SETTINGS (Fully preserved, updated theme list includes Crimson)
+--  TAB 8: SETTINGS (Fully preserved)
 -- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
 
@@ -1471,7 +1494,7 @@ secTheme:Keybind({
 local secCredit = T_SET:Section({ Title = "Credits", Opened = false })
 secCredit:Paragraph({ Title = "Designed & Developed by", Desc  = "💎 @WTF.XKID" })
 secCredit:Paragraph({ Title = "Powered by", Desc  = "⚡ WindUI" })
-secCredit:Paragraph({ Title = "Version", Desc  = "V.2 - Luxury Edition + Home + Crimson" })
+secCredit:Paragraph({ Title = "Version", Desc  = "V.2.1 - Fixed Freecam Joystick" })
 
 -- ══════════════════════════════════════════════════════════════
 --  BACKGROUND LOOPS (Fling / NoClip)
@@ -1503,8 +1526,8 @@ end))
 --  STARTUP NOTIFICATIONS
 -- ══════════════════════════════════════════════════════════════
 WindUI:SetNotificationLower(true)
-WindUI:Notify({ Title = "@WTF.XKID", Content = "Luxury Script — Home + Crimson Ready.", Duration = 3 })
+WindUI:Notify({ Title = "@WTF.XKID", Content = "Luxury Script — Freecam Fixed + Crimson Ready.", Duration = 3 })
 task.wait(1.5)
 WindUI:Notify({ Title = "Hybrid ESP Loaded", Content = "Drawing API optimized. Zero FPS Drop.", Duration = 5 })
-WindUI:Notify({ Title = "⚡ 🛡 XKID HUB", Content = "New Home Screen & Crimson Theme Active", Duration = 4 })
-print("✅ @WTF.XKID Luxury Script Loaded | Home + Crimson | OpenButton Redesigned")
+WindUI:Notify({ Title = "⚡XKID HUB", Content = "Freecam Joystick Fixed & Crimson Theme Active", Duration = 4 })
+print("✅ @WTF.XKID Luxury Script Loaded | Freecam Fixed | OpenButton: ⚡XKID HUB")
