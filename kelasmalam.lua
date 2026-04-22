@@ -241,9 +241,12 @@ end
 -- Chat command handler untuk /re
 TrackC(LP.Chatted:Connect(function(message)
     local msg = string.lower(message:match("^%s*(.-)%s*$"))
-    
     if msg == "/re" or msg == "/reset" or msg == "re" or msg == "reset" then
         refreshAvatarPremium()
+    elseif msg == "/sync" then
+        softResetDescription()
+    elseif msg == "/acc" then
+        softResetAccessories()
     end
 end))
 
@@ -711,15 +714,94 @@ WindUI:SetTheme("Rose")
 -- ══════════════════════════════════════════════════════════════
 --  TAB: AVATAR & PLAYER (Premium /re Feature)
 -- ══════════════════════════════════════════════════════════════
-local T_AV   = Window:Tab({ Title = "Avatar", Icon = "user" })
+-- ══════════════════════════════════════════════════════════════
+--  SOFT RESET A — HumanoidDescription (Full appearance, no kill)
+-- ══════════════════════════════════════════════════════════════
+local function softResetDescription()
+    local char = LP.Character
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then notify("Avatar", "Character not found", 2); return end
 
-local secAvatar = T_AV:Section({ Title = "Avatar Refresh", Opened = true })
+    notify("Avatar", "Syncing appearance...", 2)
+
+    task.spawn(function()
+        local ok, desc = pcall(function()
+            return Players:GetHumanoidDescriptionFromUserId(LP.UserId)
+        end)
+        if not ok or not desc then
+            notify("Avatar", "Failed to fetch description", 2)
+            return
+        end
+        -- Apply tanpa kill — animasi/dance tetap jalan
+        pcall(function()
+            hum:ApplyDescription(desc)
+        end)
+        notify("Avatar", "Appearance synced", 2)
+    end)
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SOFT RESET B — Accessories only (paling smooth, no flicker)
+-- ══════════════════════════════════════════════════════════════
+local function softResetAccessories()
+    local char = LP.Character
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum or not char then notify("Avatar", "Character not found", 2); return end
+
+    notify("Avatar", "Reloading accessories...", 2)
+
+    task.spawn(function()
+        -- Hapus semua accessories yang ada
+        for _, item in pairs(char:GetChildren()) do
+            if item:IsA("Accessory") then
+                item:Destroy()
+            end
+        end
+
+        -- Fetch dan apply hanya accessories dari HumanoidDescription
+        local ok, desc = pcall(function()
+            return Players:GetHumanoidDescriptionFromUserId(LP.UserId)
+        end)
+        if not ok or not desc then
+            notify("Avatar", "Failed to fetch accessories", 2)
+            return
+        end
+
+        -- Apply full desc tapi karakter tidak di-kill
+        -- Body shape tetap, hanya accessories yang berubah
+        pcall(function()
+            hum:ApplyDescription(desc)
+        end)
+
+        notify("Avatar", "Accessories reloaded", 2)
+    end)
+end
+
+
+
+local secAvatar = T_AV:Section({ Title = "Avatar Reset", Opened = true })
+
 secAvatar:Button({
-    Title    = "Reset Avatar  —  /re",
-    Desc     = "Seamless outfit reset. Position & camera stay locked.",
-    Callback = function()
-        refreshAvatarPremium()
-    end,
+    Title    = "Full Reset  —  /re",
+    Desc     = "Respawn karakter. Outfit & position tetap.",
+    Callback = function() refreshAvatarPremium() end,
+})
+
+secAvatar:Button({
+    Title    = "Sync Reset  —  /sync",
+    Desc     = "Reload outfit tanpa respawn. Dance & animasi tetap jalan.",
+    Callback = function() softResetDescription() end,
+})
+
+secAvatar:Button({
+    Title    = "Acc Reset  —  /acc",
+    Desc     = "Reload accessories saja. Paling smooth, tanpa flicker.",
+    Callback = function() softResetAccessories() end,
+})
+
+secAvatar:Paragraph({
+    Title = "Guide",
+    Desc  = "/re — full reset\n/sync — ganti outfit sambil dance\n/acc — reload accessories only",
 })
 
 local secMov = T_AV:Section({ Title = "Movement", Opened = true })
