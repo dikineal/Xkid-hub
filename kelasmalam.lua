@@ -16,12 +16,12 @@
 ╚══════════════════════════════════════════════════════════════════╝
 
   ✨ Premium Features:
-  • Avatar Refresh (/re - Ultra Seamless Recovery)
+  • Avatar Refresh (/re - Safe Fast Respawn)
   • Teleport & Location Saver (5 Slots)
   • Movement (Speed / Jump / Fly / NoClip / Fling)
   • Freecam (Smooth + Mobile Ready)
   • Spectate (Orbit & First Person)
-  • Modern ESP (Corner / Box / Highlight / Tracer + Color Picker)
+  • Modern Hybrid ESP (Drawing API / Smart Detection)
   • World Control (Weather / Atmosphere / Graphics)
   • Security (Anti-AFK / Fast Respawn / Anti-Glitcher / Anti-Lag)
   • Live FPS & PING Counter
@@ -33,16 +33,29 @@
 local RS = game:GetService("RunService")
 
 -- ══════════════════════════════════════════════════════════════
---  0. AUTO CLEANUP & MEMORY MANAGEMENT -- FIXED (Thread Clear)
+--  0. AUTO CLEANUP & MEMORY MANAGEMENT -- FIXED
 -- ══════════════════════════════════════════════════════════════
 if getgenv()._XKID_RUNNING then
-    getgenv()._XKID_RUNNING = false -- Hentikan semua loop lama
+    getgenv()._XKID_RUNNING = false 
 end
+
+-- FIXED: Membersihkan sisa-sisa Drawing API dari ESP lama agar layar tidak kotor
+if getgenv()._XKID_ESP_CACHE then
+    for _, c in pairs(getgenv()._XKID_ESP_CACHE) do
+        pcall(function()
+            if c.texts then c.texts:Remove() end
+            if c.tracer then c.tracer:Remove() end
+            if c.boxLines then for _, l in ipairs(c.boxLines) do l:Remove() end end
+            if c.hl then c.hl:Destroy() end
+        end)
+    end
+end
+getgenv()._XKID_ESP_CACHE = {}
 
 if getgenv()._XKID_LOADED then
     pcall(function()
         for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
-            if v.Name == "WindUI" or v.Name == "_XKIDEsp" then v:Destroy() end
+            if v.Name == "WindUI" then v:Destroy() end
         end
         if getgenv()._XKID_CONNS then
             for _, c in pairs(getgenv()._XKID_CONNS) do pcall(function() c:Disconnect() end) end
@@ -50,7 +63,7 @@ if getgenv()._XKID_LOADED then
         RS:UnbindFromRenderStep("XKIDFreecam")
         RS:UnbindFromRenderStep("XKIDFly")
     end)
-    task.wait(0.2) -- Jeda aman membiarkan loop lama tertutup
+    task.wait(0.2) 
     collectgarbage("collect")
 end
 
@@ -98,7 +111,7 @@ local State = {
     Chat     = { bypass = false },
     ESP = {
         active          = false,
-        cache           = {},
+        cache           = getgenv()._XKID_ESP_CACHE, -- FIXED: Terhubung ke memori global
         boxMode         = "Corner",
         tracerMode      = "Bottom",
         maxDrawDistance = 300,
@@ -112,86 +125,50 @@ local State = {
     },
 }
 
--- Color mapping untuk dropdown
 local colorMap = {
-    ["Merah"] = Color3.fromRGB(255, 0, 0),
-    ["Hijau"] = Color3.fromRGB(0, 255, 0),
-    ["Biru"] = Color3.fromRGB(0, 0, 255),
-    ["Kuning"] = Color3.fromRGB(255, 255, 0),
-    ["Ungu"] = Color3.fromRGB(255, 0, 255),
-    ["Cyan"] = Color3.fromRGB(0, 255, 255),
-    ["Orange"] = Color3.fromRGB(255, 165, 0),
-    ["Pink"] = Color3.fromRGB(255, 105, 180),
-    ["Putih"] = Color3.fromRGB(255, 255, 255),
-    ["Hitam"] = Color3.fromRGB(0, 0, 0),
+    ["Merah"] = Color3.fromRGB(255, 0, 0), ["Hijau"] = Color3.fromRGB(0, 255, 0),
+    ["Biru"]  = Color3.fromRGB(0, 0, 255), ["Kuning"]= Color3.fromRGB(255, 255, 0),
+    ["Ungu"]  = Color3.fromRGB(255, 0, 255), ["Cyan"]  = Color3.fromRGB(0, 255, 255),
+    ["Orange"]= Color3.fromRGB(255, 165, 0), ["Pink"]  = Color3.fromRGB(255, 105, 180),
+    ["Putih"] = Color3.fromRGB(255, 255, 255), ["Hitam"] = Color3.fromRGB(0, 0, 0),
 }
 
 -- ══════════════════════════════════════════════════════════════
 --  HELPER FUNCTIONS
 -- ══════════════════════════════════════════════════════════════
-local function getRoot()
-    return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-end
-
-local function getHum()
-    return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-end
-
+local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
+local function getHum() return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
 local function getPNames()
     local t = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP then table.insert(t, p.Name) end
-    end
+    for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.Name) end end
     return t
 end
-
 local function getDisplayNames()
     local t = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP then
-            table.insert(t, p.DisplayName .. " (@" .. p.Name .. ")")
-        end
-    end
+    for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName .. " (@" .. p.Name .. ")") end end
     return t
 end
-
 local function findPlayerByDisplay(str)
-    for _, p in pairs(Players:GetPlayers()) do
-        if str == p.DisplayName .. " (@" .. p.Name .. ")" then return p end
-    end
+    for _, p in pairs(Players:GetPlayers()) do if str == p.DisplayName .. " (@" .. p.Name .. ")" then return p end end
     return nil
 end
-
 local function getCharRoot(char)
     if not char then return nil end
-    return char:FindFirstChild("HumanoidRootPart")
-        or char.PrimaryPart
-        or char:FindFirstChild("Head")
-        or char:FindFirstChild("Torso")
-        or char:FindFirstChild("UpperTorso")
-        or char:FindFirstChildWhichIsA("BasePart")
+    return char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
 end
+local function notify(title, content, dur) WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 }) end
 
-local function notify(title, content, dur)
-    WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 })
-end
-
--- Persistent stats on respawn
 TrackC(LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
         if State.Move.ws ~= 16 then hum.WalkSpeed = State.Move.ws end
-        if State.Move.jp ~= 50 then
-            hum.UseJumpPower = true
-            hum.JumpPower    = State.Move.jp
-        end
+        if State.Move.jp ~= 50 then hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end
     end
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  💎 PREMIUM FAST RESPAWN SYSTEM (/re Command) 
---  ✅ ABNORMAL SCALE / ERROR 267 PROTECTED
+--  💎 PREMIUM FAST RESPAWN SYSTEM (/re Command)
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn() 
     if State.Avatar.isRefreshing then return end
@@ -221,17 +198,13 @@ local function fastRespawn()
         local newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
         local newHum = newChar:WaitForChild("Humanoid", 5)
         
-        -- FIXED: Tunggu Character Appearance untuk setup skala default roblox 
-        -- Mencegah Abnormal Scale / Error 267 kick
         if not LP:HasAppearanceLoaded() then
             LP.CharacterAppearanceLoaded:Wait()
         end
         
-        -- FIXED: Tambahan safe delay untuk memastikan engine bounding box normal
         task.wait(0.2) 
         
         if newHrp and newHum then
-            -- FIXED: Spawn Offset untuk mencegah glitch masuk ke dalam tanah/map
             newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
             newHrp.AssemblyLinearVelocity = Vector3.zero 
             
@@ -260,10 +233,7 @@ end
 -- ══════════════════════════════════════════════════════════════
 local function sendBypassMessage(msg)
     local bypassed = ""
-    for i = 1, #msg do
-        bypassed = bypassed .. msg:sub(i, i) .. "󠀠" 
-    end
-
+    for i = 1, #msg do bypassed = bypassed .. msg:sub(i, i) .. "󠀠" end
     local DefaultChat = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
     if DefaultChat and DefaultChat:FindFirstChild("SayMessageRequest") then
         DefaultChat.SayMessageRequest:FireServer(bypassed, "All")
@@ -275,205 +245,196 @@ end
 
 TrackC(LP.Chatted:Connect(function(msg)
     local lowerMsg = msg:lower()
-    
-    if lowerMsg == ";re" or lowerMsg == "/re" or lowerMsg == "/reset" or lowerMsg == ";reset" then 
-        fastRespawn() 
-        return
-    end
-    
-    if lowerMsg == "!rejoin" then
-        notify("Command", "Rejoining Server...", 2)
-        TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
-        return
-    end
-
-    if State.Chat.bypass and not msg:match("^/") then
-        sendBypassMessage(msg)
-    end
+    if lowerMsg == ";re" or lowerMsg == "/re" or lowerMsg == "/reset" or lowerMsg == ";reset" then fastRespawn(); return end
+    if lowerMsg == "!rejoin" then notify("Command", "Rejoining Server...", 2); TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP); return end
+    if State.Chat.bypass and not msg:match("^/") then sendBypassMessage(msg) end
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  ESP ENGINE (DisplayOrder=999)
+--  💎 HYBRID DETECTION ESP ENGINE -- FIXED (Drawing API + Smart Scan)
 -- ══════════════════════════════════════════════════════════════
-local function getESPGui()
-    local sg = LP.PlayerGui:FindFirstChild("_XKIDEsp")
-    if not sg then
-        sg = Instance.new("ScreenGui")
-        sg.Name = "_XKIDEsp"; sg.ResetOnSpawn = false; sg.DisplayOrder = 999
-        sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        sg.Parent = LP.PlayerGui
+
+local function initPlayerCache(player)
+    if State.ESP.cache[player] then return end
+    
+    local cache = {
+        texts    = Drawing.new("Text"),
+        tracer   = Drawing.new("Line"),
+        boxLines = {},
+        hl       = nil,
+        isSuspect= false,
+        reason   = ""
+    }
+    
+    cache.texts.Center  = true
+    cache.texts.Outline = true
+    cache.texts.Font    = 2 -- UI Font
+    cache.texts.Size    = 13
+    cache.texts.ZIndex  = 2
+    
+    cache.tracer.Thickness = 1.5
+    cache.tracer.ZIndex    = 1
+    
+    for i = 1, 4 do
+        local line = Drawing.new("Line")
+        line.Thickness = 1.5
+        line.ZIndex    = 1
+        cache.boxLines[i] = line
     end
-    return sg
+    
+    State.ESP.cache[player] = cache
 end
 
-local function w2s(pos)
-    local sp, on = Cam:WorldToScreenPoint(pos)
-    return Vector2.new(sp.X, sp.Y), on
-end
-
-local function drawLine(p1, p2, thick, color)
-    local dist = (p1 - p2).Magnitude
-    if dist < 1 then return nil end
-    local f = Instance.new("Frame")
-    f.BackgroundColor3 = color
-    f.BorderSizePixel  = 0
-    f.Position  = UDim2.new(0, (p1.X + p2.X)/2 - dist/2, 0, (p1.Y + p2.Y)/2 - thick/2)
-    f.Size      = UDim2.new(0, dist, 0, thick)
-    f.Rotation  = math.deg(math.atan2(p2.Y - p1.Y, p2.X - p1.X))
-    f.ZIndex    = 10
-    f.Parent    = getESPGui()
-    return f
-end
-
-local function drawBox(hrp, color, thick, isCorner)
-    if not hrp then return {} end
-    local top, ton = w2s(hrp.Position + Vector3.new(0,  2.5, 0))
-    local bot, bon = w2s(hrp.Position - Vector3.new(0,  3,   0))
-    if not ton and not bon then return {} end
-    local h   = math.abs(bot.Y - top.Y)
-    local w   = h * 0.6
-    local tl  = Vector2.new(bot.X - w/2, top.Y)
-    local tr  = Vector2.new(bot.X + w/2, top.Y)
-    local bl  = Vector2.new(bot.X - w/2, bot.Y)
-    local br  = Vector2.new(bot.X + w/2, bot.Y)
-    local out = {}
-    if isCorner then
-        local L = w / 3.5
-        for _, pair in ipairs({
-            {tl, tl+Vector2.new(L,0)}, {tl, tl+Vector2.new(0,L)},
-            {tr, tr-Vector2.new(L,0)}, {tr, tr+Vector2.new(0,L)},
-            {bl, bl+Vector2.new(L,0)}, {bl, bl-Vector2.new(0,L)},
-            {br, br-Vector2.new(L,0)}, {br, br-Vector2.new(0,L)},
-        }) do
-            local l = drawLine(pair[1], pair[2], thick, color)
-            if l then table.insert(out, l) end
-        end
-    else
-        for _, pair in ipairs({{tl,tr},{tr,br},{br,bl},{bl,tl}}) do
-            local l = drawLine(pair[1], pair[2], thick, color)
-            if l then table.insert(out, l) end
-        end
-    end
-    return out
-end
-
-local function isSuspect(player)
-    local char = player.Character
-    if not char then return false end
-    for _, p in pairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then
-            if p.Size.X > 15 or p.Size.Y > 15 or p.Size.Z > 15 then
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function renderESP(player)
-    if not State.ESP.active or player == LP then return end
-    local char = player.Character
-    if not char then return end
-    local hrp  = getCharRoot(char)
-    if not hrp then return end
-    local myR  = getCharRoot(LP.Character)
-    if myR and (myR.Position - hrp.Position).Magnitude > State.ESP.maxDrawDistance then return end
-
-    local suspect    = isSuspect(player)
-    local boxColor   = suspect and State.ESP.boxColor_S   or State.ESP.boxColor_N
-    local tracerCol  = suspect and State.ESP.tracerColor_S or State.ESP.tracerColor_N
-
-    if not State.ESP.cache[player] then
-        State.ESP.cache[player] = { renders = {}, hl = nil }
-    end
-    local cache = State.ESP.cache[player]
-
-    for _, r in pairs(cache.renders) do r:Destroy() end
-    cache.renders = {}
-
-    if State.ESP.boxMode == "Corner" or State.ESP.boxMode == "2D Box" then
-        if cache.hl then cache.hl.Enabled = false end
-        local lines = drawBox(hrp, boxColor, 2, State.ESP.boxMode == "Corner")
-        for _, l in ipairs(lines) do table.insert(cache.renders, l) end
-
-    elseif State.ESP.boxMode == "HIGHLIGHT" then
-        if not cache.hl or cache.hl.Parent ~= char then
-            if cache.hl then cache.hl:Destroy() end
-            local hl = Instance.new("Highlight")
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            hl.Parent    = char
-            cache.hl     = hl
-        end
-        cache.hl.FillColor           = boxColor
-        cache.hl.OutlineColor        = Color3.new(1, 1, 1)
-        cache.hl.FillTransparency    = 0.5
-        cache.hl.OutlineTransparency = 0
-        cache.hl.Enabled             = true
-    else
-        if cache.hl then cache.hl.Enabled = false end
-    end
-
-    if State.ESP.tracerMode ~= "OFF" then
-        local sp, on = w2s(hrp.Position - Vector3.new(0, 2.5, 0))
-        if on then
-            local origin
-            if     State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
-            elseif State.ESP.tracerMode == "Center" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
-            elseif State.ESP.tracerMode == "Mouse"  then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y)
-            end
-            if origin then
-                local l = drawLine(origin, sp, 1.5, tracerCol)
-                if l then table.insert(cache.renders, l) end
-            end
-        end
-    end
-
-    local showText = State.ESP.showNickname or State.ESP.showDistance or suspect
-    if showText then
-        local sp, on = w2s(hrp.Position + Vector3.new(0, 3.2, 0))
-        if on then
-            local lbl = Instance.new("TextLabel")
-            lbl.BackgroundTransparency = 1
-            lbl.TextColor3             = suspect and State.ESP.boxColor_S or State.ESP.nameColor
-            lbl.TextStrokeColor3       = Color3.new(0, 0, 0)
-            lbl.TextStrokeTransparency = 0.4
-            lbl.Font                   = Enum.Font.GothamBold
-            lbl.TextSize               = 13
-            lbl.Size                   = UDim2.new(0, 180, 0, 50)
-            lbl.Position               = UDim2.new(0, sp.X - 90, 0, sp.Y - 25)
-            lbl.TextXAlignment         = Enum.TextXAlignment.Center
-            lbl.ZIndex                 = 11
-
-            local txt = ""
-            if State.ESP.showNickname then
-                txt = player.DisplayName
-            end
-            if State.ESP.showDistance and myR then
-                local dist = math.floor((myR.Position - hrp.Position).Magnitude)
-                txt = txt .. (txt ~= "" and "\n" or "") .. dist .. "m"
-            end
-            if suspect then
-                txt = txt .. (txt ~= "" and "\n" or "") .. "⚠ SUSPECT"
-            end
-            lbl.Text   = txt
-            lbl.Parent = getESPGui()
-            table.insert(cache.renders, lbl)
-        end
-    end
-end
-
-TrackC(RS.RenderStepped:Connect(function()
-    if State.ESP.active then
-        for _, p in pairs(Players:GetPlayers()) do renderESP(p) end
-    end
-end))
-
-TrackC(Players.PlayerRemoving:Connect(function(p)
-    local c = State.ESP.cache[p]
+local function clearPlayerCache(player)
+    local c = State.ESP.cache[player]
     if c then
-        for _, r in pairs(c.renders) do if r and r.Parent then r:Destroy() end end
+        if c.texts then c.texts:Remove() end
+        if c.tracer then c.tracer:Remove() end
+        for _, l in ipairs(c.boxLines) do l:Remove() end
         if c.hl then c.hl:Destroy() end
-        State.ESP.cache[p] = nil
+        State.ESP.cache[player] = nil
+    end
+end
+
+TrackC(Players.PlayerRemoving:Connect(clearPlayerCache))
+
+-- Scanner 1 Detik untuk Performa (Mencegah FPS Drop)
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        if State.ESP.active then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LP and p.Character then
+                    local isSus = false
+                    local reason = ""
+                    
+                    -- Deteksi Map Blocker / Huge Hat
+                    for _, v in pairs(p.Character:GetChildren()) do
+                        if v:IsA("BasePart") and (v.Size.X > 20 or v.Size.Y > 20 or v.Size.Z > 20) then
+                            isSus = true; reason = "Map Blocker" break
+                        elseif v:IsA("Accessory") then
+                            local h = v:FindFirstChild("Handle")
+                            if h and h:IsA("BasePart") and (h.Size.Magnitude > 15) then
+                                isSus = true; reason = "Huge Hat" break
+                            end
+                        end
+                    end
+                    
+                    -- Deteksi Scale Abnormal
+                    if not isSus then
+                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                        if hum then
+                            local bws = hum:FindFirstChild("BodyWidthScale")
+                            local bhs = hum:FindFirstChild("BodyHeightScale")
+                            if (bws and bws.Value > 1.5) or (bhs and bhs.Value > 1.5) then
+                                isSus = true; reason = "Glitch Avatar"
+                            end
+                        end
+                    end
+                    
+                    initPlayerCache(p)
+                    State.ESP.cache[p].isSuspect = isSus
+                    State.ESP.cache[p].reason = reason
+                end
+            end
+        end
+        task.wait(1) -- FIXED: Interval 1 detik sesuai request
+    end
+end)
+
+-- Visual Tracker (Fast & Smooth Render)
+TrackC(RS.RenderStepped:Connect(function()
+    if not State.ESP.active then return end
+    local myHrp = getCharRoot(LP.Character)
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LP then
+            local char = player.Character
+            local hrp = getCharRoot(char)
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            
+            initPlayerCache(player)
+            local c = State.ESP.cache[player]
+            
+            local active = char and hrp and hum and hum.Health > 0 and myHrp
+            local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
+            
+            if not active or dist > State.ESP.maxDrawDistance then
+                c.texts.Visible = false; c.tracer.Visible = false
+                for _, l in ipairs(c.boxLines) do l.Visible = false end
+                if c.hl then c.hl.Enabled = false end
+                continue
+            end
+            
+            local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
+            if not onScreen then
+                c.texts.Visible = false; c.tracer.Visible = false
+                for _, l in ipairs(c.boxLines) do l.Visible = false end
+                if c.hl then c.hl.Enabled = false end
+                continue
+            end
+            
+            local isSus = c.isSuspect
+            
+            -- Teks Rendering
+            local txt = ""
+            if State.ESP.showNickname then txt = player.DisplayName end
+            if State.ESP.showDistance then txt = txt .. "\n[" .. math.floor(dist) .. "m]" end
+            if isSus then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
+            
+            c.texts.Text = txt
+            c.texts.Color = isSus and State.ESP.boxColor_S or State.ESP.nameColor
+            c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45)
+            c.texts.Visible = true
+            
+            -- Tracer Rendering (Normal opsional, Suspect selalu dipaksa ada)
+            if State.ESP.tracerMode ~= "OFF" or isSus then
+                local origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
+                if State.ESP.tracerMode == "Center" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
+                elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
+                
+                c.tracer.From = origin
+                c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
+                c.tracer.Color = isSus and State.ESP.tracerColor_S or State.ESP.tracerColor_N
+                c.tracer.Visible = true
+            else
+                c.tracer.Visible = false
+            end
+            
+            -- Box & Highlight (FIXED: Hanya untuk Suspect / Troll)
+            if isSus then
+                local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
+                local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
+                local h = math.abs(top.Y - bot.Y)
+                local w = h * 0.6
+                
+                local tl = Vector2.new(rootPos.X - w/2, top.Y)
+                local tr = Vector2.new(rootPos.X + w/2, top.Y)
+                local bl = Vector2.new(rootPos.X - w/2, bot.Y)
+                local br = Vector2.new(rootPos.X + w/2, bot.Y)
+                
+                c.boxLines[1].From = tl; c.boxLines[1].To = tr
+                c.boxLines[2].From = tr; c.boxLines[2].To = br
+                c.boxLines[3].From = br; c.boxLines[3].To = bl
+                c.boxLines[4].From = bl; c.boxLines[4].To = tl
+                
+                for i=1, 4 do
+                    c.boxLines[i].Color = State.ESP.boxColor_S
+                    c.boxLines[i].Visible = true
+                end
+                
+                if not c.hl or c.hl.Parent ~= char then
+                    if c.hl then c.hl:Destroy() end
+                    c.hl = Instance.new("Highlight", char)
+                    c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                end
+                c.hl.FillColor = State.ESP.boxColor_S
+                c.hl.OutlineColor = Color3.new(1,1,1)
+                c.hl.Enabled = true
+            else
+                for _, l in ipairs(c.boxLines) do l.Visible = false end
+                if c.hl then c.hl.Enabled = false end
+            end
+        end
     end
 end))
 
@@ -931,14 +892,12 @@ secTP:Button({
                     local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
                     local myHrp = getRoot()
                     
-                    -- FIXED: Pengecekan target mati & posisi offset aman
                     if tHrp and tHum and myHrp then
                         if tHum.Health <= 0 then
                             notify("Teleport", "❌ Target ("..p.DisplayName..") sedang mati!", 2)
                             return
                         end
                         
-                        -- Offset agar spawn di belakang target dan aman dari ground clipping
                         myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3) + Vector3.new(0, 2, 0)
                         myHrp.AssemblyLinearVelocity = Vector3.zero
                         notify("Teleport","✅ TP ke "..p.DisplayName, 2)
@@ -1202,18 +1161,27 @@ local function setWeather(c,b,fs,fe,fr,fg,fb,ar,ag,ab,d,o,gl,h)
 end
 
 local secWea = T_WO:Section({ Title = "Weather Presets", Opened = true })
-secWea:Button({ Title="☀ Clear", Callback=function() setWeather(14,2,1000,10000,200,220,255,120,120,120,0.05,0.1,0.3,0.2); notify("Weather","Clear",2) end })
-secWea:Button({ Title="🌸 Soft Aesthetic", Callback=function() setWeather(15,1.5,500,3000,255,200,220,200,180,200,0.1,0.2,0.5,0.3); notify("Weather","Soft Aesthetic",2) end })
-secWea:Button({ Title="🌴 Vaporwave", Callback=function() setWeather(18,2,200,2000,255,100,255,50,0,100,0.2,0.3,0.8,0.6); notify("Weather","Vaporwave",2) end })
-secWea:Button({ Title="🌅 Sunset", Callback=function() setWeather(18,1.5,500,4000,255,180,100,180,100,60,0.2,0.3,0.8,0.5); notify("Weather","Sunset",2) end })
-secWea:Button({ Title="🌃 Starry Night", Callback=function() setWeather(0,0.3,2000,20000,10,10,30,20,20,40,0.02,0,0,0.1); notify("Weather","Starry Night",2) end })
-secWea:Button({ Title="↺ Reset", Callback=function() setWeather(14,1,0,100000,191,191,191,70,70,70,0.35,0,0,0.25); notify("Weather","Reset",2) end })
+secWea:Button({ Title="🌅 Pagi (Morning)", Callback = function() Lighting.ClockTime = 7; Lighting.Brightness = 1 end })
+secWea:Button({ Title="☀ Siang (Day)", Callback = function() Lighting.ClockTime = 14; Lighting.Brightness = 2 end })
+secWea:Button({ Title="🌇 Sore (Evening)", Callback = function() Lighting.ClockTime = 17.5; Lighting.Brightness = 1.5 end })
+secWea:Button({ Title="🌃 Malam (Night)", Callback = function() Lighting.ClockTime = 0; Lighting.Brightness = 0.5 end })
 
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
 secAtmos:Slider({ Title="Clock Time", Step=1, Value={Min=0, Max=24, Default=14}, Callback=function(v) Lighting.ClockTime = tonumber(v) or 14 end })
 secAtmos:Slider({ Title="Brightness", Step=0.1, Value={Min=0, Max=5, Default=1}, Callback=function(v) Lighting.Brightness = tonumber(v) or 1 end })
-secAtmos:Slider({ Title="Fog End", Step=10, Value={Min=0, Max=5000, Default=500}, Callback=function(v) Lighting.FogEnd = tonumber(v) or 500 end })
-secAtmos:Slider({ Title="Density", Step=0.01, Value={Min=0, Max=1, Default=0}, Callback=function(v) getAtm().Density = tonumber(v) or 0 end })
+
+secAtmos:Toggle({ Title = "Fullbright (Clear Vision)", Desc = "Terangkan tempat gelap & hapus kabut", Value = false, Callback = function(v)
+    State.Atmos.fullbright = v
+    if v then
+        Lighting.Ambient = Color3.new(1,1,1)
+        Lighting.ColorShift_Bottom = Color3.new(1,1,1)
+        Lighting.ColorShift_Top = Color3.new(1,1,1)
+        Lighting.FogEnd = 999999
+    else
+        Lighting.Ambient = State.Atmos.default.Ambient
+        Lighting.FogEnd = 1000
+    end
+end })
 
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
 local function setGfx(level) pcall(function() settings().Rendering.QualityLevel=level end) end
@@ -1222,35 +1190,33 @@ secGfx:Button({ Title="📊 Medium (Lv5)", Callback=function() setGfx(Enum.Quali
 secGfx:Button({ Title="💎 Ultra (Lv10)", Callback=function() setGfx(Enum.QualityLevel.Level10); notify("Graphics","Ultra Lv10",2) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: ESP
+--  TAB 5: HYBRID ESP (Modern & Light) -- FIXED
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "ESP", Icon = "radar" })
 
-local secESP = T_ESP:Section({ Title = "ESP Settings", Opened = true })
+local secESP = T_ESP:Section({ Title = "Hybrid Detection ESP", Opened = true })
 secESP:Toggle({
     Title    = "Enable ESP",
-    Desc     = "Show all player positions",
+    Desc     = "Normal: Text & Tracer. Suspect: Box & Highlight",
     Value    = false,
     Callback = function(v)
-        State.ESP.active=v
-        if not v then
-            for _,c in pairs(State.ESP.cache) do
-                for _,r in pairs(c.renders) do if r and r.Parent then r:Destroy() end end
-                if c.hl then c.hl:Destroy() end
+        State.ESP.active = v
+        if not v and getgenv()._XKID_ESP_CACHE then
+            for _,c in pairs(getgenv()._XKID_ESP_CACHE) do
+                pcall(function()
+                    if c.texts then c.texts.Visible = false end
+                    if c.tracer then c.tracer.Visible = false end
+                    if c.boxLines then for _, l in ipairs(c.boxLines) do l.Visible = false end end
+                    if c.hl then c.hl.Enabled = false end
+                end)
             end
-            State.ESP.cache={}
         end
-        notify("ESP", v and "ON" or "OFF", 2)
+        notify("ESP", v and "Hybrid ESP Active" or "Disabled", 2)
     end,
 })
+
 secESP:Dropdown({
-    Title    = "Box Mode",
-    Values   = {"Corner","2D Box","HIGHLIGHT","OFF"},
-    Value    = "Corner",
-    Callback = function(v) State.ESP.boxMode=v end,
-})
-secESP:Dropdown({
-    Title    = "Tracer Mode",
+    Title    = "Tracer Mode (Global)",
     Values   = {"Bottom","Center","Mouse","OFF"},
     Value    = "Bottom",
     Callback = function(v) State.ESP.tracerMode=v end,
@@ -1259,72 +1225,30 @@ secESP:Toggle({ Title="Show Distance", Value=true, Callback=function(v) State.ES
 secESP:Toggle({ Title="Show Name", Value=true, Callback=function(v) State.ESP.showNickname=v end })
 secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
 
-local secESPColor = T_ESP:Section({ Title = "🎨 ESP Colors", Opened = true })
-
-secESPColor:Paragraph({ Title = "👤 Normal Player Color", Desc = "Box & tracer color for normal players" })
-local normalColorDropdown = secESPColor:Dropdown({
-    Title    = "Normal Color",
+local secESPColor = T_ESP:Section({ Title = "🎨 ESP Colors", Opened = false })
+secESPColor:Dropdown({
+    Title    = "Normal Tracer Color",
     Values   = {"Hijau", "Merah", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"},
     Value    = "Hijau",
-    Callback = function(v)
-        local color = colorMap[v]
-        if color then
-            State.ESP.boxColor_N = color
-            State.ESP.tracerColor_N = color
-            notify("ESP Color", "Normal color: " .. v, 1)
-        end
-    end,
+    Callback = function(v) if colorMap[v] then State.ESP.tracerColor_N = colorMap[v] end end,
 })
-
-secESPColor:Paragraph({ Title = "⚠ Enemy/Suspect Color", Desc = "Box & tracer color for enemies/suspects" })
-local enemyColorDropdown = secESPColor:Dropdown({
-    Title    = "Enemy Color",
+secESPColor:Dropdown({
+    Title    = "Suspect Full Color",
     Values   = {"Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"},
     Value    = "Merah",
     Callback = function(v)
-        local color = colorMap[v]
-        if color then
-            State.ESP.boxColor_S = color
-            State.ESP.tracerColor_S = color
-            notify("ESP Color", "Enemy color: " .. v, 1)
+        if colorMap[v] then
+            State.ESP.boxColor_S = colorMap[v]
+            State.ESP.tracerColor_S = colorMap[v]
         end
     end,
 })
-
-secESPColor:Paragraph({ Title = "📝 Text/Name Color", Desc = "Color for player names and distance text" })
-local textColorDropdown = secESPColor:Dropdown({
-    Title    = "Text Color",
+secESPColor:Dropdown({
+    Title    = "Text/Name Color",
     Values   = {"Putih", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Hitam"},
     Value    = "Putih",
-    Callback = function(v)
-        local color = colorMap[v]
-        if color then
-            State.ESP.nameColor = color
-            notify("ESP Color", "Text color: " .. v, 1)
-        end
-    end,
+    Callback = function(v) if colorMap[v] then State.ESP.nameColor = colorMap[v] end end,
 })
-
-local secESPPreset = T_ESP:Section({ Title = "⚡ Quick Presets", Opened = false })
-secESPPreset:Button({ Title="Legit Mode", Callback=function() 
-    State.ESP.boxMode="OFF"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=true; State.ESP.showNickname=true
-    normalColorDropdown:SetValue("Hijau"); enemyColorDropdown:SetValue("Merah"); textColorDropdown:SetValue("Putih")
-    notify("ESP","Legit Mode",2) 
-end })
-secESPPreset:Button({ Title="Rage Mode", Callback=function() 
-    State.ESP.boxMode="Corner"; State.ESP.tracerMode="Center"; State.ESP.showDistance=true; State.ESP.showNickname=true
-    normalColorDropdown:SetValue("Cyan"); enemyColorDropdown:SetValue("Merah"); textColorDropdown:SetValue("Kuning")
-    notify("ESP","Rage Mode",2) 
-end })
-secESPPreset:Button({ Title="Clean Mode", Callback=function() 
-    State.ESP.boxMode="Corner"; State.ESP.tracerMode="OFF"; State.ESP.showDistance=false; State.ESP.showNickname=false
-    notify("ESP","Clean Mode",2) 
-end })
-secESPPreset:Button({ Title="Highlight Mode", Callback=function() 
-    State.ESP.boxMode="HIGHLIGHT"; State.ESP.tracerMode="Bottom"; State.ESP.showDistance=true; State.ESP.showNickname=true
-    normalColorDropdown:SetValue("Hijau"); enemyColorDropdown:SetValue("Merah"); textColorDropdown:SetValue("Putih")
-    notify("ESP","Highlight Mode",2) 
-end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 6: SECURITY
@@ -1424,7 +1348,6 @@ TrackC(RS.RenderStepped:Connect(function(dt)
     if #fpsSamples > 30 then table.remove(fpsSamples,1) end
 end))
 
--- FIXED: Loop Stats diamankan dengan getgenv()._XKID_RUNNING
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.5)
@@ -1487,24 +1410,13 @@ secTheme:Keybind({
 })
 
 local secCredit = T_SET:Section({ Title = "Credits", Opened = false })
-secCredit:Paragraph({
-    Title = "Designed & Developed by",
-    Desc  = "💎 @WTF.XKID",
-})
-secCredit:Paragraph({
-    Title = "Powered by",
-    Desc  = "⚡ WindUI",
-})
-secCredit:Paragraph({
-    Title = "Version",
-    Desc  = "V.1 - Luxury Edition",
-})
+secCredit:Paragraph({ Title = "Designed & Developed by", Desc  = "💎 @WTF.XKID" })
+secCredit:Paragraph({ Title = "Powered by", Desc  = "⚡ WindUI" })
+secCredit:Paragraph({ Title = "Version", Desc  = "V.1 - Luxury Edition" })
 
 -- ══════════════════════════════════════════════════════════════
---  BACKGROUND LOOPS
+--  BACKGROUND LOOPS (Fling / NoClip)
 -- ══════════════════════════════════════════════════════════════
-
--- FIXED: Loop Fling diamankan dengan getgenv()._XKID_RUNNING
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         if (State.Fling.active or State.SoftFling.active) and getRoot() then
@@ -1532,19 +1444,7 @@ end))
 --  STARTUP NOTIFICATIONS
 -- ══════════════════════════════════════════════════════════════
 WindUI:SetNotificationLower(true)
-
-WindUI:Notify({
-    Title   = "@WTF.XKID",
-    Content = "Luxury Script — Ready.",
-    Duration = 3,
-})
-
+WindUI:Notify({ Title = "@WTF.XKID", Content = "Luxury Script — Ready.", Duration = 3 })
 task.wait(1.5)
-
-WindUI:Notify({
-    Title   = "Safe Fast Respawn",
-    Content = "Type /re to safely reset & teleport.",
-    Duration = 5,
-})
-
-print("✅ @WTF.XKID Luxury Script Loaded | Error 267 Bypass Online")
+WindUI:Notify({ Title = "Hybrid ESP Loaded", Content = "Drawing API optimized. Zero FPS Drop.", Duration = 5 })
+print("✅ @WTF.XKID Luxury Script Loaded | Hybrid ESP Online")
