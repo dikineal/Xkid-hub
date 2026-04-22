@@ -83,17 +83,9 @@ end
 -- ══════════════════════════════════════════════════════════════
 --  LOAD WINDUI (Dengan error handling)
 -- ══════════════════════════════════════════════════════════════
-local WindUI
-local loadSuccess, loadError = pcall(function()
-    WindUI = loadstring(game:HttpGet(
-        "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
-    ))()
-end)
-
-if not loadSuccess then
-    warn("Failed to load WindUI: " .. tostring(loadError))
-    return
-end
+local WindUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
+))()
 
 -- ══════════════════════════════════════════════════════════════
 --  SERVICES
