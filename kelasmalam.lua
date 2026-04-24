@@ -24,10 +24,11 @@
   • Spectate (Orbit & First Person - Fixed)
   • Modern Hybrid ESP (Highlight Mode + Large Glitch Detection)
   • World Control (Weather / Atmosphere / Graphics)
-  • Security (Anti-AFK / Fast Respawn / Anti-Lag)
+  • Security (Anti-AFK / Shift Lock / Anti-Lag)
   • Live FPS, PING & Map Display
   • Security Status Indicator
   • Settings (Theme / Keybind / Acrylic)
+  • NEW: Shift Lock Mode
   • NEW: Home Screen with 3-Column Live Stats
   • NEW: Crimson Theme + Redesigned OpenButton
   
@@ -66,6 +67,7 @@ if getgenv()._XKID_LOADED then
         RS:UnbindFromRenderStep("XKIDFreecam")
         RS:UnbindFromRenderStep("XKIDFly")
         RS:UnbindFromRenderStep("XKIDSpec")
+        RS:UnbindFromRenderStep("XKIDShiftLock")
     end)
     task.wait(0.2) 
     collectgarbage("collect")
@@ -107,7 +109,7 @@ local State = {
     Fling    = { active = false, power = 1000000 },
     SoftFling= { active = false, power = 4000 },
     Teleport = { selectedTarget = "" },
-    Security = { afkConn = nil, antiLag = false },
+    Security = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil },
     Cinema   = { active = false },
     Spectate = { hideName = false },
     Avatar   = { isRefreshing = false },
@@ -172,7 +174,61 @@ TrackC(LP.CharacterAdded:Connect(function(char)
         if State.Move.ws ~= 16 then hum.WalkSpeed = State.Move.ws end
         if State.Move.jp ~= 50 then hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end
     end
+    -- Re-apply Shift Lock if active
+    if State.Security.shiftLock then
+        task.wait(0.2)
+        local hrp = getRoot()
+        if hrp then
+            if State.Security.shiftLockGyro then
+                State.Security.shiftLockGyro:Destroy()
+            end
+            State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp)
+            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            State.Security.shiftLockGyro.P = 50000
+            State.Security.shiftLockGyro.D = 1000
+        end
+    end
 end))
+
+-- ══════════════════════════════════════════════════════════════
+--  SHIFT LOCK ENGINE
+-- ══════════════════════════════════════════════════════════════
+local function toggleShiftLock(v)
+    State.Security.shiftLock = v
+    if v then
+        local hrp = getRoot()
+        if hrp then
+            if State.Security.shiftLockGyro then
+                State.Security.shiftLockGyro:Destroy()
+            end
+            State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp)
+            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            State.Security.shiftLockGyro.P = 50000
+            State.Security.shiftLockGyro.D = 1000
+        end
+        
+        RS:BindToRenderStep("XKIDShiftLock", Enum.RenderPriority.Camera.Value + 2, function()
+            if not State.Security.shiftLock then return end
+            local hrp = getRoot()
+            local gyro = State.Security.shiftLockGyro
+            if hrp and gyro and gyro.Parent == hrp then
+                local camCF = Cam.CFrame
+                local flatLook = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z)
+                if flatLook.Magnitude > 0.01 then
+                    gyro.CFrame = CFrame.new(hrp.Position, hrp.Position + flatLook)
+                end
+            end
+        end)
+        notify("Shift Lock", "🔒 Shift Lock ON", 2)
+    else
+        RS:UnbindFromRenderStep("XKIDShiftLock")
+        if State.Security.shiftLockGyro then
+            State.Security.shiftLockGyro:Destroy()
+            State.Security.shiftLockGyro = nil
+        end
+        notify("Shift Lock", "🔓 Shift Lock OFF", 2)
+    end
+end
 
 -- ══════════════════════════════════════════════════════════════
 --  💎 FAST RESPAWN SYSTEM (/re Command)
@@ -820,7 +876,7 @@ local Window = WindUI:CreateWindow({
     Subtitle    = "Script",
     Author      = "by @WTF.XKID",
     Folder      = "XKIDScript",
-    Icon        = "ghost",
+    Icon        = "zap",
     Theme       = "Crimson",
     Acrylic     = true,
     Transparent = true,
@@ -834,8 +890,8 @@ local Window = WindUI:CreateWindow({
     SideBarWidth= 200,
     Topbar = { Height = 44, ButtonsType = "Default" },
     OpenButton  = {
-        Title           = "XKID HUB",
-        Icon            = "ghost",
+        Title           = "⚡XKID HUB",
+        Icon            = "shield",
         CornerRadius    = UDim.new(1, 0),
         StrokeThickness = 3,
         Enabled         = true,
@@ -896,13 +952,13 @@ local securityLabel = secSecurity:Paragraph({
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Removed Chat Bypass\n• Optimized Performance"
+    Desc  = "• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Removed Chat Bypass\n• Optimized Performance"
 })
 
 local secCreditsHome = T_HOME:Section({ Title = "💎 Credits", Opened = false })
 secCreditsHome:Paragraph({
     Title = "Created by",
-    Desc  = "@WTF.XKID\nPowered by WindUI\nVersion: V.2.3 - Live Stats Edition"
+    Desc  = "@WTF.XKID\nPowered by WindUI\nVersion: V.2.4 - Shift Lock Edition"
 })
 
 -- Live Stats Updater for Home Screen (3 Columns)
@@ -955,10 +1011,11 @@ task.spawn(function()
             local playerCount = #Players:GetPlayers()
             local antiAFKStatus = State.Security.afkConn and "✅" or "⭕"
             local antiLagStatus = State.Security.antiLag and "✅" or "⭕"
+            local shiftLockStatus = State.Security.shiftLock and "🔒" or "🔓"
             
             local securityText = string.format(
-                "🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n⚡ Anti-Lag: %s\n💾 Memory: Optimized",
-                playerCount, antiAFKStatus, antiLagStatus
+                "🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: Optimized",
+                playerCount, antiAFKStatus, shiftLockStatus, antiLagStatus
             )
             securityLabel:SetDesc(securityText)
         end
@@ -1516,7 +1573,7 @@ secESPColor:Dropdown({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: SECURITY
+--  TAB 7: SECURITY (SHIFT LOCK ADDED)
 -- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield" })
 
@@ -1537,6 +1594,16 @@ secProt:Toggle({
             if State.Security.afkConn then State.Security.afkConn:Disconnect(); State.Security.afkConn=nil end
             notify("Anti-AFK","❌ Disabled", 2)
         end
+    end,
+})
+
+local secCameraLock = T_SEC:Section({ Title = "🔒 Camera Lock", Opened = true })
+secCameraLock:Toggle({
+    Title    = "Shift Lock",
+    Desc     = "Lock character rotation to camera direction (like mobile)",
+    Value    = false,
+    Callback = function(v)
+        toggleShiftLock(v)
     end,
 })
 
@@ -1624,7 +1691,7 @@ secTheme:Keybind({
 local secCredit = T_SET:Section({ Title = "Credits", Opened = false })
 secCredit:Paragraph({ Title = "Designed & Developed by", Desc  = "💎 @WTF.XKID" })
 secCredit:Paragraph({ Title = "Powered by", Desc  = "⚡ WindUI" })
-secCredit:Paragraph({ Title = "Version", Desc  = "V.2.3 - Live Stats Edition" })
+secCredit:Paragraph({ Title = "Version", Desc  = "V.2.4 - Shift Lock Edition" })
 
 -- ══════════════════════════════════════════════════════════════
 --  BACKGROUND LOOPS (Fling / NoClip)
@@ -1656,8 +1723,8 @@ end))
 --  STARTUP NOTIFICATIONS
 -- ══════════════════════════════════════════════════════════════
 WindUI:SetNotificationLower(true)
-WindUI:Notify({ Title = "@WTF.XKID", Content = "Script Loaded — Live Stats Edition", Duration = 3 })
+WindUI:Notify({ Title = "@WTF.XKID", Content = "Script Loaded — Shift Lock Edition", Duration = 3 })
 task.wait(1.5)
 WindUI:Notify({ Title = "System Monitor Active", Content = "Map • FPS • Ping Real-time", Duration = 5 })
-WindUI:Notify({ Title = "⚡XKID HUB", Content = "Security Status: Protected", Duration = 4 })
-print("✅ @WTF.XKID Script Loaded | Live Stats Edition | All Features Working")
+WindUI:Notify({ Title = "⚡XKID HUB", Content = "Security Status: Protected | Shift Lock Ready", Duration = 4 })
+print("✅ @WTF.XKID Script Loaded | Shift Lock Edition | All Features Working")
