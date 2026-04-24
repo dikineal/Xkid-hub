@@ -17,7 +17,7 @@
 ╚══════════════════════════════════════════════════════════════════╝
 
   ✨ Features:
-  • Avatar Refresh (/re - Safe Fast Respawn)
+  • Avatar Refresh (Fast Respawn Button)
   • Teleport & Location Saver (3 Slots)
   • Movement (Speed / Jump / Fly / NoClip / Fling)
   • Freecam (Smooth + Mobile Ready - Normal Speed)
@@ -231,7 +231,7 @@ local function toggleShiftLock(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  💎 FAST RESPAWN SYSTEM (/re Command)
+--  💎 FAST RESPAWN SYSTEM
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn() 
     if State.Avatar.isRefreshing then return end
@@ -290,15 +290,6 @@ local function fastRespawn()
         State.Avatar.isRefreshing = false
     end)
 end
-
--- ══════════════════════════════════════════════════════════════
---  CHAT COMMANDS
--- ══════════════════════════════════════════════════════════════
-TrackC(LP.Chatted:Connect(function(msg)
-    local lowerMsg = msg:lower()
-    if lowerMsg == ";re" or lowerMsg == "/re" or lowerMsg == "/reset" or lowerMsg == ";reset" then fastRespawn(); return end
-    if lowerMsg == "!rejoin" then notify("Command", "Rejoining Server...", 2); TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP); return end
-end))
 
 -- ══════════════════════════════════════════════════════════════
 --  💎 HYBRID DETECTION ESP ENGINE (LARGE GLITCH ONLY)
@@ -952,13 +943,7 @@ local securityLabel = secSecurity:Paragraph({
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Removed Chat Bypass\n• Optimized Performance"
-})
-
-local secCreditsHome = T_HOME:Section({ Title = "💎 Credits", Opened = false })
-secCreditsHome:Paragraph({
-    Title = "Created by",
-    Desc  = "@WTF.XKID\nPowered by WindUI\nVersion: V.2.4 - Shift Lock Edition"
+    Desc  = "• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Optimized Performance"
 })
 
 -- Live Stats Updater for Home Screen (3 Columns)
@@ -1029,7 +1014,7 @@ local T_AV = Window:Tab({ Title = "Player", Icon = "user" })
 
 local secAvatar = T_AV:Section({ Title = "Avatar Refresh", Opened = true })
 secAvatar:Button({
-    Title    = "Fast Respawn — /re",
+    Title    = "Fast Respawn",
     Desc     = "Respawn instan dan aman (Scale/Error 267 Protected)",
     Callback = function() fastRespawn() end,
 })
@@ -1644,7 +1629,7 @@ secProt:Toggle({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: SETTINGS
+--  TAB 8: SETTINGS (CREDITS REMOVED)
 -- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
 
@@ -1688,11 +1673,6 @@ secTheme:Keybind({
     end,
 })
 
-local secCredit = T_SET:Section({ Title = "Credits", Opened = false })
-secCredit:Paragraph({ Title = "Designed & Developed by", Desc  = "💎 @WTF.XKID" })
-secCredit:Paragraph({ Title = "Powered by", Desc  = "⚡ WindUI" })
-secCredit:Paragraph({ Title = "Version", Desc  = "V.2.4 - Shift Lock Edition" })
-
 -- ══════════════════════════════════════════════════════════════
 --  BACKGROUND LOOPS (Fling / NoClip)
 -- ══════════════════════════════════════════════════════════════
@@ -1723,8 +1703,8 @@ end))
 --  STARTUP NOTIFICATIONS
 -- ══════════════════════════════════════════════════════════════
 WindUI:SetNotificationLower(true)
-WindUI:Notify({ Title = "@WTF.XKID", Content = "Script Loaded — Shift Lock Edition", Duration = 3 })
+WindUI:Notify({ Title = "@WTF.XKID", Content = "Script Loaded — Clean Edition", Duration = 3 })
 task.wait(1.5)
 WindUI:Notify({ Title = "System Monitor Active", Content = "Map • FPS • Ping Real-time", Duration = 5 })
 WindUI:Notify({ Title = "⚡XKID HUB", Content = "Security Status: Protected | Shift Lock Ready", Duration = 4 })
-print("✅ @WTF.XKID Script Loaded | Shift Lock Edition | All Features Working")
+print("✅ @WTF.XKID Script Loaded | Clean Edition | All Features Working")
