@@ -11,7 +11,7 @@
   • Freecam (Smooth + Mobile Ready - Normal Speed)
   • Spectate (Orbit & First Person - Fixed)
   • Modern Hybrid ESP (Highlight Mode + Large Glitch Detection)
-  • World Control (Weather / Atmosphere / Graphics)
+  • World Control (Aesthetic Filters / Atmosphere / Graphics)
   • Security (Anti-AFK / Shift Lock / Anti-Lag)
   • Live FPS, PING & Map Display
   • Security Status Indicator
@@ -20,7 +20,7 @@
   • NEW: Refresh Character Button
   • NEW: Home Screen with 3-Column Live Stats
   • NEW: Crimson Theme + Redesigned OpenButton
-  • FIXED: Fast Respawn & Refresh — Stay at position (no spawn reset)
+  • OPTIMIZED: Cinematic Aesthetic Filters injected to Lighting
   
   💎 Created by @WTF.XKID
 ]]
@@ -51,6 +51,9 @@ if getgenv()._XKID_LOADED then
         for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
             if v.Name == "WindUI" then v:Destroy() end
         end
+        for _, v in pairs(game:GetService("Lighting"):GetChildren()) do
+            if v.Name == "_XKID_FILTER" then v:Destroy() end
+        end
         if getgenv()._XKID_CONNS then
             for _, c in pairs(getgenv()._XKID_CONNS) do pcall(function() c:Disconnect() end) end
         end
@@ -68,7 +71,7 @@ getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
--- Memory GC Optimizer (Berjalan di background sesuai permintaan)
+-- Memory GC Optimizer (Berjalan di background)
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(30)
@@ -970,7 +973,7 @@ getgenv()._XKID_INSTANCE = Window.Instance
 WindUI:SetTheme("Crimson")
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: HOME SCREEN (3-COLUMN LIVE STATS + SECURITY INDICATOR)
+--  TAB 1: HOME SCREEN
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "Home", Icon = "home" })
 
@@ -1006,10 +1009,9 @@ local securityLabel = secSecurity:Paragraph({
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• FIXED: Fast Respawn & Refresh — Stay at position\n• Added Refresh Character\n• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Optimized Performance"
+    Desc  = "• ADDED: Aesthetic Filters di World Control\n• FIXED: Fast Respawn & Refresh — Stay at position\n• Added Refresh Character\n• Added Shift Lock Mode\n• Enhanced ESP (Large Glitch Only)\n• Optimized Performance"
 })
 
--- Live Stats Updater for Home Screen (3 Columns)
 local fpsSamples = {}
 TrackC(RS.RenderStepped:Connect(function(dt)
     table.insert(fpsSamples, dt)
@@ -1020,7 +1022,6 @@ task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.3)
         
-        -- Update Map Name
         pcall(function()
             local placeName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
             if placeName and mapLabel then
@@ -1029,7 +1030,6 @@ task.spawn(function()
             end
         end)
         
-        -- Update FPS with color
         if fpsLabel then
             local fps = 0
             if #fpsSamples > 0 then
@@ -1038,23 +1038,19 @@ task.spawn(function()
                 avg = avg / #fpsSamples
                 fps = math.floor(1 / avg)
             end
-            
             local fpsColor = fps >= 60 and "🟢" or (fps >= 30 and "🟡" or "🔴")
             fpsLabel:SetDesc(fpsColor .. " " .. fps .. " FPS")
         end
         
-        -- Update Ping with color
         if pingLabel then
             local ping = 0
             pcall(function() 
                 ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()) 
             end)
-            
             local pingColor = ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")
             pingLabel:SetDesc(pingColor .. " " .. ping .. " ms")
         end
         
-        -- Update Security Status
         if securityLabel then
             local playerCount = #Players:GetPlayers()
             local antiAFKStatus = State.Security.afkConn and "✅" or "⭕"
@@ -1062,7 +1058,7 @@ task.spawn(function()
             local shiftLockStatus = State.Security.shiftLock and "🔒" or "🔓"
             
             local securityText = string.format(
-                "🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: Optimized",
+                "🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: GC Running",
                 playerCount, antiAFKStatus, shiftLockStatus, antiLagStatus
             )
             securityLabel:SetDesc(securityText)
@@ -1228,7 +1224,7 @@ secAbi:Toggle({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 3: TELEPORT (3 SLOTS - ROBUST)
+--  TAB 3: TELEPORT
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 
@@ -1362,7 +1358,7 @@ for i = 1, 3 do
 end
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 4: CAMERA & SPECTATE (FIXED)
+--  TAB 4: CAMERA & SPECTATE
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Camera", Icon = "eye" })
 
@@ -1484,24 +1480,71 @@ secSP:Slider({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: WORLD (DEFAULT WEATHER + COMPLETE GRAPHICS)
+--  TAB 5: WORLD (AESTHETIC FILTERS)
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "World", Icon = "globe" })
 
-local secWea = T_WO:Section({ Title = "Weather Presets", Opened = true })
-secWea:Button({ Title="🌅 Pagi (Morning)", Callback = function() Lighting.ClockTime = 7; Lighting.Brightness = 1; Lighting.FogEnd = 1000 end })
-secWea:Button({ Title="☀ Siang (Day)", Callback = function() Lighting.ClockTime = 14; Lighting.Brightness = 2; Lighting.FogEnd = 1000 end })
-secWea:Button({ Title="🌇 Sore (Evening)", Callback = function() Lighting.ClockTime = 17.5; Lighting.Brightness = 1.5; Lighting.FogEnd = 1000 end })
-secWea:Button({ Title="🌃 Malam (Night)", Callback = function() Lighting.ClockTime = 0; Lighting.Brightness = 0.5; Lighting.FogEnd = 1000 end })
-secWea:Button({ Title="🔄 Default (Reset)", Callback = function()
-    Lighting.ClockTime = 14
-    Lighting.Brightness = 1
-    Lighting.FogEnd = 1000
-    Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
-    Lighting.ColorShift_Bottom = Color3.new(0, 0, 0)
-    Lighting.ColorShift_Top = Color3.new(0, 0, 0)
-    notify("Weather", "✅ Reset to default", 2)
-end })
+local secFilter = T_WO:Section({ Title = "Aesthetic Filters", Opened = true })
+
+local function applyFilter(filter)
+    -- Cleanup filter lama agar tidak bertumpuk
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v.Name == "_XKID_FILTER" then v:Destroy() end
+    end
+    
+    if filter == "Default" then
+        Lighting.ClockTime = 14
+        Lighting.Brightness = 1
+        Lighting.FogEnd = 1000
+        Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
+        notify("Filter", "✅ Reset ke Normal", 2)
+        return
+    end
+
+    local cc = Instance.new("ColorCorrectionEffect")
+    cc.Name = "_XKID_FILTER"
+    cc.Parent = Lighting
+    
+    local bloom = Instance.new("BloomEffect")
+    bloom.Name = "_XKID_FILTER"
+    bloom.Parent = Lighting
+
+    if filter == "Brutal Noir" then
+        cc.Saturation = -1
+        cc.Contrast = 0.7
+        cc.Brightness = -0.1
+        bloom.Intensity = 0.4
+        Lighting.ClockTime = 2
+    elseif filter == "Cyberpunk" then
+        cc.Saturation = 0.8
+        cc.Contrast = 0.3
+        cc.TintColor = Color3.fromRGB(200, 150, 255)
+        bloom.Intensity = 0.8
+        bloom.Size = 24
+        Lighting.ClockTime = 0
+    elseif filter == "Dreamy Pastel" then
+        cc.Saturation = 0.2
+        cc.Contrast = -0.1
+        cc.TintColor = Color3.fromRGB(255, 230, 210)
+        bloom.Intensity = 0.6
+        bloom.Size = 30
+        Lighting.ClockTime = 17
+    elseif filter == "Crimson Moon" then
+        cc.Saturation = 0.4
+        cc.Contrast = 0.5
+        cc.TintColor = Color3.fromRGB(255, 100, 100)
+        bloom.Intensity = 0.7
+        Lighting.ClockTime = 0
+    end
+    
+    notify("Filter", "✅ " .. filter .. " Applied!", 2)
+end
+
+secFilter:Button({ Title="🎬 Brutal Noir (B&W Cinematic)", Callback = function() applyFilter("Brutal Noir") end })
+secFilter:Button({ Title="🌃 Cyberpunk (Neon Vibez)", Callback = function() applyFilter("Cyberpunk") end })
+secFilter:Button({ Title="🌸 Dreamy Pastel (Soft Warm)", Callback = function() applyFilter("Dreamy Pastel") end })
+secFilter:Button({ Title="🩸 Crimson Moon (Dark Red)", Callback = function() applyFilter("Crimson Moon") end })
+secFilter:Button({ Title="🔄 Normal (Reset)", Callback = function() applyFilter("Default") end })
 
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
 secAtmos:Slider({ Title="Clock Time", Step=1, Value={Min=0, Max=24, Default=14}, Callback=function(v) Lighting.ClockTime = tonumber(v) or 14 end })
@@ -1626,7 +1669,7 @@ secESPColor:Dropdown({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: SECURITY (SHIFT LOCK ADDED)
+--  TAB 7: SECURITY
 -- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield" })
 
@@ -1771,8 +1814,8 @@ end))
 --  STARTUP NOTIFICATIONS
 -- ══════════════════════════════════════════════════════════════
 WindUI:SetNotificationLower(true)
-WindUI:Notify({ Title = "@WTF.XKID", Content = "Script Loaded — Refresh Edition", Duration = 3 })
+WindUI:Notify({ Title = "@WTF.XKID", Content = "Aesthetic Filters Added & Script Restored", Duration = 3 })
 task.wait(1.5)
 WindUI:Notify({ Title = "System Monitor Active", Content = "Map • FPS • Ping Real-time", Duration = 5 })
 WindUI:Notify({ Title = "⚡XKID HUB", Content = "Security Status: Protected | Shift Lock Ready", Duration = 4 })
-print("✅ @WTF.XKID Script Loaded | Refresh Edition | Fast Respawn & Refresh Fixed")
+print("✅ @WTF.XKID Script Loaded | Aesthetic Filters Edition | 100% Original Structure")
