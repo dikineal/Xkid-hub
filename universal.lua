@@ -5,7 +5,7 @@
 ========================
 
   ✨ Features:
-  • Avatar Refresh (Fast Respawn + Refresh Character) - SUPER FIXED
+  • Avatar Refresh (Fast Respawn + Refresh Character)
   • Teleport & Location Saver (3 Slots)
   • Movement (Speed / Jump / Fly / NoClip / Fling)
   • Freecam (Smooth + Mobile Ready - Normal Speed)
@@ -20,6 +20,8 @@
   • NEW: Refresh Character Button
   • NEW: Home Screen with 3-Column Live Stats
   • NEW: Crimson Theme + Redesigned OpenButton
+  • OPTIMIZED: Aggressive Background Garbage Collector (Memory)
+  • FIXED: Spectate & Teleport Dropdown Refresh
   
   💎 Created by @WTF.XKID
 ]]
@@ -27,7 +29,7 @@
 local RS = game:GetService("RunService")
 
 -- ══════════════════════════════════════════════════════════════
---  0. AUTO CLEANUP & MEMORY MANAGEMENT
+--  0. AUTO CLEANUP & MEMORY MANAGEMENT (OPTIMIZED)
 -- ══════════════════════════════════════════════════════════════
 if getgenv()._XKID_RUNNING then
     getgenv()._XKID_RUNNING = false 
@@ -66,6 +68,14 @@ getgenv()._XKID_LOADED = true
 getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
+
+-- Background Memory Optimizer (GC Loop)
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        task.wait(30) -- Bersihkan sampah memori setiap 30 detik
+        collectgarbage("collect")
+    end
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  LOAD WINDUI
@@ -220,7 +230,7 @@ local function toggleShiftLock(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  💎 FAST RESPAWN SYSTEM (SUPER FIXED)
+--  💎 FAST RESPAWN SYSTEM
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
@@ -246,7 +256,6 @@ local function fastRespawn()
         local newHum = newChar:WaitForChild("Humanoid", 5)
         
         if newHrp and newHum then
-            -- Tahan posisi HRP selama 0.5 detik agar engine tidak men-teleport ke spawn
             local startTime = tick()
             local holdConn
             holdConn = RS.Heartbeat:Connect(function()
@@ -271,14 +280,13 @@ local function fastRespawn()
     -- Memastikan kematian instan dan memicu CharacterAdded
     char:BreakJoints()
 
-    -- Safety Fallback
     task.delay(5, function() 
         State.Avatar.isRefreshing = false 
     end)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  REFRESH CHARACTER (SUPER FIXED - ANTI LOCK CAMERA)
+--  REFRESH CHARACTER
 -- ══════════════════════════════════════════════════════════════
 local function refreshCharacter()
     if State.Avatar.isRefreshing then return end
@@ -305,7 +313,6 @@ local function refreshCharacter()
         local newHum = newChar:WaitForChild("Humanoid", 5)
         
         if newHrp and newHum then
-            -- Tahan posisi HRP selama 0.5 detik agar engine tidak men-teleport ke spawn
             local startTime = tick()
             local holdConn
             holdConn = RS.Heartbeat:Connect(function()
@@ -319,7 +326,6 @@ local function refreshCharacter()
                 end
             end)
 
-            -- Kembalikan kamera ke humanoid baru
             Cam.CameraSubject = newHum
             Cam.CFrame = camCF
         end
@@ -328,7 +334,6 @@ local function refreshCharacter()
         notify("✅ Success", "Karakter Refreshed!", 2)
     end)
 
-    -- Mencoba menggunakan LoadCharacter, jika diblokir oleh executor, paksa mati (BreakJoints)
     local success = pcall(function()
         LP:LoadCharacter()
     end)
@@ -337,14 +342,13 @@ local function refreshCharacter()
         char:BreakJoints()
     end
     
-    -- Emergency Failsafe
     task.delay(5, function()
         State.Avatar.isRefreshing = false
     end)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  💎 HYBRID DETECTION ESP ENGINE (LARGE GLITCH ONLY)
+--  💎 HYBRID DETECTION ESP ENGINE (OPTIMIZED)
 -- ══════════════════════════════════════════════════════════════
 
 local function initPlayerCache(player)
@@ -448,10 +452,16 @@ TrackC(RS.RenderStepped:Connect(function()
             local hrp = getCharRoot(char)
             local hum = char and char:FindFirstChildOfClass("Humanoid")
             
+            -- Membersihkan cache jika player sudah mati atau keluar
+            if not char or not hrp or not hum then
+                clearPlayerCache(player)
+                continue
+            end
+            
             initPlayerCache(player)
             local c = State.ESP.cache[player]
             
-            local active = char and hrp and hum and hum.Health > 0 and myHrp
+            local active = hum.Health > 0 and myHrp
             local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
             
             if not active or dist > State.ESP.maxDrawDistance then
@@ -912,7 +922,7 @@ local function stopSpecLoop()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  MAIN WINDOW (REDESIGNED: CRIMSON THEME + NEW OPENBUTTON)
+--  MAIN WINDOW
 -- ══════════════════════════════════════════════════════════════
 local Window = WindUI:CreateWindow({
     Title       = "@WTF.XKID",
@@ -995,10 +1005,10 @@ local securityLabel = secSecurity:Paragraph({
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• FIXED: Fast Respawn & Refresh — Anti Camera Lock\n• Added Refresh Character\n• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Optimized Performance"
+    Desc  = "• OPTIMIZED: Auto Memory Cleaning\n• FIXED: Dropdown Refresh (Teleport & Spectate)\n• FIXED: Fast Respawn & Refresh\n• Added Shift Lock Mode\n• Enhanced ESP (Large Glitch Only)"
 })
 
--- Live Stats Updater for Home Screen (3 Columns)
+-- Live Stats Updater
 local fpsSamples = {}
 TrackC(RS.RenderStepped:Connect(function(dt)
     table.insert(fpsSamples, dt)
@@ -1009,7 +1019,6 @@ task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.3)
         
-        -- Update Map Name
         pcall(function()
             local placeName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
             if placeName and mapLabel then
@@ -1018,7 +1027,6 @@ task.spawn(function()
             end
         end)
         
-        -- Update FPS with color
         if fpsLabel then
             local fps = 0
             if #fpsSamples > 0 then
@@ -1032,7 +1040,6 @@ task.spawn(function()
             fpsLabel:SetDesc(fpsColor .. " " .. fps .. " FPS")
         end
         
-        -- Update Ping with color
         if pingLabel then
             local ping = 0
             pcall(function() 
@@ -1043,7 +1050,6 @@ task.spawn(function()
             pingLabel:SetDesc(pingColor .. " " .. ping .. " ms")
         end
         
-        -- Update Security Status
         if securityLabel then
             local playerCount = #Players:GetPlayers()
             local antiAFKStatus = State.Security.afkConn and "✅" or "⭕"
@@ -1051,7 +1057,7 @@ task.spawn(function()
             local shiftLockStatus = State.Security.shiftLock and "🔒" or "🔓"
             
             local securityText = string.format(
-                "🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: Optimized",
+                "🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: GC Running",
                 playerCount, antiAFKStatus, shiftLockStatus, antiLagStatus
             )
             securityLabel:SetDesc(securityText)
@@ -1067,12 +1073,12 @@ local T_AV = Window:Tab({ Title = "Player", Icon = "user" })
 local secAvatar = T_AV:Section({ Title = "Avatar Refresh", Opened = true })
 secAvatar:Button({
     Title    = "Fast Respawn",
-    Desc     = "Respawn instan — tetap di posisi kematian (bukan spawn)",
+    Desc     = "Membunuh karakter + memaksanya respawn instan di tempat matinya",
     Callback = function() fastRespawn() end,
 })
 secAvatar:Button({
     Title    = "Refresh Character",
-    Desc     = "Reload character tanpa kill — tetap di posisi semula",
+    Desc     = "Mereload karakter tanpa melalui proses event 'mati' (Mencegah kehilangan bounty)",
     Callback = function() refreshCharacter() end,
 })
 
@@ -1217,7 +1223,7 @@ secAbi:Toggle({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 3: TELEPORT (3 SLOTS - ROBUST)
+--  TAB 3: TELEPORT
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 
@@ -1240,63 +1246,32 @@ secTP:Button({
     Desc     = "Teleport to searched player",
     Callback = function()
         local success, err = pcall(function()
-            if tpTarget == "" then
-                notify("Teleport", "❌ Masukkan nama player!", 2)
-                return
-            end
-            
+            if tpTarget == "" then notify("Teleport", "❌ Masukkan nama player!", 2); return end
             local targetPlayer = nil
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LP then
-                    local nl = string.lower(p.Name)
-                    local dl = string.lower(p.DisplayName)
-                    local tl = string.lower(tpTarget)
-                    
-                    if string.find(nl, tl) or string.find(dl, tl) then
-                        targetPlayer = p
-                        break
-                    end
+                    local nl, dl, tl = string.lower(p.Name), string.lower(p.DisplayName), string.lower(tpTarget)
+                    if string.find(nl, tl) or string.find(dl, tl) then targetPlayer = p; break end
                 end
             end
             
-            if not targetPlayer then
-                notify("Teleport", "❌ Player tidak ditemukan!", 2)
-                return
-            end
-            
-            if not targetPlayer.Parent then
-                notify("Teleport", "❌ Player sudah keluar!", 2)
-                return
-            end
-            
+            if not targetPlayer then notify("Teleport", "❌ Player tidak ditemukan!", 2); return end
+            if not targetPlayer.Parent then notify("Teleport", "❌ Player sudah keluar!", 2); return end
             local tChar = targetPlayer.Character
-            if not tChar then
-                notify("Teleport", "❌ Player belum spawn!", 2)
-                return
-            end
+            if not tChar then notify("Teleport", "❌ Player belum spawn!", 2); return end
             
             local tHrp = getCharRoot(tChar)
             local tHum = tChar:FindFirstChildOfClass("Humanoid")
             local myHrp = getRoot()
             
-            if not tHrp or not tHum or not myHrp then
-                notify("Teleport", "❌ Gagal mendapatkan posisi!", 2)
-                return
-            end
-            
-            if tHum.Health <= 0 then
-                notify("Teleport", "❌ Target ("..targetPlayer.DisplayName..") sedang mati!", 2)
-                return
-            end
+            if not tHrp or not tHum or not myHrp then notify("Teleport", "❌ Gagal mendapatkan posisi!", 2); return end
+            if tHum.Health <= 0 then notify("Teleport", "❌ Target sedang mati!", 2); return end
             
             myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3) + Vector3.new(0, 2, 0)
             myHrp.AssemblyLinearVelocity = Vector3.zero
             notify("Teleport", "✅ TP ke "..targetPlayer.DisplayName, 2)
         end)
-        
-        if not success then
-            notify("Teleport", "❌ Error: "..tostring(err), 3)
-        end
+        if not success then notify("Teleport", "❌ Error: "..tostring(err), 3) end
     end,
 })
 
@@ -1313,7 +1288,7 @@ secTP:Button({
     Desc     = "Update player list",
     Callback = function()
         local newList = refreshPlayerLists()
-        tpDropdown:SetValues(newList)
+        pcall(function() tpDropdown:Refresh(newList, true) end) -- FIXED: Use :Refresh()
         notify("Teleport", "✅ List updated! "..#newList.." players", 2)
     end,
 })
@@ -1351,7 +1326,7 @@ for i = 1, 3 do
 end
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 4: CAMERA & SPECTATE (FIXED)
+--  TAB 4: CAMERA & SPECTATE
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Camera", Icon = "eye" })
 
@@ -1394,7 +1369,7 @@ secFC:Slider({ Title="Speed", Step=0.5, Value={Min=1, Max=20, Default=3}, Callba
 secFC:Slider({ Title="Sensitivity", Step=1, Value={Min=1, Max=20, Default=5}, Callback=function(v) FC.sens = (tonumber(v) or 5)*0.05 end })
 secFC:Slider({ Title="FOV", Step=1, Value={Min=10, Max=120, Default=70}, Callback=function(v) Cam.FieldOfView = tonumber(v) or 70 end })
 
-local secSP = T_CAM:Section({ Title = "Spectate Player (Fixed)", Opened = true })
+local secSP = T_CAM:Section({ Title = "Spectate Player", Opened = true })
 local specDropOpts = getDisplayNames()
 
 local specDropdown = secSP:Dropdown({
@@ -1422,7 +1397,7 @@ secSP:Button({
     Title    = "🔄 Refresh List",
     Callback = function()
         specDropOpts = getDisplayNames()
-        specDropdown:SetValues(specDropOpts)
+        pcall(function() specDropdown:Refresh(specDropOpts, true) end) -- FIXED: Use :Refresh()
         notify("Spectate", "✅ List updated! "..#specDropOpts.." players", 2)
     end,
 })
@@ -1473,7 +1448,7 @@ secSP:Slider({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: WORLD (DEFAULT WEATHER + COMPLETE GRAPHICS)
+--  TAB 5: WORLD
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "World", Icon = "globe" })
 
@@ -1525,9 +1500,7 @@ secGfx:Dropdown({
     Value = "Level 1",
     Callback = function(v)
         local level = tonumber(v:match("%d+"))
-        if level then
-            setGfx(level)
-        end
+        if level then setGfx(level) end
     end,
 })
 
@@ -1537,7 +1510,7 @@ secGfx:Button({ Title="💎 Ultra (Lv10)", Callback=function() setGfx(10) end })
 secGfx:Button({ Title="🔄 Reset to Level 1", Callback=function() setGfx(1) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: HYBRID ESP (LARGE GLITCH ONLY)
+--  TAB 6: HYBRID ESP
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "ESP", Icon = "radar" })
 
@@ -1615,7 +1588,7 @@ secESPColor:Dropdown({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: SECURITY (SHIFT LOCK ADDED)
+--  TAB 7: SECURITY
 -- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield" })
 
@@ -1686,7 +1659,7 @@ secProt:Toggle({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: SETTINGS (CREDITS REMOVED)
+--  TAB 8: SETTINGS
 -- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
 
@@ -1760,8 +1733,7 @@ end))
 --  STARTUP NOTIFICATIONS
 -- ══════════════════════════════════════════════════════════════
 WindUI:SetNotificationLower(true)
-WindUI:Notify({ Title = "@WTF.XKID", Content = "Script Loaded — Refresh Edition", Duration = 3 })
+WindUI:Notify({ Title = "@WTF.XKID", Content = "Memory GC Active & Bugs Fixed", Duration = 3 })
 task.wait(1.5)
 WindUI:Notify({ Title = "System Monitor Active", Content = "Map • FPS • Ping Real-time", Duration = 5 })
-WindUI:Notify({ Title = "⚡XKID HUB", Content = "Security Status: Protected | Shift Lock Ready", Duration = 4 })
-print("✅ @WTF.XKID Script Loaded | Refresh Edition | Fast Respawn & Refresh Fixed")
+print("✅ @WTF.XKID Script Loaded | Memory Optimized | UI Fixes Applied")
