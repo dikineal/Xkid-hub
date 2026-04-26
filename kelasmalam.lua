@@ -11,7 +11,7 @@
   • Freecam (Smooth + Mobile Ready - Normal Speed)
   • Spectate (Orbit & First Person - Fixed)
   • Modern Hybrid ESP (Highlight Mode + Large Glitch Detection)
-  • World Control (Weather / Atmosphere / Graphics)
+  • World Control (Aesthetic Filters / Atmosphere / Graphics)
   • Security (Anti-AFK / Shift Lock / Anti-Lag)
   • Live FPS, PING & Map Display
   • Security Status Indicator
@@ -20,7 +20,7 @@
   • NEW: Refresh Character Button
   • NEW: Home Screen with 3-Column Live Stats
   • NEW: Crimson Theme + Redesigned OpenButton
-  • FIXED: Fast Respawn & Refresh — Stay at position (no spawn reset)
+  • OPTIMIZED: Cinematic Aesthetic Video Filters injected to Lighting
   
   💎 Created by @WTF.XKID
 ]]
@@ -51,6 +51,9 @@ if getgenv()._XKID_LOADED then
         for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
             if v.Name == "WindUI" then v:Destroy() end
         end
+        for _, v in pairs(game:GetService("Lighting"):GetChildren()) do
+            if v.Name == "_XKID_FILTER" then v:Destroy() end
+        end
         if getgenv()._XKID_CONNS then
             for _, c in pairs(getgenv()._XKID_CONNS) do pcall(function() c:Disconnect() end) end
         end
@@ -67,6 +70,14 @@ getgenv()._XKID_LOADED = true
 getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
+
+-- Memory GC Optimizer (Berjalan di background)
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        task.wait(30)
+        collectgarbage("collect")
+    end
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  LOAD WINDUI
@@ -137,20 +148,22 @@ local colorMap = {
 -- ══════════════════════════════════════════════════════════════
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
 local function getHum() return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
-local function getPNames()
-    local t = {}
-    for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.Name) end end
-    return t
-end
+
 local function getDisplayNames()
     local t = {}
-    for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName .. " (@" .. p.Name .. ")") end end
+    for _, p in pairs(Players:GetPlayers()) do 
+        if p ~= LP then table.insert(t, p.DisplayName) end 
+    end
     return t
 end
+
 local function findPlayerByDisplay(str)
-    for _, p in pairs(Players:GetPlayers()) do if str == p.DisplayName .. " (@" .. p.Name .. ")" then return p end end
+    for _, p in pairs(Players:GetPlayers()) do 
+        if str == p.DisplayName then return p end 
+    end
     return nil
 end
+
 local function getCharRoot(char)
     if not char then return nil end
     return char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
@@ -221,201 +234,126 @@ local function toggleShiftLock(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  💎 FAST RESPAWN SYSTEM (FIXED - STAY AT DEATH POSITION)
+--  💎 FAST RESPAWN SYSTEM
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
-
+    
     local char = LP.Character
-    local hum  = char and char:FindFirstChildOfClass("Humanoid")
-    local hrp  = getRoot()
-
-    if not hum or not hrp then
-        notify("❌ Fast Respawn", "Character/HumanoidRootPart tidak ditemukan!", 2)
+    local hrp = getRoot()
+    
+    if not char or not hrp then
+        notify("❌ Error", "Karakter tidak ditemukan!", 2)
         return
     end
 
     State.Avatar.isRefreshing = true
-    notify("🔄 Fast Respawn", "Respawning safely...", 1.5)
+    notify("🔄 Fast Respawn", "Respawning...", 1.5)
 
-    -- Simpan posisi SEBELUM mati (posisi kematian)
-    local savedCF    = hrp.CFrame
-    local savedCamCF = Cam.CFrame
-
-    -- Bekukan kamera agar tidak fly ke spawn
-    Cam.CameraType = Enum.CameraType.Scriptable
-    Cam.CFrame     = savedCamCF
-
-    -- Blokir RespawnLocation agar engine tidak teleport ke spawn point
-    local prevRespawn = LP.RespawnLocation
-    LP.RespawnLocation = nil
-
-    local charAddedConn
-    charAddedConn = TrackC(LP.CharacterAdded:Connect(function(newChar)
-        charAddedConn:Disconnect()
-
-        -- Paksa posisi sesegera mungkin, sebelum engine sempat teleport ke spawn
-        local newHrp = newChar:FindFirstChild("HumanoidRootPart")
-        if newHrp then
-            newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
-            newHrp.AssemblyLinearVelocity = Vector3.zero
-        end
-
-        -- Tunggu appearance selesai load
+    local savedCF = hrp.CFrame
+    local camCF = Cam.CFrame
+    
+    local connection
+    connection = LP.CharacterAdded:Connect(function(newChar)
+        connection:Disconnect()
+        local newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
         local newHum = newChar:WaitForChild("Humanoid", 5)
-        newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
-
-        if not LP:HasAppearanceLoaded() then
-            LP.CharacterAppearanceLoaded:Wait()
-        end
-
-        task.wait(0.15)
-
+        
         if newHrp and newHum then
-            -- Set ulang posisi setelah appearance load (engine sering reset posisi saat load)
-            newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
-            newHrp.AssemblyLinearVelocity = Vector3.zero
-
-            -- Konfirmasi posisi di beberapa frame berikutnya
-            task.spawn(function()
-                for _ = 1, 3 do
-                    task.wait()
-                    if newHrp and newHrp.Parent then
-                        newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
-                        newHrp.AssemblyLinearVelocity = Vector3.zero
-                    end
+            local startTime = tick()
+            local holdConn
+            holdConn = RS.Heartbeat:Connect(function()
+                if tick() - startTime > 0.5 then
+                    holdConn:Disconnect()
+                    return
+                end
+                if newHrp.Parent then
+                    newHrp.CFrame = savedCF
+                    newHrp.AssemblyLinearVelocity = Vector3.zero
                 end
             end)
 
-            -- Pulihkan kamera
             Cam.CameraSubject = newHum
-            Cam.CameraType    = Enum.CameraType.Custom
-
-            -- Pulihkan stats gerak
-            if State.Move.ws ~= 16 then newHum.WalkSpeed = State.Move.ws end
-            if State.Move.jp ~= 50 then
-                newHum.UseJumpPower = true
-                newHum.JumpPower    = State.Move.jp
-            end
-
-            notify("✨ Success", "Fast Respawn — tetap di posisi kematian!", 2)
+            Cam.CFrame = camCF
         end
-
-        -- Kembalikan RespawnLocation ke nilai semula
-        LP.RespawnLocation = prevRespawn
+        
         State.Avatar.isRefreshing = false
-    end))
+        notify("✅ Success", "Fast Respawn Selesai!", 2)
+    end)
 
-    -- Matikan karakter
-    hum.Health = 0
+    char:BreakJoints()
 
-    -- Safety timeout
-    task.delay(8, function()
-        LP.RespawnLocation        = prevRespawn
-        State.Avatar.isRefreshing = false
+    task.delay(5, function() 
+        State.Avatar.isRefreshing = false 
     end)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  REFRESH CHARACTER (NO KILL — STAY AT CURRENT POSITION)
+--  REFRESH CHARACTER
 -- ══════════════════════════════════════════════════════════════
 local function refreshCharacter()
-    if State.Avatar.isRefreshing then
-        notify("❌ Refresh Character", "Sedang dalam proses refresh, tunggu sebentar...", 2)
-        return
-    end
+    if State.Avatar.isRefreshing then return end
 
     local char = LP.Character
-    if not char then
-        notify("❌ Refresh Character", "Character tidak ditemukan!", 2)
-        return
-    end
-
     local hrp = getRoot()
-    if not hrp then
-        notify("❌ Refresh Character", "HumanoidRootPart tidak ditemukan!", 2)
+    
+    if not char or not hrp then
+        notify("❌ Error", "Karakter tidak ditemukan!", 2)
         return
     end
 
     State.Avatar.isRefreshing = true
-    notify("🔄 Refresh Character", "Refreshing character...", 1.5)
+    notify("🔄 Refresh", "Refreshing karakter...", 1.5)
 
-    -- Simpan posisi saat ini (BUKAN spawn)
-    local savedCF    = hrp.CFrame
-    local savedCamCF = Cam.CFrame
-
-    -- Bekukan kamera agar tidak fly ke spawn
+    local savedCF = hrp.CFrame
+    local camCF = Cam.CFrame
+    
     Cam.CameraType = Enum.CameraType.Scriptable
-    Cam.CFrame     = savedCamCF
-
-    -- Blokir RespawnLocation agar tidak dikirim ke spawn
-    local prevRespawn = LP.RespawnLocation
-    LP.RespawnLocation = nil
-
-    -- Pasang listener SEBELUM LoadCharacter dipanggil
-    local charAddedConn
-    charAddedConn = TrackC(LP.CharacterAdded:Connect(function(newChar)
-        charAddedConn:Disconnect()
-
-        -- Paksa posisi secepat mungkin
-        local newHrp = newChar:FindFirstChild("HumanoidRootPart")
-        if newHrp then
-            newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
-            newHrp.AssemblyLinearVelocity = Vector3.zero
-        end
-
-        local newHum = newChar:WaitForChild("Humanoid", 10)
-        newHrp       = newChar:WaitForChild("HumanoidRootPart", 10)
-
-        if not LP:HasAppearanceLoaded() then
-            LP.CharacterAppearanceLoaded:Wait()
-        end
-
-        task.wait(0.2)
-
+    Cam.CFrame = camCF
+    
+    local connection
+    connection = LP.CharacterAdded:Connect(function(newChar)
+        connection:Disconnect()
+        
+        local newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
+        local newHum = newChar:WaitForChild("Humanoid", 5)
+        
         if newHrp and newHum then
-            -- Set posisi ulang setelah appearance load
-            newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
-            newHrp.AssemblyLinearVelocity = Vector3.zero
-
-            -- Konfirmasi posisi beberapa frame
-            task.spawn(function()
-                for _ = 1, 3 do
-                    task.wait()
-                    if newHrp and newHrp.Parent then
-                        newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
-                        newHrp.AssemblyLinearVelocity = Vector3.zero
-                    end
+            local startTime = tick()
+            local holdConn
+            holdConn = RS.Heartbeat:Connect(function()
+                if tick() - startTime > 0.5 then
+                    holdConn:Disconnect()
+                    return
+                end
+                if newHrp.Parent then
+                    newHrp.CFrame = savedCF
+                    newHrp.AssemblyLinearVelocity = Vector3.zero
                 end
             end)
 
-            -- Pulihkan kamera
             Cam.CameraSubject = newHum
-            Cam.CameraType    = Enum.CameraType.Custom
-
-            -- Pulihkan stats gerak
-            if State.Move.ws ~= 16 then newHum.WalkSpeed = State.Move.ws end
-            if State.Move.jp ~= 50 then
-                newHum.UseJumpPower = true
-                newHum.JumpPower    = State.Move.jp
-            end
-
-            notify("✅ Success", "Character refreshed — tetap di posisi semula!", 2)
-        else
-            notify("❌ Refresh Character", "Gagal refresh character!", 2)
+            Cam.CameraType = Enum.CameraType.Custom
         end
-
-        LP.RespawnLocation        = prevRespawn
+        
         State.Avatar.isRefreshing = false
-    end))
+        notify("✅ Success", "Karakter Refreshed!", 2)
+    end)
 
-    -- Trigger refresh (tanpa kill)
-    LP:LoadCharacter()
-
-    -- Safety timeout
-    task.delay(15, function()
-        LP.RespawnLocation        = prevRespawn
-        State.Avatar.isRefreshing = false
+    local success = pcall(function()
+        LP:LoadCharacter()
+    end)
+    
+    if not success then
+        char:BreakJoints()
+    end
+    
+    task.delay(3, function()
+        if State.Avatar.isRefreshing or Cam.CameraType == Enum.CameraType.Scriptable then
+            State.Avatar.isRefreshing = false
+            Cam.CameraType = Enum.CameraType.Custom
+            if getHum() then Cam.CameraSubject = getHum() end
+        end
     end)
 end
 
@@ -988,7 +926,7 @@ local function stopSpecLoop()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  MAIN WINDOW (REDESIGNED: CRIMSON THEME + NEW OPENBUTTON)
+--  MAIN WINDOW
 -- ══════════════════════════════════════════════════════════════
 local Window = WindUI:CreateWindow({
     Title       = "@WTF.XKID",
@@ -1035,7 +973,7 @@ getgenv()._XKID_INSTANCE = Window.Instance
 WindUI:SetTheme("Crimson")
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: HOME SCREEN (3-COLUMN LIVE STATS + SECURITY INDICATOR)
+--  TAB 1: HOME SCREEN
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "Home", Icon = "home" })
 
@@ -1071,10 +1009,9 @@ local securityLabel = secSecurity:Paragraph({
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• FIXED: Fast Respawn & Refresh — Stay at position\n• Added Refresh Character\n• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Optimized Performance"
+    Desc  = "• NEW: 8 Aesthetic Video Filters (Tokyo Night, Soft Pink, dll)\n• FIXED: Startup Notifications & World Lighting Brightness\n• FIXED: List Spectate (Hanya DisplayName)\n• GC Memory Background (Optimal)"
 })
 
--- Live Stats Updater for Home Screen (3 Columns)
 local fpsSamples = {}
 TrackC(RS.RenderStepped:Connect(function(dt)
     table.insert(fpsSamples, dt)
@@ -1085,7 +1022,6 @@ task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.3)
         
-        -- Update Map Name
         pcall(function()
             local placeName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
             if placeName and mapLabel then
@@ -1094,7 +1030,6 @@ task.spawn(function()
             end
         end)
         
-        -- Update FPS with color
         if fpsLabel then
             local fps = 0
             if #fpsSamples > 0 then
@@ -1103,23 +1038,19 @@ task.spawn(function()
                 avg = avg / #fpsSamples
                 fps = math.floor(1 / avg)
             end
-            
             local fpsColor = fps >= 60 and "🟢" or (fps >= 30 and "🟡" or "🔴")
             fpsLabel:SetDesc(fpsColor .. " " .. fps .. " FPS")
         end
         
-        -- Update Ping with color
         if pingLabel then
             local ping = 0
             pcall(function() 
                 ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()) 
             end)
-            
             local pingColor = ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")
             pingLabel:SetDesc(pingColor .. " " .. ping .. " ms")
         end
         
-        -- Update Security Status
         if securityLabel then
             local playerCount = #Players:GetPlayers()
             local antiAFKStatus = State.Security.afkConn and "✅" or "⭕"
@@ -1127,7 +1058,7 @@ task.spawn(function()
             local shiftLockStatus = State.Security.shiftLock and "🔒" or "🔓"
             
             local securityText = string.format(
-                "🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: Optimized",
+                "🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: GC Running",
                 playerCount, antiAFKStatus, shiftLockStatus, antiLagStatus
             )
             securityLabel:SetDesc(securityText)
@@ -1293,7 +1224,7 @@ secAbi:Toggle({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 3: TELEPORT (3 SLOTS - ROBUST)
+--  TAB 3: TELEPORT
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 
@@ -1301,7 +1232,7 @@ local secTP = T_TP:Section({ Title = "Quick Teleport", Opened = true })
 local tpTarget = ""
 
 local function refreshPlayerLists()
-    pDropOpts = getPNames()
+    pDropOpts = getDisplayNames()
     return pDropOpts
 end
 
@@ -1389,7 +1320,7 @@ secTP:Button({
     Desc     = "Update player list",
     Callback = function()
         local newList = refreshPlayerLists()
-        tpDropdown:SetValues(newList)
+        pcall(function() tpDropdown:Refresh(newList, true) end)
         notify("Teleport", "✅ List updated! "..#newList.." players", 2)
     end,
 })
@@ -1470,7 +1401,7 @@ secFC:Slider({ Title="Speed", Step=0.5, Value={Min=1, Max=20, Default=3}, Callba
 secFC:Slider({ Title="Sensitivity", Step=1, Value={Min=1, Max=20, Default=5}, Callback=function(v) FC.sens = (tonumber(v) or 5)*0.05 end })
 secFC:Slider({ Title="FOV", Step=1, Value={Min=10, Max=120, Default=70}, Callback=function(v) Cam.FieldOfView = tonumber(v) or 70 end })
 
-local secSP = T_CAM:Section({ Title = "Spectate Player (Fixed)", Opened = true })
+local secSP = T_CAM:Section({ Title = "Spectate Player", Opened = true })
 local specDropOpts = getDisplayNames()
 
 local specDropdown = secSP:Dropdown({
@@ -1498,8 +1429,8 @@ secSP:Button({
     Title    = "🔄 Refresh List",
     Callback = function()
         specDropOpts = getDisplayNames()
-        specDropdown:SetValues(specDropOpts)
-        notify("Spectate", "✅ List updated! "..#specDropOpts.." players", 2)
+        pcall(function() specDropdown:Refresh(specDropOpts, true) end)
+        notify("Spectate", "✅ List updated!", 2)
     end,
 })
 
@@ -1549,24 +1480,107 @@ secSP:Slider({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: WORLD (DEFAULT WEATHER + COMPLETE GRAPHICS)
+--  TAB 5: WORLD (AESTHETIC FILTERS)
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "World", Icon = "globe" })
 
-local secWea = T_WO:Section({ Title = "Weather Presets", Opened = true })
-secWea:Button({ Title="🌅 Pagi (Morning)", Callback = function() Lighting.ClockTime = 7; Lighting.Brightness = 1; Lighting.FogEnd = 1000 end })
-secWea:Button({ Title="☀ Siang (Day)", Callback = function() Lighting.ClockTime = 14; Lighting.Brightness = 2; Lighting.FogEnd = 1000 end })
-secWea:Button({ Title="🌇 Sore (Evening)", Callback = function() Lighting.ClockTime = 17.5; Lighting.Brightness = 1.5; Lighting.FogEnd = 1000 end })
-secWea:Button({ Title="🌃 Malam (Night)", Callback = function() Lighting.ClockTime = 0; Lighting.Brightness = 0.5; Lighting.FogEnd = 1000 end })
-secWea:Button({ Title="🔄 Default (Reset)", Callback = function()
-    Lighting.ClockTime = 14
-    Lighting.Brightness = 1
-    Lighting.FogEnd = 1000
-    Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
-    Lighting.ColorShift_Bottom = Color3.new(0, 0, 0)
-    Lighting.ColorShift_Top = Color3.new(0, 0, 0)
-    notify("Weather", "✅ Reset to default", 2)
-end })
+local secFilter = T_WO:Section({ Title = "Aesthetic Filters", Opened = true })
+
+local function applyFilter(filter)
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v.Name == "_XKID_FILTER" then v:Destroy() end
+    end
+    
+    if filter == "Default" then
+        Lighting.ClockTime = 14
+        Lighting.Brightness = 1
+        Lighting.FogEnd = 1000
+        Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
+        notify("Filter", "✅ Reset ke Normal", 2)
+        return
+    end
+
+    local cc = Instance.new("ColorCorrectionEffect")
+    cc.Name = "_XKID_FILTER"
+    cc.Parent = Lighting
+    
+    local bloom = Instance.new("BloomEffect")
+    bloom.Name = "_XKID_FILTER"
+    bloom.Parent = Lighting
+
+    if filter == "Tokyo Night" then
+        cc.TintColor = Color3.fromRGB(180, 150, 255)
+        cc.Saturation = 0.6
+        cc.Contrast = 0.2
+        bloom.Intensity = 0.8
+        Lighting.ClockTime = 1
+        Lighting.Brightness = 1
+    elseif filter == "Rich Sunset" then
+        cc.TintColor = Color3.fromRGB(255, 180, 120)
+        cc.Saturation = 0.4
+        cc.Contrast = 0.2
+        bloom.Intensity = 0.5
+        Lighting.ClockTime = 17.5
+        Lighting.Brightness = 1.5
+    elseif filter == "Soft Pink" then
+        cc.TintColor = Color3.fromRGB(255, 200, 220)
+        cc.Saturation = 0.2
+        cc.Contrast = 0.1
+        bloom.Intensity = 0.4
+        Lighting.ClockTime = 14
+        Lighting.Brightness = 2
+    elseif filter == "Rain Mood" then
+        cc.TintColor = Color3.fromRGB(180, 190, 210)
+        cc.Saturation = -0.5
+        cc.Contrast = -0.1
+        cc.Brightness = -0.1
+        bloom.Intensity = 0.1
+        Lighting.ClockTime = 12
+        Lighting.Brightness = 0.8
+    elseif filter == "Dreamcore" then
+        cc.TintColor = Color3.fromRGB(255, 255, 200)
+        cc.Saturation = 0.7
+        cc.Contrast = 0.4
+        bloom.Intensity = 1.2
+        bloom.Size = 30
+        Lighting.ClockTime = 9
+        Lighting.Brightness = 1.5
+    elseif filter == "Cinematic Black" then
+        cc.Saturation = -1
+        cc.Contrast = 0.4
+        cc.Brightness = 0
+        bloom.Intensity = 0.2
+        Lighting.ClockTime = 14
+        Lighting.Brightness = 1.2
+    elseif filter == "Soft Dreamy Pastel" then
+        cc.TintColor = Color3.fromRGB(255, 225, 235)
+        cc.Saturation = -0.1
+        cc.Contrast = -0.15
+        bloom.Intensity = 0.6
+        bloom.Size = 40
+        Lighting.ClockTime = 8
+        Lighting.Brightness = 1.5
+    elseif filter == "Aurora" then
+        cc.TintColor = Color3.fromRGB(120, 255, 200)
+        cc.Saturation = 0.5
+        cc.Contrast = 0.1
+        bloom.Intensity = 0.8
+        Lighting.ClockTime = 0
+        Lighting.Brightness = 1
+    end
+    
+    notify("Filter", "✅ " .. filter .. " Applied!", 2)
+end
+
+secFilter:Button({ Title="🌃 Tokyo Night", Callback = function() applyFilter("Tokyo Night") end })
+secFilter:Button({ Title="🌇 Rich Sunset", Callback = function() applyFilter("Rich Sunset") end })
+secFilter:Button({ Title="🌸 Soft Pink", Callback = function() applyFilter("Soft Pink") end })
+secFilter:Button({ Title="🌧 Rain Mood", Callback = function() applyFilter("Rain Mood") end })
+secFilter:Button({ Title="👁 Dreamcore", Callback = function() applyFilter("Dreamcore") end })
+secFilter:Button({ Title="🎬 Cinematic Black", Callback = function() applyFilter("Cinematic Black") end })
+secFilter:Button({ Title="☁ Soft Dreamy Pastel", Callback = function() applyFilter("Soft Dreamy Pastel") end })
+secFilter:Button({ Title="🌌 Aurora Filter", Callback = function() applyFilter("Aurora") end })
+secFilter:Button({ Title="🔄 Normal (Reset)", Callback = function() applyFilter("Default") end })
 
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
 secAtmos:Slider({ Title="Clock Time", Step=1, Value={Min=0, Max=24, Default=14}, Callback=function(v) Lighting.ClockTime = tonumber(v) or 14 end })
@@ -1762,7 +1776,7 @@ secProt:Toggle({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: SETTINGS (CREDITS REMOVED)
+--  TAB 8: SETTINGS
 -- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
 
@@ -1836,8 +1850,5 @@ end))
 --  STARTUP NOTIFICATIONS
 -- ══════════════════════════════════════════════════════════════
 WindUI:SetNotificationLower(true)
-WindUI:Notify({ Title = "@WTF.XKID", Content = "Script Loaded — Refresh Edition", Duration = 3 })
-task.wait(1.5)
-WindUI:Notify({ Title = "System Monitor Active", Content = "Map • FPS • Ping Real-time", Duration = 5 })
-WindUI:Notify({ Title = "⚡XKID HUB", Content = "Security Status: Protected | Shift Lock Ready", Duration = 4 })
-print("✅ @WTF.XKID Script Loaded | Refresh Edition | Fast Respawn & Refresh Fixed")
+WindUI:Notify({ Title = "⚡ XKID HUB", Content = "Loaded Successfully | Enjoy Cinematic Filters!", Duration = 5 })
+print("✅ @WTF.XKID Script Loaded | Aesthetic Filters Edition | 100% Original Structure")
