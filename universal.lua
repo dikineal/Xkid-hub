@@ -5,7 +5,7 @@
 ========================
 
   ✨ Features:
-  • Avatar Refresh (Fast Respawn + Refresh Character)
+  • Avatar Refresh (Fast Respawn + Refresh Character) - FIXED
   • Teleport & Location Saver (3 Slots)
   • Movement (Speed / Jump / Fly / NoClip / Fling)
   • Freecam (Smooth + Mobile Ready - Normal Speed)
@@ -20,6 +20,7 @@
   • NEW: Refresh Character Button
   • NEW: Home Screen with 3-Column Live Stats
   • NEW: Crimson Theme + Redesigned OpenButton
+  • FIXED: Fast Respawn & Refresh — Stay at position (no spawn reset)
   
   💎 Created by @WTF.XKID
 ]]
@@ -220,134 +221,106 @@ local function toggleShiftLock(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  💎 FAST RESPAWN SYSTEM
+--  💎 FAST RESPAWN SYSTEM (FIXED)
 -- ══════════════════════════════════════════════════════════════
-local function fastRespawn() 
+local function fastRespawn()
     if State.Avatar.isRefreshing then return end
     
     local char = LP.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
     local hrp = getRoot()
-
-    if not hum or not hrp then
-        notify("❌ Fast Respawn", "Character/HumanoidRootPart tidak ditemukan!", 2)
-        return 
+    local hum = getHum()
+    
+    if not char or not hrp or not hum then
+        notify("❌ Error", "Character tidak valid untuk respawn!", 2)
+        return
     end
 
     State.Avatar.isRefreshing = true
-    notify("🔄 Fast Respawn", "Respawning safely...", 1.5)
-    
+    notify("🔄 Fast Respawn", "Respawning...", 1.5)
+
     local savedCF = hrp.CFrame
-    local savedCamCF = Cam.CFrame
+    local camCF = Cam.CFrame
     
-    Cam.CameraType = Enum.CameraType.Scriptable
-    Cam.CFrame = savedCamCF
-    
-    local charAddedConn
-    charAddedConn = TrackC(LP.CharacterAdded:Connect(function(newChar)
-        charAddedConn:Disconnect() 
-        
+    local connection
+    connection = LP.CharacterAdded:Connect(function(newChar)
+        connection:Disconnect()
         local newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
         local newHum = newChar:WaitForChild("Humanoid", 5)
         
-        if not LP:HasAppearanceLoaded() then
-            LP.CharacterAppearanceLoaded:Wait()
-        end
-        
-        task.wait(0.2) 
-        
-        if newHrp and newHum then
-            newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
-            newHrp.AssemblyLinearVelocity = Vector3.zero 
-            
-            task.spawn(function()
-                task.wait(0.05)
-                if newHrp then newHrp.CFrame = savedCF + Vector3.new(0, 3, 0) end
-            end)
-            
-            Cam.CameraSubject = newHum
+        if newHrp then
+            task.wait(0.1)
+            newHrp.CFrame = savedCF
             Cam.CameraType = Enum.CameraType.Custom
-            
-            notify("✨ Success", "Fast Respawn & Scale Safe!", 2)
+            Cam.CFrame = camCF
+            Cam.CameraSubject = newHum
         end
+        
         State.Avatar.isRefreshing = false
-    end))
+        notify("✅ Success", "Fast Respawn Complete", 2)
+    end)
 
     hum.Health = 0
-
-    task.delay(5, function()
-        State.Avatar.isRefreshing = false
+    -- Safety Fallback
+    task.delay(5, function() 
+        if State.Avatar.isRefreshing then 
+            State.Avatar.isRefreshing = false 
+            Cam.CameraType = Enum.CameraType.Custom
+        end 
     end)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  REFRESH CHARACTER (NO KILL)
+--  REFRESH CHARACTER (FIXED CAMERA LOCK)
 -- ══════════════════════════════════════════════════════════════
 local function refreshCharacter()
-    if State.Avatar.isRefreshing then
-        notify("❌ Refresh Character", "Sedang dalam proses refresh, tunggu sebentar...", 2)
-        return
-    end
-    
+    if State.Avatar.isRefreshing then return end
+
     local char = LP.Character
-    if not char then
-        notify("❌ Refresh Character", "Character tidak ditemukan!", 2)
+    local hrp = getRoot()
+    
+    if not char or not hrp then
+        notify("❌ Error", "Character tidak ditemukan!", 2)
         return
     end
-    
+
     State.Avatar.isRefreshing = true
-    notify("🔄 Refresh Character", "Refreshing character...", 1.5)
+    notify("🔄 Refresh", "Refreshing character...", 1.5)
+
+    local savedCF = hrp.CFrame
+    local camCF = Cam.CFrame
     
-    -- Simpan posisi terakhir
-    local hrp = getRoot()
-    local savedCF = hrp and hrp.CFrame or nil
-    local savedCamCF = Cam.CFrame
+    -- Force Camera Subject Reset and Unlock
+    Cam.CameraType = Enum.CameraType.Scriptable
     
-    -- Load character baru
-    LP:LoadCharacter()
-    
-    -- Tunggu character baru spawn
-    local newChar = LP.Character or LP.CharacterAdded:Wait()
-    local newHrp = newChar:WaitForChild("HumanoidRootPart", 10)
-    local newHum = newChar:WaitForChild("Humanoid", 10)
-    
-    if not LP:HasAppearanceLoaded() then
-        LP.CharacterAppearanceLoaded:Wait()
-    end
-    
-    task.wait(0.3)
-    
-    if newHrp and newHum then
-        -- Kembalikan ke posisi terakhir jika ada
-        if savedCF then
-            newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
-            newHrp.AssemblyLinearVelocity = Vector3.zero
+    local connection
+    connection = LP.CharacterAdded:Connect(function(newChar)
+        connection:Disconnect()
+        
+        local newHrp = newChar:WaitForChild("HumanoidRootPart", 10)
+        local newHum = newChar:WaitForChild("Humanoid", 10)
+        
+        if newHrp and newHum then
+            task.wait(0.2)
+            newHrp.CFrame = savedCF
             
-            task.spawn(function()
-                task.wait(0.05)
-                if newHrp and newHrp.Parent then
-                    newHrp.CFrame = savedCF + Vector3.new(0, 3, 0)
-                end
-            end)
+            -- Reset Camera
+            Cam.CameraSubject = newHum
+            Cam.CameraType = Enum.CameraType.Custom
+            Cam.CFrame = camCF
         end
         
-        Cam.CameraSubject = newHum
-        Cam.CameraType = Enum.CameraType.Custom
-        
-        -- Kembalikan walk speed & jump power
-        if State.Move.ws ~= 16 then newHum.WalkSpeed = State.Move.ws end
-        if State.Move.jp ~= 50 then newHum.UseJumpPower = true; newHum.JumpPower = State.Move.jp end
-        
-        notify("✅ Success", "Character refreshed successfully!", 2)
-    else
-        notify("❌ Refresh Character", "Gagal refresh character!", 2)
-    end
-    
-    State.Avatar.isRefreshing = false
-    
-    -- Safety timeout
-    task.delay(10, function()
         State.Avatar.isRefreshing = false
+        notify("✅ Success", "Character Refreshed!", 2)
+    end)
+
+    LP:LoadCharacter()
+    
+    -- Emergency Camera Unlock
+    task.delay(5, function()
+        if Cam.CameraType == Enum.CameraType.Scriptable then
+            Cam.CameraType = Enum.CameraType.Custom
+            State.Avatar.isRefreshing = false
+        end
     end)
 end
 
@@ -1003,7 +976,7 @@ local securityLabel = secSecurity:Paragraph({
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• Added Refresh Character\n• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Optimized Performance"
+    Desc  = "• FIXED: Fast Respawn & Refresh — Stay at position\n• Added Refresh Character\n• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Optimized Performance"
 })
 
 -- Live Stats Updater for Home Screen (3 Columns)
@@ -1075,12 +1048,12 @@ local T_AV = Window:Tab({ Title = "Player", Icon = "user" })
 local secAvatar = T_AV:Section({ Title = "Avatar Refresh", Opened = true })
 secAvatar:Button({
     Title    = "Fast Respawn",
-    Desc     = "Respawn instan dan aman (Scale/Error 267 Protected)",
+    Desc     = "Respawn instan — tetap di posisi kematian (bukan spawn)",
     Callback = function() fastRespawn() end,
 })
 secAvatar:Button({
     Title    = "Refresh Character",
-    Desc     = "Reload character tanpa kill (LoadCharacter)",
+    Desc     = "Reload character tanpa kill — tetap di posisi semula",
     Callback = function() refreshCharacter() end,
 })
 
@@ -1772,4 +1745,4 @@ WindUI:Notify({ Title = "@WTF.XKID", Content = "Script Loaded — Refresh Editio
 task.wait(1.5)
 WindUI:Notify({ Title = "System Monitor Active", Content = "Map • FPS • Ping Real-time", Duration = 5 })
 WindUI:Notify({ Title = "⚡XKID HUB", Content = "Security Status: Protected | Shift Lock Ready", Duration = 4 })
-print("✅ @WTF.XKID Script Loaded | Refresh Edition | All Features Working")
+print("✅ @WTF.XKID Script Loaded | Refresh Edition | Fast Respawn & Refresh Fixed")
