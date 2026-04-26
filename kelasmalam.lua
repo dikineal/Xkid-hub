@@ -11,7 +11,7 @@
   • Freecam (Smooth + Mobile Ready - Normal Speed)
   • Spectate (Orbit & First Person - Fixed)
   • Modern Hybrid ESP (Highlight Mode + Large Glitch Detection)
-  • World Control (Aesthetic Filters / Atmosphere / Graphics)
+  • World Control (Eye-Safe Cinematic Filters / Atmosphere)
   • Security (Anti-AFK / Shift Lock / Anti-Lag)
   • Live FPS, PING & Map Display
   • Security Status Indicator
@@ -20,7 +20,7 @@
   • NEW: Refresh Character Button
   • NEW: Home Screen with 3-Column Live Stats
   • NEW: Crimson Theme + Redesigned OpenButton
-  • OPTIMIZED: Cinematic Aesthetic Video Filters injected to Lighting
+  • OPTIMIZED: Cinematic Aesthetic Video Filters (Eye-Safe)
   
   💎 Created by @WTF.XKID
 ]]
@@ -1009,7 +1009,7 @@ local securityLabel = secSecurity:Paragraph({
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• NEW: 8 Aesthetic Video Filters (Tokyo Night, Soft Pink, dll)\n• FIXED: Startup Notifications & World Lighting Brightness\n• FIXED: List Spectate (Hanya DisplayName)\n• GC Memory Background (Optimal)"
+    Desc  = "• ADDED: Eye-Safe Aesthetic Video Filters\n• OPTIMIZED: Clean Startup Notifications\n• FIXED: Fast Respawn & Camera Bug\n• FIXED: Clean Spectate List (DisplayName)"
 })
 
 local fpsSamples = {}
@@ -1480,7 +1480,7 @@ secSP:Slider({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: WORLD (AESTHETIC FILTERS)
+--  TAB 5: WORLD (EYE-SAFE AESTHETIC FILTERS)
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "World", Icon = "globe" })
 
@@ -1509,49 +1509,53 @@ local function applyFilter(filter)
     bloom.Parent = Lighting
 
     if filter == "Tokyo Night" then
-        cc.TintColor = Color3.fromRGB(180, 150, 255)
-        cc.Saturation = 0.6
-        cc.Contrast = 0.2
-        bloom.Intensity = 0.8
-        Lighting.ClockTime = 1
-        Lighting.Brightness = 1
-    elseif filter == "Rich Sunset" then
-        cc.TintColor = Color3.fromRGB(255, 180, 120)
-        cc.Saturation = 0.4
-        cc.Contrast = 0.2
-        bloom.Intensity = 0.5
-        Lighting.ClockTime = 17.5
-        Lighting.Brightness = 1.5
-    elseif filter == "Soft Pink" then
-        cc.TintColor = Color3.fromRGB(255, 200, 220)
+        cc.TintColor = Color3.fromRGB(160, 160, 255)
         cc.Saturation = 0.2
-        cc.Contrast = 0.1
-        bloom.Intensity = 0.4
-        Lighting.ClockTime = 14
-        Lighting.Brightness = 2
-    elseif filter == "Rain Mood" then
-        cc.TintColor = Color3.fromRGB(180, 190, 210)
-        cc.Saturation = -0.5
-        cc.Contrast = -0.1
-        cc.Brightness = -0.1
+        cc.Contrast = 0.15
+        cc.Brightness = -0.05
         bloom.Intensity = 0.1
-        Lighting.ClockTime = 12
+        Lighting.ClockTime = 1
         Lighting.Brightness = 0.8
-    elseif filter == "Dreamcore" then
-        cc.TintColor = Color3.fromRGB(255, 255, 200)
-        cc.Saturation = 0.7
-        cc.Contrast = 0.4
-        bloom.Intensity = 1.2
-        bloom.Size = 30
-        Lighting.ClockTime = 9
-        Lighting.Brightness = 1.5
-    elseif filter == "Cinematic Black" then
-        cc.Saturation = -1
-        cc.Contrast = 0.4
+    elseif filter == "Late Sunset" then
+        cc.TintColor = Color3.fromRGB(255, 190, 150)
+        cc.Saturation = 0.3
+        cc.Contrast = 0.1
         cc.Brightness = 0
-        bloom.Intensity = 0.2
+        bloom.Intensity = 0.15
+        Lighting.ClockTime = 17.6
+        Lighting.Brightness = 0.8
+    elseif filter == "Gloomy Rain" then
+        cc.TintColor = Color3.fromRGB(160, 170, 190)
+        cc.Saturation = -0.4
+        cc.Contrast = -0.1
+        cc.Brightness = 0
+        bloom.Intensity = 0.05
+        Lighting.ClockTime = 12
+        Lighting.Brightness = 0.6
+    elseif filter == "Vintage 90s" then
+        cc.TintColor = Color3.fromRGB(255, 235, 190)
+        cc.Saturation = -0.2
+        cc.Contrast = 0.1
+        cc.Brightness = 0
+        bloom.Intensity = 0.1
+        Lighting.ClockTime = 15
+        Lighting.Brightness = 0.9
+    elseif filter == "Dark Cinematic" then
+        cc.TintColor = Color3.fromRGB(240, 240, 240)
+        cc.Saturation = -0.3
+        cc.Contrast = 0.4
+        cc.Brightness = -0.1
+        bloom.Intensity = 0.05
         Lighting.ClockTime = 14
-        Lighting.Brightness = 1.2
+        Lighting.Brightness = 0.6
+    elseif filter == "Cyberpunk City" then
+        cc.TintColor = Color3.fromRGB(180, 120, 255)
+        cc.Saturation = 0.5
+        cc.Contrast = 0.2
+        cc.Brightness = -0.05
+        bloom.Intensity = 0.15
+        Lighting.ClockTime = 0
+        Lighting.Brightness = 0.7
     elseif filter == "Soft Dreamy Pastel" then
         cc.TintColor = Color3.fromRGB(255, 225, 235)
         cc.Saturation = -0.1
@@ -1560,26 +1564,27 @@ local function applyFilter(filter)
         bloom.Size = 40
         Lighting.ClockTime = 8
         Lighting.Brightness = 1.5
-    elseif filter == "Aurora" then
-        cc.TintColor = Color3.fromRGB(120, 255, 200)
-        cc.Saturation = 0.5
+    elseif filter == "Deep Forest" then
+        cc.TintColor = Color3.fromRGB(160, 210, 180)
+        cc.Saturation = 0.1
         cc.Contrast = 0.1
-        bloom.Intensity = 0.8
-        Lighting.ClockTime = 0
-        Lighting.Brightness = 1
+        cc.Brightness = -0.05
+        bloom.Intensity = 0.1
+        Lighting.ClockTime = 6
+        Lighting.Brightness = 0.7
     end
     
     notify("Filter", "✅ " .. filter .. " Applied!", 2)
 end
 
 secFilter:Button({ Title="🌃 Tokyo Night", Callback = function() applyFilter("Tokyo Night") end })
-secFilter:Button({ Title="🌇 Rich Sunset", Callback = function() applyFilter("Rich Sunset") end })
-secFilter:Button({ Title="🌸 Soft Pink", Callback = function() applyFilter("Soft Pink") end })
-secFilter:Button({ Title="🌧 Rain Mood", Callback = function() applyFilter("Rain Mood") end })
-secFilter:Button({ Title="👁 Dreamcore", Callback = function() applyFilter("Dreamcore") end })
-secFilter:Button({ Title="🎬 Cinematic Black", Callback = function() applyFilter("Cinematic Black") end })
+secFilter:Button({ Title="🌇 Late Sunset", Callback = function() applyFilter("Late Sunset") end })
+secFilter:Button({ Title="🌧️ Gloomy Rain", Callback = function() applyFilter("Gloomy Rain") end })
+secFilter:Button({ Title="🎞️ Vintage 90s", Callback = function() applyFilter("Vintage 90s") end })
+secFilter:Button({ Title="🎬 Dark Cinematic", Callback = function() applyFilter("Dark Cinematic") end })
+secFilter:Button({ Title="🏙️ Cyberpunk City", Callback = function() applyFilter("Cyberpunk City") end })
 secFilter:Button({ Title="☁ Soft Dreamy Pastel", Callback = function() applyFilter("Soft Dreamy Pastel") end })
-secFilter:Button({ Title="🌌 Aurora Filter", Callback = function() applyFilter("Aurora") end })
+secFilter:Button({ Title="🌲 Deep Forest", Callback = function() applyFilter("Deep Forest") end })
 secFilter:Button({ Title="🔄 Normal (Reset)", Callback = function() applyFilter("Default") end })
 
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
@@ -1850,5 +1855,5 @@ end))
 --  STARTUP NOTIFICATIONS
 -- ══════════════════════════════════════════════════════════════
 WindUI:SetNotificationLower(true)
-WindUI:Notify({ Title = "⚡ XKID HUB", Content = "Loaded Successfully | Enjoy Cinematic Filters!", Duration = 5 })
-print("✅ @WTF.XKID Script Loaded | Aesthetic Filters Edition | 100% Original Structure")
+WindUI:Notify({ Title = "⚡ XKID HUB", Content = "Loaded Successfully", Duration = 3 })
+print("✅ @WTF.XKID Script Loaded | Eye-Safe Filters Edition")
