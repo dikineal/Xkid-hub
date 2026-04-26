@@ -5,7 +5,7 @@
 ========================
 
   ✨ Features:
-  • Avatar Refresh (Fast Respawn + Refresh Character) - FIXED
+  • Avatar Refresh (Fast Respawn + Refresh Character) - SUPER FIXED
   • Teleport & Location Saver (3 Slots)
   • Movement (Speed / Jump / Fly / NoClip / Fling)
   • Freecam (Smooth + Mobile Ready - Normal Speed)
@@ -20,7 +20,6 @@
   • NEW: Refresh Character Button
   • NEW: Home Screen with 3-Column Live Stats
   • NEW: Crimson Theme + Redesigned OpenButton
-  • FIXED: Fast Respawn & Refresh — Stay at position (no spawn reset)
   
   💎 Created by @WTF.XKID
 ]]
@@ -221,17 +220,16 @@ local function toggleShiftLock(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  💎 FAST RESPAWN SYSTEM (FIXED)
+--  💎 FAST RESPAWN SYSTEM (SUPER FIXED)
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
     
     local char = LP.Character
     local hrp = getRoot()
-    local hum = getHum()
     
-    if not char or not hrp or not hum then
-        notify("❌ Error", "Character tidak valid untuk respawn!", 2)
+    if not char or not hrp then
+        notify("❌ Error", "Karakter tidak ditemukan!", 2)
         return
     end
 
@@ -247,30 +245,40 @@ local function fastRespawn()
         local newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
         local newHum = newChar:WaitForChild("Humanoid", 5)
         
-        if newHrp then
-            task.wait(0.1)
-            newHrp.CFrame = savedCF
-            Cam.CameraType = Enum.CameraType.Custom
-            Cam.CFrame = camCF
+        if newHrp and newHum then
+            -- Tahan posisi HRP selama 0.5 detik agar engine tidak men-teleport ke spawn
+            local startTime = tick()
+            local holdConn
+            holdConn = RS.Heartbeat:Connect(function()
+                if tick() - startTime > 0.5 then
+                    holdConn:Disconnect()
+                    return
+                end
+                if newHrp.Parent then
+                    newHrp.CFrame = savedCF
+                    newHrp.AssemblyLinearVelocity = Vector3.zero
+                end
+            end)
+
             Cam.CameraSubject = newHum
+            Cam.CFrame = camCF
         end
         
         State.Avatar.isRefreshing = false
-        notify("✅ Success", "Fast Respawn Complete", 2)
+        notify("✅ Success", "Fast Respawn Selesai!", 2)
     end)
 
-    hum.Health = 0
+    -- Memastikan kematian instan dan memicu CharacterAdded
+    char:BreakJoints()
+
     -- Safety Fallback
     task.delay(5, function() 
-        if State.Avatar.isRefreshing then 
-            State.Avatar.isRefreshing = false 
-            Cam.CameraType = Enum.CameraType.Custom
-        end 
+        State.Avatar.isRefreshing = false 
     end)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  REFRESH CHARACTER (FIXED CAMERA LOCK)
+--  REFRESH CHARACTER (SUPER FIXED - ANTI LOCK CAMERA)
 -- ══════════════════════════════════════════════════════════════
 local function refreshCharacter()
     if State.Avatar.isRefreshing then return end
@@ -279,48 +287,59 @@ local function refreshCharacter()
     local hrp = getRoot()
     
     if not char or not hrp then
-        notify("❌ Error", "Character tidak ditemukan!", 2)
+        notify("❌ Error", "Karakter tidak ditemukan!", 2)
         return
     end
 
     State.Avatar.isRefreshing = true
-    notify("🔄 Refresh", "Refreshing character...", 1.5)
+    notify("🔄 Refresh", "Refreshing karakter...", 1.5)
 
     local savedCF = hrp.CFrame
     local camCF = Cam.CFrame
-    
-    -- Force Camera Subject Reset and Unlock
-    Cam.CameraType = Enum.CameraType.Scriptable
     
     local connection
     connection = LP.CharacterAdded:Connect(function(newChar)
         connection:Disconnect()
         
-        local newHrp = newChar:WaitForChild("HumanoidRootPart", 10)
-        local newHum = newChar:WaitForChild("Humanoid", 10)
+        local newHrp = newChar:WaitForChild("HumanoidRootPart", 5)
+        local newHum = newChar:WaitForChild("Humanoid", 5)
         
         if newHrp and newHum then
-            task.wait(0.2)
-            newHrp.CFrame = savedCF
-            
-            -- Reset Camera
+            -- Tahan posisi HRP selama 0.5 detik agar engine tidak men-teleport ke spawn
+            local startTime = tick()
+            local holdConn
+            holdConn = RS.Heartbeat:Connect(function()
+                if tick() - startTime > 0.5 then
+                    holdConn:Disconnect()
+                    return
+                end
+                if newHrp.Parent then
+                    newHrp.CFrame = savedCF
+                    newHrp.AssemblyLinearVelocity = Vector3.zero
+                end
+            end)
+
+            -- Kembalikan kamera ke humanoid baru
             Cam.CameraSubject = newHum
-            Cam.CameraType = Enum.CameraType.Custom
             Cam.CFrame = camCF
         end
         
         State.Avatar.isRefreshing = false
-        notify("✅ Success", "Character Refreshed!", 2)
+        notify("✅ Success", "Karakter Refreshed!", 2)
     end)
 
-    LP:LoadCharacter()
+    -- Mencoba menggunakan LoadCharacter, jika diblokir oleh executor, paksa mati (BreakJoints)
+    local success = pcall(function()
+        LP:LoadCharacter()
+    end)
     
-    -- Emergency Camera Unlock
+    if not success then
+        char:BreakJoints()
+    end
+    
+    -- Emergency Failsafe
     task.delay(5, function()
-        if Cam.CameraType == Enum.CameraType.Scriptable then
-            Cam.CameraType = Enum.CameraType.Custom
-            State.Avatar.isRefreshing = false
-        end
+        State.Avatar.isRefreshing = false
     end)
 end
 
@@ -976,7 +995,7 @@ local securityLabel = secSecurity:Paragraph({
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• FIXED: Fast Respawn & Refresh — Stay at position\n• Added Refresh Character\n• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Optimized Performance"
+    Desc  = "• FIXED: Fast Respawn & Refresh — Anti Camera Lock\n• Added Refresh Character\n• Added Shift Lock Mode\n• 3-Column Live Stats Display\n• Security Status Indicator\n• Enhanced ESP (Large Glitch Only)\n• Optimized Performance"
 })
 
 -- Live Stats Updater for Home Screen (3 Columns)
