@@ -20,9 +20,11 @@
   • NEW: Refresh Character Button
   • NEW: Home Screen with 3-Column Live Stats
   • NEW: Crimson Theme + Redesigned OpenButton
-  • OPTIMIZED: Custom Lighting Sliders & Fixed Reset System
+  • OPTIMIZED: Custom Lighting Sliders & Fixed Graphics System
   
   💎 Created by @WTF.XKID
+  📱 Tiktok: @wtf.xkid
+  💬 Discord: @4sharken
 ]]
 
 local RS = game:GetService("RunService")
@@ -929,15 +931,15 @@ local Window = WindUI:CreateWindow({
     Theme       = "Crimson",
     Acrylic     = true,
     Transparent = true,
-    Size        = UDim2.fromOffset(720, 560),
-    MinSize     = Vector2.new(580, 420),
-    MaxSize     = Vector2.new(880, 620),
+    Size        = UDim2.fromOffset(520, 430),
+    MinSize     = Vector2.new(420, 340),
+    MaxSize     = Vector2.new(650, 500),
     ToggleKey   = Enum.KeyCode.RightShift,
     Resizable   = true,
     AutoScale   = true,
     NewElements = true,
-    SideBarWidth= 200,
-    Topbar = { Height = 44, ButtonsType = "Default" },
+    SideBarWidth= 145,
+    Topbar = { Height = 40, ButtonsType = "Default" },
     OpenButton  = {
         Title           = "@WTF.XKID",
         Icon            = "ghost",
@@ -948,9 +950,16 @@ local Window = WindUI:CreateWindow({
         OnlyMobile      = false,
         Scale           = 0.75,
         Color = ColorSequence.new(
-            Color3.fromRGB(225, 0, 120),
-            Color3.fromRGB(0, 255, 255)
+            Color3.fromRGB(220, 20, 60),
+            Color3.fromRGB(180, 10, 40)
         ),
+    },
+    User = {
+        Enabled   = true,
+        Anonymous = false,
+        Callback  = function()
+            notify("@WTF.XKID", "Tiktok: @wtf.xkid\nDiscord: @4sharken", 4)
+        end,
     },
 })
 
@@ -965,7 +974,7 @@ local T_HOME = Window:Tab({ Title = "Home", Icon = "home" })
 local secWelcome = T_HOME:Section({ Title = "⚡XKID HUB", Opened = true })
 secWelcome:Paragraph({
     Title = "Welcome Back",
-    Desc  = "@WTF.XKID\nScript Loaded Successfully."
+    Desc  = "Script Loaded Successfully.\n📱 Tiktok: @wtf.xkid\n💬 Discord: @4sharken"
 })
 
 local secStatus = T_HOME:Section({ Title = "📊 Live System Monitor", Opened = true })
@@ -983,7 +992,7 @@ local securityLabel = secSecurity:Paragraph({
 local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
 secChangelog:Paragraph({
     Title = "Latest Updates",
-    Desc  = "• NEW: Manual Bloom & Exposure Sliders\n• FIXED: Perfect Reset Lighting Filter\n• ADDED: Eye-Safe Cinematic Filters"
+    Desc  = "• NEW: Filter Visual HD & Custom Lighting Sliders\n• FIXED: Roblox Graphics System Accuracy\n• ADDED: Social Credits"
 })
 
 local fpsSamples = {}
@@ -1190,13 +1199,12 @@ secSP:Toggle({ Title = "First Person Mode", Value = false, Callback = function(v
 secSP:Slider({ Title = "Orbit Distance", Step = 1, Value = {Min = 3, Max = 30, Default = 8}, Callback = function(v) Spec.dist = tonumber(v) or 8 end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: WORLD (CUSTOM ATMOSPHERE & FILTERS)
+--  TAB 5: WORLD (AESTHETIC HD FILTERS)
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "World", Icon = "globe" })
 
-local secFilter = T_WO:Section({ Title = "Aesthetic Filters", Opened = true })
+local secFilter = T_WO:Section({ Title = "Aesthetic HD Filters", Opened = true })
 
--- Logika Reset yang sempurna (Dibersihkan hingga kembali murni)
 local function resetLighting()
     for _, v in pairs(Lighting:GetChildren()) do
         if v.Name == "_XKID_FILTER" then v:Destroy() end
@@ -1209,7 +1217,7 @@ local function resetLighting()
     Lighting.ColorShift_Bottom = Color3.new(0, 0, 0)
     Lighting.ColorShift_Top = Color3.new(0, 0, 0)
     Lighting.FogEnd = 100000
-    notify("Filter", "✅ Lighting direset ke Normal!", 2)
+    notify("Filter", "✅ Lighting direset ke Default!", 2)
 end
 
 local function applyFilter(filter)
@@ -1230,88 +1238,67 @@ local function applyFilter(filter)
     bloom.Name = "_XKID_FILTER"
     bloom.Parent = Lighting
 
-    if filter == "Tokyo Night" then
-        cc.TintColor = Color3.fromRGB(160, 160, 255)
+    if filter == "Dark Map HD" then
+        cc.Saturation = -0.3
+        cc.Contrast = 0.5
+        cc.Brightness = -0.2
+        bloom.Intensity = 0.1
+        Lighting.ClockTime = 2
+    elseif filter == "Ultra HD" then
         cc.Saturation = 0.2
-        cc.Contrast = 0.15
-        cc.Brightness = -0.05
-        bloom.Intensity = 0.1
-        Lighting.ClockTime = 1
-        Lighting.Brightness = 0.8
-    elseif filter == "Rich Sunset" then
-        cc.TintColor = Color3.fromRGB(255, 190, 150)
-        cc.Saturation = 0.3
-        cc.Contrast = 0.1
-        cc.Brightness = 0
-        bloom.Intensity = 0.15
-        Lighting.ClockTime = 17.6
-        Lighting.Brightness = 0.8
-    elseif filter == "Soft Pink" then
-        cc.TintColor = Color3.fromRGB(255, 200, 220)
-        cc.Saturation = 0.1
-        cc.Contrast = 0.05
-        cc.Brightness = 0
-        bloom.Intensity = 0.1
+        cc.Contrast = 0.3
+        cc.Brightness = 0.1
+        bloom.Intensity = 0.2
         Lighting.ClockTime = 14
-        Lighting.Brightness = 1.2
-    elseif filter == "Rain Mood" then
-        cc.TintColor = Color3.fromRGB(160, 170, 190)
-        cc.Saturation = -0.4
-        cc.Contrast = -0.1
+    elseif filter == "Sharp Visual HD" then
+        cc.Saturation = 0.1
+        cc.Contrast = 0.4
         cc.Brightness = 0
-        bloom.Intensity = 0.05
+        bloom.Intensity = 0
         Lighting.ClockTime = 12
-        Lighting.Brightness = 0.6
-    elseif filter == "Dreamcore" then
-        cc.TintColor = Color3.fromRGB(255, 255, 200)
-        cc.Saturation = 0.5
+    elseif filter == "Realistic HD" then
+        cc.Saturation = 0.1
         cc.Contrast = 0.2
         cc.Brightness = 0.1
-        bloom.Intensity = 0.3
-        bloom.Size = 30
-        Lighting.ClockTime = 9
-        Lighting.Brightness = 1.2
-    elseif filter == "Cinematic Black" then
-        cc.Saturation = -1
-        cc.Contrast = 0.4
+        bloom.Intensity = 0.15
+        Lighting.ClockTime = 15
+    elseif filter == "Night HD" then
+        cc.TintColor = Color3.fromRGB(180, 180, 255)
+        cc.Saturation = 0.1
+        cc.Contrast = 0.3
         cc.Brightness = -0.1
-        bloom.Intensity = 0.05
-        Lighting.ClockTime = 14
-        Lighting.Brightness = 0.6
-    elseif filter == "Soft Dreamy Pastel" then
+        bloom.Intensity = 0.1
+        Lighting.ClockTime = 0
+    elseif filter == "Luxury HD" then
+        cc.TintColor = Color3.fromRGB(255, 230, 200)
+        cc.Saturation = 0.3
+        cc.Contrast = 0.3
+        cc.Brightness = 0.1
+        bloom.Intensity = 0.4
+        Lighting.ClockTime = 17
+    elseif filter == "Soft dreamy pastel HD" then
         cc.TintColor = Color3.fromRGB(255, 225, 235)
         cc.Saturation = -0.1
-        cc.Contrast = -0.15
+        cc.Contrast = -0.1
         bloom.Intensity = 0.6
         bloom.Size = 40
         Lighting.ClockTime = 8
-        Lighting.Brightness = 1.5
-    elseif filter == "Aurora" then
-        cc.TintColor = Color3.fromRGB(120, 255, 200)
-        cc.Saturation = 0.3
-        cc.Contrast = 0.1
-        cc.Brightness = -0.05
-        bloom.Intensity = 0.2
-        Lighting.ClockTime = 0
-        Lighting.Brightness = 0.9
     end
     
     notify("Filter", "✅ " .. filter .. " Applied!", 2)
 end
 
-secFilter:Button({ Title="🌃 Tokyo Night", Callback = function() applyFilter("Tokyo Night") end })
-secFilter:Button({ Title="🌇 Rich Sunset", Callback = function() applyFilter("Rich Sunset") end })
-secFilter:Button({ Title="🌸 Soft Pink", Callback = function() applyFilter("Soft Pink") end })
-secFilter:Button({ Title="🌧 Rain Mood", Callback = function() applyFilter("Rain Mood") end })
-secFilter:Button({ Title="👁 Dreamcore", Callback = function() applyFilter("Dreamcore") end })
-secFilter:Button({ Title="🎬 Cinematic Black", Callback = function() applyFilter("Cinematic Black") end })
-secFilter:Button({ Title="☁ Soft Dreamy Pastel", Callback = function() applyFilter("Soft Dreamy Pastel") end })
-secFilter:Button({ Title="🌌 Aurora Filter", Callback = function() applyFilter("Aurora") end })
+secFilter:Button({ Title="🎬 Dark Map HD", Callback = function() applyFilter("Dark Map HD") end })
+secFilter:Button({ Title="💎 Ultra HD", Callback = function() applyFilter("Ultra HD") end })
+secFilter:Button({ Title="👁 Sharp Visual HD", Callback = function() applyFilter("Sharp Visual HD") end })
+secFilter:Button({ Title="🌍 Realistic HD", Callback = function() applyFilter("Realistic HD") end })
+secFilter:Button({ Title="🌃 Night HD", Callback = function() applyFilter("Night HD") end })
+secFilter:Button({ Title="✨ Luxury HD", Callback = function() applyFilter("Luxury HD") end })
+secFilter:Button({ Title="☁ Soft dreamy pastel HD", Callback = function() applyFilter("Soft dreamy pastel HD") end })
 secFilter:Button({ Title="🔄 Normal (Reset)", Callback = function() applyFilter("Default") end })
 
-local secAtmos = T_WO:Section({ Title = "Custom Atmosphere & Lighting", Opened = false })
+local secAtmos = T_WO:Section({ Title = "Custom Atmosphere Sliders", Opened = false })
 
--- Mengambil atau Membuat Efek Spesifik untuk Slider Kustom
 local function getEff(className)
     for _, v in pairs(Lighting:GetChildren()) do
         if v.Name == "_XKID_FILTER" and v:IsA(className) then return v end
@@ -1322,37 +1309,35 @@ local function getEff(className)
     return e
 end
 
-secAtmos:Slider({ Title="Clock Time", Step=0.1, Value={Min=0, Max=24, Default=14}, Callback=function(v) Lighting.ClockTime = tonumber(v) or 14 end })
 secAtmos:Slider({ Title="Brightness", Step=0.1, Value={Min=0, Max=10, Default=1}, Callback=function(v) Lighting.Brightness = tonumber(v) or 1 end })
-secAtmos:Slider({ Title="Exposure (Light Intensity)", Step=0.1, Value={Min=-5, Max=5, Default=0}, Callback=function(v) Lighting.ExposureCompensation = tonumber(v) or 0 end })
+secAtmos:Slider({ Title="Exposure", Step=0.1, Value={Min=-5, Max=5, Default=0}, Callback=function(v) Lighting.ExposureCompensation = tonumber(v) or 0 end })
+secAtmos:Slider({ Title="ClockTime", Step=0.1, Value={Min=0, Max=24, Default=14}, Callback=function(v) Lighting.ClockTime = tonumber(v) or 14 end })
+secAtmos:Slider({ Title="Contrast", Step=0.1, Value={Min=-2, Max=2, Default=0}, Callback=function(v) getEff("ColorCorrectionEffect").Contrast = tonumber(v) or 0 end })
+secAtmos:Slider({ Title="Bloom", Step=0.1, Value={Min=0, Max=5, Default=0}, Callback=function(v) getEff("BloomEffect").Intensity = tonumber(v) or 0 end })
 
-secAtmos:Slider({ Title="Bloom Intensity", Step=0.05, Value={Min=0, Max=5, Default=1}, Callback=function(v) getEff("BloomEffect").Intensity = tonumber(v) or 1 end })
-secAtmos:Slider({ Title="Bloom Size", Step=1, Value={Min=0, Max=56, Default=24}, Callback=function(v) getEff("BloomEffect").Size = tonumber(v) or 24 end })
-secAtmos:Slider({ Title="Bloom Threshold", Step=0.1, Value={Min=0, Max=10, Default=2}, Callback=function(v) getEff("BloomEffect").Threshold = tonumber(v) or 2 end })
+local secGfx = T_WO:Section({ Title = "Graphics Menu", Opened = false })
 
-State.Atmos = State.Atmos or {}
-State.Atmos.default = State.Atmos.default or { Ambient = Lighting.Ambient }
-secAtmos:Toggle({ Title = "Fullbright (Clear Vision)", Desc = "Terangkan tempat gelap & hapus kabut", Value = false, Callback = function(v)
-    State.Atmos.fullbright = v
-    if v then
-        Lighting.Ambient = Color3.new(1,1,1)
-        Lighting.ColorShift_Bottom = Color3.new(1,1,1)
-        Lighting.ColorShift_Top = Color3.new(1,1,1)
-        Lighting.FogEnd = 999999
-    else
-        Lighting.Ambient = State.Atmos.default.Ambient or Color3.new(0.5,0.5,0.5)
-        Lighting.FogEnd = 100000
+-- Fix sinkronisasi QualityLevel 1-10 dengan sistem asli Roblox (Level01 - Level21)
+local gfxMap = {
+    [1] = "Level01", [2] = "Level03", [3] = "Level05", [4] = "Level07", [5] = "Level09",
+    [6] = "Level11", [7] = "Level13", [8] = "Level15", [9] = "Level17", [10] = "Level21"
+}
+
+secGfx:Slider({
+    Title = "Roblox Graphics Level",
+    Desc  = "Sesuai dengan 1-10 bar di Esc Menu",
+    Step  = 1,
+    Value = {Min = 1, Max = 10, Default = 5},
+    Callback = function(v)
+        local levelNum = tonumber(v)
+        if levelNum and gfxMap[levelNum] then
+            pcall(function()
+                settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[levelNum]]
+                notify("Graphics", "✅ Set to Graphic Level "..tostring(levelNum), 2)
+            end)
+        end
     end
-end })
-
-local secGfx = T_WO:Section({ Title = "Graphics (Complete)", Opened = false })
-local function setGfx(level) 
-    pcall(function() settings().Rendering.QualityLevel = level; notify("Graphics", "✅ Set to "..tostring(level), 2) end) 
-end
-secGfx:Dropdown({ Title = "Quality Level", Values = {"Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7", "Level 8", "Level 9", "Level 10"}, Value = "Level 1", Callback = function(v) local level = tonumber(v:match("%d+")); if level then setGfx(level) end end })
-secGfx:Button({ Title="🥔 Potato (Lv1)", Callback=function() setGfx(1) end })
-secGfx:Button({ Title="📊 Medium (Lv5)", Callback=function() setGfx(5) end })
-secGfx:Button({ Title="💎 Ultra (Lv10)", Callback=function() setGfx(10) end })
+})
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 6: HYBRID ESP
@@ -1439,4 +1424,4 @@ TrackC(RS.Stepped:Connect(function()
 end))
 
 WindUI:SetNotificationLower(true)
-print("✅ @WTF.XKID Script Loaded | Manual Lighting Control | Eye-Safe Filters")
+print("✅ @WTF.XKID Script Loaded | HD Aesthetics | Accurate Roblox Graphics")
