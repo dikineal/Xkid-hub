@@ -8,12 +8,12 @@
   • Avatar Refresh (Fast Respawn + Refresh Character)
   • Teleport (Click TP) & Location Saver
   • Movement (Speed / Jump / Fly / NoClip / Soft Fling Ultra)
-  • Camera (Freecam / Spectate / Max Zoom Out)
+  • Camera (Freecam / Spectate / Max Zoom Out Toggle)
   • Modern Hybrid ESP (Highlight Mode + Large Glitch Detection)
   • World Control (Custom Bloom/Lighting Filters)
   • Security (Anti-AFK / Anti-Void / Stuck Fix / FPS Boost)
   • Network (Auto Rejoin, Server Hop, True Ping Spike Alert)
-  • Settings (Save/Load Config, Themes)
+  • Settings (Save/Load Config, Built-in Themes)
   • UI (RGB ROG Animated OpenButton)
   
   💎 Created by @WTF.XKID
@@ -768,7 +768,7 @@ secTP:Button({ Title = "Teleport", Callback = function()
         if tpTarget == "" then notify("Teleport", "❌ Masukkan nama player!", 2); return end
         local targetPlayer = nil
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LP and (string.find(string.lower(p.DisplayName), string.lower(tpTarget))) then targetPlayer = p; break end
+            if p ~= LP and (string.find(string.lower(p.Name), string.lower(tpTarget))) then targetPlayer = p; break end
         end
         if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then notify("Teleport", "❌ Player tidak valid!", 2); return end
         local tHrp, tHum, myHrp = getCharRoot(targetPlayer.Character), targetPlayer.Character:FindFirstChildOfClass("Humanoid"), getRoot()
@@ -803,13 +803,17 @@ end
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Camera", Icon = "eye" })
 
-local secZoom = T_CAM:Section({ Title = "Camera Zoom (Max Distance)", Opened = true })
-secZoom:Slider({ Title = "Max Zoom Out Limit", Desc = "Melebihi batas zoom bawaan game", Step = 10, Value = {Min = 400, Max = 100000, Default = 400}, Callback = function(v)
-    pcall(function() LP.CameraMaxZoomDistance = tonumber(v) or 400 end)
-end})
-secZoom:Button({ Title = "🔄 Reset Zoom Limit", Callback = function() 
-    pcall(function() LP.CameraMaxZoomDistance = 400 end)
-    notify("Camera", "Zoom dikembalikan ke default (400)", 2)
+local secZoom = T_CAM:Section({ Title = "Camera Zoom", Opened = true })
+secZoom:Toggle({ Title = "Max Zoom Out", Desc = "Bypass batas zoom jauh bawaan game", Value = false, Callback = function(v)
+    pcall(function() 
+        if v then
+            LP.CameraMaxZoomDistance = 10000
+            notify("Camera", "Max Zoom Out Aktif!", 2)
+        else
+            LP.CameraMaxZoomDistance = 400
+            notify("Camera", "Zoom limit kembali Normal.", 2)
+        end
+    end)
 end})
 
 local secFC = T_CAM:Section({ Title = "Freecam", Opened = true })
@@ -860,7 +864,7 @@ secSP:Toggle({ Title = "First Person Mode", Value = false, Callback = function(v
 secSP:Slider({ Title = "Orbit Distance", Step = 1, Value = {Min = 3, Max = 30, Default = 8}, Callback = function(v) Spec.dist = tonumber(v) or 8 end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: WORLD
+--  TAB 5: WORLD (AESTHETIC HD FILTERS)
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "World", Icon = "globe" })
 
@@ -996,7 +1000,7 @@ secSrv:Button({ Title="Low Player Server", Desc="Server Hop", Callback=function(
     end)
 end})
 
--- True Ping Spike Alert (Solusi C)
+-- True Ping Spike Alert (Cooldown 5 Menit / 300 detik)
 task.spawn(function()
     local pingHistory = {}
     local lastAlert = 0
@@ -1007,11 +1011,13 @@ task.spawn(function()
             if currentPing > 0 then
                 table.insert(pingHistory, currentPing)
                 if #pingHistory > 20 then table.remove(pingHistory, 1) end
+                
                 local sum = 0
                 for _, p in ipairs(pingHistory) do sum = sum + p end
                 local avgPing = sum / #pingHistory
+                
                 if currentPing >= avgPing + 150 and currentPing > 200 then
-                    if tick() - lastAlert > 60 then
+                    if tick() - lastAlert > 300 then 
                         lastAlert = tick()
                         notify("⚠ Ping Spike Alert", string.format("Lonjakan! Avg: %d ms | Now: %d ms", math.floor(avgPing), currentPing), 4)
                     end
@@ -1079,7 +1085,7 @@ end})
 
 local secTheme = T_SET:Section({ Title = "Appearance", Opened = true })
 -- Mengembalikan format Dropdown Theme asli WindUI untuk memastikan tidak ada UI yang Error/Blank
-secTheme:Dropdown({ Title="Preset Themes", Values={"Dark", "Light", "Rose", "Aqua", "Amethyst", "Mocha", "Midnight", "Mint", "Crimson"}, Value="Crimson", Callback=function(selected) 
+secTheme:Dropdown({ Title="Theme", Values=(function() local names={}; for name in pairs(WindUI:GetThemes()) do table.insert(names,name) end; table.sort(names); if not table.find(names, "Crimson") then table.insert(names, 1, "Crimson") end; return names end)(), Value="Crimson", Callback=function(selected) 
     pcall(function() WindUI:SetTheme(selected) end) 
 end })
 
