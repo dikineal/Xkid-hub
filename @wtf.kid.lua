@@ -21,9 +21,8 @@ end
 if getgenv()._XKID_ESP_CACHE then
     for _, c in pairs(getgenv()._XKID_ESP_CACHE) do
         pcall(function()
-            if c.texts then c.texts:Remove() end
+            if c.bg then c.bg:Destroy() end
             if c.tracer then c.tracer:Remove() end
-            if c.boxLines then for _, l in ipairs(c.boxLines) do l:Remove() end end
             if c.hl then c.hl:Destroy() end
         end)
     end
@@ -33,7 +32,7 @@ getgenv()._XKID_ESP_CACHE = {}
 if getgenv()._XKID_LOADED then
     pcall(function()
         for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
-            if v.Name == "WindUI" then v:Destroy() end
+            if v.Name == "WindUI" or v.Name == "XKID_ESP_UI" then v:Destroy() end
         end
         for _, v in pairs(game:GetService("Lighting"):GetChildren()) do
             if v.Name == "_XKID_FILTER" then v:Destroy() end
@@ -55,6 +54,8 @@ getgenv()._XKID_LOADED = true
 getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
+
+local START_TIME = os.time()
 
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
@@ -84,6 +85,11 @@ local LP          = Players.LocalPlayer
 local Cam         = workspace.CurrentCamera
 local onMobile    = not UIS.KeyboardEnabled
 
+local ESP_FOLDER = Instance.new("Folder")
+ESP_FOLDER.Name = "XKID_ESP_UI"
+pcall(function() ESP_FOLDER.Parent = CoreGui end)
+if not ESP_FOLDER.Parent then ESP_FOLDER.Parent = LP:WaitForChild("PlayerGui") end
+
 local cachedMapName = nil
 local lastMapCheck = 0
 
@@ -98,7 +104,7 @@ local State = {
     Security = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, arConn = nil, arFallback = nil },
     Cinema   = { active = false },
     Avatar   = { isRefreshing = false },
-    Utility  = { chatLog = false, chatTarget = nil, chatConn = nil, chatHistory = {} },
+    Utility  = { chatLog = false, chatTarget = nil, chatHistory = {} },
     ESP = {
         active          = false,
         cache           = getgenv()._XKID_ESP_CACHE,
@@ -111,7 +117,6 @@ local State = {
         tracerColor_N   = Color3.fromRGB(0, 200, 255),
         tracerColor_S   = Color3.fromRGB(220, 20, 60),
         tracerColor_G   = Color3.fromRGB(255, 165, 0),
-        nameColor       = Color3.fromRGB(255, 255, 255),
     },
 }
 
@@ -144,6 +149,12 @@ local function getCharRoot(char)
 end
 local function notify(title, content, dur) pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 }) end) end
 
+local function formatTime(seconds)
+    local m = math.floor(seconds / 60)
+    local s = seconds % 60
+    return string.format("%02d:%02d", m, s)
+end
+
 local function getConfigList()
     local list = {}
     pcall(function()
@@ -161,7 +172,6 @@ local function getConfigList()
     return list
 end
 
--- Fungsi cek tanah buat soft landing
 local function isOnGround()
     local r = getRoot()
     if not r then return false end
@@ -282,23 +292,43 @@ local function refreshCharacter()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  HYBRID ESP ENGINE
+--  HYBRID ESP ENGINE (Optimized with BillboardGui & Highlight)
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
-    local cache = { texts=Drawing.new("Text"), tracer=Drawing.new("Line"), boxLines={}, hl=nil, isSuspect=false, isGlitch=false, reason="" }
-    cache.texts.Center = true; cache.texts.Outline = true; cache.texts.Font = 2; cache.texts.Size = 13; cache.texts.ZIndex = 2
-    cache.tracer.Thickness = 1.5; cache.tracer.ZIndex = 1
-    for i = 1, 4 do local line = Drawing.new("Line"); line.Thickness = 1.5; line.ZIndex = 1; cache.boxLines[i] = line end
-    State.ESP.cache[player] = cache
+    
+    local bg = Instance.new("BillboardGui")
+    bg.Name = "XKID_ESP_TXT"
+    bg.AlwaysOnTop = true
+    bg.Size = UDim2.new(0, 200, 0, 50)
+    bg.StudsOffset = Vector3.new(0, 3, 0)
+    bg.Parent = ESP_FOLDER
+    
+    local txt = Instance.new("TextLabel", bg)
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.TextStrokeTransparency = 0.5
+    txt.Font = Enum.Font.GothamBold
+    txt.TextSize = 13
+    txt.TextColor3 = Color3.new(1,1,1)
+    
+    local hl = Instance.new("Highlight")
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Enabled = false
+    hl.Parent = ESP_FOLDER
+    
+    local tracer = Drawing.new("Line")
+    tracer.Thickness = 1.5
+    tracer.ZIndex = 1
+    
+    State.ESP.cache[player] = { bg = bg, txt = txt, hl = hl, tracer = tracer, isSuspect = false, isGlitch = false, reason = "" }
 end
 
 local function clearPlayerCache(player)
     local c = State.ESP.cache[player]
     if c then
-        pcall(function() if c.texts then c.texts:Remove() end end)
+        pcall(function() if c.bg then c.bg:Destroy() end end)
         pcall(function() if c.tracer then c.tracer:Remove() end end)
-        for _, l in ipairs(c.boxLines) do pcall(function() l:Remove() end) end
         pcall(function() if c.hl then c.hl:Destroy() end end)
         State.ESP.cache[player] = nil
     end
@@ -355,65 +385,48 @@ RS:BindToRenderStep("XKIDESP", Enum.RenderPriority.Camera.Value + 1, function()
             local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
             
             if not active or dist > State.ESP.maxDrawDistance then
-                c.texts.Visible=false; c.tracer.Visible=false
-                for _, l in ipairs(c.boxLines) do l.Visible=false end
-                if c.hl then c.hl.Enabled=false end
-                continue
+                c.bg.Adornee = nil; c.tracer.Visible = false; c.hl.Adornee = nil; continue
             end
             
             local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
-            if not onScreen then
-                c.texts.Visible=false; c.tracer.Visible=false
-                for _, l in ipairs(c.boxLines) do l.Visible=false end
-                if c.hl then c.hl.Enabled=false end
-                continue
-            end
             
             local isSus, isGlitch = c.isSuspect, c.isGlitch
             local useHighlight = isSus or isGlitch or State.ESP.highlightMode
             
-            local txt = player.DisplayName .. "\n[" .. math.floor(dist) .. "m]"
-            if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
+            -- Teks ESP (BillboardGui) - Pasti muncul di Mobile
+            c.bg.Adornee = hrp
+            local tStr = string.format("%s\n[ %d m ]", player.DisplayName, math.floor(dist))
+            if isSus or isGlitch then tStr = tStr .. "\n⚠ " .. c.reason .. " ⚠" end
+            c.txt.Text = tStr
+            c.txt.TextColor3 = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
             
-            c.texts.Text = txt
-            c.texts.Color = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
-            c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true
+            -- Box / Glow ESP (Highlight)
+            if useHighlight then
+                c.hl.Adornee = char
+                c.hl.FillColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
+                c.hl.Enabled = true
+            else
+                c.hl.Adornee = nil
+                c.hl.Enabled = false
+            end
             
-            if State.ESP.tracerMode ~= "OFF" or isSus or isGlitch then
+            -- Tracer ESP (Drawing)
+            if onScreen and State.ESP.tracerMode ~= "OFF" then
                 local origin = center
                 if State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
                 elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
                 c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
-                c.tracer.Color = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); c.tracer.Visible = true
-            else c.tracer.Visible = false end
-            
-            if useHighlight then
-                local boxColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
-                local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
-                local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
-                if topOn and botOn then
-                    local h = math.abs(top.Y - bot.Y); local w = h * 0.6
-                    local tl, tr = Vector2.new(rootPos.X - w/2, top.Y), Vector2.new(rootPos.X + w/2, top.Y)
-                    local bl, br = Vector2.new(rootPos.X - w/2, bot.Y), Vector2.new(rootPos.X + w/2, bot.Y)
-                    c.boxLines[1].From=tl; c.boxLines[1].To=tr; c.boxLines[2].From=tr; c.boxLines[2].To=br
-                    c.boxLines[3].From=br; c.boxLines[3].To=bl; c.boxLines[4].From=bl; c.boxLines[4].To=tl
-                    for i=1, 4 do c.boxLines[i].Color = boxColor; c.boxLines[i].Visible = true end
-                end
-                if not c.hl or c.hl.Parent ~= char then
-                    pcall(function() if c.hl then c.hl:Destroy() end end)
-                    pcall(function() c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end)
-                end
-                if c.hl then c.hl.FillColor = boxColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true end
-            else
-                for _, l in ipairs(c.boxLines) do l.Visible = false end
-                if c.hl then c.hl.Enabled = false end
+                c.tracer.Color = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N)
+                c.tracer.Visible = true
+            else 
+                c.tracer.Visible = false 
             end
         end
     end
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  FLY ENGINE (MOMENTUM + SOFT LANDING + SMOOTH TURN)
+--  FLY ENGINE (MOMENTUM + SOFT LANDING)
 -- ══════════════════════════════════════════════════════════════
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
 local flyVel = Vector3.zero
@@ -495,16 +508,14 @@ local function toggleFly(v)
         
         local targetVel
         if move.Magnitude > 0 then
-            -- Gerak: smooth turn + momentum
             targetVel = move.Unit * spd
             flyVel = flyVel:Lerp(targetVel, 0.15)
         else
-            -- Idle: soft landing
             if isOnGround() then
                 targetVel = Vector3.zero
                 flyVel = flyVel:Lerp(targetVel, 0.1)
             else
-                targetVel = Vector3.new(0, -8, 0)
+                targetVel = Vector3.new(0, -1.5, 0) -- Animasi mendarat halus
                 flyVel = flyVel:Lerp(targetVel, 0.08)
             end
         end
@@ -657,26 +668,43 @@ end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 
 -- ══════════════════════════════════════════════════════════════
---  CHAT LOGGER ENGINE
+--  CHAT LOGGER ENGINE (DUAL-LISTENER)
 -- ══════════════════════════════════════════════════════════════
-local function startChatLogger(targetPlayer, logPanel)
-    if State.Utility.chatConn then State.Utility.chatConn:Disconnect() end
+local chatLogPanel = nil
+
+local function logMsg(speakerName, msg)
+    if not State.Utility.chatLog then return end
+    if State.Utility.chatTarget and State.Utility.chatTarget.Name ~= speakerName and State.Utility.chatTarget.DisplayName ~= speakerName then return end
     
-    State.Utility.chatConn = TrackC(targetPlayer.Chatted:Connect(function(msg)
-        local timestamp = os.date("%H:%M:%S")
-        local entry = string.format("[%s] %s: %s", timestamp, targetPlayer.DisplayName, msg)
-        table.insert(State.Utility.chatHistory, entry)
-        if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end
-        
-        -- Update log panel
+    local timestamp = os.date("%H:%M:%S")
+    local entry = string.format("[%s] %s: %s", timestamp, speakerName, msg)
+    table.insert(State.Utility.chatHistory, entry)
+    if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end
+    
+    if chatLogPanel then
         local logText = table.concat(State.Utility.chatHistory, "\n")
         if #logText > 2000 then logText = logText:sub(-2000) end
-        pcall(function() logPanel:SetDesc(logText) end)
-        
-        -- Notifikasi
-        notify("💬 " .. targetPlayer.DisplayName, msg, 3)
-    end))
+        pcall(function() chatLogPanel:SetDesc(logText) end)
+    end
+    notify("💬 " .. speakerName, msg, 3)
 end
+
+-- Hook TextChatService (Modern Chat)
+pcall(function()
+    TextChatService.MessageReceived:Connect(function(textChatMessage)
+        if textChatMessage.TextSource then
+            logMsg(textChatMessage.TextSource.Name, textChatMessage.Text)
+        end
+    end)
+end)
+
+-- Hook Legacy Chat
+for _, p in ipairs(Players:GetPlayers()) do
+    pcall(function() p.Chatted:Connect(function(msg) logMsg(p.Name, msg) end) end)
+end
+Players.PlayerAdded:Connect(function(p)
+    pcall(function() p.Chatted:Connect(function(msg) logMsg(p.Name, msg) end) end)
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  MAIN WINDOW
@@ -751,9 +779,8 @@ task.spawn(function()
             if getgenv()._XKID_ESP_CACHE then
                 for _, c in pairs(getgenv()._XKID_ESP_CACHE) do
                     pcall(function()
-                        if c.texts then c.texts:Remove() end
+                        if c.bg then c.bg:Destroy() end
                         if c.tracer then c.tracer:Remove() end
-                        for _, l in ipairs(c.boxLines) do l:Remove() end
                         if c.hl then c.hl:Destroy() end
                     end)
                 end
@@ -828,17 +855,11 @@ T_HOME:Section({ Title = "🔗 Discord", Opened = true }):Button({
 })
 
 local secStatus = T_HOME:Section({ Title = "📊 Live Monitor", Opened = true })
-local mapLabel = secStatus:Paragraph({ Title = "🗺️ Map", Desc = "Memuat..." })
-local fpsLabel = secStatus:Paragraph({ Title = "⚡ FPS", Desc = "---" })
-local pingLabel = secStatus:Paragraph({ Title = "📡 Ping", Desc = "--- ms" })
+local srvLabel = secStatus:Paragraph({ Title = "🌐 Server Info", Desc = "Memuat..." })
+local netLabel = secStatus:Paragraph({ Title = "⚡ Network & Perf", Desc = "Memuat..." })
 
 local secSecurity = T_HOME:Section({ Title = "🛡️ Security Status", Opened = true })
 local securityLabel = secSecurity:Paragraph({ Title = "Status", Desc = "Script Protected\nAnti-Crash Enabled" })
-
-T_HOME:Section({ Title = "📋 Changelog", Opened = false }):Paragraph({
-    Title = "Update Terbaru",
-    Desc = "• Fly momentum + soft landing\n• Utility Tab (Server Info + Chat Logger)\n• Auto cleanup saat close\n• Dark Map & Night HD lebih terang\n• Semua bug fixed\n• Discord copy link\n• UI lebih clean dengan icon"
-})
 
 -- Cache map name
 task.spawn(function()
@@ -862,32 +883,27 @@ task.spawn(function()
         table.insert(fpsSamples, dt)
         if #fpsSamples > 30 then table.remove(fpsSamples, 1) end
         
-        if mapLabel and cachedMapName then
-            pcall(function() mapLabel:SetDesc(cachedMapName) end)
+        if srvLabel and cachedMapName then
+            local pCount = #Players:GetPlayers()
+            local mCount = Players.MaxPlayers
+            local uptime = formatTime(os.difftime(os.time(), START_TIME))
+            pcall(function() srvLabel:SetDesc(string.format("🗺️ Map: %s\n👥 Pemain: %d/%d\n⏳ Uptime: %s", cachedMapName, pCount, mCount, uptime)) end)
         end
         
-        if fpsLabel and #fpsSamples > 0 then
-            local avg = 0; for _, s in ipairs(fpsSamples) do avg = avg + s end
-            local fps = math.floor(1 / (avg / #fpsSamples))
-            local c = fps >= 60 and "🟢" or (fps >= 30 and "🟡" or "🔴")
-            local bar = string.rep("█", math.clamp(math.floor(fps/12), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor(fps/12), 0, 10))
-            pcall(function() fpsLabel:SetDesc(c .. " " .. fps .. " FPS\n[" .. bar .. "]") end)
-        end
-        
-        if pingLabel then
-            local ping = 0; pcall(function() ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-            local c = ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")
-            local bar = string.rep("█", math.clamp(math.floor((200-ping)/20), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor((200-ping)/20), 0, 10))
-            pcall(function() pingLabel:SetDesc(c .. " " .. ping .. " ms\n[" .. bar .. "]") end)
+        if netLabel then
+            local fps = 0; if #fpsSamples > 0 then local avg = 0; for _, s in ipairs(fpsSamples) do avg = avg + s end; fps = math.floor(1 / (avg / #fpsSamples)) end
+            local ping = 0; pcall(function() ping = math.floor(game:GetService("Stats").PerformanceStats.Ping:GetValue()) end)
+            local fc = fps >= 60 and "🟢" or (fps >= 30 and "🟡" or "🔴")
+            local pc = ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")
+            pcall(function() netLabel:SetDesc(string.format("%s %d FPS  |  %s %d ms", fc, fps, pc, ping)) end)
         end
         
         if securityLabel then
-            local pc = #Players:GetPlayers()
             local afk = State.Security.afkConn and "✅ Aktif" or "⭕ Mati"
             local lag = State.Security.antiLag and "✅ Aktif" or "⭕ Mati"
             local sl = State.Security.shiftLock and "🔒 Aktif" or "🔓 Mati"
             local vd = State.Security.voidConn and "✅ Aktif" or "⭕ Mati"
-            pcall(function() securityLabel:SetDesc(string.format("👥 Pemain: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n🕳️ Anti-Void: %s\n⚡ FPS Boost: %s", pc, afk, sl, vd, lag)) end)
+            pcall(function() securityLabel:SetDesc(string.format("⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n🕳️ Anti-Void: %s\n⚡ FPS Boost: %s", afk, sl, vd, lag)) end)
         end
     end
 end)
@@ -981,9 +997,9 @@ end
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Camera", Icon = "eye" })
 
-T_CAM:Section({ Title = "🔍 Camera Zoom", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v)
-    pcall(function() LP.CameraMaxZoomDistance = v and 10000 or 400 end)
-    notify("Camera", v and "Zoom jauh aktif" or "Zoom normal", 2)
+T_CAM:Section({ Title = "🔍 Camera Zoom", Opened = true }):Toggle({ Title = "Max Zoom Out", Desc = "Buka batasan zoom bawaan", Value = false, Callback = function(v)
+    pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end)
+    notify("Camera", v and "Max Zoom Out aktif 🔭" or "Zoom dinormalkan", 2)
 end})
 
 local secFC = T_CAM:Section({ Title = "🎥 Freecam", Opened = true })
@@ -1098,60 +1114,36 @@ local secESP = T_ESP:Section({ Title = "Hybrid Detection ESP", Opened = true })
 secESP:Toggle({ Title="Enable ESP", Value=false, Callback=function(v)
     State.ESP.active = v
     if not v and getgenv()._XKID_ESP_CACHE then
-        for _,c in pairs(getgenv()._XKID_ESP_CACHE) do pcall(function() c.texts.Visible=false; c.tracer.Visible=false; for _,l in ipairs(c.boxLines) do l.Visible=false end; c.hl.Enabled=false end) end
+        for _,c in pairs(getgenv()._XKID_ESP_CACHE) do pcall(function() if c.bg then c.bg:Destroy() end; if c.tracer then c.tracer:Remove() end; if c.hl then c.hl:Destroy() end end) end
     end
-    notify("ESP", v and "ESP nyala 🔥" or "ESP mati 😴", 2)
+    notify("ESP", v and "✅ ESP Active (Name & Distance Auto)" or "❌ ESP Disabled", 2)
 end})
 secESP:Dropdown({ Title="Tracer Mode", Values={"Bottom","Center","Mouse","OFF"}, Value="Bottom", Callback=function(v) State.ESP.tracerMode=v end })
-secESP:Toggle({ Title="Highlight Mode (Semua)", Desc="Box & highlight untuk semua player", Value=false, Callback=function(v) State.ESP.highlightMode=v end })
+secESP:Toggle({ Title="Highlight Mode (All Players)", Desc="Enable box & highlight for ALL players", Value=false, Callback=function(v) State.ESP.highlightMode=v end })
 secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
 
 local secESPColor = T_ESP:Section({ Title = "🎨 ESP Colors", Opened = false })
-secESPColor:Dropdown({ Title="Warna Normal", Values={"Hijau", "Merah", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"}, Value="Hijau", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_N = colorMap[v] end end })
-secESPColor:Dropdown({ Title="Warna Suspect", Values={"Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam", "Crimson"}, Value="Crimson", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_S = colorMap[v]; State.ESP.boxColor_S = colorMap[v] end end })
-secESPColor:Dropdown({ Title="Warna Glitch Acc", Values={"Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v]; State.ESP.boxColor_G = colorMap[v] end end })
+secESPColor:Dropdown({ Title="Normal Player Color", Values={"Hijau", "Merah", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"}, Value="Hijau", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_N = colorMap[v] end end })
+secESPColor:Dropdown({ Title="Suspect Color (Glitcher)", Values={"Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam", "Crimson"}, Value="Crimson", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_S = colorMap[v]; State.ESP.boxColor_S = colorMap[v] end end })
+secESPColor:Dropdown({ Title="Large Glitch Acc Color", Values={"Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v]; State.ESP.boxColor_G = colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: UTILITY (NEW)
+--  TAB 7: UTILITY 
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "smartphone" })
-
--- Server Info
-local secSrvInfo = T_UTIL:Section({ Title = "📊 Server Info", Opened = true })
-local serverInfoLabel = secSrvInfo:Paragraph({ Title = "Server", Desc = "Memuat..." })
-
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        task.wait(1)
-        pcall(function()
-            local placeName = cachedMapName or game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
-            local jobId = game.JobId
-            local players = #Players:GetPlayers()
-            local maxPlayers = Players.MaxPlayers
-            local ping = 0; pcall(function() ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-            local fps = 0
-            if #fpsSamples > 0 then local avg = 0; for _, s in ipairs(fpsSamples) do avg = avg + s end; fps = math.floor(1 / (avg / #fpsSamples)) end
-            
-            local info = string.format(
-                "🗺️ Game: %s\n🆔 Job ID: %s\n👥 Pemain: %d/%d\n📡 Ping: %d ms | ⚡ FPS: %d",
-                placeName, jobId:sub(1, 8).."...", players, maxPlayers, ping, fps
-            )
-            pcall(function() serverInfoLabel:SetDesc(info) end)
-        end)
-    end
-end)
 
 -- Chat Logger
 local secChat = T_UTIL:Section({ Title = "💬 Chat Logger", Opened = true })
 secChat:Toggle({ Title = "Chat Log ON/OFF", Value = false, Callback = function(v)
     State.Utility.chatLog = v
     if not v then
-        if State.Utility.chatConn then State.Utility.chatConn:Disconnect(); State.Utility.chatConn = nil end
         notify("Chat Log", "Logger dimatikan", 2)
     else
         notify("Chat Log", "Pilih target di dropdown!", 2)
     end
 end})
+
+local chatLogPanel = secChat:Paragraph({ Title = "Log Chat", Desc = "Menunggu chat..." })
 
 local chatTargetDropdown = secChat:Dropdown({
     Title = "Pilih Target",
@@ -1161,7 +1153,7 @@ local chatTargetDropdown = secChat:Dropdown({
         if p and State.Utility.chatLog then
             State.Utility.chatTarget = p
             State.Utility.chatHistory = {}
-            startChatLogger(p, chatLogPanel)
+            pcall(function() chatLogPanel:SetDesc("Target: " .. p.DisplayName) end)
             notify("Chat Log", "Ngikutin chat "..p.DisplayName, 2)
         end
     end
@@ -1170,12 +1162,16 @@ local chatTargetDropdown = secChat:Dropdown({
 secChat:Button({ Title = "🔄 Refresh List", Callback = function()
     pcall(function() chatTargetDropdown:Refresh(getDisplayNames(), true) end)
 end})
-
-local chatLogPanel = secChat:Paragraph({ Title = "Log Chat", Desc = "Menunggu chat..." })
 secChat:Button({ Title = "🗑️ Clear Log", Callback = function()
     State.Utility.chatHistory = {}
     pcall(function() chatLogPanel:SetDesc("Menunggu chat...") end)
     notify("Chat Log", "Log dihapus", 2)
+end})
+
+local secMisc = T_UTIL:Section({ Title = "🛠️ Misc Utility", Opened = true })
+secMisc:Button({ Title = "📋 Copy JobID", Desc = "Salin ID Server untuk invite teman", Callback = function()
+    pcall(function() setclipboard(game.JobId) end)
+    notify("Utilitas", "JobID tersalin!", 2)
 end})
 
 -- ══════════════════════════════════════════════════════════════
@@ -1241,19 +1237,19 @@ secSrv:Button({ Title = "🏃 Server Hop", Callback = function()
     end)
 end})
 
--- Ping Spike Alert
+-- Ping Spike Alert (Cooldown 5 Menit = 300 detik)
 task.spawn(function()
     local pingHistory, lastAlert = {}, 0
     while getgenv()._XKID_RUNNING do
         task.wait(1)
         pcall(function()
-            local cp = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
+            local cp = math.floor(game:GetService("Stats").PerformanceStats.Ping:GetValue())
             if cp > 0 then
                 table.insert(pingHistory, cp); if #pingHistory > 20 then table.remove(pingHistory, 1) end
                 local sum = 0; for _, p in ipairs(pingHistory) do sum = sum + p end
                 local ap = sum / #pingHistory
                 if cp >= ap + 150 and cp > 200 and tick() - lastAlert > 300 then
-                    lastAlert = tick(); notify("Ping", "Ping lagi tinggi nih 📡", 4)
+                    lastAlert = tick(); notify("Ping Spike", "Lag! " .. cp .. " ms 📡", 4)
                 end
             end
         end)
@@ -1262,7 +1258,8 @@ end)
 
 local secPerf = T_SEC:Section({ Title = "⚡ Performance", Opened = true })
 local advCache = {mats={}, texs={}, shadows=true, level=10, brightness=0, clockTime=0, fogEnd=0}
-secPerf:Toggle({ Title = "FPS Boost", Value = false, Callback = function(v)
+secPerf:Slider({ Title="FPS Capper", Desc="Buka batas FPS", Step=5, Value={Min=30, Max=240, Default=60}, Callback=function(v) pcall(function() setfpscap(v) end) end})
+secPerf:Toggle({ Title = "FPS Boost (No Textures)", Value = false, Callback = function(v)
     State.Security.antiLag = v
     if v then
         pcall(function() advCache.level = settings().Rendering.QualityLevel end)
