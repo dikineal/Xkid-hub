@@ -7,14 +7,14 @@
   ✨ Features:
   • Avatar Refresh (Fast Respawn + Refresh Character)
   • Teleport (Click TP) & Location Saver
-  • Movement (Speed / Jump / Fly / NoClip / Soft Fling)
-  • Freecam (Smooth + Mobile Ready)
-  • Spectate (Orbit & First Person)
+  • Movement (Speed / Jump / Fly / NoClip / Soft Fling Ultra)
+  • Camera (Freecam / Spectate / Aim Lock FOV)
   • Modern Hybrid ESP (Highlight Mode + Large Glitch Detection)
   • World Control (Custom Bloom/Lighting & Camera FOV)
-  • Utility & Security (Auto Rejoin, Crash Detection, Anti Void)
-  • Network (Ping Spike Alert, Low Player Server Hop)
-  • Live FPS, PING & Map Display
+  • Security (Anti-AFK / Anti-Void / Stuck Fix / FPS Boost)
+  • Network (Auto Rejoin, Server Hop, True Ping Spike Alert)
+  • Settings (Save/Load Config, Custom Color Picker Theme)
+  • UI (RGB ROG Animated OpenButton)
   
   💎 Created by @WTF.XKID
   📱 Tiktok: @wtf.xkid
@@ -22,6 +22,7 @@
 ]]
 
 local RS = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 
 -- ══════════════════════════════════════════════════════════════
 --  0. AUTO CLEANUP & MEMORY MANAGEMENT
@@ -41,6 +42,8 @@ if getgenv()._XKID_ESP_CACHE then
     end
 end
 getgenv()._XKID_ESP_CACHE = {}
+
+if getgenv()._XKID_FOVCIRCLE then pcall(function() getgenv()._XKID_FOVCIRCLE:Remove() end) end
 
 if getgenv()._XKID_LOADED then
     pcall(function()
@@ -67,7 +70,6 @@ getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
--- Memory GC Optimizer
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(30)
@@ -78,9 +80,7 @@ end)
 -- ══════════════════════════════════════════════════════════════
 --  LOAD WINDUI
 -- ══════════════════════════════════════════════════════════════
-local WindUI = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
-))()
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 -- ══════════════════════════════════════════════════════════════
 --  SERVICES
@@ -91,7 +91,6 @@ local VirtualUser = game:GetService("VirtualUser")
 local Lighting    = game:GetService("Lighting")
 local TPService   = game:GetService("TeleportService")
 local StatsService= game:GetService("Stats")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui     = game:GetService("CoreGui")
 local LP          = Players.LocalPlayer
 local Cam         = workspace.CurrentCamera
@@ -103,16 +102,14 @@ local onMobile    = not UIS.KeyboardEnabled
 local State = {
     Move     = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
     Fly      = { active = false, bv = nil, bg = nil, noFallConn = nil },
-    SoftFling= { active = false, power = 4000 },
+    SoftFling= { active = false, power = 50000 }, -- Diperkuat drastis
     Teleport = { selectedTarget = "", clickTool = nil, clickConn = nil },
     Security = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, fallConn = nil, arConn = nil },
-    Cinema   = { active = false },
-    Spectate = { hideName = false },
+    Aim      = { active = false, showFov = false, radius = 100, part = "Head", circle = nil },
     Avatar   = { isRefreshing = false },
     ESP = {
         active          = false,
         cache           = getgenv()._XKID_ESP_CACHE,
-        boxMode         = "Corner",
         tracerMode      = "Bottom",
         maxDrawDistance = 300,
         showDistance    = true,
@@ -128,6 +125,15 @@ local State = {
     },
 }
 
+-- Buat FOV Circle (Drawing API)
+local fovCircle = Drawing.new("Circle")
+fovCircle.Visible = false
+fovCircle.Thickness = 1.5
+fovCircle.Color = Color3.fromRGB(255, 255, 255)
+fovCircle.Filled = false
+fovCircle.Transparency = 1
+getgenv()._XKID_FOVCIRCLE = fovCircle
+
 local colorMap = {
     ["Merah"] = Color3.fromRGB(255, 0, 0), ["Hijau"] = Color3.fromRGB(0, 255, 0),
     ["Biru"]  = Color3.fromRGB(0, 0, 255), ["Kuning"]= Color3.fromRGB(255, 255, 0),
@@ -142,22 +148,15 @@ local colorMap = {
 -- ══════════════════════════════════════════════════════════════
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
 local function getHum() return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
-
 local function getDisplayNames()
     local t = {}
-    for _, p in pairs(Players:GetPlayers()) do 
-        if p ~= LP then table.insert(t, p.DisplayName) end 
-    end
+    for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName) end end
     return t
 end
-
 local function findPlayerByDisplay(str)
-    for _, p in pairs(Players:GetPlayers()) do 
-        if str == p.DisplayName then return p end 
-    end
+    for _, p in pairs(Players:GetPlayers()) do if str == p.DisplayName then return p end end
     return nil
 end
-
 local function getCharRoot(char)
     if not char then return nil end
     return char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
@@ -181,9 +180,7 @@ TrackC(LP.CharacterAdded:Connect(function(char)
             State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
         end
     end
-    if State.Teleport.clickTool then
-        State.Teleport.clickTool.Parent = LP.Backpack
-    end
+    if State.Teleport.clickTool then State.Teleport.clickTool.Parent = LP.Backpack end
 end))
 
 -- ══════════════════════════════════════════════════════════════
@@ -217,7 +214,7 @@ local function toggleShiftLock(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  💎 AVATAR REFRESH ENGINE
+--  💎 FAST RESPAWN & REFRESH SYSTEM
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
@@ -272,7 +269,7 @@ local function refreshCharacter()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  💎 HYBRID DETECTION ESP ENGINE
+--  💎 HYBRID ESP & AIM LOCK ENGINE
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -295,6 +292,7 @@ local function clearPlayerCache(player)
 end
 TrackC(Players.PlayerRemoving:Connect(clearPlayerCache))
 
+-- Background ESP Deteksi Anomali
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         if State.ESP.active then
@@ -302,24 +300,20 @@ task.spawn(function()
                 if p ~= LP and p.Character then
                     local isSus, isGlitch, reason = false, false, ""
                     for _, v in pairs(p.Character:GetChildren()) do
-                        if v:IsA("BasePart") and (v.Size.X > 30 or v.Size.Y > 30 or v.Size.Z > 30) then
-                            isSus = true; reason = "Map Blocker" break
+                        if v:IsA("BasePart") and (v.Size.X > 30 or v.Size.Y > 30 or v.Size.Z > 30) then isSus=true; reason="Map Blocker" break
                         elseif v:IsA("Accessory") then
                             local h = v:FindFirstChild("Handle")
                             if h and h:IsA("BasePart") then
-                                if h.Size.Magnitude > 20 then isSus = true; reason = "Huge Hat" break
-                                elseif h.Size.Magnitude > 10 or (h.Transparency < 0.1 and h.Material == Enum.Material.Neon) then
-                                    isGlitch = true; reason = "Glitch Accessory"
-                                end
+                                if h.Size.Magnitude > 20 then isSus=true; reason="Huge Hat" break
+                                elseif h.Size.Magnitude > 10 or (h.Transparency < 0.1 and h.Material == Enum.Material.Neon) then isGlitch=true; reason="Glitch Acc" end
                             end
                         end
                     end
                     if not isSus and not isGlitch then
                         local hum = p.Character:FindFirstChildOfClass("Humanoid")
                         if hum then
-                            local bws = hum:FindFirstChild("BodyWidthScale")
-                            local bhs = hum:FindFirstChild("BodyHeightScale")
-                            if (bws and bws.Value > 2.0) or (bhs and bhs.Value > 2.0) then isSus = true; reason = "Glitch Avatar" end
+                            local bws, bhs = hum:FindFirstChild("BodyWidthScale"), hum:FindFirstChild("BodyHeightScale")
+                            if (bws and bws.Value > 2.0) or (bhs and bhs.Value > 2.0) then isSus=true; reason="Glitch Avatar" end
                         end
                     end
                     initPlayerCache(p)
@@ -331,71 +325,107 @@ task.spawn(function()
     end
 end)
 
+-- RenderStepped for ESP & Aim Lock
 TrackC(RS.RenderStepped:Connect(function()
-    if not State.ESP.active then return end
     local myHrp = getCharRoot(LP.Character)
+    local center = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
+    
+    -- Update FOV Circle Position
+    if State.Aim.showFov then
+        fovCircle.Position = center
+        fovCircle.Radius = State.Aim.radius
+        fovCircle.Visible = true
+    else
+        fovCircle.Visible = false
+    end
+
+    local closestDist = State.Aim.radius
+    local aimTarget = nil
+
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LP then
             local char, hrp, hum = player.Character, getCharRoot(player.Character), player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-            if not char or not hrp or not hum then clearPlayerCache(player); continue end
-            initPlayerCache(player); local c = State.ESP.cache[player]
-            local active = hum.Health > 0 and myHrp
-            local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
             
-            if not active or dist > State.ESP.maxDrawDistance then
-                c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
+            -- Aim Lock Target Calculation
+            if State.Aim.active and char and hum and hum.Health > 0 and char:FindFirstChild(State.Aim.part) then
+                local part = char[State.Aim.part]
+                local pos, onScreen = Cam:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        aimTarget = part
+                    end
+                end
             end
-            
-            local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
-            if not onScreen then
-                c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
-            end
-            
-            local isSus, isGlitch = c.isSuspect, c.isGlitch
-            local useHighlight = isSus or isGlitch or State.ESP.highlightMode
-            local txt = ""
-            if State.ESP.showNickname then txt = player.DisplayName end
-            if State.ESP.showDistance then txt = txt .. "\n[" .. math.floor(dist) .. "m]" end
-            if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
-            
-            c.texts.Text = txt
-            c.texts.Color = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
-            c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true
-            
-            if State.ESP.tracerMode ~= "OFF" or isSus or isGlitch then
-                local origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
-                if State.ESP.tracerMode == "Center" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
-                elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
+
+            -- Main ESP Rendering
+            if State.ESP.active then
+                if not char or not hrp or not hum then clearPlayerCache(player); continue end
+                initPlayerCache(player); local c = State.ESP.cache[player]
+                local active = hum.Health > 0 and myHrp
+                local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
                 
-                c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
-                c.tracer.Color = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); c.tracer.Visible = true
-            else c.tracer.Visible = false end
-            
-            if useHighlight then
-                local boxColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
-                local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
-                local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
-                if topOn and botOn then
-                    local h = math.abs(top.Y - bot.Y); local w = h * 0.6
-                    local tl, tr = Vector2.new(rootPos.X - w/2, top.Y), Vector2.new(rootPos.X + w/2, top.Y)
-                    local bl, br = Vector2.new(rootPos.X - w/2, bot.Y), Vector2.new(rootPos.X + w/2, bot.Y)
-                    c.boxLines[1].From=tl; c.boxLines[1].To=tr; c.boxLines[2].From=tr; c.boxLines[2].To=br
-                    c.boxLines[3].From=br; c.boxLines[3].To=bl; c.boxLines[4].From=bl; c.boxLines[4].To=tl
-                    for i=1, 4 do c.boxLines[i].Color = boxColor; c.boxLines[i].Visible = true end
+                if not active or dist > State.ESP.maxDrawDistance then
+                    c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
                 end
-                if not c.hl or c.hl.Parent ~= char then
-                    if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                
+                local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
+                if not onScreen then
+                    c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
                 end
-                c.hl.FillColor = boxColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true
-            else
-                for _, l in ipairs(c.boxLines) do l.Visible = false end; if c.hl then c.hl.Enabled = false end
+                
+                local isSus, isGlitch = c.isSuspect, c.isGlitch
+                local useHighlight = isSus or isGlitch or State.ESP.highlightMode
+                local txt = ""
+                if State.ESP.showNickname then txt = player.DisplayName end
+                if State.ESP.showDistance then txt = txt .. "\n[" .. math.floor(dist) .. "m]" end
+                if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
+                
+                c.texts.Text = txt
+                c.texts.Color = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
+                c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true
+                
+                if State.ESP.tracerMode ~= "OFF" or isSus or isGlitch then
+                    local origin = center
+                    if State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
+                    elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
+                    c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
+                    c.tracer.Color = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); c.tracer.Visible = true
+                else c.tracer.Visible = false end
+                
+                if useHighlight then
+                    local boxColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
+                    local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
+                    local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
+                    if topOn and botOn then
+                        local h = math.abs(top.Y - bot.Y); local w = h * 0.6
+                        local tl, tr = Vector2.new(rootPos.X - w/2, top.Y), Vector2.new(rootPos.X + w/2, top.Y)
+                        local bl, br = Vector2.new(rootPos.X - w/2, bot.Y), Vector2.new(rootPos.X + w/2, bot.Y)
+                        c.boxLines[1].From=tl; c.boxLines[1].To=tr; c.boxLines[2].From=tr; c.boxLines[2].To=br
+                        c.boxLines[3].From=br; c.boxLines[3].To=bl; c.boxLines[4].From=bl; c.boxLines[4].To=tl
+                        for i=1, 4 do c.boxLines[i].Color = boxColor; c.boxLines[i].Visible = true end
+                    end
+                    if not c.hl or c.hl.Parent ~= char then
+                        if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    end
+                    c.hl.FillColor = boxColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true
+                else
+                    for _, l in ipairs(c.boxLines) do l.Visible = false end; if c.hl then c.hl.Enabled = false end
+                end
             end
         end
+    end
+    
+    -- Execution of Aim Lock 
+    if State.Aim.active and aimTarget then
+        -- Lock camera towards the selected part
+        Cam.CFrame = CFrame.new(Cam.CFrame.Position, aimTarget.Position)
     end
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  FLY ENGINE (DIPERBAIKI: INCLUDE AUTO NO-FALL DAMAGE)
+--  FLY ENGINE
 -- ══════════════════════════════════════════════════════════════
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
 
@@ -422,12 +452,10 @@ local function startFlyCapture()
     end))
     State.Fly._keys = keysHeld
 end
-
 local function stopFlyCapture()
     for _, c in ipairs(flyConns) do c:Disconnect() end
     flyConns={}; flyMoveTouch=nil; flyMoveSt=nil; flyJoy=Vector2.zero; State.Fly._keys={}
 end
-
 local function toggleFly(v)
     if not v then
         State.Fly.active = false; stopFlyCapture(); RS:UnbindFromRenderStep("XKIDFly")
@@ -435,8 +463,8 @@ local function toggleFly(v)
         if State.Fly.bg then State.Fly.bg:Destroy(); State.Fly.bg=nil end
         local hum = getHum()
         if hum then hum.PlatformStand=false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed=State.Move.ws; hum.UseJumpPower=true; hum.JumpPower=State.Move.jp end
-        if State.Fly.noFallConn then State.Fly.noFallConn:Disconnect(); State.Fly.noFallConn = nil end -- Auto turn off no fall
-        notify("Fly","✈ Fly OFF (No Fall Off)", 2)
+        if State.Fly.noFallConn then State.Fly.noFallConn:Disconnect(); State.Fly.noFallConn = nil end
+        notify("Fly","✈ Fly OFF", 2)
         return
     end
     local hrp=getRoot(); local hum=getHum()
@@ -445,7 +473,6 @@ local function toggleFly(v)
     State.Fly.bv=Instance.new("BodyVelocity",hrp); State.Fly.bv.MaxForce=Vector3.new(9e9,9e9,9e9); State.Fly.bv.Velocity=Vector3.zero
     State.Fly.bg=Instance.new("BodyGyro",hrp); State.Fly.bg.MaxTorque=Vector3.new(9e9,9e9,9e9); State.Fly.bg.P=50000 
     
-    -- Mengaktifkan No Fall Damage secara otomatis saat Fly On
     if not State.Fly.noFallConn then
         State.Fly.noFallConn = TrackC(RS.Heartbeat:Connect(function()
             local r = getRoot()
@@ -458,8 +485,7 @@ local function toggleFly(v)
         if not State.Fly.active then return end
         local r=getRoot(); if not r then return end
         local camCF=Cam.CFrame; local spd=State.Move.flyS; local move=Vector3.zero; local keys=State.Fly._keys or {}
-        if onMobile then
-            move = camCF.LookVector*(-flyJoy.Y) + camCF.RightVector*flyJoy.X
+        if onMobile then move = camCF.LookVector*(-flyJoy.Y) + camCF.RightVector*flyJoy.X
         else
             if keys[Enum.KeyCode.W] then move=move+camCF.LookVector  end
             if keys[Enum.KeyCode.S] then move=move-camCF.LookVector  end
@@ -471,7 +497,7 @@ local function toggleFly(v)
         State.Fly.bv.Velocity = move.Magnitude > 0 and move.Unit * spd or Vector3.zero
         State.Fly.bg.CFrame   = CFrame.new(r.Position, r.Position+camCF.LookVector)
     end)
-    notify("Fly","✈ Fly Linear ON (No Fall Active)", 3)
+    notify("Fly","✈ Fly Linear ON", 3)
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -484,8 +510,7 @@ local function startFreecamCapture()
     fcKeysHeld = {}
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
-        local k = inp.KeyCode
-        if k == Enum.KeyCode.W or k == Enum.KeyCode.A or k == Enum.KeyCode.S or k == Enum.KeyCode.D or k == Enum.KeyCode.E or k == Enum.KeyCode.Q then fcKeysHeld[k] = true end
+        local k = inp.KeyCode; if k == Enum.KeyCode.W or k == Enum.KeyCode.A or k == Enum.KeyCode.S or k == Enum.KeyCode.D or k == Enum.KeyCode.E or k == Enum.KeyCode.Q then fcKeysHeld[k] = true end
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then FC._mouseRot = true; UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition end
     end))
     table.insert(fcConns, UIS.InputEnded:Connect(function(inp)
@@ -499,11 +524,8 @@ local function startFreecamCapture()
     end))
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp.Position.X > Cam.ViewportSize.X / 2 then
-            if not fcRotTouch then fcRotTouch = inp; fcRotLast = inp.Position end
-        else
-            if not fcMoveTouch then fcMoveTouch = inp; fcMoveSt = inp.Position end
-        end
+        if inp.Position.X > Cam.ViewportSize.X / 2 then if not fcRotTouch then fcRotTouch = inp; fcRotLast = inp.Position end
+        else if not fcMoveTouch then fcMoveTouch = inp; fcMoveSt = inp.Position end end
     end))
     table.insert(fcConns, UIS.TouchMoved:Connect(function(inp)
         if inp == fcRotTouch and fcRotLast then
@@ -520,13 +542,10 @@ local function startFreecamCapture()
         if inp == fcMoveTouch then fcMoveTouch = nil; fcMoveSt = nil; fcJoy = Vector2.zero end
     end))
 end
-
 local function stopFreecamCapture()
     for _, c in ipairs(fcConns) do c:Disconnect() end
-    fcConns = {}; fcMoveTouch = nil; fcMoveSt = nil; fcRotTouch = nil; fcRotLast = nil; fcJoy = Vector2.zero; fcKeysHeld = {}
-    FC._mouseRot = false; UIS.MouseBehavior = Enum.MouseBehavior.Default
+    fcConns = {}; fcMoveTouch = nil; fcMoveSt = nil; fcRotTouch = nil; fcRotLast = nil; fcJoy = Vector2.zero; fcKeysHeld = {}; FC._mouseRot = false; UIS.MouseBehavior = Enum.MouseBehavior.Default
 end
-
 local function startFreecamLoop()
     RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not FC.active then return end
@@ -549,7 +568,6 @@ local function startFreecamLoop()
         if hum then hum:ChangeState(Enum.HumanoidStateType.Physics); hum.WalkSpeed = 0; hum.JumpPower = 0 end
     end)
 end
-
 local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 
 -- ══════════════════════════════════════════════════════════════
@@ -558,8 +576,7 @@ local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 local function inJoystick(pos)
     local ctrl = LP and LP.PlayerGui and LP.PlayerGui:FindFirstChild("TouchGui")
     if ctrl then
-        local frame = ctrl:FindFirstChild("TouchControlFrame")
-        local thumb = frame and frame:FindFirstChild("DynamicThumbstickFrame")
+        local frame = ctrl:FindFirstChild("TouchControlFrame"); local thumb = frame and frame:FindFirstChild("DynamicThumbstickFrame")
         if thumb then
             local ap, as = thumb.AbsolutePosition, thumb.AbsoluteSize
             if pos.X>=ap.X and pos.Y>=ap.Y and pos.X<=ap.X+as.X and pos.Y<=ap.Y+as.Y then return true end
@@ -570,7 +587,6 @@ end
 
 local Spec = { active=false, target=nil, mode="third", dist=8, origFov=70, orbitYaw=0, orbitPitch=0, fpYaw=0, fpPitch=0 }
 local specTM,specPinch,specPinchD,specPan,specConns = nil,{},nil,Vector2.zero,{}
-
 local function startSpecCapture()
     table.insert(specConns, UIS.InputBegan:Connect(function(inp,gp)
         if gp or not Spec.active or inp.UserInputType~=Enum.UserInputType.Touch or inJoystick(inp.Position) then return end
@@ -578,8 +594,7 @@ local function startSpecCapture()
     end))
     table.insert(specConns, UIS.InputChanged:Connect(function(inp)
         if not Spec.active or inp.UserInputType~=Enum.UserInputType.Touch then return end
-        if #specPinch==1 and inp==specTM then
-            specPan = specPan+Vector2.new(inp.Delta.X,inp.Delta.Y)
+        if #specPinch==1 and inp==specTM then specPan = specPan+Vector2.new(inp.Delta.X,inp.Delta.Y)
         elseif #specPinch>=2 then
             local d=(specPinch[1].Position-specPinch[2].Position).Magnitude
             if specPinchD then
@@ -596,12 +611,10 @@ local function startSpecCapture()
         specPinchD=nil; specTM = #specPinch==1 and specPinch[1] or nil
     end))
 end
-
 local function stopSpecCapture()
     for _,c in ipairs(specConns) do c:Disconnect() end
     specConns={}; specTM=nil; specPinch={}; specPinchD=nil; specPan=Vector2.zero
 end
-
 local function startSpecLoop()
     RS:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value+1, function()
         if not Spec.active then return end
@@ -653,27 +666,46 @@ local Window = WindUI:CreateWindow({
         Title           = "@WTF.XKID",
         Icon            = "ghost",
         CornerRadius    = UDim.new(1, 0),
-        StrokeThickness = 4,
+        StrokeThickness = 3,
         Enabled         = true,
         Draggable       = true,
         OnlyMobile      = false,
         Scale           = 0.75,
-        Color = ColorSequence.new(
-            Color3.fromRGB(225, 0, 120),
-            Color3.fromRGB(0, 255, 255)
-        ),
-    },
-    User = {
-        Enabled   = true,
-        Anonymous = false,
-        Callback  = function()
-            notify("@WTF.XKID", "Tiktok: @wtf.xkid\nDiscord: @4sharken", 4)
-        end,
+        Color = ColorSequence.new(Color3.fromRGB(225, 0, 120), Color3.fromRGB(0, 255, 255)),
     },
 })
 
 getgenv()._XKID_INSTANCE = Window.Instance
 WindUI:SetTheme("Crimson")
+
+-- Animasi RGB ROG untuk OpenButton
+task.spawn(function()
+    local hue = 0
+    while getgenv()._XKID_RUNNING do
+        hue = (hue + 0.005) % 1
+        local c1 = Color3.fromHSV(hue, 1, 1)
+        local c2 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
+        local seq = ColorSequence.new(c1, c2)
+        
+        pcall(function()
+            local wind = CoreGui:FindFirstChild("WindUI")
+            if wind then
+                local openBtn = wind:FindFirstChild("OpenButton", true)
+                if openBtn then
+                    local stroke = openBtn:FindFirstChildOfClass("UIStroke")
+                    if stroke then
+                        local grad = stroke:FindFirstChildOfClass("UIGradient")
+                        if not grad then grad = Instance.new("UIGradient", stroke) end
+                        grad.Color = seq; grad.Rotation = (grad.Rotation + 5) % 360
+                    end
+                    local bgGrad = openBtn:FindFirstChildOfClass("UIGradient")
+                    if bgGrad then bgGrad.Color = seq; bgGrad.Rotation = (bgGrad.Rotation + 2) % 360 end
+                end
+            end
+        end)
+        task.wait(0.03)
+    end
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 1: HOME SCREEN
@@ -690,9 +722,6 @@ local pingLabel = secStatus:Paragraph({ Title = "📡 Ping", Desc  = "--- ms" })
 
 local secSecurity = T_HOME:Section({ Title = "🛡️ Security Status", Opened = true })
 local securityLabel = secSecurity:Paragraph({ Title = "Protection Active", Desc  = "✅ Script Protected\n✅ Anti-Crash Enabled\n✅ Memory Optimized" })
-
-local secChangelog = T_HOME:Section({ Title = "📋 Changelog", Opened = false })
-secChangelog:Paragraph({ Title = "Latest Updates", Desc  = "• NEW: Utility & Security Features\n• NEW: Custom Atmosphere Sliders & FOV\n• NEW: Auto Rejoin & Server Tools\n• OPTIMIZED: UI & Memory" })
 
 local fpsSamples = {}
 TrackC(RS.RenderStepped:Connect(function(dt)
@@ -717,8 +746,7 @@ task.spawn(function()
         end
         
         if pingLabel then
-            local ping = 0
-            pcall(function() ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
+            local ping = 0; pcall(function() ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
             pingLabel:SetDesc((ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")) .. " " .. ping .. " ms")
         end
         
@@ -727,8 +755,7 @@ task.spawn(function()
             local antiAFKStatus = State.Security.afkConn and "✅" or "⭕"
             local antiLagStatus = State.Security.antiLag and "✅" or "⭕"
             local shiftLockStatus = State.Security.shiftLock and "🔒" or "🔓"
-            local securityText = string.format("🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: GC Running", playerCount, antiAFKStatus, shiftLockStatus, antiLagStatus)
-            securityLabel:SetDesc(securityText)
+            securityLabel:SetDesc(string.format("🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: GC Running", playerCount, antiAFKStatus, shiftLockStatus, antiLagStatus))
         end
     end
 end)
@@ -754,24 +781,23 @@ local secAbi = T_AV:Section({ Title = "Abilities", Opened = true })
 secAbi:Toggle({ Title = "Fly", Desc = "Fly following camera direction (Auto No-Fall Damage)", Value = false, Callback = function(v) toggleFly(v) end })
 secAbi:Slider({ Title = "Fly Speed", Desc = "Default: 60", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = tonumber(v) or 60 end })
 secAbi:Toggle({ Title = "NoClip", Desc = "Walk through walls", Value = false, Callback = function(v) State.Move.ncp = v end })
-secAbi:Toggle({ Title = "Soft Fling", Desc = "Gentle collision", Value = false, Callback = function(v) State.SoftFling.active=v; State.Move.ncp=v end })
+secAbi:Toggle({ Title = "Soft Fling", Desc = "Tabrak player lain hingga terpental", Value = false, Callback = function(v) State.SoftFling.active=v; State.Move.ncp=v end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 3: TELEPORT
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 
-local secTP = T_TP:Section({ Title = "Teleport Tool", Opened = true })
-secTP:Toggle({ Title = "Click Teleport (Tool)", Desc = "Equip Tool di layar/backpack dan klik area untuk TP", Value = false, Callback = function(v)
+local secTPT = T_TP:Section({ Title = "Click Teleport (Map)", Opened = true })
+secTPT:Toggle({ Title = "Click Teleport Tool", Desc = "Equip Tool di layar/backpack dan klik area untuk TP", Value = false, Callback = function(v)
     if v then
-        local tool = Instance.new("Tool")
-        tool.Name = "Click TP"; tool.RequiresHandle = false; tool.Parent = LP.Backpack
+        local tool = Instance.new("Tool"); tool.Name = "Click TP"; tool.RequiresHandle = false; tool.Parent = LP.Backpack
         State.Teleport.clickTool = tool
         State.Teleport.clickConn = tool.Activated:Connect(function()
             local mouse = LP:GetMouse(); local hrp = getRoot()
             if hrp and mouse.Hit then hrp.CFrame = mouse.Hit + Vector3.new(0, 3, 0) end
         end)
-        notify("Click TP", "✅ Tool 'Click TP' diberikan ke Backpack!", 2)
+        notify("Click TP", "✅ Tool 'Click TP' di Backpack!", 2)
     else
         if State.Teleport.clickTool then State.Teleport.clickTool:Destroy(); State.Teleport.clickTool = nil end
         if State.Teleport.clickConn then State.Teleport.clickConn:Disconnect(); State.Teleport.clickConn = nil end
@@ -779,35 +805,30 @@ secTP:Toggle({ Title = "Click Teleport (Tool)", Desc = "Equip Tool di layar/back
     end
 end})
 
-local secTPO = T_TP:Section({ Title = "Player Teleport", Opened = true })
+local secTP = T_TP:Section({ Title = "Player Teleport", Opened = true })
 local tpTarget = ""
 local function refreshPlayerLists() return getDisplayNames() end
 
-secTPO:Input({ Title = "Search Player", Desc = "Type player name", Placeholder = "player name...", Callback = function(v) tpTarget = v end })
-secTPO:Button({ Title = "Teleport", Desc = "Teleport to searched player", Callback = function()
-    local success, err = pcall(function()
+secTP:Input({ Title = "Search Player", Placeholder = "type display name...", Callback = function(v) tpTarget = v end })
+secTP:Button({ Title = "Teleport", Callback = function()
+    pcall(function()
         if tpTarget == "" then notify("Teleport", "❌ Masukkan nama player!", 2); return end
         local targetPlayer = nil
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LP then
-                local nl, dl, tl = string.lower(p.Name), string.lower(p.DisplayName), string.lower(tpTarget)
-                if string.find(nl, tl) or string.find(dl, tl) then targetPlayer = p; break end
-            end
+            if p ~= LP and (string.find(string.lower(p.DisplayName), string.lower(tpTarget))) then targetPlayer = p; break end
         end
-        if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then notify("Teleport", "❌ Player tidak valid/spawn!", 2); return end
+        if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then notify("Teleport", "❌ Player tidak valid!", 2); return end
         local tHrp, tHum, myHrp = getCharRoot(targetPlayer.Character), targetPlayer.Character:FindFirstChildOfClass("Humanoid"), getRoot()
-        if not tHrp or not tHum or not myHrp or tHum.Health <= 0 then notify("Teleport", "❌ Gagal mendapatkan posisi / Target mati!", 2); return end
+        if not tHrp or not tHum or not myHrp or tHum.Health <= 0 then notify("Teleport", "❌ Target mati/posisi gagal!", 2); return end
         myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3) + Vector3.new(0, 2, 0); myHrp.AssemblyLinearVelocity = Vector3.zero
         notify("Teleport", "✅ TP ke "..targetPlayer.DisplayName, 2)
     end)
-    if not success then notify("Teleport", "❌ Error: "..tostring(err), 3) end
 end})
 
 local pDropOpts = refreshPlayerLists()
-local tpDropdown = secTPO:Dropdown({ Title = "Player List", Desc = "Select from list", Values = pDropOpts, Callback = function(v) tpTarget = v end })
-secTPO:Button({ Title = "Refresh List", Desc = "Update player list", Callback = function()
-    local newList = refreshPlayerLists(); pcall(function() tpDropdown:Refresh(newList, true) end)
-    notify("Teleport", "✅ List updated! "..#newList.." players", 2)
+local tpDropdown = secTP:Dropdown({ Title = "Player List", Values = pDropOpts, Callback = function(v) tpTarget = v end })
+secTP:Button({ Title = "Refresh List", Callback = function()
+    local newList = refreshPlayerLists(); pcall(function() tpDropdown:Refresh(newList, true) end); notify("Teleport", "✅ List updated!", 2)
 end})
 
 local secLoc = T_TP:Section({ Title = "Save & Load Location", Opened = true })
@@ -825,9 +846,16 @@ for i = 1, 3 do
 end
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 4: CAMERA & SPECTATE
+--  TAB 4: CAMERA & SPECTATE & AIM
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Camera", Icon = "eye" })
+
+local secAim = T_CAM:Section({ Title = "Aim Lock (Camera)", Opened = true })
+secAim:Toggle({ Title = "Show FOV Circle", Value = false, Callback = function(v) State.Aim.showFov = v end })
+secAim:Slider({ Title = "FOV Radius", Step = 1, Value = {Min = 10, Max = 500, Default = 100}, Callback = function(v) State.Aim.radius = tonumber(v) or 100 end })
+secAim:Dropdown({ Title = "Target Part", Values = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, Value = "Head", Callback = function(v) State.Aim.part = v end })
+secAim:Toggle({ Title = "Enable Aim Lock", Desc="Kamera mengunci ke player di dalam FOV", Value = false, Callback = function(v) State.Aim.active = v; notify("Aim Lock", v and "✅ ON" or "❌ OFF", 2) end })
+
 local secFC = T_CAM:Section({ Title = "Freecam", Opened = true })
 secFC:Toggle({ Title = "Freecam", Desc = "PC: RMB rotate | Mobile: Left move / Right rotate", Value = false, Callback = function(v)
     FC.active = v; State.Cinema.active = v
@@ -844,7 +872,6 @@ secFC:Toggle({ Title = "Freecam", Desc = "PC: RMB rotate | Mobile: Left move / R
     end
 end})
 secFC:Slider({ Title="Speed", Step=0.5, Value={Min=1, Max=20, Default=3}, Callback=function(v) FC.speed = tonumber(v) or 3 end })
-secFC:Slider({ Title="Sensitivity", Step=1, Value={Min=1, Max=20, Default=5}, Callback=function(v) FC.sens = (tonumber(v) or 5)*0.05 end })
 
 local secSP = T_CAM:Section({ Title = "Spectate Player", Opened = true })
 local specDropOpts = getDisplayNames()
@@ -877,7 +904,7 @@ secSP:Toggle({ Title = "First Person Mode", Value = false, Callback = function(v
 secSP:Slider({ Title = "Orbit Distance", Step = 1, Value = {Min = 3, Max = 30, Default = 8}, Callback = function(v) Spec.dist = tonumber(v) or 8 end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: WORLD (AESTHETIC HD FILTERS)
+--  TAB 5: WORLD
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "World", Icon = "globe" })
 
@@ -888,8 +915,7 @@ local function resetLighting()
     Lighting.ClockTime = 14; Lighting.Brightness = 1; Lighting.ExposureCompensation = 0
     Lighting.Ambient = Color3.fromRGB(127, 127, 127); Lighting.OutdoorAmbient = Color3.fromRGB(127, 127, 127)
     Lighting.ColorShift_Bottom = Color3.new(0, 0, 0); Lighting.ColorShift_Top = Color3.new(0, 0, 0)
-    Lighting.FogEnd = 100000
-    notify("Filter", "✅ Lighting direset ke Default!", 2)
+    Lighting.FogEnd = 100000; notify("Filter", "✅ Lighting direset ke Default!", 2)
 end
 
 local function applyFilter(filter)
@@ -930,23 +956,18 @@ secAtmos:Slider({ Title="Bloom", Step=0.1, Value={Min=0, Max=5, Default=0}, Call
 secAtmos:Button({ Title="🔄 Reset Sliders", Callback = function() applyFilter("Default") end })
 
 local secCamW = T_WO:Section({ Title = "Camera Settings", Opened = false })
-secCamW:Slider({ Title="Player Camera FOV", Desc="Mengubah Field of View asli Player", Step=1, Value={Min=10, Max=120, Default=70}, Callback=function(v) Cam.FieldOfView = tonumber(v) or 70 end })
+secCamW:Slider({ Title="Player Camera FOV", Desc="Mengubah FOV Player", Step=1, Value={Min=10, Max=120, Default=70}, Callback=function(v) Cam.FieldOfView = tonumber(v) or 70 end })
 
 local secGfx = T_WO:Section({ Title = "Graphics Menu", Opened = false })
-local gfxMap = { [1] = "Level01", [2] = "Level03", [3] = "Level05", [4] = "Level07", [5] = "Level09", [6] = "Level11", [7] = "Level13", [8] = "Level15", [9] = "Level17", [10] = "Level21" }
-secGfx:Slider({
-    Title = "Roblox Graphics Level", Desc  = "Sesuai dengan 1-10 bar di Esc Menu", Step  = 1, Value = {Min = 1, Max = 10, Default = 5},
-    Callback = function(v)
-        local levelNum = tonumber(v)
-        if levelNum and gfxMap[levelNum] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[levelNum]]; notify("Graphics", "✅ Set to Graphic Level "..tostring(levelNum), 2) end) end
-    end
-})
+local gfxMap = { [1]="Level01", [2]="Level03", [3]="Level05", [4]="Level07", [5]="Level09", [6]="Level11", [7]="Level13", [8]="Level15", [9]="Level17", [10]="Level21" }
+secGfx:Slider({ Title = "Roblox Graphics Level", Step = 1, Value = {Min=1, Max=10, Default=5}, Callback = function(v)
+    local levelNum = tonumber(v); if levelNum and gfxMap[levelNum] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[levelNum]]; notify("Graphics", "✅ Graphic Level "..tostring(levelNum), 2) end) end
+end})
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 6: HYBRID ESP
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "ESP", Icon = "radar" })
-
 local secESP = T_ESP:Section({ Title = "Hybrid Detection ESP", Opened = true })
 secESP:Toggle({ Title="Enable ESP", Value=false, Callback=function(v)
     State.ESP.active = v
@@ -962,43 +983,26 @@ secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=30
 
 local secESPColor = T_ESP:Section({ Title = "🎨 ESP Colors", Opened = false })
 secESPColor:Dropdown({ Title="Normal Tracer", Values={"Hijau", "Merah", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"}, Value="Hijau", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_N = colorMap[v] end end })
-secESPColor:Dropdown({ Title="Suspect (Map Blocker)", Values={"Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam", "Crimson"}, Value="Crimson", Callback=function(v) if colorMap[v] then State.ESP.boxColor_S = colorMap[v]; State.ESP.tracerColor_S = colorMap[v] end end })
-secESPColor:Dropdown({ Title="Glitch Accessory", Values={"Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.boxColor_G = colorMap[v]; State.ESP.tracerColor_G = colorMap[v] end end })
-secESPColor:Dropdown({ Title="Text/Name", Values={"Putih", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Hitam"}, Value="Putih", Callback=function(v) if colorMap[v] then State.ESP.nameColor = colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: UTILITY / SECURITY
+--  TAB 7: SECURITY
 -- ══════════════════════════════════════════════════════════════
-local T_SEC = Window:Tab({ Title = "Utility/Security", Icon = "shield" })
+local T_SEC = Window:Tab({ Title = "Security", Icon = "shield" })
 
 local secProt = T_SEC:Section({ Title = "Protection", Opened = true })
 secProt:Toggle({ Title="Anti Void", Desc="Otomatis TP ke atas jika jatuh keluar map", Value=false, Callback=function(v)
     if v then
         State.Security.voidConn = TrackC(RS.Heartbeat:Connect(function()
-            local hrp = getRoot(); if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then hrp.Velocity = Vector3.zero; hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0); notify("Anti Void", "Jatuh ke void! Diselamatkan.", 2) end
+            local hrp = getRoot(); if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then hrp.Velocity = Vector3.zero; hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0); notify("Anti Void", "Diselamatkan dari Void!", 2) end
         end))
         notify("Anti Void","✅ Active", 2)
     else
         if State.Security.voidConn then State.Security.voidConn:Disconnect(); State.Security.voidConn=nil end
-        notify("Anti Void","❌ Disabled", 2)
     end
 end})
-secProt:Toggle({ Title="Anti Fall (No Fall Damage)", Desc="Memblokir kecepatan jatuh / fall damage", Value=false, Callback=function(v)
+secProt:Toggle({ Title="Anti-AFK (Auto Active)", Desc="Mencegah kick 20 menit dari Roblox", Value=true, Callback=function(v)
     if v then
-        State.Security.fallConn = TrackC(RS.Heartbeat:Connect(function()
-            local hrp = getRoot(); if hrp and hrp.Velocity.Y < -30 then hrp.Velocity = Vector3.new(hrp.Velocity.X, -10, hrp.Velocity.Z) end
-        end))
-        notify("Anti Fall","✅ Active", 2)
-    else
-        if State.Security.fallConn then State.Security.fallConn:Disconnect(); State.Security.fallConn=nil end
-        notify("Anti Fall","❌ Disabled", 2)
-    end
-end})
-secProt:Toggle({ Title="Anti-AFK", Desc="Mencegah kick 20 menit dari Roblox (Otomatis berjalan!)", Value=true, Callback=function(v)
-    if v then
-        if not State.Security.afkConn then
-            State.Security.afkConn = TrackC(LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); task.wait(1) end))
-        end
+        if not State.Security.afkConn then State.Security.afkConn = TrackC(LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); task.wait(1) end)) end
         notify("Anti-AFK","✅ Active", 2)
     else
         if State.Security.afkConn then State.Security.afkConn:Disconnect(); State.Security.afkConn=nil end
@@ -1013,115 +1017,159 @@ secProt:Button({ Title="Stuck Fix", Desc="Lepaskan karakter jika nyangkut / glit
 end})
 
 local secSrv = T_SEC:Section({ Title = "Server & Network Tools", Opened = true })
-secSrv:Toggle({ Title="Auto Rejoin", Desc="Otomatis rejoin saat terdeteksi koneksi putus/kick", Value=false, Callback=function(v)
+secSrv:Toggle({ Title="Auto Rejoin", Desc="Otomatis rejoin saat kick", Value=false, Callback=function(v)
     if v then
         State.Security.arConn = TrackC(CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
-            if child.Name == "ErrorPrompt" then
-                notify("Auto Rejoin", "Terputus! Rejoining...", 3)
-                TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
-            end
+            if child.Name == "ErrorPrompt" then notify("Auto Rejoin", "Terputus! Rejoining...", 3); TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end
         end))
     else
         if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn=nil end
     end
 end})
-secSrv:Button({ Title="Rejoin Same Server", Desc="Masuk kembali ke server yang SAMA", Callback=function() 
-    notify("Rejoin", "🔄 Rejoining Same Server...", 2)
-    TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) 
-end})
-secSrv:Button({ Title="Low Player Server", Desc="Server Hop ke server sepi (Butuh Executor Support)", Callback=function() 
+secSrv:Button({ Title="Rejoin Same Server", Callback=function() notify("Rejoin", "🔄 Rejoining Same Server...", 2); TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end})
+secSrv:Button({ Title="Low Player Server", Desc="Server Hop", Callback=function() 
     notify("Server Hop", "Mencari server sepi...", 2)
     pcall(function()
-        local Http = game:GetService("HttpService")
-        local req = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+        local req = (syn and syn.request) or (http and http.request) or http_request or request
         if req then
             local res = req({Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100", Method = "GET"})
             if res.StatusCode == 200 then
-                local body = Http:JSONDecode(res.Body)
+                local body = HttpService:JSONDecode(res.Body)
                 if body and body.data then
-                    for _, v in ipairs(body.data) do
-                        if v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); return end
-                    end
+                    for _, v in ipairs(body.data) do if v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); return end end
                 end
             end
         end
-        notify("Server Hop", "Gagal (Executor API kurang / Server penuh)", 3)
     end)
 end})
 
--- Ping Spike Alert
+-- True Ping Spike Alert (Solusi C)
 task.spawn(function()
-    local lastSpike = 0
+    local pingHistory = {}
+    local lastAlert = 0
     while getgenv()._XKID_RUNNING do
-        task.wait(2)
+        task.wait(1)
         pcall(function()
-            local ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
-            if ping > 250 and (tick() - lastSpike > 10) then
-                lastSpike = tick()
-                notify("⚠ Ping Spike Alert", "Koneksi tidak stabil: " .. ping .. " ms", 3)
+            local currentPing = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
+            if currentPing > 0 then
+                table.insert(pingHistory, currentPing)
+                if #pingHistory > 20 then table.remove(pingHistory, 1) end
+                
+                local sum = 0
+                for _, p in ipairs(pingHistory) do sum = sum + p end
+                local avgPing = sum / #pingHistory
+                
+                -- Jika ping loncat 150ms+ dari rata-rata (dan lebih dari 200)
+                if currentPing >= avgPing + 150 and currentPing > 200 then
+                    if tick() - lastAlert > 60 then -- Cooldown 1 menit agar tidak spam
+                        lastAlert = tick()
+                        notify("⚠ Ping Spike Alert", string.format("Lonjakan! Avg: %d ms | Now: %d ms", math.floor(avgPing), currentPing), 4)
+                    end
+                end
             end
         end)
     end
 end)
 
 local secPerf = T_SEC:Section({ Title = "Performance", Opened = true })
-secPerf:Button({ Title="FPS Boost Advance", Desc="Menghapus semua tekstur, shadow, material, & partikel", Callback=function() 
-    settings().Rendering.QualityLevel = 1
-    Lighting.GlobalShadows = false
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic; v.Reflectance = 0
-        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") then v.Enabled = false; v.Transparency = 1 end
-    end
-    notify("FPS Boost", "Advanced Boost Activated!", 2)
-end})
+local advCache = {mats={}, texs={}, shadows=true, level=10}
 
-local antiLag = { mats={}, texs={}, shadows=true }
-secPerf:Toggle({ Title="Anti Lag Mode (Simple)", Desc="Remove textures & shadows (bisa di-reset)", Value=false, Callback=function(v)
-    State.Security.antiLag = v
+secPerf:Toggle({ Title="FPS Boost Advance", Desc="Hapus semua tekstur/partikel map", Value=false, Callback=function(v) 
     if v then
-        antiLag.shadows=Lighting.GlobalShadows; Lighting.GlobalShadows=false
-        for _,obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("BasePart") then antiLag.mats[obj]=obj.Material; obj.Material=Enum.Material.SmoothPlastic
-            elseif obj:IsA("Texture") or obj:IsA("Decal") then antiLag.texs[obj]=obj.Parent; obj.Parent=nil end
+        pcall(function() advCache.level = settings().Rendering.QualityLevel; settings().Rendering.QualityLevel = 1 end)
+        advCache.shadows = Lighting.GlobalShadows; Lighting.GlobalShadows = false
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic
+            elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end
         end
-        notify("Anti Lag","✅ Active", 2)
+        notify("FPS Boost", "✅ Advanced Boost ON", 2)
     else
-        Lighting.GlobalShadows=antiLag.shadows
-        for obj,mat in pairs(antiLag.mats) do if obj and obj.Parent then obj.Material=mat end end
-        for obj,par in pairs(antiLag.texs) do if obj and par and par.Parent then obj.Parent=par end end
-        antiLag.mats={}; antiLag.texs={}
+        pcall(function() settings().Rendering.QualityLevel = advCache.level end)
+        Lighting.GlobalShadows = advCache.shadows
+        for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end
+        for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end
+        advCache.mats={}; advCache.texs={}
+        notify("FPS Boost", "❌ Boost OFF", 2)
     end
 end})
 
 local secCameraLock = T_SEC:Section({ Title = "🔒 Camera Lock", Opened = true })
-secCameraLock:Toggle({ Title="Shift Lock", Desc="Lock character rotation to camera (Mobile Ready)", Value=false, Callback=function(v) toggleShiftLock(v) end })
+secCameraLock:Toggle({ Title="Shift Lock", Value=false, Callback=function(v) toggleShiftLock(v) end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 8: SETTINGS
 -- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
+
+local secCfg = T_SET:Section({ Title = "Config System", Opened = true })
+local cfgName = "XKID_Config"
+secCfg:Input({ Title = "Config Name", Default = "XKID_Config", Callback = function(v) cfgName = v end })
+secCfg:Button({ Title="💾 Save Config", Callback=function()
+    pcall(function()
+        if makefolder and writefile then
+            if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end
+            local data = { Move = State.Move, ESP = { active=State.ESP.active, tracerMode=State.ESP.tracerMode, maxDrawDistance=State.ESP.maxDrawDistance } }
+            writefile("XKID_HUB/"..cfgName..".json", HttpService:JSONEncode(data))
+            notify("Config", "✅ Berhasil disimpan: "..cfgName, 2)
+        else notify("Config", "❌ Executor tidak support Save!", 2) end
+    end)
+end})
+secCfg:Button({ Title="📂 Load Config", Callback=function()
+    pcall(function()
+        if isfile and readfile and isfile("XKID_HUB/"..cfgName..".json") then
+            local data = HttpService:JSONDecode(readfile("XKID_HUB/"..cfgName..".json"))
+            if data then 
+                if data.Move then State.Move.ws = data.Move.ws; State.Move.jp = data.Move.jp; State.Move.flyS = data.Move.flyS end
+                if data.ESP then State.ESP.tracerMode = data.ESP.tracerMode; State.ESP.maxDrawDistance = data.ESP.maxDrawDistance end
+                notify("Config", "✅ Config Dimuat: "..cfgName, 2)
+            end
+        else notify("Config", "❌ Config tidak ditemukan!", 2) end
+    end)
+end})
+
 local secTheme = T_SET:Section({ Title = "Appearance", Opened = true })
-secTheme:Dropdown({ Title="Theme", Values=(function() local names={}; for name in pairs(WindUI:GetThemes()) do table.insert(names,name) end; table.sort(names); if not table.find(names, "Crimson") then table.insert(names, 1, "Crimson") end; return names end)(), Value="Crimson", Callback=function(selected) WindUI:SetTheme(selected) end })
+
+-- COLOR PICKER TEMA
+secTheme:ColorPicker({
+    Title = "Custom Accent Color",
+    Default = Color3.fromRGB(220, 20, 60),
+    Callback = function(color)
+        WindUI:AddTheme("XKID_Custom", {
+            Accent = color,
+            Outline = Color3.fromRGB(50, 50, 50),
+            Text = Color3.fromRGB(255, 255, 255),
+            PlaceholderText = Color3.fromRGB(178, 178, 178),
+            Background = Color3.fromRGB(30, 30, 30)
+        })
+        WindUI:SetTheme("XKID_Custom")
+        notify("Theme", "✅ Tema Kustom Diaplikasikan!", 2)
+    end
+})
+
+secTheme:Dropdown({ Title="Preset Themes", Values=(function() local names={}; for name in pairs(WindUI:GetThemes()) do table.insert(names,name) end; table.sort(names); if not table.find(names, "Crimson") then table.insert(names, 1, "Crimson") end; return names end)(), Value="Crimson", Callback=function(selected) WindUI:SetTheme(selected) end })
 secTheme:Toggle({ Title="Acrylic Background", Value=true, Callback=function() WindUI:ToggleAcrylic(not WindUI.Window.Acrylic) end })
 secTheme:Toggle({ Title="Transparent Window", Value=true, Callback=function(state) Window:ToggleTransparency(state) end })
 local currentKey = Enum.KeyCode.RightShift
 secTheme:Keybind({ Title="Toggle Key", Value=currentKey, Callback=function(v) currentKey = (typeof(v)=="EnumItem") and v or Enum.KeyCode[v]; Window:SetToggleKey(currentKey) end })
 
 -- ══════════════════════════════════════════════════════════════
---  BACKGROUND LOOPS & STARTUP
+--  BACKGROUND LOOPS (Fling / Anti-AFK)
 -- ══════════════════════════════════════════════════════════════
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
-        if (State.Fling.active or State.SoftFling.active) and getRoot() then
-            local r, brutal = getRoot(), State.Fling.active
-            local pwr = brutal and State.Fling.power or State.SoftFling.power
-            pcall(function() r.AssemblyAngularVelocity=Vector3.new(0,pwr,0); if brutal then r.AssemblyLinearVelocity=Vector3.new(pwr,pwr,pwr) end end)
+        if State.SoftFling.active and getRoot() then
+            local r = getRoot()
+            pcall(function() 
+                r.AssemblyAngularVelocity = Vector3.new(0, State.SoftFling.power, 0) 
+                -- Mikromovement agar benturan lebih "kerasa" ke target
+                r.AssemblyLinearVelocity = Vector3.new(r.AssemblyLinearVelocity.X, 50, r.AssemblyLinearVelocity.Z)
+            end)
         end
         RS.RenderStepped:Wait()
     end
 end)
 TrackC(RS.Stepped:Connect(function()
-    if (State.Move.ncp or State.Fling.active or State.SoftFling.active) and LP.Character then
+    if (State.Move.ncp or State.SoftFling.active) and LP.Character then
         for _,v in pairs(LP.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide=false end end
     end
 end))
@@ -1139,17 +1187,15 @@ task.spawn(function()
         
         if dropTime >= 5 and not State.Security.antiLag then
             notify("⚠ Crash Detection", "FPS sangat rendah! Mengaktifkan Anti-Lag otomatis...", 4)
-            -- Memaksa eksekusi FPS Boost Advance untuk penyelamatan
             pcall(function() settings().Rendering.QualityLevel = 1; Lighting.GlobalShadows = false end)
             dropTime = 0
         end
     end
 end)
 
--- Eksekusi otomatis Anti-AFK (Default Value = True, logic dijalan di awal)
+-- Eksekusi otomatis Anti-AFK
 if not State.Security.afkConn then
     State.Security.afkConn = TrackC(LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); task.wait(1) end))
 end
 
 WindUI:SetNotificationLower(true)
-print("✅ @WTF.XKID Script Loaded | Ultimate Utility & Security")
