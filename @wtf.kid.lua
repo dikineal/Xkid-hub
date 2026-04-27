@@ -13,8 +13,8 @@
   • World Control (Custom Bloom/Lighting Filters)
   • Security (Anti-AFK / Anti-Void / Stuck Fix / FPS Boost)
   • Network (Auto Rejoin, Server Hop, True Ping Spike Alert)
-  • Settings (Save/Load Config with Dropdown, Built-in Themes)
-  • UI (RGB ROG Animated OpenButton)
+  • Settings (Save/Load Config, Built-in Themes)
+  • UI (RGB ROG Animated OpenButton + Full Notifications)
   
   💎 Created by @WTF.XKID
   📱 Tiktok: @wtf.xkid
@@ -58,7 +58,6 @@ if getgenv()._XKID_LOADED then
         RS:UnbindFromRenderStep("XKIDFly")
         RS:UnbindFromRenderStep("XKIDSpec")
         RS:UnbindFromRenderStep("XKIDShiftLock")
-        RS:UnbindFromRenderStep("XKIDESP")
     end)
     task.wait(0.2) 
     collectgarbage("collect")
@@ -73,7 +72,7 @@ local START_TIME = os.time()
 
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
-        task.wait(30)
+        task.wait(60)
         collectgarbage("collect")
     end
 end)
@@ -113,12 +112,14 @@ local State = {
     Security = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, fallConn = nil, arConn = nil },
     Cinema   = { active = false },
     Avatar   = { isRefreshing = false },
-    Utility  = { chatLog = false, chatTarget = nil, chatConn = nil, chatHistory = {} },
+    Utility  = { chatLog = false, chatTarget = nil, chatHistory = {} },
     ESP = {
         active          = false,
         cache           = getgenv()._XKID_ESP_CACHE,
         tracerMode      = "Bottom",
         maxDrawDistance = 300,
+        showDistance    = true,
+        showNickname    = true,
         highlightMode   = false,
         boxColor_N      = Color3.fromRGB(0, 255, 150),
         boxColor_S      = Color3.fromRGB(220, 20, 60),
@@ -302,7 +303,7 @@ local function refreshCharacter()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  HYBRID ESP ENGINE (Drawing API + Highlight)
+--  HYBRID ESP ENGINE (KODE ORIGINAL DIKEMBALIKAN 100%)
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -357,21 +358,18 @@ task.spawn(function()
     end
 end)
 
-RS:BindToRenderStep("XKIDESP", Enum.RenderPriority.Camera.Value + 1, function()
+TrackC(RS.RenderStepped:Connect(function()
     if not State.ESP.active then return end
     local myHrp = getCharRoot(LP.Character)
-    if not myHrp then return end
     local center = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LP then
-            local char = player.Character
-            local hrp = getCharRoot(char)
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if not hrp or not hum then clearPlayerCache(player); continue end
+            local char, hrp, hum = player.Character, getCharRoot(player.Character), player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+            if not char or not hrp or not hum then clearPlayerCache(player); continue end
             
             initPlayerCache(player); local c = State.ESP.cache[player]
-            local active = hum.Health > 0
+            local active = hum.Health > 0 and myHrp
             local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
             
             if not active or dist > State.ESP.maxDrawDistance then
@@ -386,7 +384,7 @@ RS:BindToRenderStep("XKIDESP", Enum.RenderPriority.Camera.Value + 1, function()
             local isSus, isGlitch = c.isSuspect, c.isGlitch
             local useHighlight = isSus or isGlitch or State.ESP.highlightMode
             
-            -- Show Distance & Name selalu aktif (otomatis)
+            -- Show Distance & Name selalu aktif
             local txt = player.DisplayName .. "\n[" .. math.floor(dist) .. "m]"
             if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
             
@@ -415,19 +413,18 @@ RS:BindToRenderStep("XKIDESP", Enum.RenderPriority.Camera.Value + 1, function()
                     for i=1, 4 do c.boxLines[i].Color = boxColor; c.boxLines[i].Visible = true end
                 end
                 if not c.hl or c.hl.Parent ~= char then
-                    pcall(function() if c.hl then c.hl:Destroy() end end)
-                    pcall(function() c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end)
+                    if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
                 end
-                if c.hl then c.hl.FillColor = boxColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true end
+                c.hl.FillColor = boxColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true
             else
                 for _, l in ipairs(c.boxLines) do l.Visible = false end; if c.hl then c.hl.Enabled = false end
             end
         end
     end
-end)
+end))
 
 -- ══════════════════════════════════════════════════════════════
---  FLY ENGINE (MOMENTUM + SOFT LANDING ANIMATION)
+--  FLY ENGINE (MOMENTUM + SOFT LANDING)
 -- ══════════════════════════════════════════════════════════════
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
 local flyVel = Vector3.zero
@@ -474,7 +471,7 @@ local function toggleFly(v)
         return
     end
     local hrp = getRoot(); local hum = getHum()
-    if not hrp or not hum then return end
+    if not hrp or not hum then notify("Error", "Gagal menyalakan fly!", 2); return end
     State.Fly.active = true; hum.PlatformStand = true; flyVel = Vector3.zero
     State.Fly.bv = Instance.new("BodyVelocity", hrp); State.Fly.bv.MaxForce = Vector3.new(9e9,9e9,9e9); State.Fly.bv.Velocity = Vector3.zero
     State.Fly.bg = Instance.new("BodyGyro", hrp); State.Fly.bg.MaxTorque = Vector3.new(9e9,9e9,9e9); State.Fly.bg.P = 50000
@@ -513,8 +510,8 @@ local function toggleFly(v)
                 targetVel = Vector3.zero
                 flyVel = flyVel:Lerp(targetVel, 0.1)
             else
-                -- Turun perlahan agar animasi jatuh tetap aktif tapi tidak nabrak keras
-                targetVel = Vector3.new(0, -0.8, 0)
+                -- Turun SANGAT perlahan agar animasi jatuh mulus
+                targetVel = Vector3.new(0, -0.8, 0) 
                 flyVel = flyVel:Lerp(targetVel, 0.08)
             end
         end
@@ -849,7 +846,7 @@ T_HOME:Section({ Title = "🔗 Discord", Opened = true }):Button({
     end
 })
 
-local secStatus = T_HOME:Section({ Title = "📊 Live Monitor", Opened = true })
+local secStatus = T_HOME:Section({ Title = "📊 Live System Monitor", Opened = true })
 local srvLabel = secStatus:Paragraph({ Title = "🌐 Server Info", Desc = "Memuat..." })
 local netLabel = secStatus:Paragraph({ Title = "⚡ Network & Perf", Desc = "Memuat..." })
 
@@ -869,42 +866,56 @@ task.spawn(function()
     end
 end)
 
--- Unified stats loop
+-- Unified stats loop (Ganda Pcall untuk Anti-Freeze)
 local fpsSamples = {}
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
-        task.wait(0.5)
-        local dt = task.wait()
-        table.insert(fpsSamples, dt)
-        if #fpsSamples > 30 then table.remove(fpsSamples, 1) end
+        task.wait(1)
         
-        if srvLabel and cachedMapName then
-            local pCount = #Players:GetPlayers()
-            local mCount = Players.MaxPlayers
-            local uptime = formatTime(os.difftime(os.time(), START_TIME))
-            pcall(function() srvLabel:SetDesc(string.format("🗺️ Map: %s\n👥 Pemain: %d/%d\n⏳ Uptime: %s", cachedMapName, pCount, mCount, uptime)) end)
-        end
+        pcall(function()
+            if srvLabel and cachedMapName then
+                local pCount = #Players:GetPlayers()
+                local mCount = Players.MaxPlayers
+                local uptime = formatTime(os.difftime(os.time(), START_TIME))
+                local job = game.JobId:sub(1, 8).."..."
+                srvLabel:SetDesc(string.format("🗺️ Map: %s\n🆔 Job: %s\n👥 Pemain: %d/%d\n⏳ Uptime: %s", cachedMapName, job, pCount, mCount, uptime))
+            end
+        end)
         
-        if netLabel then
-            local fps = 0; if #fpsSamples > 0 then local avg = 0; for _, s in ipairs(fpsSamples) do avg = avg + s end; fps = math.floor(1 / (avg / #fpsSamples)) end
-            local ping = 0; pcall(function() ping = math.floor(game:GetService("Stats").PerformanceStats.Ping:GetValue()) end)
-            local fc = fps >= 60 and "🟢" or (fps >= 30 and "🟡" or "🔴")
-            local pc = ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")
-            local fBar = string.rep("█", math.clamp(math.floor(fps/12), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor(fps/12), 0, 10))
-            local pBar = string.rep("█", math.clamp(math.floor((200-ping)/20), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor((200-ping)/20), 0, 10))
-            
-            pcall(function() netLabel:SetDesc(string.format("%s %d FPS\n[%s]\n\n%s %d ms\n[%s]", fc, fps, fBar, pc, ping, pBar)) end)
-        end
+        pcall(function()
+            if netLabel then
+                local fps = 0; if #fpsSamples > 0 then local avg = 0; for _, s in ipairs(fpsSamples) do avg = avg + s end; fps = math.floor(1 / (avg / #fpsSamples)) end
+                local ping = 0
+                
+                -- Fallback aman untuk ping
+                local s, v = pcall(function() return math.floor(game:GetService("Stats").PerformanceStats.Ping:GetValue()) end)
+                if s and v > 0 then ping = v else ping = 999 end
+                
+                local fc = fps >= 60 and "🟢" or (fps >= 30 and "🟡" or "🔴")
+                local pc = ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")
+                local fBar = string.rep("█", math.clamp(math.floor(fps/12), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor(fps/12), 0, 10))
+                local pBar = string.rep("█", math.clamp(math.floor((200-ping)/20), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor((200-ping)/20), 0, 10))
+                
+                netLabel:SetDesc(string.format("%s %d FPS\n[%s]\n\n%s %d ms\n[%s]", fc, fps, fBar, pc, ping, pBar))
+            end
+        end)
         
-        if securityLabel then
-            local afk = State.Security.afkConn and "✅ Aktif" or "⭕ Mati"
-            local lag = State.Security.antiLag and "⚡ Aktif" or "⭕ Mati"
-            local sl = State.Security.shiftLock and "🔒 Aktif" or "🔓 Mati"
-            local vd = State.Security.voidConn and "✅ Aktif" or "⭕ Mati"
-            pcall(function() securityLabel:SetDesc(string.format("⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n🕳️ Anti-Void: %s\n⚡ FPS Boost: %s", afk, sl, vd, lag)) end)
-        end
+        pcall(function()
+            if securityLabel then
+                local afk = State.Security.afkConn and "✅ Aktif" or "⭕ Mati"
+                local lag = State.Security.antiLag and "⚡ Aktif" or "⭕ Mati"
+                local sl = State.Security.shiftLock and "🔒 Aktif" or "🔓 Mati"
+                local vd = State.Security.voidConn and "✅ Aktif" or "⭕ Mati"
+                securityLabel:SetDesc(string.format("⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n🕳️ Anti-Void: %s\n⚡ FPS Boost: %s", afk, sl, vd, lag))
+            end
+        end)
     end
 end)
+
+TrackC(RS.RenderStepped:Connect(function(dt)
+    table.insert(fpsSamples, dt)
+    if #fpsSamples > 30 then table.remove(fpsSamples, 1) end
+end))
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 2: AVATAR & PLAYER
@@ -915,18 +926,19 @@ T_AV:Section({ Title = "🔄 Avatar Refresh", Opened = true }):Button({ Title = 
 T_AV:Section({ Title = "🔄 Avatar Refresh", Opened = true }):Button({ Title = "🔄 Refresh Character", Desc = "Reload tanpa kill", Callback = function() refreshCharacter() end })
 
 local secMov = T_AV:Section({ Title = "🏃 Movement", Opened = true })
-secMov:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
-secMov:Slider({ Title = "Jump Power", Step = 1, Value = { Min = 50, Max = 500, Default = 50 }, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end end })
+secMov:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end; notify("Gerak", "Speed jadi "..v, 2) end })
+secMov:Slider({ Title = "Jump Power", Step = 1, Value = { Min = 50, Max = 500, Default = 50 }, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end; notify("Gerak", "Loncat jadi "..v, 2) end })
 secMov:Toggle({ Title = "🦘 Infinite Jump", Value = false, Callback = function(v)
     if v then State.Move.infJ = TrackC(UIS.JumpRequest:Connect(function() if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end end))
     else if State.Move.infJ then State.Move.infJ:Disconnect(); State.Move.infJ = nil end end
+    notify("Gerak", v and "Inf Jump Aktif 🦘" or "Inf Jump Mati", 2)
 end})
 
 local secAbi = T_AV:Section({ Title = "⚡ Abilities", Opened = true })
 secAbi:Toggle({ Title = "✈️ Fly", Value = false, Callback = function(v) toggleFly(v) end })
-secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = v end })
-secAbi:Toggle({ Title = "👻 NoClip", Value = false, Callback = function(v) State.Move.ncp = v end })
-secAbi:Toggle({ Title = "💫 Soft Fling", Value = false, Callback = function(v) State.SoftFling.active = v; State.Move.ncp = v end })
+secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = v; notify("Fly", "Speed terbang: "..v, 2) end })
+secAbi:Toggle({ Title = "👻 NoClip", Value = false, Callback = function(v) State.Move.ncp = v; notify("Kemampuan", v and "Noclip Tembus Dinding 🔥" or "Noclip mati", 2) end })
+secAbi:Toggle({ Title = "💫 Soft Fling", Value = false, Callback = function(v) State.SoftFling.active = v; State.Move.ncp = v; notify("Fling", v and "Soft Fling siap nabrak 💫" or "Fling mati", 2) end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 3: TELEPORT
@@ -1017,7 +1029,7 @@ secFC:Toggle({ Title = "Freecam", Value = false, Callback = function(v)
         Cam.CameraType = Enum.CameraType.Custom; notify("Freecam", "Freecam mati 👁️", 2)
     end
 end})
-secFC:Slider({ Title = "Speed", Step = 0.5, Value = {Min = 1, Max = 20, Default = 3}, Callback = function(v) FC.speed = v end })
+secFC:Slider({ Title = "Speed", Step = 0.5, Value = {Min = 1, Max = 20, Default = 3}, Callback = function(v) FC.speed = v; notify("Freecam", "Speed diubah: "..v, 2) end })
 
 local secSP = T_CAM:Section({ Title = "👁️ Spectate", Opened = true })
 local specDropOpts = getDisplayNames()
@@ -1028,11 +1040,11 @@ local specDropdown = secSP:Dropdown({ Title = "Target", Values = specDropOpts, C
         if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
             local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ(); Spec.orbitYaw = math.deg(ry); Spec.orbitPitch = 20; Spec.fpYaw = math.deg(ry)
         end
-        notify("Spectate", "Target: "..p.DisplayName, 2)
+        notify("Spectate", "Target diset: "..p.DisplayName, 2)
     end
 end})
 secSP:Button({ Title = "🔄 Refresh", Callback = function()
-    specDropOpts = getDisplayNames(); pcall(function() specDropdown:Refresh(specDropOpts, true) end)
+    specDropOpts = getDisplayNames(); pcall(function() specDropdown:Refresh(specDropOpts, true) end); notify("Spectate", "List diperbarui!", 2)
 end})
 secSP:Toggle({ Title = "Spectate ON", Value = false, Callback = function(v)
     Spec.active = v
@@ -1045,7 +1057,7 @@ secSP:Toggle({ Title = "Spectate ON", Value = false, Callback = function(v)
         stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov; notify("Spectate", "Selesai ✌️", 2)
     end
 end})
-secSP:Toggle({ Title = "🎯 First Person", Value = false, Callback = function(v) Spec.mode = v and "first" or "third" end })
+secSP:Toggle({ Title = "🎯 First Person", Value = false, Callback = function(v) Spec.mode = v and "first" or "third"; notify("Spectate", v and "POV Orang Pertama" or "POV Orang Ketiga", 2) end })
 secSP:Slider({ Title = "Jarak", Step = 1, Value = {Min = 3, Max = 30, Default = 8}, Callback = function(v) Spec.dist = v end })
 
 -- ══════════════════════════════════════════════════════════════
@@ -1091,46 +1103,48 @@ local function getEff(className)
     for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" and v:IsA(className) then return v end end
     local e = Instance.new(className); e.Name = "_XKID_FILTER"; e.Parent = Lighting; return e
 end
-secAtmos:Slider({ Title = "Brightness", Step = 0.1, Value = {Min = 0, Max = 10, Default = 1}, Callback = function(v) Lighting.Brightness = v end })
-secAtmos:Slider({ Title = "Exposure", Step = 0.1, Value = {Min = -5, Max = 5, Default = 0}, Callback = function(v) Lighting.ExposureCompensation = v end })
-secAtmos:Slider({ Title = "ClockTime", Step = 0.1, Value = {Min = 0, Max = 24, Default = 14}, Callback = function(v) Lighting.ClockTime = v end })
-secAtmos:Slider({ Title = "Contrast", Step = 0.1, Value = {Min = -2, Max = 2, Default = 0}, Callback = function(v) getEff("ColorCorrectionEffect").Contrast = v end })
-secAtmos:Slider({ Title = "Bloom", Step = 0.1, Value = {Min = 0, Max = 5, Default = 0}, Callback = function(v) getEff("BloomEffect").Intensity = v end })
+secAtmos:Slider({ Title = "Brightness", Step = 0.1, Value = {Min = 0, Max = 10, Default = 1}, Callback = function(v) Lighting.Brightness = v; notify("Atmosfer", "Ubah kecerahan", 1) end })
+secAtmos:Slider({ Title = "Exposure", Step = 0.1, Value = {Min = -5, Max = 5, Default = 0}, Callback = function(v) Lighting.ExposureCompensation = v; notify("Atmosfer", "Ubah exposure", 1) end })
+secAtmos:Slider({ Title = "ClockTime", Step = 0.1, Value = {Min = 0, Max = 24, Default = 14}, Callback = function(v) Lighting.ClockTime = v; notify("Atmosfer", "Ubah waktu", 1) end })
+secAtmos:Slider({ Title = "Contrast", Step = 0.1, Value = {Min = -2, Max = 2, Default = 0}, Callback = function(v) getEff("ColorCorrectionEffect").Contrast = v; notify("Atmosfer", "Ubah contrast", 1) end })
+secAtmos:Slider({ Title = "Bloom", Step = 0.1, Value = {Min = 0, Max = 5, Default = 0}, Callback = function(v) getEff("BloomEffect").Intensity = v; notify("Atmosfer", "Ubah glow/bloom", 1) end })
 secAtmos:Button({ Title = "🔄 Reset Semua", Callback = function() applyFilter("Default") end })
 
 local secGfx = T_WO:Section({ Title = "🖥️ Graphics", Opened = false })
 local gfxMap = { [1]="Level01", [2]="Level03", [3]="Level05", [4]="Level07", [5]="Level09", [6]="Level11", [7]="Level13", [8]="Level15", [9]="Level17", [10]="Level21" }
 secGfx:Slider({ Title = "Kualitas", Step = 1, Value = {Min = 1, Max = 10, Default = 5}, Callback = function(v)
-    if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end
+    if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]]; notify("Graphics", "Quality ke "..v, 2) end) end
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: ESP
+--  TAB 6: ESP (DRAWING API ORIGINAL - WORK 100%)
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "ESP", Icon = "radar" })
 local secESP = T_ESP:Section({ Title = "Hybrid Detection ESP", Opened = true })
+
 secESP:Toggle({ Title="Enable ESP", Value=false, Callback=function(v)
     State.ESP.active = v
     if not v and getgenv()._XKID_ESP_CACHE then
         for _,c in pairs(getgenv()._XKID_ESP_CACHE) do pcall(function() c.texts.Visible=false; c.tracer.Visible=false; for _,l in ipairs(c.boxLines) do l.Visible=false end; c.hl.Enabled=false end) end
     end
-    notify("ESP", v and "✅ ESP Active (Name & Distance Auto)" or "❌ ESP Disabled", 2)
+    notify("ESP", v and "✅ ESP Aktif" or "❌ ESP Mati", 2)
 end})
-secESP:Dropdown({ Title="Tracer Mode", Values={"Bottom","Center","Mouse","OFF"}, Value="Bottom", Callback=function(v) State.ESP.tracerMode=v end })
-secESP:Toggle({ Title="Highlight Mode (All Players)", Desc="Enable box & highlight for ALL players", Value=false, Callback=function(v) State.ESP.highlightMode=v end })
-secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
+
+secESP:Dropdown({ Title="Tracer Mode", Values={"Bottom","Center","Mouse","OFF"}, Value="Bottom", Callback=function(v) State.ESP.tracerMode=v; notify("ESP", "Tracer: "..v, 2) end })
+secESP:Toggle({ Title="Highlight Mode (All Players)", Desc="Enable box & highlight for ALL players", Value=false, Callback=function(v) State.ESP.highlightMode=v; notify("ESP", v and "Highlight Semua ON" or "Highlight Semua OFF", 2) end })
+secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300; notify("ESP", "Jarak render: "..v.."m", 2) end })
 
 local secESPColor = T_ESP:Section({ Title = "🎨 ESP Colors", Opened = false })
-secESPColor:Dropdown({ Title="Normal Player Color", Values={"Hijau", "Merah", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"}, Value="Hijau", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_N = colorMap[v] end end })
-secESPColor:Dropdown({ Title="Suspect Color (Glitcher)", Values={"Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam", "Crimson"}, Value="Crimson", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_S = colorMap[v]; State.ESP.boxColor_S = colorMap[v] end end })
-secESPColor:Dropdown({ Title="Large Glitch Acc Color", Values={"Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v]; State.ESP.boxColor_G = colorMap[v] end end })
+secESPColor:Dropdown({ Title="Normal Player Color", Values={"Hijau", "Merah", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"}, Value="Hijau", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_N = colorMap[v] end; notify("Color", "Warna normal: "..v, 2) end })
+secESPColor:Dropdown({ Title="Suspect Color (Glitcher)", Values={"Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam", "Crimson"}, Value="Crimson", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_S = colorMap[v]; State.ESP.boxColor_S = colorMap[v] end; notify("Color", "Warna suspect: "..v, 2) end })
+secESPColor:Dropdown({ Title="Large Glitch Acc Color", Values={"Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v]; State.ESP.boxColor_G = colorMap[v] end; notify("Color", "Warna glitch: "..v, 2) end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 7: UTILITY 
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "smartphone" })
 
--- Chat Logger
+-- Chat Logger (Dual Listener)
 local secChat = T_UTIL:Section({ Title = "💬 Chat Logger", Opened = true })
 secChat:Toggle({ Title = "Chat Log ON/OFF", Value = false, Callback = function(v)
     State.Utility.chatLog = v
@@ -1158,12 +1172,11 @@ local chatTargetDropdown = secChat:Dropdown({
 })
 
 secChat:Button({ Title = "🔄 Refresh List", Callback = function()
-    pcall(function() chatTargetDropdown:Refresh(getDisplayNames(), true) end)
+    pcall(function() chatTargetDropdown:Refresh(getDisplayNames(), true) end); notify("Chat Log", "List target diupdate", 2)
 end})
 secChat:Button({ Title = "🗑️ Clear Log", Callback = function()
     State.Utility.chatHistory = {}
-    pcall(function() chatLogPanel:SetDesc("Menunggu chat...") end)
-    notify("Chat Log", "Log dihapus", 2)
+    pcall(function() chatLogPanel:SetDesc("Menunggu chat...") end); notify("Chat Log", "Log dibersihkan", 2)
 end})
 
 local secMisc = T_UTIL:Section({ Title = "🛠️ Misc Utility", Opened = true })
@@ -1184,15 +1197,19 @@ secProt:Toggle({ Title = "🕳️ Anti Void", Value = false, Callback = function
             local hrp = getRoot()
             if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then hrp.Velocity = Vector3.zero; hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0); notify("Anti Void", "Terselamatkan dari void!", 2) end
         end))
+        notify("Protection", "Anti Void nyala", 2)
     else
         if State.Security.voidConn then State.Security.voidConn:Disconnect(); State.Security.voidConn = nil end
+        notify("Protection", "Anti Void mati", 2)
     end
 end})
 secProt:Toggle({ Title = "⏰ Anti AFK", Value = true, Callback = function(v)
     if v then
         if not State.Security.afkConn then State.Security.afkConn = TrackC(LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); task.wait(1) end)) end
+        notify("Protection", "Anti AFK nyala", 2)
     else
         if State.Security.afkConn then State.Security.afkConn:Disconnect(); State.Security.afkConn = nil end
+        notify("Protection", "Anti AFK mati", 2)
     end
 end})
 secProt:Button({ Title = "🔧 Stuck Fix", Callback = function()
@@ -1215,12 +1232,14 @@ secSrv:Toggle({ Title = "🔄 Auto Rejoin", Value = false, Callback = function(v
                 if tick() - lastHb > 15 then notify("Auto Rejoin", "Koneksi putus, rejoin...", 3); task.wait(2); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end); break end
             end
         end)
+        notify("Server", "Auto Rejoin siaga", 2)
     else
         if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end
         if State.Security.arFallback then State.Security.arFallback:Disconnect(); State.Security.arFallback = nil end
+        notify("Server", "Auto Rejoin mati", 2)
     end
 end})
-secSrv:Button({ Title = "🔁 Rejoin", Callback = function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end })
+secSrv:Button({ Title = "🔁 Rejoin", Callback = function() notify("Rejoin", "Masuk ulang server sama...", 2); TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end })
 secSrv:Button({ Title = "🏃 Server Hop", Callback = function()
     notify("Server Hop", "Nyari server sepi...", 2)
     pcall(function()
@@ -1237,7 +1256,7 @@ end})
 
 local secPerf = T_SEC:Section({ Title = "⚡ Performance", Opened = true })
 local advCache = {mats={}, texs={}, shadows=true, level=10, brightness=0, clockTime=0, fogEnd=0}
-secPerf:Slider({ Title="FPS Capper", Desc="Buka batas FPS", Step=5, Value={Min=30, Max=240, Default=60}, Callback=function(v) pcall(function() setfpscap(v) end) end})
+secPerf:Slider({ Title="FPS Capper", Desc="Buka batas FPS", Step=5, Value={Min=30, Max=240, Default=60}, Callback=function(v) pcall(function() setfpscap(v) end); notify("Perf", "Batas FPS: "..v, 2) end})
 secPerf:Toggle({ Title = "FPS Boost (No Textures)", Value = false, Callback = function(v)
     State.Security.antiLag = v
     if v then
@@ -1305,13 +1324,13 @@ local configDropdown = secCfg:Dropdown({ Title = "📂 Load Config", Values = ge
         end
     end)
 end})
-secCfg:Button({ Title = "🔄 Refresh List", Callback = function() pcall(function() configDropdown:Refresh(getConfigList(), true) end) end })
+secCfg:Button({ Title = "🔄 Refresh List", Callback = function() pcall(function() configDropdown:Refresh(getConfigList(), true) end); notify("Config", "List diupdate!", 2) end })
 
 local secTheme = T_SET:Section({ Title = "🎨 Theme", Opened = true })
-secTheme:Dropdown({ Title = "Theme", Values = (function() local n = {}; for name in pairs(WindUI:GetThemes()) do table.insert(n, name) end; table.sort(n); if not table.find(n, "Crimson") then table.insert(n, 1, "Crimson") end; return n end)(), Value = "Crimson", Callback = function(s) pcall(function() WindUI:SetTheme(s) end) end })
-secTheme:Toggle({ Title = "Acrylic", Value = true, Callback = function() pcall(function() WindUI:ToggleAcrylic(not WindUI.Window.Acrylic) end) end })
-secTheme:Toggle({ Title = "Transparent", Value = true, Callback = function(s) pcall(function() Window:ToggleTransparency(s) end) end })
-secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callback = function(v) Window:SetToggleKey(typeof(v) == "EnumItem" and v or Enum.KeyCode[v]) end })
+secTheme:Dropdown({ Title = "Theme", Values = (function() local n = {}; for name in pairs(WindUI:GetThemes()) do table.insert(n, name) end; table.sort(n); if not table.find(n, "Crimson") then table.insert(n, 1, "Crimson") end; return n end)(), Value = "Crimson", Callback = function(s) pcall(function() WindUI:SetTheme(s) end); notify("Theme", "Ganti ke "..s, 2) end })
+secTheme:Toggle({ Title = "Acrylic", Value = true, Callback = function() pcall(function() WindUI:ToggleAcrylic(not WindUI.Window.Acrylic) end); notify("Theme", "Acrylic ditoggle", 2) end })
+secTheme:Toggle({ Title = "Transparent", Value = true, Callback = function(s) pcall(function() Window:ToggleTransparency(s) end); notify("Theme", "Transparansi: "..tostring(s), 2) end })
+secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callback = function(v) Window:SetToggleKey(typeof(v) == "EnumItem" and v or Enum.KeyCode[v]); notify("Keybind", "Tombol menu diubah", 2) end })
 
 -- ══════════════════════════════════════════════════════════════
 --  BACKGROUND LOOPS
