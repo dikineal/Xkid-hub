@@ -13,8 +13,8 @@
   • World Control (Custom Bloom/Lighting Filters)
   • Security (Anti-AFK / Anti-Void / Stuck Fix / FPS Boost)
   • Network (Auto Rejoin, Server Hop, True Ping Spike Alert)
-  • Settings (Save/Load Config, Built-in Themes)
-  • UI (RGB ROG Animated OpenButton + Full Notifications)
+  • Settings (Save/Load Config with Dropdown, Built-in Themes)
+  • UI (RGB ROG Animated OpenButton)
   
   💎 Created by @WTF.XKID
   📱 Tiktok: @wtf.xkid
@@ -58,6 +58,7 @@ if getgenv()._XKID_LOADED then
         RS:UnbindFromRenderStep("XKIDFly")
         RS:UnbindFromRenderStep("XKIDSpec")
         RS:UnbindFromRenderStep("XKIDShiftLock")
+        RS:UnbindFromRenderStep("XKIDESP")
     end)
     task.wait(0.2) 
     collectgarbage("collect")
@@ -112,14 +113,12 @@ local State = {
     Security = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, fallConn = nil, arConn = nil },
     Cinema   = { active = false },
     Avatar   = { isRefreshing = false },
-    Utility  = { chatLog = false, chatTarget = nil, chatHistory = {} },
+    Utility  = { chatLog = false, chatTarget = nil, chatConn = nil, chatHistory = {} },
     ESP = {
         active          = false,
         cache           = getgenv()._XKID_ESP_CACHE,
         tracerMode      = "Bottom",
         maxDrawDistance = 300,
-        showDistance    = true,
-        showNickname    = true,
         highlightMode   = false,
         boxColor_N      = Color3.fromRGB(0, 255, 150),
         boxColor_S      = Color3.fromRGB(220, 20, 60),
@@ -303,14 +302,26 @@ local function refreshCharacter()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  HYBRID ESP ENGINE (KODE ORIGINAL DIKEMBALIKAN 100%)
+--  HYBRID ESP ENGINE (Optimized)
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
-    local cache = { texts=Drawing.new("Text"), tracer=Drawing.new("Line"), boxLines={}, hl=nil, isSuspect=false, isGlitch=false, reason="" }
-    cache.texts.Center = true; cache.texts.Outline = true; cache.texts.Font = 2; cache.texts.Size = 13; cache.texts.ZIndex = 2
-    cache.tracer.Thickness = 1.5; cache.tracer.ZIndex = 1
-    for i = 1, 4 do local line = Drawing.new("Line"); line.Thickness = 1.5; line.ZIndex = 1; cache.boxLines[i] = line end
+    local cache = { texts=nil, tracer=nil, boxLines={}, hl=nil, isSuspect=false, isGlitch=false, reason="" }
+    
+    pcall(function()
+        cache.texts = Drawing.new("Text")
+        if cache.texts then
+            cache.texts.Center = true; cache.texts.Outline = true; cache.texts.Font = 2; cache.texts.Size = 13; cache.texts.ZIndex = 2
+        end
+        cache.tracer = Drawing.new("Line")
+        if cache.tracer then
+            cache.tracer.Thickness = 1.5; cache.tracer.ZIndex = 1
+        end
+        for i = 1, 4 do 
+            local line = Drawing.new("Line")
+            if line then line.Thickness = 1.5; line.ZIndex = 1; cache.boxLines[i] = line end
+        end
+    end)
     State.ESP.cache[player] = cache
 end
 
@@ -319,7 +330,7 @@ local function clearPlayerCache(player)
     if c then
         pcall(function() if c.texts then c.texts:Remove() end end)
         pcall(function() if c.tracer then c.tracer:Remove() end end)
-        for _, l in ipairs(c.boxLines) do pcall(function() l:Remove() end) end
+        for _, l in ipairs(c.boxLines) do pcall(function() if l then l:Remove() end end) end
         pcall(function() if c.hl then c.hl:Destroy() end end)
         State.ESP.cache[player] = nil
     end
@@ -350,7 +361,9 @@ task.spawn(function()
                         end
                     end
                     initPlayerCache(p)
-                    State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason
+                    if State.ESP.cache[p] then
+                        State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason
+                    end
                 end
             end
         end
@@ -358,70 +371,107 @@ task.spawn(function()
     end
 end)
 
-TrackC(RS.RenderStepped:Connect(function()
+RS:BindToRenderStep("XKIDESP", Enum.RenderPriority.Camera.Value + 1, function()
     if not State.ESP.active then return end
     local myHrp = getCharRoot(LP.Character)
+    if not myHrp then return end
     local center = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LP then
-            local char, hrp, hum = player.Character, getCharRoot(player.Character), player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-            if not char or not hrp or not hum then clearPlayerCache(player); continue end
+            local char = player.Character
+            local hrp = getCharRoot(char)
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if not hrp or not hum then clearPlayerCache(player); continue end
             
             initPlayerCache(player); local c = State.ESP.cache[player]
-            local active = hum.Health > 0 and myHrp
+            if not c then continue end
+
+            local active = hum.Health > 0
             local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
             
             if not active or dist > State.ESP.maxDrawDistance then
-                c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
+                pcall(function()
+                    if c.texts then c.texts.Visible = false end
+                    if c.tracer then c.tracer.Visible = false end
+                    for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end
+                    if c.hl then c.hl.Enabled = false end
+                end)
+                continue
             end
             
             local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
             if not onScreen then
-                c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
+                pcall(function()
+                    if c.texts then c.texts.Visible = false end
+                    if c.tracer then c.tracer.Visible = false end
+                    for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end
+                    if c.hl then c.hl.Enabled = false end
+                end)
+                continue
             end
             
             local isSus, isGlitch = c.isSuspect, c.isGlitch
             local useHighlight = isSus or isGlitch or State.ESP.highlightMode
             
-            -- Show Distance & Name selalu aktif
             local txt = player.DisplayName .. "\n[" .. math.floor(dist) .. "m]"
             if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
             
-            c.texts.Text = txt
-            c.texts.Color = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
-            c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true
-            
-            if State.ESP.tracerMode ~= "OFF" or isSus or isGlitch then
-                local origin = center
-                if State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
-                elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
-                c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
-                c.tracer.Color = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); c.tracer.Visible = true
-            else c.tracer.Visible = false end
+            local cColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
+            local tColor = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N)
+            local bColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
+
+            pcall(function()
+                if c.texts then
+                    c.texts.Text = txt
+                    c.texts.Color = cColor
+                    c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45)
+                    c.texts.Visible = true
+                end
+                
+                if State.ESP.tracerMode ~= "OFF" and c.tracer then
+                    local origin = center
+                    if State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
+                    elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
+                    c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
+                    c.tracer.Color = tColor; c.tracer.Visible = true
+                elseif c.tracer then 
+                    c.tracer.Visible = false 
+                end
+            end)
             
             if useHighlight then
-                local boxColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
                 local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
                 local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
-                if topOn and botOn then
-                    local h = math.abs(top.Y - bot.Y); local w = h * 0.6
-                    local tl, tr = Vector2.new(rootPos.X - w/2, top.Y), Vector2.new(rootPos.X + w/2, top.Y)
-                    local bl, br = Vector2.new(rootPos.X - w/2, bot.Y), Vector2.new(rootPos.X + w/2, bot.Y)
-                    c.boxLines[1].From=tl; c.boxLines[1].To=tr; c.boxLines[2].From=tr; c.boxLines[2].To=br
-                    c.boxLines[3].From=br; c.boxLines[3].To=bl; c.boxLines[4].From=bl; c.boxLines[4].To=tl
-                    for i=1, 4 do c.boxLines[i].Color = boxColor; c.boxLines[i].Visible = true end
-                end
-                if not c.hl or c.hl.Parent ~= char then
-                    if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                end
-                c.hl.FillColor = boxColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true
+                pcall(function()
+                    if topOn and botOn and #c.boxLines == 4 then
+                        local h = math.abs(top.Y - bot.Y); local w = h * 0.6
+                        local tl, tr = Vector2.new(rootPos.X - w/2, top.Y), Vector2.new(rootPos.X + w/2, top.Y)
+                        local bl, br = Vector2.new(rootPos.X - w/2, bot.Y), Vector2.new(rootPos.X + w/2, bot.Y)
+                        c.boxLines[1].From=tl; c.boxLines[1].To=tr; c.boxLines[2].From=tr; c.boxLines[2].To=br
+                        c.boxLines[3].From=br; c.boxLines[3].To=bl; c.boxLines[4].From=bl; c.boxLines[4].To=tl
+                        for i=1, 4 do if c.boxLines[i] then c.boxLines[i].Color = bColor; c.boxLines[i].Visible = true end end
+                    else
+                        for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end
+                    end
+                end)
+                pcall(function()
+                    if not c.hl or c.hl.Parent ~= char then
+                        if c.hl then c.hl:Destroy() end
+                        c.hl = Instance.new("Highlight", char)
+                        c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    end
+                    if c.hl then c.hl.FillColor = bColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true end
+                end)
             else
-                for _, l in ipairs(c.boxLines) do l.Visible = false end; if c.hl then c.hl.Enabled = false end
+                pcall(function()
+                    for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end
+                    if c.hl then c.hl.Enabled = false end
+                end)
             end
         end
     end
-end))
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  FLY ENGINE (MOMENTUM + SOFT LANDING)
@@ -471,7 +521,7 @@ local function toggleFly(v)
         return
     end
     local hrp = getRoot(); local hum = getHum()
-    if not hrp or not hum then notify("Error", "Gagal menyalakan fly!", 2); return end
+    if not hrp or not hum then return end
     State.Fly.active = true; hum.PlatformStand = true; flyVel = Vector3.zero
     State.Fly.bv = Instance.new("BodyVelocity", hrp); State.Fly.bv.MaxForce = Vector3.new(9e9,9e9,9e9); State.Fly.bv.Velocity = Vector3.zero
     State.Fly.bg = Instance.new("BodyGyro", hrp); State.Fly.bg.MaxTorque = Vector3.new(9e9,9e9,9e9); State.Fly.bg.P = 50000
@@ -846,7 +896,7 @@ T_HOME:Section({ Title = "🔗 Discord", Opened = true }):Button({
     end
 })
 
-local secStatus = T_HOME:Section({ Title = "📊 Live System Monitor", Opened = true })
+local secStatus = T_HOME:Section({ Title = "📊 Live Monitor", Opened = true })
 local srvLabel = secStatus:Paragraph({ Title = "🌐 Server Info", Desc = "Memuat..." })
 local netLabel = secStatus:Paragraph({ Title = "⚡ Network & Perf", Desc = "Memuat..." })
 
@@ -868,9 +918,22 @@ end)
 
 -- Unified stats loop (Ganda Pcall untuk Anti-Freeze)
 local fpsSamples = {}
+local sharedPing = 0
+local sharedFPS = 60
+
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(1)
+        pcall(function()
+            local ping = game:GetService("Stats").PerformanceStats.Ping:GetValue()
+            if ping and ping > 0 then sharedPing = math.floor(ping) end
+        end)
+    end
+end)
+
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        task.wait(0.3)
         
         pcall(function()
             if srvLabel and cachedMapName then
@@ -884,19 +947,12 @@ task.spawn(function()
         
         pcall(function()
             if netLabel then
-                local fps = 0; if #fpsSamples > 0 then local avg = 0; for _, s in ipairs(fpsSamples) do avg = avg + s end; fps = math.floor(1 / (avg / #fpsSamples)) end
-                local ping = 0
+                local fc = sharedFPS >= 60 and "🟢" or (sharedFPS >= 30 and "🟡" or "🔴")
+                local pc = sharedPing < 100 and "🟢" or (sharedPing < 200 and "🟡" or "🔴")
+                local fBar = string.rep("█", math.clamp(math.floor(sharedFPS/12), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor(sharedFPS/12), 0, 10))
+                local pBar = string.rep("█", math.clamp(math.floor((200-sharedPing)/20), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor((200-sharedPing)/20), 0, 10))
                 
-                -- Fallback aman untuk ping
-                local s, v = pcall(function() return math.floor(game:GetService("Stats").PerformanceStats.Ping:GetValue()) end)
-                if s and v > 0 then ping = v else ping = 999 end
-                
-                local fc = fps >= 60 and "🟢" or (fps >= 30 and "🟡" or "🔴")
-                local pc = ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")
-                local fBar = string.rep("█", math.clamp(math.floor(fps/12), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor(fps/12), 0, 10))
-                local pBar = string.rep("█", math.clamp(math.floor((200-ping)/20), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor((200-ping)/20), 0, 10))
-                
-                netLabel:SetDesc(string.format("%s %d FPS\n[%s]\n\n%s %d ms\n[%s]", fc, fps, fBar, pc, ping, pBar))
+                netLabel:SetDesc(string.format("%s %d FPS\n[%s]\n\n%s %d ms\n[%s]", fc, sharedFPS, fBar, pc, sharedPing, pBar))
             end
         end)
         
@@ -915,6 +971,9 @@ end)
 TrackC(RS.RenderStepped:Connect(function(dt)
     table.insert(fpsSamples, dt)
     if #fpsSamples > 30 then table.remove(fpsSamples, 1) end
+    local sum = 0
+    for _, s in ipairs(fpsSamples) do sum = sum + s end
+    sharedFPS = math.floor(1 / (sum / #fpsSamples))
 end))
 
 -- ══════════════════════════════════════════════════════════════
@@ -955,12 +1014,12 @@ T_TP:Section({ Title = "🖱️ Click Teleport", Opened = true }):Toggle({ Title
             local m = LP:GetMouse(); local r = getRoot()
             if r and m and m.Hit then r.CFrame = m.Hit + Vector3.new(0, 3, 0) end
         end)
-        notify("Click TP", "Tool dipasang, klik map buat TP", 2)
+        notify("Click TP", "✅ Tool 'Click TP' di Backpack!", 2)
     else
         State.Teleport.clickActive = false
         if State.Teleport.clickTool then State.Teleport.clickTool:Destroy(); State.Teleport.clickTool = nil end
         if State.Teleport.clickConn then State.Teleport.clickConn:Disconnect(); State.Teleport.clickConn = nil end
-        notify("Click TP", "Tool dihapus", 2)
+        notify("Click TP", "❌ Tool dihapus", 2)
     end
 end})
 
@@ -969,16 +1028,16 @@ local tpTarget = ""
 secTP:Input({ Title = "Cari Player", Placeholder = "ketik nama...", Callback = function(v) tpTarget = v end })
 secTP:Button({ Title = "🚀 Teleport", Callback = function()
     pcall(function()
-        if tpTarget == "" then notify("Teleport", "Masukkan nama dulu!", 2); return end
-        local tp = nil
+        if tpTarget == "" then notify("Teleport", "❌ Masukkan nama player!", 2); return end
+        local targetPlayer = nil
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LP and (string.find(string.lower(p.Name), string.lower(tpTarget)) or string.find(string.lower(p.DisplayName), string.lower(tpTarget))) then tp = p; break end
+            if p ~= LP and (string.find(string.lower(p.Name), string.lower(tpTarget)) or string.find(string.lower(p.DisplayName), string.lower(tpTarget))) then targetPlayer = p; break end
         end
-        if not tp or not tp.Parent or not tp.Character then notify("Teleport", "Player gak valid!", 2); return end
-        local th = getCharRoot(tp.Character); local tm = tp.Character:FindFirstChildOfClass("Humanoid"); local mh = getRoot()
-        if not th or not tm or not mh or tm.Health <= 0 then notify("Teleport", "Gagal teleport!", 2); return end
-        mh.CFrame = th.CFrame * CFrame.new(0, 0, 3) + Vector3.new(0, 2, 0); mh.AssemblyLinearVelocity = Vector3.zero
-        notify("Teleport", "Ke "..tp.DisplayName.." 🚀", 2)
+        if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then notify("Teleport", "❌ Player tidak valid!", 2); return end
+        local tHrp, tHum, myHrp = getCharRoot(targetPlayer.Character), targetPlayer.Character:FindFirstChildOfClass("Humanoid"), getRoot()
+        if not tHrp or not tHum or not myHrp or tHum.Health <= 0 then notify("Teleport", "❌ Target mati/posisi gagal!", 2); return end
+        myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3) + Vector3.new(0, 2, 0); myHrp.AssemblyLinearVelocity = Vector3.zero
+        notify("Teleport", "✅ TP ke "..targetPlayer.DisplayName, 2)
     end)
 end})
 
@@ -1117,7 +1176,7 @@ secGfx:Slider({ Title = "Kualitas", Step = 1, Value = {Min = 1, Max = 10, Defaul
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: ESP (DRAWING API ORIGINAL - WORK 100%)
+--  TAB 6: ESP
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "ESP", Icon = "radar" })
 local secESP = T_ESP:Section({ Title = "Hybrid Detection ESP", Opened = true })
@@ -1144,7 +1203,6 @@ secESPColor:Dropdown({ Title="Large Glitch Acc Color", Values={"Orange", "Merah"
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "smartphone" })
 
--- Chat Logger (Dual Listener)
 local secChat = T_UTIL:Section({ Title = "💬 Chat Logger", Opened = true })
 secChat:Toggle({ Title = "Chat Log ON/OFF", Value = false, Callback = function(v)
     State.Utility.chatLog = v
@@ -1183,6 +1241,9 @@ local secMisc = T_UTIL:Section({ Title = "🛠️ Misc Utility", Opened = true }
 secMisc:Button({ Title = "📋 Copy JobID", Desc = "Salin ID Server untuk invite teman", Callback = function()
     pcall(function() setclipboard(game.JobId) end)
     notify("Utilitas", "JobID tersalin!", 2)
+end})
+secMisc:Slider({ Title="FPS Capper", Desc="Buka batas FPS", Step=5, Value={Min=30, Max=240, Default=60}, Callback=function(v) 
+    pcall(function() setfpscap(v) end); notify("Utilitas", "Batas FPS: "..v, 2) 
 end})
 
 -- ══════════════════════════════════════════════════════════════
@@ -1256,7 +1317,6 @@ end})
 
 local secPerf = T_SEC:Section({ Title = "⚡ Performance", Opened = true })
 local advCache = {mats={}, texs={}, shadows=true, level=10, brightness=0, clockTime=0, fogEnd=0}
-secPerf:Slider({ Title="FPS Capper", Desc="Buka batas FPS", Step=5, Value={Min=30, Max=240, Default=60}, Callback=function(v) pcall(function() setfpscap(v) end); notify("Perf", "Batas FPS: "..v, 2) end})
 secPerf:Toggle({ Title = "FPS Boost (No Textures)", Value = false, Callback = function(v)
     State.Security.antiLag = v
     if v then
