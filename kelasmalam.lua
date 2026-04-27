@@ -939,17 +939,17 @@ local Window = WindUI:CreateWindow({
     SideBarWidth= 200,
     Topbar = { Height = 44, ButtonsType = "Default" },
     OpenButton  = {
-        Title           = "XKID HUB",
+        Title           = "@WTF.XKID",
         Icon            = "ghost",
         CornerRadius    = UDim.new(1, 0),
-        StrokeThickness = 3,
+        StrokeThickness = 4,
         Enabled         = true,
         Draggable       = true,
         OnlyMobile      = false,
-        Scale           = 1,
+        Scale           = 0.75,
         Color = ColorSequence.new(
-            Color3.fromRGB(220, 20, 60),
-            Color3.fromRGB(180, 10, 40)
+            Color3.fromRGB(225, 0, 120),
+            Color3.fromRGB(0, 255, 255)
         ),
     },
 })
