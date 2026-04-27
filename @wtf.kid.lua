@@ -7,7 +7,7 @@
   ✨ Features:
   • Avatar Refresh (Fast Respawn + Refresh Character)
   • Teleport (Click TP) & Location Saver
-  • Movement (Speed / Jump / Fly / NoClip / Soft Fling Ultra)
+  • Movement (Speed / Jump / Fly Smooth / NoClip / Soft Fling Ultra)
   • Camera (Freecam / Spectate / Max Zoom Out Toggle)
   • Modern Hybrid ESP (Highlight Mode + Large Glitch Detection)
   • World Control (Custom Bloom/Lighting Filters)
@@ -69,7 +69,7 @@ getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
--- Auto garbage collection setiap 60 detik (reduced from 30)
+-- Auto garbage collection setiap 60 detik
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(60)
@@ -105,7 +105,7 @@ local lastMapCheck = 0
 -- ══════════════════════════════════════════════════════════════
 local State = {
     Move     = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
-    Fly      = { active = false, bv = nil, bg = nil, noFallConn = nil },
+    Fly      = { active = false, bv = nil, bg = nil, noFallConn = nil, _keys = {} },
     SoftFling= { active = false, power = 50000 },
     Teleport = { selectedTarget = "", clickTool = nil, clickConn = nil, clickActive = false },
     Security = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, arConn = nil, arFallback = nil },
@@ -416,25 +416,39 @@ RS:BindToRenderStep("XKIDESP", Enum.RenderPriority.Camera.Value + 1, function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  FLY ENGINE
+--  🚀 FLY ENGINE (NEW SMOOTH - INPUT SAMA KAYAK LAMA)
 -- ══════════════════════════════════════════════════════════════
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
+local flyVel = Vector3.zero
 
 local function startFlyCapture()
     local keysHeld = {}
+    -- Keyboard PC (sama kayak lama)
     table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
-        local k = inp.KeyCode; if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then keysHeld[k] = true end
+        local k = inp.KeyCode
+        if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then
+            keysHeld[k] = true
+        end
     end))
-    table.insert(flyConns, UIS.InputEnded:Connect(function(inp) keysHeld[inp.KeyCode] = false end))
+    table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
+        keysHeld[inp.KeyCode] = nil
+    end))
+    -- Touch Mobile (SAMA PERSIS kayak Fly lama)
     table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp.Position.X <= Cam.ViewportSize.X/2 then if not flyMoveTouch then flyMoveTouch = inp; flyMoveSt = inp.Position end end
+        if inp.Position.X <= Cam.ViewportSize.X/2 then
+            if not flyMoveTouch then flyMoveTouch = inp; flyMoveSt = inp.Position end
+        end
     end))
     table.insert(flyConns, UIS.TouchMoved:Connect(function(inp)
         if inp == flyMoveTouch and flyMoveSt then
-            local dx, dy = inp.Position.X - flyMoveSt.X, inp.Position.Y - flyMoveSt.Y
-            flyJoy = Vector2.new(math.abs(dx)>25 and math.clamp((dx-math.sign(dx)*25)/80,-1,1) or 0, math.abs(dy)>20 and math.clamp((dy-math.sign(dy)*20)/80,-1,1) or 0)
+            local dx = inp.Position.X - flyMoveSt.X
+            local dy = inp.Position.Y - flyMoveSt.Y
+            flyJoy = Vector2.new(
+                math.abs(dx)>25 and math.clamp((dx-math.sign(dx)*25)/80,-1,1) or 0,
+                math.abs(dy)>20 and math.clamp((dy-math.sign(dy)*20)/80,-1,1) or 0
+            )
         end
     end))
     table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
@@ -443,52 +457,114 @@ local function startFlyCapture()
     end))
     State.Fly._keys = keysHeld
 end
+
 local function stopFlyCapture()
     for _, c in ipairs(flyConns) do c:Disconnect() end
-    flyConns={}; flyMoveTouch=nil; flyMoveSt=nil; flyJoy=Vector2.zero; State.Fly._keys={}
+    flyConns = {}
+    flyMoveTouch = nil
+    flyMoveSt = nil
+    flyJoy = Vector2.zero
+    State.Fly._keys = {}
 end
+
 local function toggleFly(v)
     if not v then
-        State.Fly.active = false; stopFlyCapture(); RS:UnbindFromRenderStep("XKIDFly")
-        if State.Fly.bv then State.Fly.bv:Destroy(); State.Fly.bv=nil end
-        if State.Fly.bg then State.Fly.bg:Destroy(); State.Fly.bg=nil end
+        State.Fly.active = false
+        stopFlyCapture()
+        RS:UnbindFromRenderStep("XKIDFly")
+        pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end)
+        pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end)
+        State.Fly.bv = nil; State.Fly.bg = nil
+        flyVel = Vector3.zero
         local hum = getHum()
-        if hum then hum.PlatformStand=false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed=State.Move.ws; hum.UseJumpPower=true; hum.JumpPower=State.Move.jp end
-        if State.Fly.noFallConn then State.Fly.noFallConn:Disconnect(); State.Fly.noFallConn = nil end
-        notify("Fly","✈ Fly OFF", 2)
+        if hum then
+            hum.PlatformStand = false
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            hum.WalkSpeed = State.Move.ws
+            hum.UseJumpPower = true
+            hum.JumpPower = State.Move.jp
+        end
+        if State.Fly.noFallConn then
+            State.Fly.noFallConn:Disconnect()
+            State.Fly.noFallConn = nil
+        end
+        notify("Fly", "✈ Fly OFF", 2)
         return
     end
-    local hrp=getRoot(); local hum=getHum()
-    if not hrp or not hum then return end
-    State.Fly.active=true; hum.PlatformStand=true
-    State.Fly.bv=Instance.new("BodyVelocity",hrp); State.Fly.bv.MaxForce=Vector3.new(9e9,9e9,9e9); State.Fly.bv.Velocity=Vector3.zero
-    State.Fly.bg=Instance.new("BodyGyro",hrp); State.Fly.bg.MaxTorque=Vector3.new(9e9,9e9,9e9); State.Fly.bg.P=50000 
     
+    local hrp = getRoot()
+    local hum = getHum()
+    if not hrp or not hum then return end
+    
+    State.Fly.active = true
+    hum.PlatformStand = true
+    flyVel = Vector3.zero
+    
+    -- BodyVelocity
+    State.Fly.bv = Instance.new("BodyVelocity", hrp)
+    State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    State.Fly.bv.Velocity = Vector3.zero
+    
+    -- BodyGyro
+    State.Fly.bg = Instance.new("BodyGyro", hrp)
+    State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    State.Fly.bg.P = 50000
+    
+    -- Safety net fall damage
     if not State.Fly.noFallConn then
         State.Fly.noFallConn = TrackC(RS.Heartbeat:Connect(function()
             local r = getRoot()
-            if r and r.Velocity.Y < -30 then r.Velocity = Vector3.new(r.Velocity.X, -10, r.Velocity.Z) end
+            if r and r.Velocity.Y < -30 then
+                r.Velocity = Vector3.new(r.Velocity.X, -10, r.Velocity.Z)
+            end
         end))
     end
-
+    
     startFlyCapture()
+    
+    -- ENGINE BARU: Lerp Smooth, INPUT SAMA PERSIS
     RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value+1, function()
         if not State.Fly.active then return end
-        local r=getRoot(); if not r then return end
-        local camCF=Cam.CFrame; local spd=State.Move.flyS; local move=Vector3.zero; local keys=State.Fly._keys or {}
-        if onMobile then move = camCF.LookVector*(-flyJoy.Y) + camCF.RightVector*flyJoy.X
+        local r = getRoot()
+        if not r then return end
+        
+        local camCF = Cam.CFrame
+        local spd = State.Move.flyS
+        local move = Vector3.zero
+        local keys = State.Fly._keys or {}
+        
+        -- INPUT SAMA PERSIS KAYAK FLY LAMA
+        if onMobile then
+            move = camCF.LookVector*(-flyJoy.Y) + camCF.RightVector*flyJoy.X
         else
-            if keys[Enum.KeyCode.W] then move=move+camCF.LookVector  end
-            if keys[Enum.KeyCode.S] then move=move-camCF.LookVector  end
-            if keys[Enum.KeyCode.D] then move=move+camCF.RightVector end
-            if keys[Enum.KeyCode.A] then move=move-camCF.RightVector end
-            if keys[Enum.KeyCode.E] then move=move+Vector3.new(0,1,0) end
-            if keys[Enum.KeyCode.Q] then move=move-Vector3.new(0,1,0) end
+            if keys[Enum.KeyCode.W] then move = move + camCF.LookVector end
+            if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end
+            if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end
+            if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end
+            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) end
+            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) end
         end
-        State.Fly.bv.Velocity = move.Magnitude > 0 and move.Unit * spd or Vector3.zero
-        State.Fly.bg.CFrame   = CFrame.new(r.Position, r.Position+camCF.LookVector)
+        
+        -- LERP SMOOTH (ini yang bikin beda)
+        local targetVel
+        if move.Magnitude > 0 then
+            targetVel = move.Unit * spd
+        else
+            targetVel = Vector3.zero
+        end
+        
+        flyVel = flyVel:Lerp(targetVel, 0.08)
+        
+        if State.Fly.bv and State.Fly.bv.Parent then
+            State.Fly.bv.Velocity = flyVel
+        end
+        
+        if State.Fly.bg and State.Fly.bg.Parent then
+            State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector)
+        end
     end)
-    notify("Fly","✈ Fly Linear ON (No Fall Active)", 3)
+    
+    notify("Fly", "✈ Fly ON (Smooth)", 3)
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -714,7 +790,7 @@ local pingLabel = secStatus:Paragraph({ Title = "📡 Ping", Desc  = "--- ms" })
 local secSecurity = T_HOME:Section({ Title = "🛡️ Security Status", Opened = true })
 local securityLabel = secSecurity:Paragraph({ Title = "Protection Active", Desc  = "✅ Script Protected\n✅ Anti-Crash Enabled\n✅ Memory Optimized" })
 
--- Cache map name - update setiap 30 detik (reduced GetProductInfo spam)
+-- Cache map name - update setiap 30 detik
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         pcall(function()
@@ -790,7 +866,7 @@ secMov:Toggle({ Title = "Infinite Jump", Desc = "Jump continuously", Value = fal
 end})
 
 local secAbi = T_AV:Section({ Title = "Abilities", Opened = true })
-secAbi:Toggle({ Title = "Fly", Desc = "Fly following camera direction (Auto No-Fall Damage)", Value = false, Callback = function(v) toggleFly(v) end })
+secAbi:Toggle({ Title = "Fly (Smooth)", Desc = "Fly with smooth Lerp transition", Value = false, Callback = function(v) toggleFly(v) end })
 secAbi:Slider({ Title = "Fly Speed", Desc = "Default: 60", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = tonumber(v) or 60 end })
 secAbi:Toggle({ Title = "NoClip", Desc = "Walk through walls", Value = false, Callback = function(v) State.Move.ncp = v end })
 secAbi:Toggle({ Title = "Soft Fling", Desc = "Tabrak player lain hingga terpental", Value = false, Callback = function(v) State.SoftFling.active=v; State.Move.ncp=v end })
@@ -1319,7 +1395,6 @@ task.spawn(function()
         
         if dropTime >= 5 and not State.Security.antiLag then
             notify("⚠ Crash Detection", "FPS sangat rendah! Mengaktifkan FPS Boost otomatis...", 4)
-            -- Auto aktifkan FPS Boost
             State.Security.antiLag = true
             pcall(function() advCache.level = settings().Rendering.QualityLevel end)
             advCache.shadows = Lighting.GlobalShadows
@@ -1349,4 +1424,4 @@ task.spawn(function()
     end)
 end)
 
-print("✅ @WTF.XKID Script Loaded | Fixed Edition | All Bugs Patched")
+print("✅ @WTF.XKID Script Loaded | Smooth Fly Edition | All Bugs Patched")
