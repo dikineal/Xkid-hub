@@ -8,12 +8,12 @@
   • Avatar Refresh (Fast Respawn + Refresh Character)
   • Teleport (Click TP) & Location Saver
   • Movement (Speed / Jump / Fly / NoClip / Soft Fling Ultra)
-  • Camera (Freecam / Spectate / Aim Lock FOV)
+  • Camera (Freecam / Spectate / Max Zoom Out)
   • Modern Hybrid ESP (Highlight Mode + Large Glitch Detection)
-  • World Control (Custom Bloom/Lighting & Camera FOV)
+  • World Control (Custom Bloom/Lighting Filters)
   • Security (Anti-AFK / Anti-Void / Stuck Fix / FPS Boost)
   • Network (Auto Rejoin, Server Hop, True Ping Spike Alert)
-  • Settings (Save/Load Config, Custom Color Picker Theme)
+  • Settings (Save/Load Config, Themes)
   • UI (RGB ROG Animated OpenButton)
   
   💎 Created by @WTF.XKID
@@ -42,8 +42,6 @@ if getgenv()._XKID_ESP_CACHE then
     end
 end
 getgenv()._XKID_ESP_CACHE = {}
-
-if getgenv()._XKID_FOVCIRCLE then pcall(function() getgenv()._XKID_FOVCIRCLE:Remove() end) end
 
 if getgenv()._XKID_LOADED then
     pcall(function()
@@ -102,10 +100,9 @@ local onMobile    = not UIS.KeyboardEnabled
 local State = {
     Move     = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
     Fly      = { active = false, bv = nil, bg = nil, noFallConn = nil },
-    SoftFling= { active = false, power = 50000 }, -- Diperkuat drastis
+    SoftFling= { active = false, power = 50000 },
     Teleport = { selectedTarget = "", clickTool = nil, clickConn = nil },
     Security = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, fallConn = nil, arConn = nil },
-    Aim      = { active = false, showFov = false, radius = 100, part = "Head", circle = nil },
     Avatar   = { isRefreshing = false },
     ESP = {
         active          = false,
@@ -124,15 +121,6 @@ local State = {
         nameColor       = Color3.fromRGB(255, 255, 255),
     },
 }
-
--- Buat FOV Circle (Drawing API)
-local fovCircle = Drawing.new("Circle")
-fovCircle.Visible = false
-fovCircle.Thickness = 1.5
-fovCircle.Color = Color3.fromRGB(255, 255, 255)
-fovCircle.Filled = false
-fovCircle.Transparency = 1
-getgenv()._XKID_FOVCIRCLE = fovCircle
 
 local colorMap = {
     ["Merah"] = Color3.fromRGB(255, 0, 0), ["Hijau"] = Color3.fromRGB(0, 255, 0),
@@ -269,7 +257,7 @@ local function refreshCharacter()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  💎 HYBRID ESP & AIM LOCK ENGINE
+--  💎 HYBRID ESP ENGINE
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -292,7 +280,6 @@ local function clearPlayerCache(player)
 end
 TrackC(Players.PlayerRemoving:Connect(clearPlayerCache))
 
--- Background ESP Deteksi Anomali
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         if State.ESP.active then
@@ -325,102 +312,68 @@ task.spawn(function()
     end
 end)
 
--- RenderStepped for ESP & Aim Lock
 TrackC(RS.RenderStepped:Connect(function()
+    if not State.ESP.active then return end
     local myHrp = getCharRoot(LP.Character)
     local center = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
-    
-    -- Update FOV Circle Position
-    if State.Aim.showFov then
-        fovCircle.Position = center
-        fovCircle.Radius = State.Aim.radius
-        fovCircle.Visible = true
-    else
-        fovCircle.Visible = false
-    end
-
-    local closestDist = State.Aim.radius
-    local aimTarget = nil
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LP then
             local char, hrp, hum = player.Character, getCharRoot(player.Character), player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+            if not char or not hrp or not hum then clearPlayerCache(player); continue end
             
-            -- Aim Lock Target Calculation
-            if State.Aim.active and char and hum and hum.Health > 0 and char:FindFirstChild(State.Aim.part) then
-                local part = char[State.Aim.part]
-                local pos, onScreen = Cam:WorldToViewportPoint(part.Position)
-                if onScreen then
-                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        aimTarget = part
-                    end
-                end
+            initPlayerCache(player); local c = State.ESP.cache[player]
+            local active = hum.Health > 0 and myHrp
+            local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
+            
+            if not active or dist > State.ESP.maxDrawDistance then
+                c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
             end
-
-            -- Main ESP Rendering
-            if State.ESP.active then
-                if not char or not hrp or not hum then clearPlayerCache(player); continue end
-                initPlayerCache(player); local c = State.ESP.cache[player]
-                local active = hum.Health > 0 and myHrp
-                local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
-                
-                if not active or dist > State.ESP.maxDrawDistance then
-                    c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
+            
+            local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
+            if not onScreen then
+                c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
+            end
+            
+            local isSus, isGlitch = c.isSuspect, c.isGlitch
+            local useHighlight = isSus or isGlitch or State.ESP.highlightMode
+            local txt = ""
+            if State.ESP.showNickname then txt = player.DisplayName end
+            if State.ESP.showDistance then txt = txt .. "\n[" .. math.floor(dist) .. "m]" end
+            if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
+            
+            c.texts.Text = txt
+            c.texts.Color = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
+            c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true
+            
+            if State.ESP.tracerMode ~= "OFF" or isSus or isGlitch then
+                local origin = center
+                if State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
+                elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
+                c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
+                c.tracer.Color = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); c.tracer.Visible = true
+            else c.tracer.Visible = false end
+            
+            if useHighlight then
+                local boxColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
+                local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
+                local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
+                if topOn and botOn then
+                    local h = math.abs(top.Y - bot.Y); local w = h * 0.6
+                    local tl, tr = Vector2.new(rootPos.X - w/2, top.Y), Vector2.new(rootPos.X + w/2, top.Y)
+                    local bl, br = Vector2.new(rootPos.X - w/2, bot.Y), Vector2.new(rootPos.X + w/2, bot.Y)
+                    c.boxLines[1].From=tl; c.boxLines[1].To=tr; c.boxLines[2].From=tr; c.boxLines[2].To=br
+                    c.boxLines[3].From=br; c.boxLines[3].To=bl; c.boxLines[4].From=bl; c.boxLines[4].To=tl
+                    for i=1, 4 do c.boxLines[i].Color = boxColor; c.boxLines[i].Visible = true end
                 end
-                
-                local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
-                if not onScreen then
-                    c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
+                if not c.hl or c.hl.Parent ~= char then
+                    if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
                 end
-                
-                local isSus, isGlitch = c.isSuspect, c.isGlitch
-                local useHighlight = isSus or isGlitch or State.ESP.highlightMode
-                local txt = ""
-                if State.ESP.showNickname then txt = player.DisplayName end
-                if State.ESP.showDistance then txt = txt .. "\n[" .. math.floor(dist) .. "m]" end
-                if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
-                
-                c.texts.Text = txt
-                c.texts.Color = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
-                c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true
-                
-                if State.ESP.tracerMode ~= "OFF" or isSus or isGlitch then
-                    local origin = center
-                    if State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
-                    elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
-                    c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
-                    c.tracer.Color = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); c.tracer.Visible = true
-                else c.tracer.Visible = false end
-                
-                if useHighlight then
-                    local boxColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
-                    local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
-                    local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
-                    if topOn and botOn then
-                        local h = math.abs(top.Y - bot.Y); local w = h * 0.6
-                        local tl, tr = Vector2.new(rootPos.X - w/2, top.Y), Vector2.new(rootPos.X + w/2, top.Y)
-                        local bl, br = Vector2.new(rootPos.X - w/2, bot.Y), Vector2.new(rootPos.X + w/2, bot.Y)
-                        c.boxLines[1].From=tl; c.boxLines[1].To=tr; c.boxLines[2].From=tr; c.boxLines[2].To=br
-                        c.boxLines[3].From=br; c.boxLines[3].To=bl; c.boxLines[4].From=bl; c.boxLines[4].To=tl
-                        for i=1, 4 do c.boxLines[i].Color = boxColor; c.boxLines[i].Visible = true end
-                    end
-                    if not c.hl or c.hl.Parent ~= char then
-                        if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    end
-                    c.hl.FillColor = boxColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true
-                else
-                    for _, l in ipairs(c.boxLines) do l.Visible = false end; if c.hl then c.hl.Enabled = false end
-                end
+                c.hl.FillColor = boxColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true
+            else
+                for _, l in ipairs(c.boxLines) do l.Visible = false end; if c.hl then c.hl.Enabled = false end
             end
         end
-    end
-    
-    -- Execution of Aim Lock 
-    if State.Aim.active and aimTarget then
-        -- Lock camera towards the selected part
-        Cam.CFrame = CFrame.new(Cam.CFrame.Position, aimTarget.Position)
     end
 end))
 
@@ -497,7 +450,7 @@ local function toggleFly(v)
         State.Fly.bv.Velocity = move.Magnitude > 0 and move.Unit * spd or Vector3.zero
         State.Fly.bg.CFrame   = CFrame.new(r.Position, r.Position+camCF.LookVector)
     end)
-    notify("Fly","✈ Fly Linear ON", 3)
+    notify("Fly","✈ Fly Linear ON (No Fall Active)", 3)
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -666,7 +619,7 @@ local Window = WindUI:CreateWindow({
         Title           = "@WTF.XKID",
         Icon            = "ghost",
         CornerRadius    = UDim.new(1, 0),
-        StrokeThickness = 3,
+        StrokeThickness = 4,
         Enabled         = true,
         Draggable       = true,
         OnlyMobile      = false,
@@ -846,15 +799,18 @@ for i = 1, 3 do
 end
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 4: CAMERA & SPECTATE & AIM
+--  TAB 4: CAMERA & SPECTATE
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Camera", Icon = "eye" })
 
-local secAim = T_CAM:Section({ Title = "Aim Lock (Camera)", Opened = true })
-secAim:Toggle({ Title = "Show FOV Circle", Value = false, Callback = function(v) State.Aim.showFov = v end })
-secAim:Slider({ Title = "FOV Radius", Step = 1, Value = {Min = 10, Max = 500, Default = 100}, Callback = function(v) State.Aim.radius = tonumber(v) or 100 end })
-secAim:Dropdown({ Title = "Target Part", Values = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, Value = "Head", Callback = function(v) State.Aim.part = v end })
-secAim:Toggle({ Title = "Enable Aim Lock", Desc="Kamera mengunci ke player di dalam FOV", Value = false, Callback = function(v) State.Aim.active = v; notify("Aim Lock", v and "✅ ON" or "❌ OFF", 2) end })
+local secZoom = T_CAM:Section({ Title = "Camera Zoom (Max Distance)", Opened = true })
+secZoom:Slider({ Title = "Max Zoom Out Limit", Desc = "Melebihi batas zoom bawaan game", Step = 10, Value = {Min = 400, Max = 100000, Default = 400}, Callback = function(v)
+    pcall(function() LP.CameraMaxZoomDistance = tonumber(v) or 400 end)
+end})
+secZoom:Button({ Title = "🔄 Reset Zoom Limit", Callback = function() 
+    pcall(function() LP.CameraMaxZoomDistance = 400 end)
+    notify("Camera", "Zoom dikembalikan ke default (400)", 2)
+end})
 
 local secFC = T_CAM:Section({ Title = "Freecam", Opened = true })
 secFC:Toggle({ Title = "Freecam", Desc = "PC: RMB rotate | Mobile: Left move / Right rotate", Value = false, Callback = function(v)
@@ -955,9 +911,6 @@ secAtmos:Slider({ Title="Contrast", Step=0.1, Value={Min=-2, Max=2, Default=0}, 
 secAtmos:Slider({ Title="Bloom", Step=0.1, Value={Min=0, Max=5, Default=0}, Callback=function(v) getEff("BloomEffect").Intensity = tonumber(v) or 0 end })
 secAtmos:Button({ Title="🔄 Reset Sliders", Callback = function() applyFilter("Default") end })
 
-local secCamW = T_WO:Section({ Title = "Camera Settings", Opened = false })
-secCamW:Slider({ Title="Player Camera FOV", Desc="Mengubah FOV Player", Step=1, Value={Min=10, Max=120, Default=70}, Callback=function(v) Cam.FieldOfView = tonumber(v) or 70 end })
-
 local secGfx = T_WO:Section({ Title = "Graphics Menu", Opened = false })
 local gfxMap = { [1]="Level01", [2]="Level03", [3]="Level05", [4]="Level07", [5]="Level09", [6]="Level11", [7]="Level13", [8]="Level15", [9]="Level17", [10]="Level21" }
 secGfx:Slider({ Title = "Roblox Graphics Level", Step = 1, Value = {Min=1, Max=10, Default=5}, Callback = function(v)
@@ -1054,14 +1007,11 @@ task.spawn(function()
             if currentPing > 0 then
                 table.insert(pingHistory, currentPing)
                 if #pingHistory > 20 then table.remove(pingHistory, 1) end
-                
                 local sum = 0
                 for _, p in ipairs(pingHistory) do sum = sum + p end
                 local avgPing = sum / #pingHistory
-                
-                -- Jika ping loncat 150ms+ dari rata-rata (dan lebih dari 200)
                 if currentPing >= avgPing + 150 and currentPing > 200 then
-                    if tick() - lastAlert > 60 then -- Cooldown 1 menit agar tidak spam
+                    if tick() - lastAlert > 60 then
                         lastAlert = tick()
                         notify("⚠ Ping Spike Alert", string.format("Lonjakan! Avg: %d ms | Now: %d ms", math.floor(avgPing), currentPing), 4)
                     end
@@ -1128,27 +1078,13 @@ secCfg:Button({ Title="📂 Load Config", Callback=function()
 end})
 
 local secTheme = T_SET:Section({ Title = "Appearance", Opened = true })
+-- Mengembalikan format Dropdown Theme asli WindUI untuk memastikan tidak ada UI yang Error/Blank
+secTheme:Dropdown({ Title="Preset Themes", Values={"Dark", "Light", "Rose", "Aqua", "Amethyst", "Mocha", "Midnight", "Mint", "Crimson"}, Value="Crimson", Callback=function(selected) 
+    pcall(function() WindUI:SetTheme(selected) end) 
+end })
 
--- COLOR PICKER TEMA
-secTheme:ColorPicker({
-    Title = "Custom Accent Color",
-    Default = Color3.fromRGB(220, 20, 60),
-    Callback = function(color)
-        WindUI:AddTheme("XKID_Custom", {
-            Accent = color,
-            Outline = Color3.fromRGB(50, 50, 50),
-            Text = Color3.fromRGB(255, 255, 255),
-            PlaceholderText = Color3.fromRGB(178, 178, 178),
-            Background = Color3.fromRGB(30, 30, 30)
-        })
-        WindUI:SetTheme("XKID_Custom")
-        notify("Theme", "✅ Tema Kustom Diaplikasikan!", 2)
-    end
-})
-
-secTheme:Dropdown({ Title="Preset Themes", Values=(function() local names={}; for name in pairs(WindUI:GetThemes()) do table.insert(names,name) end; table.sort(names); if not table.find(names, "Crimson") then table.insert(names, 1, "Crimson") end; return names end)(), Value="Crimson", Callback=function(selected) WindUI:SetTheme(selected) end })
-secTheme:Toggle({ Title="Acrylic Background", Value=true, Callback=function() WindUI:ToggleAcrylic(not WindUI.Window.Acrylic) end })
-secTheme:Toggle({ Title="Transparent Window", Value=true, Callback=function(state) Window:ToggleTransparency(state) end })
+secTheme:Toggle({ Title="Acrylic Background", Value=true, Callback=function() pcall(function() WindUI:ToggleAcrylic(not WindUI.Window.Acrylic) end) end })
+secTheme:Toggle({ Title="Transparent Window", Value=true, Callback=function(state) pcall(function() Window:ToggleTransparency(state) end) end })
 local currentKey = Enum.KeyCode.RightShift
 secTheme:Keybind({ Title="Toggle Key", Value=currentKey, Callback=function(v) currentKey = (typeof(v)=="EnumItem") and v or Enum.KeyCode[v]; Window:SetToggleKey(currentKey) end })
 
@@ -1161,7 +1097,6 @@ task.spawn(function()
             local r = getRoot()
             pcall(function() 
                 r.AssemblyAngularVelocity = Vector3.new(0, State.SoftFling.power, 0) 
-                -- Mikromovement agar benturan lebih "kerasa" ke target
                 r.AssemblyLinearVelocity = Vector3.new(r.AssemblyLinearVelocity.X, 50, r.AssemblyLinearVelocity.Z)
             end)
         end
@@ -1174,7 +1109,6 @@ TrackC(RS.Stepped:Connect(function()
     end
 end))
 
--- Memantau FPS untuk Crash Detection
 task.spawn(function()
     local dropTime = 0
     while getgenv()._XKID_RUNNING do
@@ -1193,7 +1127,6 @@ task.spawn(function()
     end
 end)
 
--- Eksekusi otomatis Anti-AFK
 if not State.Security.afkConn then
     State.Security.afkConn = TrackC(LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); task.wait(1) end))
 end
