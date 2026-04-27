@@ -13,7 +13,7 @@
   • World Control (Custom Bloom/Lighting Filters)
   • Security (Anti-AFK / Anti-Void / Stuck Fix / FPS Boost)
   • Network (Auto Rejoin, Server Hop, True Ping Spike Alert)
-  • Settings (Save/Load Config, Built-in Themes)
+  • Settings (Save/Load Config with Dropdown, Built-in Themes)
   • UI (RGB ROG Animated OpenButton)
   
   💎 Created by @WTF.XKID
@@ -150,6 +150,24 @@ local function getCharRoot(char)
     return char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
 end
 local function notify(title, content, dur) WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 }) end
+
+-- Fungsi helper untuk config
+local function getConfigList()
+    local list = {}
+    pcall(function()
+        if isfolder and isfolder("XKID_HUB") then
+            local files = listfiles("XKID_HUB")
+            for _, file in ipairs(files) do
+                if file:match("%.json$") then
+                    local name = file:match("([^/]+)%.json$")
+                    if name then table.insert(list, name) end
+                end
+            end
+        end
+    end)
+    if #list == 0 then table.insert(list, "No Config Found") end
+    return list
+end
 
 TrackC(LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
@@ -337,9 +355,9 @@ TrackC(RS.RenderStepped:Connect(function()
             
             local isSus, isGlitch = c.isSuspect, c.isGlitch
             local useHighlight = isSus or isGlitch or State.ESP.highlightMode
-            local txt = ""
-            if State.ESP.showNickname then txt = player.DisplayName end
-            if State.ESP.showDistance then txt = txt .. "\n[" .. math.floor(dist) .. "m]" end
+            
+            -- Show Distance & Name selalu aktif (otomatis)
+            local txt = player.DisplayName .. "\n[" .. math.floor(dist) .. "m]"
             if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
             
             c.texts.Text = txt
@@ -708,7 +726,7 @@ task.spawn(function()
             local antiAFKStatus = State.Security.afkConn and "✅" or "⭕"
             local antiLagStatus = State.Security.antiLag and "✅" or "⭕"
             local shiftLockStatus = State.Security.shiftLock and "🔒" or "🔓"
-            securityLabel:SetDesc(string.format("🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ Anti-Lag: %s\n💾 Memory: GC Running", playerCount, antiAFKStatus, shiftLockStatus, antiLagStatus))
+            securityLabel:SetDesc(string.format("🛡️ Script: Active\n👥 Players: %d\n⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n⚡ FPS Boost: %s\n💾 Memory: GC Running", playerCount, antiAFKStatus, shiftLockStatus, antiLagStatus))
         end
     end
 end)
@@ -768,7 +786,7 @@ secTP:Button({ Title = "Teleport", Callback = function()
         if tpTarget == "" then notify("Teleport", "❌ Masukkan nama player!", 2); return end
         local targetPlayer = nil
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LP and (string.find(string.lower(p.Name), string.lower(tpTarget))) then targetPlayer = p; break end
+            if p ~= LP and (string.find(string.lower(p.Name), string.lower(tpTarget)) or string.find(string.lower(p.DisplayName), string.lower(tpTarget))) then targetPlayer = p; break end
         end
         if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then notify("Teleport", "❌ Player tidak valid!", 2); return end
         local tHrp, tHum, myHrp = getCharRoot(targetPlayer.Character), targetPlayer.Character:FindFirstChildOfClass("Humanoid"), getRoot()
@@ -931,15 +949,16 @@ secESP:Toggle({ Title="Enable ESP", Value=false, Callback=function(v)
     if not v and getgenv()._XKID_ESP_CACHE then
         for _,c in pairs(getgenv()._XKID_ESP_CACHE) do pcall(function() c.texts.Visible=false; c.tracer.Visible=false; for _,l in ipairs(c.boxLines) do l.Visible=false end; c.hl.Enabled=false end) end
     end
+    notify("ESP", v and "✅ ESP Active (Name & Distance Auto)" or "❌ ESP Disabled", 2)
 end})
 secESP:Dropdown({ Title="Tracer Mode", Values={"Bottom","Center","Mouse","OFF"}, Value="Bottom", Callback=function(v) State.ESP.tracerMode=v end })
-secESP:Toggle({ Title="Show Distance", Value=true, Callback=function(v) State.ESP.showDistance=v end })
-secESP:Toggle({ Title="Show Name", Value=true, Callback=function(v) State.ESP.showNickname=v end })
-secESP:Toggle({ Title="Highlight Mode (All)", Value=false, Callback=function(v) State.ESP.highlightMode=v end })
+secESP:Toggle({ Title="Highlight Mode (All Players)", Desc="Enable box & highlight for ALL players", Value=false, Callback=function(v) State.ESP.highlightMode=v end })
 secESP:Slider({ Title="Draw Distance", Step=10, Value={Min=50,Max=500,Default=300}, Callback=function(v) State.ESP.maxDrawDistance=tonumber(v) or 300 end })
 
 local secESPColor = T_ESP:Section({ Title = "🎨 ESP Colors", Opened = false })
-secESPColor:Dropdown({ Title="Normal Tracer", Values={"Hijau", "Merah", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"}, Value="Hijau", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_N = colorMap[v] end end })
+secESPColor:Dropdown({ Title="Normal Player Color", Values={"Hijau", "Merah", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam"}, Value="Hijau", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_N = colorMap[v] end end })
+secESPColor:Dropdown({ Title="Suspect Color (Glitcher)", Values={"Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam", "Crimson"}, Value="Crimson", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_S = colorMap[v]; State.ESP.boxColor_S = colorMap[v] end end })
+secESPColor:Dropdown({ Title="Large Glitch Acc Color", Values={"Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v]; State.ESP.boxColor_G = colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 7: SECURITY
@@ -955,6 +974,7 @@ secProt:Toggle({ Title="Anti Void", Desc="Otomatis TP ke atas jika jatuh keluar 
         notify("Anti Void","✅ Active", 2)
     else
         if State.Security.voidConn then State.Security.voidConn:Disconnect(); State.Security.voidConn=nil end
+        notify("Anti Void","❌ Disabled", 2)
     end
 end})
 secProt:Toggle({ Title="Anti-AFK (Auto Active)", Desc="Mencegah kick 20 menit dari Roblox", Value=true, Callback=function(v)
@@ -1031,6 +1051,7 @@ local secPerf = T_SEC:Section({ Title = "Performance", Opened = true })
 local advCache = {mats={}, texs={}, shadows=true, level=10}
 
 secPerf:Toggle({ Title="FPS Boost Advance", Desc="Hapus semua tekstur/partikel map", Value=false, Callback=function(v) 
+    State.Security.antiLag = v
     if v then
         pcall(function() advCache.level = settings().Rendering.QualityLevel; settings().Rendering.QualityLevel = 1 end)
         advCache.shadows = Lighting.GlobalShadows; Lighting.GlobalShadows = false
@@ -1053,38 +1074,64 @@ local secCameraLock = T_SEC:Section({ Title = "🔒 Camera Lock", Opened = true 
 secCameraLock:Toggle({ Title="Shift Lock", Value=false, Callback=function(v) toggleShiftLock(v) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: SETTINGS
+--  TAB 8: SETTINGS (DROPDOWN CONFIG + THEME)
 -- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
 
 local secCfg = T_SET:Section({ Title = "Config System", Opened = true })
 local cfgName = "XKID_Config"
-secCfg:Input({ Title = "Config Name", Default = "XKID_Config", Callback = function(v) cfgName = v end })
+
+secCfg:Input({ Title = "Config Name", Default = "XKID_Config", Placeholder = "Enter config name...", Callback = function(v) cfgName = v end })
+
 secCfg:Button({ Title="💾 Save Config", Callback=function()
     pcall(function()
         if makefolder and writefile then
             if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end
-            local data = { Move = State.Move, ESP = { active=State.ESP.active, tracerMode=State.ESP.tracerMode, maxDrawDistance=State.ESP.maxDrawDistance } }
+            local data = { Move = State.Move, ESP = { active=State.ESP.active, tracerMode=State.ESP.tracerMode, maxDrawDistance=State.ESP.maxDrawDistance, highlightMode=State.ESP.highlightMode } }
             writefile("XKID_HUB/"..cfgName..".json", HttpService:JSONEncode(data))
             notify("Config", "✅ Berhasil disimpan: "..cfgName, 2)
+            pcall(function() configDropdown:Refresh(getConfigList(), true) end)
         else notify("Config", "❌ Executor tidak support Save!", 2) end
     end)
 end})
-secCfg:Button({ Title="📂 Load Config", Callback=function()
-    pcall(function()
-        if isfile and readfile and isfile("XKID_HUB/"..cfgName..".json") then
-            local data = HttpService:JSONDecode(readfile("XKID_HUB/"..cfgName..".json"))
-            if data then 
-                if data.Move then State.Move.ws = data.Move.ws; State.Move.jp = data.Move.jp; State.Move.flyS = data.Move.flyS end
-                if data.ESP then State.ESP.tracerMode = data.ESP.tracerMode; State.ESP.maxDrawDistance = data.ESP.maxDrawDistance end
-                notify("Config", "✅ Config Dimuat: "..cfgName, 2)
+
+local configDropdown = secCfg:Dropdown({
+    Title = "Load Config",
+    Values = getConfigList(),
+    Callback = function(selected)
+        if selected == "No Config Found" then return end
+        cfgName = selected
+        pcall(function()
+            if isfile and readfile and isfile("XKID_HUB/"..selected..".json") then
+                local data = HttpService:JSONDecode(readfile("XKID_HUB/"..selected..".json"))
+                if data then 
+                    if data.Move then 
+                        State.Move.ws = data.Move.ws or 16
+                        State.Move.jp = data.Move.jp or 50
+                        State.Move.flyS = data.Move.flyS or 60
+                        local hum = getHum()
+                        if hum then hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end
+                    end
+                    if data.ESP then 
+                        State.ESP.tracerMode = data.ESP.tracerMode or "Bottom"
+                        State.ESP.maxDrawDistance = data.ESP.maxDrawDistance or 300
+                        State.ESP.highlightMode = data.ESP.highlightMode or false
+                    end
+                    notify("Config", "✅ Config Dimuat: "..selected, 2)
+                end
+            else 
+                notify("Config", "❌ Config tidak ditemukan!", 2) 
             end
-        else notify("Config", "❌ Config tidak ditemukan!", 2) end
-    end)
+        end)
+    end
+})
+
+secCfg:Button({ Title="🔄 Refresh Config List", Callback=function()
+    pcall(function() configDropdown:Refresh(getConfigList(), true) end)
+    notify("Config", "✅ List refreshed!", 2)
 end})
 
 local secTheme = T_SET:Section({ Title = "Appearance", Opened = true })
--- Mengembalikan format Dropdown Theme asli WindUI untuk memastikan tidak ada UI yang Error/Blank
 secTheme:Dropdown({ Title="Theme", Values=(function() local names={}; for name in pairs(WindUI:GetThemes()) do table.insert(names,name) end; table.sort(names); if not table.find(names, "Crimson") then table.insert(names, 1, "Crimson") end; return names end)(), Value="Crimson", Callback=function(selected) 
     pcall(function() WindUI:SetTheme(selected) end) 
 end })
@@ -1126,8 +1173,8 @@ task.spawn(function()
         if fps < 15 then dropTime = dropTime + 1 else dropTime = 0 end
         
         if dropTime >= 5 and not State.Security.antiLag then
-            notify("⚠ Crash Detection", "FPS sangat rendah! Mengaktifkan Anti-Lag otomatis...", 4)
-            pcall(function() settings().Rendering.QualityLevel = 1; Lighting.GlobalShadows = false end)
+            notify("⚠ Crash Detection", "FPS sangat rendah! Mengaktifkan FPS Boost otomatis...", 4)
+            pcall(function() advCache.level = settings().Rendering.QualityLevel; settings().Rendering.QualityLevel = 1; Lighting.GlobalShadows = false end)
             dropTime = 0
         end
     end
