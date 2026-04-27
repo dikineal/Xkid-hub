@@ -27,7 +27,7 @@
   • ESP pakai RenderStepped:Connect (bukan BindToRenderStep)
   • Double section Avatar Refresh dihapus
   • Chat logger scope fix
-  • Banyak double/broken cleanup fix
+  • Auto-Cleanup suicide bug fixed (Aman untuk Mobile Executor)
 ]]
 
 local RS = game:GetService("RunService")
@@ -281,7 +281,6 @@ end
 
 -- ══════════════════════════════════════════════════════════════
 --  FAST RESPAWN & REFRESH CHARACTER
---  FIX: Tidak lock camera, non-blocking, fallback BreakJoints
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
@@ -302,7 +301,6 @@ local function fastRespawn()
             done = true
             conn:Disconnect()
 
-            -- Paksa posisi sebelum engine sempat teleport ke spawn
             local newHrp = newChar:FindFirstChild("HumanoidRootPart")
             if newHrp then
                 newHrp.CFrame = savedCF + Vector3.new(0, 3.5, 0)
@@ -315,7 +313,6 @@ local function fastRespawn()
             task.wait(0.1)
 
             if newHrp and newHum then
-                -- Hold posisi 0.5 detik via Heartbeat
                 local t0 = tick()
                 local hold; hold = RS.Heartbeat:Connect(function()
                     if tick() - t0 > 0.5 then hold:Disconnect(); return end
@@ -422,7 +419,6 @@ end
 
 -- ══════════════════════════════════════════════════════════════
 --  HYBRID ESP ENGINE
---  FIX: Pakai RenderStepped:Connect biasa, bukan BindToRenderStep
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -456,7 +452,6 @@ end
 
 TrackC(Players.PlayerRemoving:Connect(clearPlayerCache))
 
--- Deteksi suspect/glitch (1 Hz)
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         if State.ESP.active then
@@ -500,7 +495,6 @@ task.spawn(function()
     end
 end)
 
--- ESP Render Loop — RenderStepped:Connect (FIX dari BindToRenderStep yg conflict)
 TrackC(RS.RenderStepped:Connect(function()
     if not State.ESP.active then return end
     local myHrp = getCharRoot(LP.Character)
@@ -617,7 +611,7 @@ TrackC(RS.RenderStepped:Connect(function()
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  FLY ENGINE (MOMENTUM + SOFT LANDING)
+--  FLY ENGINE
 -- ══════════════════════════════════════════════════════════════
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
 local flyVel = Vector3.zero
@@ -676,7 +670,6 @@ local function toggleFly(v)
             hum.WalkSpeed = State.Move.ws
             hum.UseJumpPower = true; hum.JumpPower = State.Move.jp
         end
-        if State.Fly.noFallConn then State.Fly.noFallConn:Disconnect(); State.Fly.noFallConn = nil end
         notify("Fly", "Fly dimatikan 👋", 2)
         return
     end
@@ -692,13 +685,6 @@ local function toggleFly(v)
     State.Fly.bg = Instance.new("BodyGyro", hrp)
     State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
     State.Fly.bg.P = 50000
-
-    if not State.Fly.noFallConn then
-        State.Fly.noFallConn = TrackC(RS.Heartbeat:Connect(function()
-            local r = getRoot()
-            if r and r.Velocity.Y < -30 then r.Velocity = Vector3.new(r.Velocity.X, -10, r.Velocity.Z) end
-        end))
-    end
 
     startFlyCapture()
     RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function()
@@ -927,7 +913,6 @@ local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 -- ══════════════════════════════════════════════════════════════
 --  CHAT LOGGER
 -- ══════════════════════════════════════════════════════════════
--- chatLogPanel dideklarasi di sini agar bisa diakses dari logMsg
 local chatLogPanel = nil
 
 local function logMsg(speakerName, msg)
@@ -1036,8 +1021,6 @@ end)
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 1: HOME — LIVE MONITOR
---  FIX: Ping pakai StatsService.Network.ServerStatsItem (real-time)
---  FIX: FPS dari Heartbeat delta (bukan fpsSamples yg delay)
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "Home", Icon = "home" })
 
@@ -1060,19 +1043,15 @@ local netLabel   = secStatus:Paragraph({ Title = "⚡ Network & Perf", Desc = "M
 local secSecHome = T_HOME:Section({ Title = "🛡️ Security Status", Opened = true })
 local securityLabel = secSecHome:Paragraph({ Title = "Status", Desc = "Script Protected\nAnti-Crash Enabled" })
 
--- FPS tracker via Heartbeat (lebih akurat)
 local sharedFPS  = 60
 local sharedPing = 0
-local lastHbTime = tick()
 
-TrackC(RS.Heartbeat:Connect(function(dt)
-    -- FPS real dari delta Heartbeat
+TrackC(RS.RenderStepped:Connect(function(dt)
     if dt > 0 then
         sharedFPS = math.floor(1 / dt)
     end
 end))
 
--- Ping real-time via StatsService (fix dari PerformanceStats yg deprecated)
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         pcall(function()
@@ -1081,11 +1060,10 @@ task.spawn(function()
                 sharedPing = math.floor(pingItem:GetValue())
             end
         end)
-        task.wait(0.5) -- update ping tiap 0.5 detik (real-time)
+        task.wait(0.5)
     end
 end)
 
--- Cache map name
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         pcall(function()
@@ -1098,7 +1076,6 @@ task.spawn(function()
     end
 end)
 
--- Update UI panel (0.3 detik, sangat real-time)
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.3)
@@ -1150,7 +1127,6 @@ end)
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 2: PLAYER
---  FIX: Double section "Avatar Refresh" dihapus → jadi 1 section
 -- ══════════════════════════════════════════════════════════════
 local T_AV = Window:Tab({ Title = "Player", Icon = "user" })
 
@@ -1179,7 +1155,6 @@ secAbi:Toggle({ Title = "✈️ Fly", Value = false, Callback = function(v) togg
 secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 },
     Callback = function(v) State.Move.flyS = v; notify("Fly", "Speed: "..v, 1) end })
 
--- FIX: NoClip via Heartbeat (lebih responsif dari Stepped)
 local noclipConn = nil
 secAbi:Toggle({ Title = "👻 NoClip", Value = false, Callback = function(v)
     State.Move.ncp = v
@@ -1200,7 +1175,6 @@ secAbi:Toggle({ Title = "👻 NoClip", Value = false, Callback = function(v)
     notify("Kemampuan", v and "Noclip ON 👻" or "Noclip OFF", 2)
 end})
 
--- FIX: SoftFling via Heartbeat tiap frame (bukan RenderStepped)
 local softFlingConn = nil
 secAbi:Toggle({ Title = "💫 Soft Fling", Value = false, Callback = function(v)
     State.SoftFling.active = v
@@ -1219,7 +1193,6 @@ secAbi:Toggle({ Title = "💫 Soft Fling", Value = false, Callback = function(v)
                         r.AssemblyLinearVelocity.Z
                     )
                 end)
-                -- NoClip untuk fling
                 if LP.Character then
                     for _, p in pairs(LP.Character:GetDescendants()) do
                         if p:IsA("BasePart") then p.CanCollide = false end
@@ -1229,7 +1202,6 @@ secAbi:Toggle({ Title = "💫 Soft Fling", Value = false, Callback = function(v)
         end
     else
         if softFlingConn then softFlingConn:Disconnect(); softFlingConn = nil end
-        -- Matikan juga noclip jika tidak ada yang aktif
         if not State.Move.ncp then
             if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
         end
@@ -1482,8 +1454,7 @@ secChat:Toggle({ Title = "Chat Log ON/OFF", Value = false, Callback = function(v
     notify("Chat Log", v and "Logger aktif!" or "Logger mati", 2)
 end})
 
--- FIX: chatLogPanel dideklarasi di scope file, assign di sini (tidak nil)
-chatLogPanel = secChat:Paragraph({ Title = "Log Chat", Desc = "Menunggu chat..." })
+local chatLogPanel = secChat:Paragraph({ Title = "Log Chat", Desc = "Menunggu chat..." })
 
 local chatTargetDrop = secChat:Dropdown({ Title = "Pilih Target", Values = getDisplayNames(), Callback = function(v)
     local p = findPlayerByDisplay(v)
@@ -1597,6 +1568,25 @@ secSrv:Button({ Title = "🏃 Server Hop", Callback = function()
         notify("Server Hop", "Tidak ada server tersedia", 2)
     end)
 end})
+
+-- True Ping Spike Alert
+task.spawn(function()
+    local pingHistory, lastAlert = {}, 0
+    while getgenv()._XKID_RUNNING do
+        task.wait(1)
+        pcall(function()
+            local cp = math.floor(game:GetService("Stats").PerformanceStats.Ping:GetValue())
+            if cp > 0 then
+                table.insert(pingHistory, cp); if #pingHistory > 20 then table.remove(pingHistory, 1) end
+                local sum = 0; for _, p in ipairs(pingHistory) do sum = sum + p end
+                local ap = sum / #pingHistory
+                if cp >= ap + 150 and cp > 200 and tick() - lastAlert > 300 then
+                    lastAlert = tick(); notify("Ping Spike", "Lag! " .. cp .. " ms 📡", 4)
+                end
+            end
+        end)
+    end
+end)
 
 local secPerf = T_SEC:Section({ Title = "⚡ Performance", Opened = true })
 local advCache = { mats = {}, texs = {}, shadows = true, level = 10, brightness = 0, clockTime = 0, fogEnd = 0 }
@@ -1727,6 +1717,7 @@ task.spawn(function()
             RS:UnbindFromRenderStep("XKIDFreecam")
             RS:UnbindFromRenderStep("XKIDSpec")
             RS:UnbindFromRenderStep("XKIDShiftLock")
+            RS:UnbindFromRenderStep("XKIDESP")
 
             for _, c in pairs(getgenv()._XKID_ESP_CACHE) do
                 pcall(function()
@@ -1757,7 +1748,6 @@ end)
 -- ══════════════════════════════════════════════════════════════
 --  STARTUP
 -- ══════════════════════════════════════════════════════════════
--- Anti-AFK aktif otomatis
 if not State.Security.afkConn then
     State.Security.afkConn = TrackC(LP.Idled:Connect(function()
         VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); task.wait(1)
@@ -1766,7 +1756,6 @@ end
 
 WindUI:SetNotificationLower(true)
 
--- Cache map nama saat startup
 task.spawn(function()
     pcall(function()
         cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
