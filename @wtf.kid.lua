@@ -3,7 +3,20 @@
       @WTF.XKID
         Script
 ========================
-  💎 Dibuat oleh @WTF.XKID
+
+  ✨ Features:
+  • Avatar Refresh (Fast Respawn + Refresh Character)
+  • Teleport (Click TP) & Location Saver
+  • Movement (Speed / Jump / Fly / NoClip / Soft Fling Ultra)
+  • Camera (Freecam / Spectate / Max Zoom Out Toggle)
+  • Modern Hybrid ESP (Highlight Mode + Large Glitch Detection)
+  • World Control (Custom Bloom/Lighting Filters)
+  • Security (Anti-AFK / Anti-Void / Stuck Fix / FPS Boost)
+  • Network (Auto Rejoin, Server Hop, True Ping Spike Alert)
+  • Settings (Save/Load Config with Dropdown, Built-in Themes)
+  • UI (RGB ROG Animated OpenButton)
+  
+  💎 Created by @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4sharken
 ]]
@@ -15,14 +28,15 @@ local HttpService = game:GetService("HttpService")
 --  0. AUTO CLEANUP & MEMORY MANAGEMENT
 -- ══════════════════════════════════════════════════════════════
 if getgenv()._XKID_RUNNING then
-    getgenv()._XKID_RUNNING = false
+    getgenv()._XKID_RUNNING = false 
 end
 
 if getgenv()._XKID_ESP_CACHE then
     for _, c in pairs(getgenv()._XKID_ESP_CACHE) do
         pcall(function()
-            if c.bg then c.bg:Destroy() end
+            if c.texts then c.texts:Remove() end
             if c.tracer then c.tracer:Remove() end
+            if c.boxLines then for _, l in ipairs(c.boxLines) do l:Remove() end end
             if c.hl then c.hl:Destroy() end
         end)
     end
@@ -32,7 +46,7 @@ getgenv()._XKID_ESP_CACHE = {}
 if getgenv()._XKID_LOADED then
     pcall(function()
         for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
-            if v.Name == "WindUI" or v.Name == "XKID_ESP_UI" then v:Destroy() end
+            if v.Name == "WindUI" then v:Destroy() end
         end
         for _, v in pairs(game:GetService("Lighting"):GetChildren()) do
             if v.Name == "_XKID_FILTER" then v:Destroy() end
@@ -46,7 +60,7 @@ if getgenv()._XKID_LOADED then
         RS:UnbindFromRenderStep("XKIDShiftLock")
         RS:UnbindFromRenderStep("XKIDESP")
     end)
-    task.wait(0.2)
+    task.wait(0.2) 
     collectgarbage("collect")
 end
 
@@ -59,7 +73,7 @@ local START_TIME = os.time()
 
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
-        task.wait(60)
+        task.wait(30)
         collectgarbage("collect")
     end
 end)
@@ -85,11 +99,6 @@ local LP          = Players.LocalPlayer
 local Cam         = workspace.CurrentCamera
 local onMobile    = not UIS.KeyboardEnabled
 
-local ESP_FOLDER = Instance.new("Folder")
-ESP_FOLDER.Name = "XKID_ESP_UI"
-pcall(function() ESP_FOLDER.Parent = CoreGui end)
-if not ESP_FOLDER.Parent then ESP_FOLDER.Parent = LP:WaitForChild("PlayerGui") end
-
 local cachedMapName = nil
 local lastMapCheck = 0
 
@@ -101,10 +110,10 @@ local State = {
     Fly      = { active = false, bv = nil, bg = nil, noFallConn = nil, _keys = {} },
     SoftFling= { active = false, power = 50000 },
     Teleport = { selectedTarget = "", clickTool = nil, clickConn = nil, clickActive = false },
-    Security = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, arConn = nil, arFallback = nil },
+    Security = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, fallConn = nil, arConn = nil },
     Cinema   = { active = false },
     Avatar   = { isRefreshing = false },
-    Utility  = { chatLog = false, chatTarget = nil, chatHistory = {} },
+    Utility  = { chatLog = false, chatTarget = nil, chatConn = nil, chatHistory = {} },
     ESP = {
         active          = false,
         cache           = getgenv()._XKID_ESP_CACHE,
@@ -117,6 +126,7 @@ local State = {
         tracerColor_N   = Color3.fromRGB(0, 200, 255),
         tracerColor_S   = Color3.fromRGB(220, 20, 60),
         tracerColor_G   = Color3.fromRGB(255, 165, 0),
+        nameColor       = Color3.fromRGB(255, 255, 255),
     },
 }
 
@@ -292,43 +302,23 @@ local function refreshCharacter()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  HYBRID ESP ENGINE (Optimized with BillboardGui & Highlight)
+--  HYBRID ESP ENGINE (Drawing API + Highlight)
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
-    
-    local bg = Instance.new("BillboardGui")
-    bg.Name = "XKID_ESP_TXT"
-    bg.AlwaysOnTop = true
-    bg.Size = UDim2.new(0, 200, 0, 50)
-    bg.StudsOffset = Vector3.new(0, 3, 0)
-    bg.Parent = ESP_FOLDER
-    
-    local txt = Instance.new("TextLabel", bg)
-    txt.Size = UDim2.new(1, 0, 1, 0)
-    txt.BackgroundTransparency = 1
-    txt.TextStrokeTransparency = 0.5
-    txt.Font = Enum.Font.GothamBold
-    txt.TextSize = 13
-    txt.TextColor3 = Color3.new(1,1,1)
-    
-    local hl = Instance.new("Highlight")
-    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Enabled = false
-    hl.Parent = ESP_FOLDER
-    
-    local tracer = Drawing.new("Line")
-    tracer.Thickness = 1.5
-    tracer.ZIndex = 1
-    
-    State.ESP.cache[player] = { bg = bg, txt = txt, hl = hl, tracer = tracer, isSuspect = false, isGlitch = false, reason = "" }
+    local cache = { texts=Drawing.new("Text"), tracer=Drawing.new("Line"), boxLines={}, hl=nil, isSuspect=false, isGlitch=false, reason="" }
+    cache.texts.Center = true; cache.texts.Outline = true; cache.texts.Font = 2; cache.texts.Size = 13; cache.texts.ZIndex = 2
+    cache.tracer.Thickness = 1.5; cache.tracer.ZIndex = 1
+    for i = 1, 4 do local line = Drawing.new("Line"); line.Thickness = 1.5; line.ZIndex = 1; cache.boxLines[i] = line end
+    State.ESP.cache[player] = cache
 end
 
 local function clearPlayerCache(player)
     local c = State.ESP.cache[player]
     if c then
-        pcall(function() if c.bg then c.bg:Destroy() end end)
+        pcall(function() if c.texts then c.texts:Remove() end end)
         pcall(function() if c.tracer then c.tracer:Remove() end end)
+        for _, l in ipairs(c.boxLines) do pcall(function() l:Remove() end) end
         pcall(function() if c.hl then c.hl:Destroy() end end)
         State.ESP.cache[player] = nil
     end
@@ -385,48 +375,59 @@ RS:BindToRenderStep("XKIDESP", Enum.RenderPriority.Camera.Value + 1, function()
             local dist = active and (hrp.Position - myHrp.Position).Magnitude or 9999
             
             if not active or dist > State.ESP.maxDrawDistance then
-                c.bg.Adornee = nil; c.tracer.Visible = false; c.hl.Adornee = nil; continue
+                c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
             end
             
             local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
+            if not onScreen then
+                c.texts.Visible=false; c.tracer.Visible=false; for _, l in ipairs(c.boxLines) do l.Visible=false end; if c.hl then c.hl.Enabled=false end; continue
+            end
             
             local isSus, isGlitch = c.isSuspect, c.isGlitch
             local useHighlight = isSus or isGlitch or State.ESP.highlightMode
             
-            -- Teks ESP (BillboardGui) - Pasti muncul di Mobile
-            c.bg.Adornee = hrp
-            local tStr = string.format("%s\n[ %d m ]", player.DisplayName, math.floor(dist))
-            if isSus or isGlitch then tStr = tStr .. "\n⚠ " .. c.reason .. " ⚠" end
-            c.txt.Text = tStr
-            c.txt.TextColor3 = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
+            -- Show Distance & Name selalu aktif (otomatis)
+            local txt = player.DisplayName .. "\n[" .. math.floor(dist) .. "m]"
+            if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason .. " ⚠" end
             
-            -- Box / Glow ESP (Highlight)
-            if useHighlight then
-                c.hl.Adornee = char
-                c.hl.FillColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
-                c.hl.Enabled = true
-            else
-                c.hl.Adornee = nil
-                c.hl.Enabled = false
-            end
+            c.texts.Text = txt
+            c.texts.Color = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
+            c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true
             
-            -- Tracer ESP (Drawing)
-            if onScreen and State.ESP.tracerMode ~= "OFF" then
+            if State.ESP.tracerMode ~= "OFF" or isSus or isGlitch then
                 local origin = center
                 if State.ESP.tracerMode == "Bottom" then origin = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
                 elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
                 c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
-                c.tracer.Color = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N)
-                c.tracer.Visible = true
-            else 
-                c.tracer.Visible = false 
+                c.tracer.Color = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); c.tracer.Visible = true
+            else c.tracer.Visible = false end
+            
+            if useHighlight then
+                local boxColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
+                local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
+                local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
+                if topOn and botOn then
+                    local h = math.abs(top.Y - bot.Y); local w = h * 0.6
+                    local tl, tr = Vector2.new(rootPos.X - w/2, top.Y), Vector2.new(rootPos.X + w/2, top.Y)
+                    local bl, br = Vector2.new(rootPos.X - w/2, bot.Y), Vector2.new(rootPos.X + w/2, bot.Y)
+                    c.boxLines[1].From=tl; c.boxLines[1].To=tr; c.boxLines[2].From=tr; c.boxLines[2].To=br
+                    c.boxLines[3].From=br; c.boxLines[3].To=bl; c.boxLines[4].From=bl; c.boxLines[4].To=tl
+                    for i=1, 4 do c.boxLines[i].Color = boxColor; c.boxLines[i].Visible = true end
+                end
+                if not c.hl or c.hl.Parent ~= char then
+                    pcall(function() if c.hl then c.hl:Destroy() end end)
+                    pcall(function() c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end)
+                end
+                if c.hl then c.hl.FillColor = boxColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true end
+            else
+                for _, l in ipairs(c.boxLines) do l.Visible = false end; if c.hl then c.hl.Enabled = false end
             end
         end
     end
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  FLY ENGINE (MOMENTUM + SOFT LANDING)
+--  FLY ENGINE (MOMENTUM + SOFT LANDING ANIMATION)
 -- ══════════════════════════════════════════════════════════════
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
 local flyVel = Vector3.zero
@@ -435,10 +436,7 @@ local function startFlyCapture()
     local keysHeld = {}
     table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
-        local k = inp.KeyCode
-        if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then
-            keysHeld[k] = true
-        end
+        local k = inp.KeyCode; if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then keysHeld[k] = true end
     end))
     table.insert(flyConns, UIS.InputEnded:Connect(function(inp) keysHeld[inp.KeyCode] = nil end))
     table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
@@ -447,7 +445,7 @@ local function startFlyCapture()
     end))
     table.insert(flyConns, UIS.TouchMoved:Connect(function(inp)
         if inp == flyMoveTouch and flyMoveSt then
-            local dx = inp.Position.X - flyMoveSt.X; local dy = inp.Position.Y - flyMoveSt.Y
+            local dx, dy = inp.Position.X - flyMoveSt.X, inp.Position.Y - flyMoveSt.Y
             flyJoy = Vector2.new(math.abs(dx)>25 and math.clamp((dx-math.sign(dx)*25)/80,-1,1) or 0, math.abs(dy)>20 and math.clamp((dy-math.sign(dy)*20)/80,-1,1) or 0)
         end
     end))
@@ -515,7 +513,8 @@ local function toggleFly(v)
                 targetVel = Vector3.zero
                 flyVel = flyVel:Lerp(targetVel, 0.1)
             else
-                targetVel = Vector3.new(0, -1.5, 0) -- Animasi mendarat halus
+                -- Turun perlahan agar animasi jatuh tetap aktif tapi tidak nabrak keras
+                targetVel = Vector3.new(0, -0.8, 0)
                 flyVel = flyVel:Lerp(targetVel, 0.08)
             end
         end
@@ -689,7 +688,7 @@ local function logMsg(speakerName, msg)
     notify("💬 " .. speakerName, msg, 3)
 end
 
--- Hook TextChatService (Modern Chat)
+-- TextChatService (Chat Baru)
 pcall(function()
     TextChatService.MessageReceived:Connect(function(textChatMessage)
         if textChatMessage.TextSource then
@@ -698,13 +697,9 @@ pcall(function()
     end)
 end)
 
--- Hook Legacy Chat
-for _, p in ipairs(Players:GetPlayers()) do
-    pcall(function() p.Chatted:Connect(function(msg) logMsg(p.Name, msg) end) end)
-end
-Players.PlayerAdded:Connect(function(p)
-    pcall(function() p.Chatted:Connect(function(msg) logMsg(p.Name, msg) end) end)
-end)
+-- Legacy Chat (Chat Lama)
+for _, p in ipairs(Players:GetPlayers()) do pcall(function() p.Chatted:Connect(function(msg) logMsg(p.Name, msg) end) end) end
+Players.PlayerAdded:Connect(function(p) pcall(function() p.Chatted:Connect(function(msg) logMsg(p.Name, msg) end) end) end)
 
 -- ══════════════════════════════════════════════════════════════
 --  MAIN WINDOW
@@ -779,7 +774,7 @@ task.spawn(function()
             if getgenv()._XKID_ESP_CACHE then
                 for _, c in pairs(getgenv()._XKID_ESP_CACHE) do
                     pcall(function()
-                        if c.bg then c.bg:Destroy() end
+                        if c.texts then c.texts:Remove() end
                         if c.tracer then c.tracer:Remove() end
                         if c.hl then c.hl:Destroy() end
                     end)
@@ -895,12 +890,15 @@ task.spawn(function()
             local ping = 0; pcall(function() ping = math.floor(game:GetService("Stats").PerformanceStats.Ping:GetValue()) end)
             local fc = fps >= 60 and "🟢" or (fps >= 30 and "🟡" or "🔴")
             local pc = ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")
-            pcall(function() netLabel:SetDesc(string.format("%s %d FPS  |  %s %d ms", fc, fps, pc, ping)) end)
+            local fBar = string.rep("█", math.clamp(math.floor(fps/12), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor(fps/12), 0, 10))
+            local pBar = string.rep("█", math.clamp(math.floor((200-ping)/20), 0, 10)) .. string.rep("░", 10 - math.clamp(math.floor((200-ping)/20), 0, 10))
+            
+            pcall(function() netLabel:SetDesc(string.format("%s %d FPS\n[%s]\n\n%s %d ms\n[%s]", fc, fps, fBar, pc, ping, pBar)) end)
         end
         
         if securityLabel then
             local afk = State.Security.afkConn and "✅ Aktif" or "⭕ Mati"
-            local lag = State.Security.antiLag and "✅ Aktif" or "⭕ Mati"
+            local lag = State.Security.antiLag and "⚡ Aktif" or "⭕ Mati"
             local sl = State.Security.shiftLock and "🔒 Aktif" or "🔓 Mati"
             local vd = State.Security.voidConn and "✅ Aktif" or "⭕ Mati"
             pcall(function() securityLabel:SetDesc(string.format("⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n🕳️ Anti-Void: %s\n⚡ FPS Boost: %s", afk, sl, vd, lag)) end)
@@ -909,7 +907,7 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 2: PLAYER
+--  TAB 2: AVATAR & PLAYER
 -- ══════════════════════════════════════════════════════════════
 local T_AV = Window:Tab({ Title = "Player", Icon = "user" })
 
@@ -997,9 +995,9 @@ end
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Camera", Icon = "eye" })
 
-T_CAM:Section({ Title = "🔍 Camera Zoom", Opened = true }):Toggle({ Title = "Max Zoom Out", Desc = "Buka batasan zoom bawaan", Value = false, Callback = function(v)
+T_CAM:Section({ Title = "🔍 Camera Zoom", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v)
     pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end)
-    notify("Camera", v and "Max Zoom Out aktif 🔭" or "Zoom dinormalkan", 2)
+    notify("Camera", v and "Zoom jauh aktif 🔭" or "Zoom dinormalkan", 2)
 end})
 
 local secFC = T_CAM:Section({ Title = "🎥 Freecam", Opened = true })
@@ -1114,7 +1112,7 @@ local secESP = T_ESP:Section({ Title = "Hybrid Detection ESP", Opened = true })
 secESP:Toggle({ Title="Enable ESP", Value=false, Callback=function(v)
     State.ESP.active = v
     if not v and getgenv()._XKID_ESP_CACHE then
-        for _,c in pairs(getgenv()._XKID_ESP_CACHE) do pcall(function() if c.bg then c.bg:Destroy() end; if c.tracer then c.tracer:Remove() end; if c.hl then c.hl:Destroy() end end) end
+        for _,c in pairs(getgenv()._XKID_ESP_CACHE) do pcall(function() c.texts.Visible=false; c.tracer.Visible=false; for _,l in ipairs(c.boxLines) do l.Visible=false end; c.hl.Enabled=false end) end
     end
     notify("ESP", v and "✅ ESP Active (Name & Distance Auto)" or "❌ ESP Disabled", 2)
 end})
@@ -1236,25 +1234,6 @@ secSrv:Button({ Title = "🏃 Server Hop", Callback = function()
         end
     end)
 end})
-
--- Ping Spike Alert (Cooldown 5 Menit = 300 detik)
-task.spawn(function()
-    local pingHistory, lastAlert = {}, 0
-    while getgenv()._XKID_RUNNING do
-        task.wait(1)
-        pcall(function()
-            local cp = math.floor(game:GetService("Stats").PerformanceStats.Ping:GetValue())
-            if cp > 0 then
-                table.insert(pingHistory, cp); if #pingHistory > 20 then table.remove(pingHistory, 1) end
-                local sum = 0; for _, p in ipairs(pingHistory) do sum = sum + p end
-                local ap = sum / #pingHistory
-                if cp >= ap + 150 and cp > 200 and tick() - lastAlert > 300 then
-                    lastAlert = tick(); notify("Ping Spike", "Lag! " .. cp .. " ms 📡", 4)
-                end
-            end
-        end)
-    end
-end)
 
 local secPerf = T_SEC:Section({ Title = "⚡ Performance", Opened = true })
 local advCache = {mats={}, texs={}, shadows=true, level=10, brightness=0, clockTime=0, fogEnd=0}
