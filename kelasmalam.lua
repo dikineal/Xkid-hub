@@ -546,8 +546,8 @@ local function toggleSmartTP(v)
     end
 end
 
--- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (FIXED)
+-- -- ══════════════════════════════════════════════════════════════
+--  FREECAM ENGINE (ROTASI & HEIGHT FIXED)
 -- ══════════════════════════════════════════════════════════════
 local FC = {
     active   = false,
@@ -637,7 +637,7 @@ local function makeFCBtn(name, txt, pos, actionKey)
 end
 
 -- Layout 2x3 di sisi kanan layar
--- Baris 1: ↺ (putar kiri = yaw+)  ↻ (putar kanan = yaw-)
+-- Baris 1: ↺ (putar kiri)  ↻ (putar kanan)
 -- Baris 2: ↑ (naik)  + (zoom in)
 -- Baris 3: ↓ (turun) - (zoom out)
 makeFCBtn("BtnRotL", "↺", UDim2.new(1, -118, 0.5, -84), "rotLeft")
@@ -757,16 +757,19 @@ local function startFreecamLoop()
         local safeDt = math.clamp(dt, 0.001, 0.05)
 
         -- ── 1. ROTASI ─────────────────────────────────────────
-        -- FIXED: ↺ (kiri) = yaw+ (putar kiri), ↻ (kanan) = yaw- (putar kanan)
+        -- FIXED: ↺ (CCW) = yaw+ (kamera putar ke kiri)
+        --        ↻ (CW)  = yaw- (kamera putar ke kanan)
         local btnYawTarget = 0
-        if FC_UI_Btns.rotLeft  then btnYawTarget =  200 * FC.sens end
-        if FC_UI_Btns.rotRight then btnYawTarget = -200 * FC.sens end
+        if FC_UI_Btns.rotLeft  then btnYawTarget =  150 * FC.sens end  -- ↺ = putar kiri
+        if FC_UI_Btns.rotRight then btnYawTarget = -150 * FC.sens end  -- ↻ = putar kanan
 
         if btnYawTarget ~= 0 then
-            I_YawVel = I_YawVel + (btnYawTarget - I_YawVel) * math.clamp(safeDt * 12, 0, 1)
+            -- Ada input tombol: langsung set kecepatan target (responsif)
+            I_YawVel = I_YawVel + (btnYawTarget - I_YawVel) * math.clamp(safeDt * 10, 0, 1)
         else
-            I_YawVel   = I_YawVel   * math.max(0, 1 - safeDt * 14)
-            I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14)
+            -- Tidak ada input: perlambat
+            I_YawVel   = I_YawVel   * math.max(0, 1 - safeDt * 12)
+            I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 12)
         end
 
         FC.yawDeg   = FC.yawDeg   + I_YawVel   * safeDt
@@ -795,13 +798,13 @@ local function startFreecamLoop()
         I_CamVel = I_CamVel:Lerp(moveTarget, lerpFactor)
 
         -- ── 3. KETINGGIAN (E/Q atau tombol ↑↓) ───────────────
-        -- FIXED: Height lerp lebih lambat (factor 3)
+        -- FIXED: Height lerp pakai factor 1 (sangat lambat)
         local heightTarget = 0
         if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up   then heightTarget =  FC.speed * 60 end
         if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end
 
         heightVelocity = heightVelocity + (heightTarget - heightVelocity)
-            * math.clamp(safeDt * 3, 0, 1)
+            * math.clamp(safeDt * 1, 0, 1)
 
         -- ── 4. ZOOM (FOV) ──────────────────────────────────────
         if FC_UI_Btns.zoomIn  then Cam.FieldOfView = math.clamp(Cam.FieldOfView - 1.2, 10, 120) end
