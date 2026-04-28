@@ -165,46 +165,29 @@ local function isOnGround()
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
 
+local function lerpNum(a, b, t)
+    return a + (b - a) * t
+end
+
 local START_TIME = os.time()
 local cachedMapName, lastMapCheck = nil, 0
 local sharedFPS, sharedPing = 60, 0
 
--- FPS Tracker
-TrackC(RS.RenderStepped:Connect(function(dt)
-    if dt > 0 then sharedFPS = math.floor(1 / dt) end
-end))
-
--- Ping Tracker
+-- Trackers
+TrackC(RS.RenderStepped:Connect(function(dt) if dt > 0 then sharedFPS = math.floor(1 / dt) end end))
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.5)
-        pcall(function()
-            local item = StatsService.Network.ServerStatsItem["Data Ping"]
-            if item then sharedPing = math.floor(item:GetValue()) end
-        end)
+        pcall(function() local item = StatsService.Network.ServerStatsItem["Data Ping"]; if item then sharedPing = math.floor(item:GetValue()) end end)
     end
 end)
-
--- Map Cache
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
-        pcall(function()
-            if tick() - lastMapCheck > 30 or not cachedMapName then
-                cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
-                lastMapCheck = tick()
-            end
-        end)
+        pcall(function() if tick() - lastMapCheck > 30 or not cachedMapName then cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name; lastMapCheck = tick() end end)
         task.wait(5)
     end
 end)
-
--- Garbage collector
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        task.wait(120)
-        collectgarbage("collect")
-    end
-end)
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
 -- ══════════════════════════════════════════════════════════════
 --  CHARACTER HANDLER
@@ -258,7 +241,7 @@ local function toggleShiftLock(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FAST RESPAWN
+--  FAST RESPAWN & REFRESH
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
@@ -293,9 +276,6 @@ local function fastRespawn()
     end)
 end
 
--- ══════════════════════════════════════════════════════════════
---  REFRESH CHARACTER
--- ══════════════════════════════════════════════════════════════
 local function refreshCharacter()
     if State.Avatar.isRefreshing then return end
     local char, hrp = LP.Character, getRoot()
@@ -572,14 +552,13 @@ end
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70 }
 local fcMoveTouch, fcMoveSt, fcRotTouch, fcRotLast = nil, nil, nil, nil
 local fcKeysHeld = {}
-local FC_UI_Btns = { up = false, down = false, rotUp = false, rotDown = false, zoomIn = false, zoomOut = false }
+local FC_UI_Btns = { up = false, down = false, rotLeft = false, rotRight = false, zoomIn = false, zoomOut = false }
 
 local I_FlyJoy = Vector2.zero
 local I_CamVel = Vector3.zero
 local I_HeightVel = 0
-local I_PitchVel = 0
+local I_RotVel = 0
 
--- Build Mobile Overlay UI for Freecam
 local FCUI = Instance.new("ScreenGui")
 FCUI.Name = "XKID_FreecamUI"
 FCUI.ResetOnSpawn = false
@@ -609,9 +588,9 @@ local function makeFCBtn(name, txt, pos, actionKey)
     return b
 end
 
--- Layout Kanan 2x3 Matrix (Smooth Action Buttons)
-local btnRotL = makeFCBtn("BtnRotL", "↺", UDim2.new(1, -120, 0.5, -80), "rotUp")
-local btnRotR = makeFCBtn("BtnRotR", "↻", UDim2.new(1, -60, 0.5, -80), "rotDown")
+-- Layout Kanan 2x3 Matrix (Sumbu Yaw + Zoom)
+local btnRotL = makeFCBtn("BtnRotL", "↺", UDim2.new(1, -120, 0.5, -80), "rotLeft")
+local btnRotR = makeFCBtn("BtnRotR", "↻", UDim2.new(1, -60, 0.5, -80), "rotRight")
 local btnUp   = makeFCBtn("BtnUp", "↑", UDim2.new(1, -120, 0.5, -20), "up")
 local btnZIn  = makeFCBtn("BtnZIn", "+", UDim2.new(1, -60, 0.5, -20), "zoomIn")
 local btnDown = makeFCBtn("BtnDown", "↓", UDim2.new(1, -120, 0.5, 40), "down")
@@ -661,15 +640,15 @@ end
 
 local function stopFreecamCapture()
     for _, c in ipairs(fcConns) do c:Disconnect() end
-    fcConns = {}; fcMoveTouch = nil; fcMoveSt = nil; fcRotTouch = nil; fcRotLast = nil; State.Move.inf_virtual_joy = Vector2.zero; fcKeysHeld = {}; FC_UI_Btns = { up = false, down = false, rotUp = false, rotDown = false, zoomIn = false, zoomOut = false }
-    I_FlyJoy = Vector2.zero; I_CamVel = Vector3.zero; I_HeightVel = 0; I_PitchVel = 0
+    fcConns = {}; fcMoveTouch = nil; fcMoveSt = nil; fcRotTouch = nil; fcRotLast = nil; State.Move.inf_virtual_joy = Vector2.zero; fcKeysHeld = {}; FC_UI_Btns = { up = false, down = false, rotLeft = false, rotRight = false, zoomIn = false, zoomOut = false }
+    I_FlyJoy = Vector2.zero; I_CamVel = Vector3.zero; I_HeightVel = 0; I_RotVel = 0
 end
 
 local function startFreecamLoop()
     RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not FC.active then return end; Cam.CameraType = Enum.CameraType.Scriptable
         
-        -- Smooth Joystick & Keys
+        -- Instant Joystick Input (No delay)
         local targetJoy = onMobile and (State.Move.inf_virtual_joy or Vector2.zero) or Vector2.zero
         if not onMobile then
             if fcKeysHeld[Enum.KeyCode.W] then targetJoy = targetJoy + Vector2.new(0, -1) end
@@ -677,39 +656,37 @@ local function startFreecamLoop()
             if fcKeysHeld[Enum.KeyCode.D] then targetJoy = targetJoy + Vector2.new(1, 0) end
             if fcKeysHeld[Enum.KeyCode.A] then targetJoy = targetJoy + Vector2.new(-1, 0) end
         end
-        I_FlyJoy = I_FlyJoy:Lerp(targetJoy, math.clamp(dt * 8, 0, 1))
+        I_FlyJoy = targetJoy 
 
-        -- Smooth Height Velocity
+        -- Smooth Height Velocity (Nerfed to 0.5 for stability)
         local targetHeight = 0
-        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then targetHeight = 1 end
-        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then targetHeight = -1 end
-        -- Custom Lerp math
-        I_HeightVel = I_HeightVel + (targetHeight - I_HeightVel) * math.clamp(dt * 10, 0, 1)
+        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then targetHeight = 0.5 end
+        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then targetHeight = -0.5 end
+        I_HeightVel = lerpNum(I_HeightVel, targetHeight, math.clamp(dt * 15, 0, 1))
 
-        -- Smooth Pitch (Vertical Rotation)
-        local targetPitch = 0
-        if FC_UI_Btns.rotUp then targetPitch = 1 end
-        if FC_UI_Btns.rotDown then targetPitch = -1 end
-        I_PitchVel = I_PitchVel + (targetPitch - I_PitchVel) * math.clamp(dt * 8, 0, 1)
-        FC.pitchDeg = math.clamp(FC.pitchDeg + (I_PitchVel * FC.sens * 8 * dt * 60), -80, 80)
+        -- Smooth Yaw Rotation (Jam 9 / Jam 3)
+        local targetRot = 0
+        if FC_UI_Btns.rotLeft then targetRot = 1 end
+        if FC_UI_Btns.rotRight then targetRot = -1 end
+        I_RotVel = lerpNum(I_RotVel, targetRot, math.clamp(dt * 15, 0, 1))
+        FC.yawDeg = FC.yawDeg + (I_RotVel * FC.sens * 10 * dt * 60)
 
         -- Smooth FOV (Cinematic Zoom)
         local targetFov = Cam.FieldOfView
         if FC_UI_Btns.zoomIn then targetFov = math.clamp(targetFov - 1.5, 10, 120) end
         if FC_UI_Btns.zoomOut then targetFov = math.clamp(targetFov + 1.5, 10, 120) end
-        Cam.FieldOfView = Cam.FieldOfView + (targetFov - Cam.FieldOfView) * math.clamp(dt * 10, 0, 1)
+        Cam.FieldOfView = lerpNum(Cam.FieldOfView, targetFov, math.clamp(dt * 10, 0, 1))
 
-        -- Apply Movement
+        -- Calculate Target Movement Vector
         local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
         local inputMove = (camCF.LookVector * (-I_FlyJoy.Y) + camCF.RightVector * I_FlyJoy.X + Vector3.new(0, I_HeightVel, 0))
-        I_CamVel = I_CamVel:Lerp(inputMove, math.clamp(dt * 12, 0, 1))
+        
+        -- Smooth Acceleration / Gliding
+        I_CamVel = I_CamVel:Lerp(inputMove, math.clamp(dt * 15, 0, 1))
 
+        -- Apply Final Position & Rotation
         if I_CamVel.Magnitude > 0.01 then FC.pos = FC.pos + (I_CamVel * FC.speed * dt * 60) end
         Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
-        
-        local hrp, hum = getRoot(), getHum()
-        if hrp and not hrp.Anchored then hrp.Anchored = true end
-        if hum then hum:ChangeState(Enum.HumanoidStateType.Physics); hum.WalkSpeed = 0; hum.JumpPower = 0 end
     end)
 end
 
@@ -1015,10 +992,10 @@ local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video" })
 local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true })
 secFC:Toggle({ Title = "Enable Freecam", Value = false, Callback = function(v)
     FC.active = v; if v then local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry)
-        local hrp, hum = getRoot(), getHum(); if hrp then FC.savedCF = hrp.CFrame; hrp.Anchored = true end
+        local hrp = getRoot(); if hrp then FC.savedCF = hrp.CFrame; hrp.Anchored = true end
         FC.origFov = Cam.FieldOfView
         startFreecamCapture(); startFreecamLoop(); if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end; notify("Freecam", "Drone deployed ✅", 2)
-    else stopFreecamLoop(); stopFreecamCapture(); local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; if FC.savedCF then hrp.CFrame = FC.savedCF end end
+    else stopFreecamLoop(); stopFreecamCapture(); local hrp = getRoot(); if hrp then hrp.Anchored = false; if FC.savedCF then hrp.CFrame = FC.savedCF end end
         Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; notify("Freecam", "Drone recalled ❌", 2)
     end
 end})
@@ -1255,4 +1232,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine v1.7 Ready")
+print("✅ XKID Engine v1.8 Ready")
