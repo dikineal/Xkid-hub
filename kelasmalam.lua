@@ -12,7 +12,7 @@ local RS = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
 -- ══════════════════════════════════════════════════════════════
---  0. CLEANUP & INITIALIZATION (SIMPEL)
+--  0. CLEANUP AWAL
 -- ══════════════════════════════════════════════════════════════
 if getgenv()._XKID_RUNNING then
     getgenv()._XKID_RUNNING = false
@@ -854,7 +854,7 @@ end})
 -- ══════════════════════════════════════════════════════════════
 --  TAB 3: TELEPORT
 -- ══════════════════════════════════════════════════════════════
-local T_TP = Window:Tab({ Title = "Teleport", Icon = "crosshair" })
+local T_TP = Window:Tab({ Title = "Navigation", Icon = "crosshair" })
 T_TP:Section({ Title = "Point Teleport", Opened = true }):Toggle({ Title = "Click TP Tool", Value = false, Callback = function(v)
     if v then
         if State.Teleport.clickTool then State.Teleport.clickTool:Destroy() end
@@ -904,9 +904,9 @@ for i = 1, 3 do
 end
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 4: VISUAL / CAM
+--  TAB 4: CAMERA
 -- ══════════════════════════════════════════════════════════════
-local T_CAM = Window:Tab({ Title = "Visual / Cam", Icon = "focus" })
+local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus" })
 T_CAM:Section({ Title = "Zoom Override", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
 
 local secFC = T_CAM:Section({ Title = "Freecam", Opened = true })
@@ -951,7 +951,7 @@ secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Defaul
 --  TAB 5: WORLD EDITOR
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "World Editor", Icon = "layers" })
-local secFilter = T_WO:Section({ Title = "Shaders & Filters", Opened = true })
+local secFilter = T_WO:Section({ Title = "Shaders", Opened = true })
 
 local function resetLighting()
     for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end
@@ -959,7 +959,7 @@ local function resetLighting()
     Lighting.Ambient = Color3.fromRGB(127, 127, 127); Lighting.OutdoorAmbient = Color3.fromRGB(127, 127, 127)
     Lighting.ColorShift_Bottom = Color3.new(0, 0, 0); Lighting.ColorShift_Top = Color3.new(0, 0, 0)
     Lighting.GlobalShadows = true
-    Lighting.FogEnd = 100000; notify("Environment", "Shaders reset ✅", 2)
+    Lighting.FogEnd = 100000; notify("World Editor", "Shaders reset ✅", 2)
 end
 
 local function applyFilter(filter)
@@ -975,19 +975,23 @@ local function applyFilter(filter)
         Lighting.Brightness = 3
         Lighting.ClockTime = 14
         Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 150)
-        notify("System", "Full Bright HD Active ☀️", 2)
-        return
     elseif filter == "Ultra HD"   then cc.Saturation=0.2;  cc.Contrast=0.3;  cc.Brightness=0.1;   bloom.Intensity=0.2;  Lighting.ClockTime=14; Lighting.GlobalShadows = true
     elseif filter == "Sharp HD"   then cc.Saturation=0.1;  cc.Contrast=0.4;  cc.Brightness=0;     bloom.Intensity=0;    Lighting.ClockTime=12; Lighting.GlobalShadows = true
     elseif filter == "Realistic"  then cc.Saturation=0.1;  cc.Contrast=0.2;  cc.Brightness=0.1;   bloom.Intensity=0.15; Lighting.ClockTime=15; Lighting.GlobalShadows = true
+    elseif filter == "Night HD"   then cc.TintColor=Color3.fromRGB(200,200,255); cc.Saturation=0.1; cc.Contrast=0.2; cc.Brightness=0.1; bloom.Intensity=0.15; Lighting.ClockTime=1; Lighting.GlobalShadows = true
+    elseif filter == "Luxury HD"  then cc.TintColor=Color3.fromRGB(255,230,200); cc.Saturation=0.3; cc.Contrast=0.3; cc.Brightness=0.1; bloom.Intensity=0.4;  Lighting.ClockTime=17; Lighting.GlobalShadows = true
+    elseif filter == "Pastel HD"  then cc.TintColor=Color3.fromRGB(255,225,235); cc.Saturation=-0.1; cc.Contrast=-0.1; bloom.Intensity=0.6; bloom.Size=40; Lighting.ClockTime=8; Lighting.GlobalShadows = true
     end
-    notify("Environment", filter.." applied ✅", 2)
+    notify("World Editor", filter.." applied ✅", 2)
 end
 
 secFilter:Button({ Title = "☀️ Full Bright HD",  Callback = function() applyFilter("Full Bright HD")  end })
 secFilter:Button({ Title = "💎 Ultra HD",      Callback = function() applyFilter("Ultra HD")     end })
-secFilter:Button({ Title = "🌍 Realistic",     Callback = function() applyFilter("Realistic")    end })
 secFilter:Button({ Title = "👁️ Sharp HD",       Callback = function() applyFilter("Sharp HD")     end })
+secFilter:Button({ Title = "🌍 Realistic",     Callback = function() applyFilter("Realistic")    end })
+secFilter:Button({ Title = "🌃 Night HD",      Callback = function() applyFilter("Night HD")     end })
+secFilter:Button({ Title = "✨ Luxury HD",     Callback = function() applyFilter("Luxury HD")    end })
+secFilter:Button({ Title = "☁ Pastel HD",     Callback = function() applyFilter("Pastel HD")    end })
 secFilter:Button({ Title = "🔄 Reset Lighting",Callback = function() applyFilter("Default")      end })
 
 local secAtmos = T_WO:Section({ Title = "Atmosphere Control", Opened = false })
@@ -1003,9 +1007,9 @@ local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Lev
 secGfx:Slider({ Title="Quality Level", Step=1, Value={Min=1,Max=10,Default=5}, Callback=function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: ESP SCANNER
+--  TAB 6: RADAR
 -- ══════════════════════════════════════════════════════════════
-local T_ESP = Window:Tab({ Title = "ESP Scanner", Icon = "cpu" })
+local T_ESP = Window:Tab({ Title = "Radar", Icon = "cpu" })
 local secESP = T_ESP:Section({ Title = "Detection System", Opened = true })
 secESP:Toggle({ Title = "Enable Radar", Value = false, Callback = function(v)
     State.ESP.active = v
@@ -1022,9 +1026,9 @@ secESPColor:Dropdown({ Title="Suspect Color", Values={"Merah","Hijau","Biru","Ku
 secESPColor:Dropdown({ Title="Glitch Acc Color", Values={"Orange","Merah","Hijau","Biru","Kuning","Ungu","Cyan","Pink","Putih","Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G=colorMap[v]; State.ESP.boxColor_G=colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: TOOLS & MISC
+--  TAB 7: UTILITY
 -- ══════════════════════════════════════════════════════════════
-local T_UTIL = Window:Tab({ Title = "Tools & Misc", Icon = "terminal" })
+local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal" })
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Callback = function(v) State.Utility.chatLog = v; notify("Utility", v and "Logger running ✅" or "Logger stopped ❌", 2) end })
 chatLogPanel = secChat:Paragraph({ Title = "Console Output", Desc = "Waiting for data..." })
@@ -1038,9 +1042,9 @@ local secMisc = T_UTIL:Section({ Title = "Data Extraction", Opened = true })
 secMisc:Button({ Title = "Copy JobID", Callback = function() pcall(function() setclipboard(game.JobId) end); notify("Utility", "JobID copied ✅", 2) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: PROTECTION
+--  TAB 8: SECURITY
 -- ══════════════════════════════════════════════════════════════
-local T_SEC = Window:Tab({ Title = "Protection", Icon = "shield-alert" })
+local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert" })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true })
 secProt:Toggle({ Title = "Anti Void 🛡️", Value = false, Callback = function(v)
     if v then State.Security.voidConn = TrackC(RS.Heartbeat:Connect(function() local hrp = getRoot(); if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then hrp.AssemblyLinearVelocity = Vector3.zero; hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0); notify("Security", "Anti-Void saved entity 🛡️", 2) end end))
@@ -1098,9 +1102,9 @@ end})
 T_SEC:Section({ Title = "Camera Lock", Opened = true }):Toggle({ Title = "Force Shift Lock", Value = false, Callback = function(v) toggleShiftLock(v) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 9: SETTINGS
+--  TAB 9: CONFIG
 -- ══════════════════════════════════════════════════════════════
-local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
+local T_SET = Window:Tab({ Title = "Config", Icon = "settings" })
 local secCfg = T_SET:Section({ Title = "File Management", Opened = true })
 local cfgName = "XKID_Config"
 secCfg:Input({ Title = "Config Name", Default = "XKID_Config", Callback = function(v) cfgName = v end })
@@ -1145,4 +1149,4 @@ task.spawn(function() pcall(function() cachedMapName = game:GetService("Marketpl
 task.wait(0.5)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine v1.1 Ready")
+print("✅ XKID Engine v1.0 Ready")
