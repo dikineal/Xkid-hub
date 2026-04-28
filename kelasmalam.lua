@@ -771,7 +771,7 @@ end)
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard" })
 local secWelcome = T_HOME:Section({ Title = "System Access", Opened = true })
 
-secWelcome:Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] Operator : @WTF.XKID\n[ 📱 ] TikTok   : @wtf.xkid\n[ 💬 ] Discord  : @4Sharken" })
+secWelcome:Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
 secWelcome:Button({ Title = "Copy Discord Link", Desc = "Join the network", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
 
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true })
@@ -806,7 +806,7 @@ task.spawn(function()
                 local pCount = #Players:GetPlayers(); local mCount = Players.MaxPlayers
                 local uptime = formatTime(os.difftime(os.time(), START_TIME))
                 local job = game.JobId ~= "" and game.JobId:sub(1, 8).."..." or "N/A"
-                srvLabel:SetDesc(string.format("[ 🗺️ ] Grid     : %s\n[ 🆔 ] Node     : %s\n[ 👥 ] Entities : %d / %d\n[ ⏳ ] Session  : %s", cachedMapName, job, pCount, mCount, uptime))
+                srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s", cachedMapName, job, pCount, mCount, uptime))
             end
         end)
         pcall(function()
@@ -816,7 +816,7 @@ task.spawn(function()
                 local fpsBar = makeBarA(fps, 120, 14, "FPS")
                 local pingBar = makeBarA(ping, 200, 14, "PING")
                 
-                netLabel:SetDesc(string.format("<b>FPS  </b> %s <font color='#FFFFFF'>%d</font>\n<b>PING </b> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping))
+                netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping))
             end
         end)
         pcall(function()
@@ -825,7 +825,7 @@ task.spawn(function()
                 local sl = State.Security.shiftLock and "🟢 LOCKED" or "🔴 UNLOCKED"
                 local vd = State.Security.voidConn and "🟢 SECURED" or "🔴 OFFLINE"
                 local lag = State.Security.antiLag and "🟢 ACTIVE" or "🔴 INACTIVE"
-                securityLabel:SetDesc(string.format("[ ⏰ ] AFK Protocol : %s\n[ 🔒 ] Shift Lock   : %s\n[ 🕳️ ] Void Shield  : %s\n[ ⚡ ] Frame Boost  : %s", afk, sl, vd, lag))
+                securityLabel:SetDesc(string.format("[ ⏰ ] <font face='RobotoMono'>AFK Protocol :</font> %s\n[ 🔒 ] <font face='RobotoMono'>Shift Lock   :</font> %s\n[ 🕳️ ] <font face='RobotoMono'>Void Shield  :</font> %s\n[ ⚡ ] <font face='RobotoMono'>Frame Boost  :</font> %s", afk, sl, vd, lag))
             end
         end)
     end
@@ -924,7 +924,7 @@ for i = 1, 3 do
 end
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 4: CAMERA
+--  TAB 4: VISION
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus" })
 T_CAM:Section({ Title = "Zoom Override", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
@@ -1169,4 +1169,4 @@ task.spawn(function() pcall(function() cachedMapName = game:GetService("Marketpl
 task.wait(0.5)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine v1.1 Ready")
+print("✅ XKID Engine v1.2 Ready")
