@@ -882,7 +882,14 @@ T_TP:Section({ Title = "Point Teleport", Opened = true }):Toggle({ Title = "Clic
         local tool = Instance.new("Tool"); tool.Name = "Click TP"; tool.RequiresHandle = false; tool.Parent = LP.Backpack
         State.Teleport.clickTool = tool; State.Teleport.clickActive = true
         State.Teleport.clickConn = tool.Activated:Connect(function()
-            local m, r = LP:GetMouse(), getRoot(); if r and m and m.Hit then r.CFrame = m.Hit + Vector3.new(0, 3, 0) end
+            local m, r = LP:GetMouse(), getRoot()
+            if r and m then
+                local targetPos = m.Hit and m.Hit.Position
+                if targetPos then
+                    r.CFrame = CFrame.new(targetPos + Vector3.new(0, 3.5, 0))
+                    r.AssemblyLinearVelocity = Vector3.zero
+                end
+            end
         end)
         notify("Teleport", "Tool injected ✅", 2)
     else
@@ -992,9 +999,11 @@ local function applyFilter(filter)
     if filter == "Full Bright HD" then
         cc:Destroy(); bloom:Destroy()
         Lighting.GlobalShadows = false
-        Lighting.Brightness = 3
-        Lighting.ClockTime = 14
-        Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 150)
+        Lighting.Brightness = 5
+        Lighting.ClockTime = 12
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        Lighting.FogEnd = 100000
     elseif filter == "Ultra HD"   then cc.Saturation=0.2;  cc.Contrast=0.3;  cc.Brightness=0.1;   bloom.Intensity=0.2;  Lighting.ClockTime=14; Lighting.GlobalShadows = true
     elseif filter == "Sharp HD"   then cc.Saturation=0.1;  cc.Contrast=0.4;  cc.Brightness=0;     bloom.Intensity=0;    Lighting.ClockTime=12; Lighting.GlobalShadows = true
     elseif filter == "Realistic"  then cc.Saturation=0.1;  cc.Contrast=0.2;  cc.Brightness=0.1;   bloom.Intensity=0.15; Lighting.ClockTime=15; Lighting.GlobalShadows = true
@@ -1021,10 +1030,15 @@ secAtmos:Slider({ Title="Exposure", Step=0.1, Value={Min=-5,Max=5,Default=0}, Ca
 secAtmos:Slider({ Title="ClockTime", Step=0.1, Value={Min=0,Max=24,Default=14}, Callback=function(v) Lighting.ClockTime=v end })
 secAtmos:Slider({ Title="Contrast", Step=0.1, Value={Min=-2,Max=2,Default=0}, Callback=function(v) getEff("ColorCorrectionEffect").Contrast=v end })
 secAtmos:Slider({ Title="Bloom", Step=0.1, Value={Min=0,Max=5,Default=0}, Callback=function(v) getEff("BloomEffect").Intensity=v end })
+secAtmos:Button({ Title="🔄 Reset Atmosphere", Callback=function() 
+    Lighting.Brightness = 1; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14
+    getEff("ColorCorrectionEffect").Contrast = 0; getEff("BloomEffect").Intensity = 0
+    notify("Atmosphere", "Reset to normal ✅", 2)
+end })
 
 local secGfx = T_WO:Section({ Title = "Graphics Override", Opened = false })
 local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Level09",[6]="Level11",[7]="Level13",[8]="Level15",[9]="Level17",[10]="Level21"}
-secGfx:Slider({ Title="Quality Level", Step=1, Value={Min=1,Max=10,Default=5}, Callback=function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
+secGfx:Slider({ Title="Quality Level", Step=1, Value={Min=1,Max=10,Default=1}, Callback=function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 6: RADAR
@@ -1127,8 +1141,10 @@ T_SEC:Section({ Title = "Camera Lock", Opened = true }):Toggle({ Title = "Force 
 local T_SET = Window:Tab({ Title = "Config", Icon = "settings" })
 local secCfg = T_SET:Section({ Title = "File Management", Opened = true })
 local cfgName = "XKID_Config"
+local currentConfig = "No config"
+
 secCfg:Input({ Title = "Config Name", Default = "XKID_Config", Callback = function(v) cfgName = v end })
-secCfg:Button({ Title = "Save Config", Callback = function()
+secCfg:Button({ Title = "💾 Save Config", Callback = function()
     pcall(function()
         if makefolder and writefile then if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end
             local data = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS }, ESP = { tracerMode = State.ESP.tracerMode, maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag } }
@@ -1136,7 +1152,8 @@ secCfg:Button({ Title = "Save Config", Callback = function()
         end
     end)
 end})
-local configDrop = secCfg:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected)
+local configDrop = secCfg:Dropdown({ Title = "📂 Load Config", Values = getConfigList(), Callback = function(selected)
+    currentConfig = selected
     if selected == "No config" then return end
     pcall(function()
         if isfile and readfile and isfile("XKID_HUB/"..selected..".json") then
@@ -1150,7 +1167,21 @@ local configDrop = secCfg:Dropdown({ Title = "Load Config", Values = getConfigLi
         end
     end)
 end})
-secCfg:Button({ Title = "Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end); notify("Config", "Files updated ✅", 2) end })
+secCfg:Button({ Title = "🗑️ Hapus Config", Callback = function()
+    if currentConfig ~= "No config" and currentConfig ~= "" then
+        pcall(function()
+            if isfile and delfile and isfile("XKID_HUB/"..currentConfig..".json") then
+                delfile("XKID_HUB/"..currentConfig..".json")
+                notify("Config", currentConfig .. " dihapus 🗑️", 2)
+                pcall(function() configDrop:Refresh(getConfigList(), true) end)
+                currentConfig = "No config"
+            end
+        end)
+    else
+        notify("Config", "Pilih config dari Load List dulu! ⚠️", 2)
+    end
+end})
+secCfg:Button({ Title = "🔄 Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end); notify("Config", "Files updated ✅", 2) end })
 
 local secTheme = T_SET:Section({ Title = "Interface", Opened = true })
 secTheme:Dropdown({ Title = "Theme", Values = (function() local n = {}; for name in pairs(WindUI:GetThemes()) do table.insert(n, name) end; table.sort(n); if not table.find(n, "Crimson") then table.insert(n, 1, "Crimson") end; return n end)(), Value = "Crimson", Callback = function(s) pcall(function() WindUI:SetTheme(s) end) end })
@@ -1169,4 +1200,4 @@ task.spawn(function() pcall(function() cachedMapName = game:GetService("Marketpl
 task.wait(0.5)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine v1.2 Ready")
+print("✅ XKID Engine v1.3 Ready")
