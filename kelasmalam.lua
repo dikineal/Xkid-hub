@@ -34,7 +34,7 @@ getgenv()._XKID_ESP_CACHE = {}
 if getgenv()._XKID_LOADED then
     pcall(function()
         for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
-            if v.Name == "WindUI" then v:Destroy() end
+            if v.Name == "WindUI" or v.Name == "XKID_FreecamUI" then v:Destroy() end
         end
         for _, v in pairs(game:GetService("Lighting"):GetChildren()) do
             if v.Name == "_XKID_FILTER" then v:Destroy() end
@@ -47,6 +47,7 @@ if getgenv()._XKID_LOADED then
     pcall(function() RS:UnbindFromRenderStep("XKIDFly") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
+    pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
     task.wait(0.2)
     collectgarbage("collect")
 end
@@ -73,6 +74,7 @@ local StatsService = game:GetService("Stats")
 local CoreGui      = game:GetService("CoreGui")
 local GuiService   = game:GetService("GuiService")
 local TextChatService = game:GetService("TextChatService")
+local StarterGui   = game:GetService("StarterGui")
 local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
@@ -86,7 +88,7 @@ local State = {
     SoftFling = { active = false, power = 50000 },
     Teleport  = { selectedTarget = "", clickTool = nil, clickConn = nil, clickActive = false },
     Security  = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, arConn = nil, arFallback = nil },
-    Cinema    = { active = false },
+    Cinema    = { hideUI = false, hideNames = false, nameConn = nil, cachedGuis = {} },
     Avatar    = { isRefreshing = false },
     Utility   = { chatLog = false, chatTarget = nil, chatHistory = {} },
     ESP = {
@@ -360,7 +362,7 @@ end
 TrackC(Players.PlayerRemoving:Connect(clearPlayerCache))
 
 local espsortedPlayers = {}
--- Background ESP Data Tracker (Sort & Check)
+-- Background ESP Data Tracker
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         if State.ESP.active then
@@ -369,7 +371,6 @@ task.spawn(function()
             
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LP and p.Character then
-                    -- Detection Logics
                     local isSus, isGlitch, reason = false, false, ""
                     for _, v in pairs(p.Character:GetChildren()) do
                         if v:IsA("BasePart") and (v.Size.X > 30 or v.Size.Y > 30 or v.Size.Z > 30) then isSus = true; reason = "Map Blocker"; break
@@ -394,7 +395,6 @@ task.spawn(function()
                         State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason 
                     end
                     
-                    -- Distance Sort
                     if myHrp then
                         local hrp = getCharRoot(p.Character)
                         local hum = p.Character:FindFirstChildOfClass("Humanoid")
@@ -421,7 +421,6 @@ TrackC(RS.RenderStepped:Connect(function()
     if not myHrp then return end
     local vp = Cam.ViewportSize; local center = Vector2.new(vp.X / 2, vp.Y / 2)
     
-    -- Hide all first
     for _, c in pairs(State.ESP.cache) do
         pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end)
     end
@@ -551,11 +550,39 @@ local function toggleFly(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE
+--  FREECAM ENGINE (UPGRADED)
 -- ══════════════════════════════════════════════════════════════
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, speed = 3, sens = 0.25, savedCF = nil }
 local fcMoveTouch, fcMoveSt, fcRotTouch, fcRotLast = nil, nil, nil, nil
 local fcJoy, fcConns, fcKeysHeld = Vector2.zero, {}, {}
+local FC_UI_Btns = { up = false, down = false, left = false, right = false }
+
+-- Build Mobile Overlay UI for Freecam
+local FCUI = Instance.new("ScreenGui")
+FCUI.Name = "XKID_FreecamUI"
+FCUI.ResetOnSpawn = false
+FCUI.ZIndexBehavior = Enum.ZIndexBehavior.Global
+FCUI.Enabled = false
+FCUI.Parent = CoreGui
+getgenv()._XKID_FCUI = FCUI
+
+local function makeFCBtn(name, txt, pos, actionKey)
+    local b = Instance.new("TextButton", FCUI)
+    b.Name = name; b.Size = UDim2.new(0, 55, 0, 55); b.Position = pos
+    b.BackgroundColor3 = Color3.fromRGB(15, 15, 15); b.BackgroundTransparency = 0.4
+    b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 28; b.Font = Enum.Font.GothamBold
+    local uic = Instance.new("UICorner", b); uic.CornerRadius = UDim.new(0, 12)
+    local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(220, 20, 60); uis.Thickness = 2; uis.Transparency = 0.3
+    
+    b.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then FC_UI_Btns[actionKey] = true end end)
+    b.InputEnded:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then FC_UI_Btns[actionKey] = false end end)
+    return b
+end
+
+local btnUp = makeFCBtn("BtnUp", "+", UDim2.new(1, -75, 0.5, -60), "up")
+local btnDown = makeFCBtn("BtnDown", "-", UDim2.new(1, -75, 0.5, 10), "down")
+local btnLeft = makeFCBtn("BtnLeft", "↺", UDim2.new(0.5, -70, 1, -90), "left")
+local btnRight = makeFCBtn("BtnRight", "↻", UDim2.new(0.5, 15, 1, -90), "right")
 
 local function startFreecamCapture()
     fcKeysHeld = {}
@@ -597,14 +624,22 @@ end
 local function stopFreecamCapture()
     for _, c in ipairs(fcConns) do c:Disconnect() end
     fcConns = {}; fcMoveTouch = nil; fcMoveSt = nil; fcRotTouch = nil; fcRotLast = nil; fcJoy = Vector2.zero; fcKeysHeld = {}; FC._mouseRot = false; UIS.MouseBehavior = Enum.MouseBehavior.Default
+    FC_UI_Btns = { up = false, down = false, left = false, right = false }
 end
 
 local function startFreecamLoop()
     RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not FC.active then return end; Cam.CameraType = Enum.CameraType.Scriptable
+        
+        -- Override Rotations from UI
+        if FC_UI_Btns.left then FC.yawDeg = FC.yawDeg + (FC.sens * 10) end
+        if FC_UI_Btns.right then FC.yawDeg = FC.yawDeg - (FC.sens * 10) end
+
         local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
         local move = Vector3.zero
-        if onMobile then move = camCF.LookVector * (-fcJoy.Y) + camCF.RightVector * fcJoy.X
+        
+        if onMobile then 
+            move = camCF.LookVector * (-fcJoy.Y) + camCF.RightVector * fcJoy.X
         else
             if fcKeysHeld[Enum.KeyCode.W] then move = move + camCF.LookVector end
             if fcKeysHeld[Enum.KeyCode.S] then move = move - camCF.LookVector end
@@ -613,6 +648,11 @@ local function startFreecamLoop()
             if fcKeysHeld[Enum.KeyCode.E] then move = move + Vector3.new(0, 1, 0) end
             if fcKeysHeld[Enum.KeyCode.Q] then move = move - Vector3.new(0, 1, 0) end
         end
+
+        -- Override Height from UI
+        if FC_UI_Btns.up then move = move + Vector3.new(0, 1, 0) end
+        if FC_UI_Btns.down then move = move - Vector3.new(0, 1, 0) end
+
         if move.Magnitude > 0 then FC.pos = FC.pos + move.Unit * (FC.speed * dt * 60) end
         Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
         local hrp, hum = getRoot(), getHum()
@@ -936,23 +976,6 @@ end
 local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus" })
 T_CAM:Section({ Title = "Zoom Override", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
 
-local secFC = T_CAM:Section({ Title = "Freecam", Opened = true })
-secFC:Toggle({ Title = "Enable Freecam", Value = false, Callback = function(v)
-    FC.active = v; State.Cinema.active = v
-    if v then
-        local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry)
-        local hrp, hum = getRoot(), getHum(); if hrp then FC.savedCF = hrp.CFrame; hrp.Anchored = true end
-        if hum then hum.WalkSpeed = 0; hum.JumpPower = 0; hum:ChangeState(Enum.HumanoidStateType.Physics) end
-        startFreecamCapture(); startFreecamLoop(); notify("Vision", "Freecam enabled ✅", 2)
-    else
-        stopFreecamLoop(); stopFreecamCapture()
-        local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; if FC.savedCF then hrp.CFrame = FC.savedCF end end
-        if hum then hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp; hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
-        Cam.CameraType = Enum.CameraType.Custom; notify("Vision", "Freecam disabled ❌", 2)
-    end
-end})
-secFC:Slider({ Title = "Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
-
 local secSP = T_CAM:Section({ Title = "Spectator Mode", Opened = true })
 local specDropOpts = getDisplayNames()
 local specDropdown = secSP:Dropdown({ Title = "Select Target", Values = specDropOpts, Callback = function(v)
@@ -975,7 +998,86 @@ secSP:Toggle({ Title = "First Person View", Value = false, Callback = function(v
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: WORLD EDITOR
+--  TAB 5: FREECAM (NEW DEDICATED TAB)
+-- ══════════════════════════════════════════════════════════════
+local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video" })
+
+local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true })
+secFC:Toggle({ Title = "Enable Freecam", Value = false, Callback = function(v)
+    FC.active = v; State.Cinema.active = v
+    if v then
+        local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry)
+        local hrp, hum = getRoot(), getHum(); if hrp then FC.savedCF = hrp.CFrame; hrp.Anchored = true end
+        if hum then hum.WalkSpeed = 0; hum.JumpPower = 0; hum:ChangeState(Enum.HumanoidStateType.Physics) end
+        startFreecamCapture(); startFreecamLoop(); 
+        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end
+        notify("Freecam", "Drone deployed ✅", 2)
+    else
+        stopFreecamLoop(); stopFreecamCapture()
+        local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; if FC.savedCF then hrp.CFrame = FC.savedCF end end
+        if hum then hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp; hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
+        Cam.CameraType = Enum.CameraType.Custom; 
+        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end
+        notify("Freecam", "Drone recalled ❌", 2)
+    end
+end})
+secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
+secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
+
+local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true })
+secCine:Toggle({ Title = "Hide All UI (Safe Mode)", Value = false, Callback = function(v)
+    State.Cinema.hideUI = v
+    if v then
+        for _, gui in pairs(LP.PlayerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                table.insert(State.Cinema.cachedGuis, gui)
+                gui.Enabled = false
+            end
+        end
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+        notify("Cinematic", "UI Hidden. Enjoy the view 🎬", 2)
+    else
+        for _, gui in pairs(State.Cinema.cachedGuis) do
+            if gui and gui.Parent then gui.Enabled = true end
+        end
+        State.Cinema.cachedGuis = {}
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+        notify("Cinematic", "UI Restored ✅", 2)
+    end
+end})
+
+secCine:Toggle({ Title = "Hide Player Names & Bubble Chat", Value = false, Callback = function(v)
+    State.Cinema.hideNames = v
+    if v then
+        State.Cinema.nameConn = TrackC(RS.Heartbeat:Connect(function()
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Character then
+                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                    if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
+                    for _, desc in ipairs(p.Character:GetDescendants()) do
+                        if desc:IsA("BillboardGui") then desc.Enabled = false end
+                    end
+                end
+            end
+        end))
+        notify("Cinematic", "Names & Chat wiped 🧹", 2)
+    else
+        if State.Cinema.nameConn then State.Cinema.nameConn:Disconnect(); State.Cinema.nameConn = nil end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character then
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
+                for _, desc in ipairs(p.Character:GetDescendants()) do
+                    if desc:IsA("BillboardGui") then desc.Enabled = true end
+                end
+            end
+        end
+        notify("Cinematic", "Names & Chat restored ✅", 2)
+    end
+end})
+
+-- ══════════════════════════════════════════════════════════════
+--  WORLD EDITOR
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "World Editor", Icon = "layers" })
 local secFilter = T_WO:Section({ Title = "Shaders", Opened = true })
@@ -1200,4 +1302,4 @@ task.spawn(function() pcall(function() cachedMapName = game:GetService("Marketpl
 task.wait(0.5)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine v1.3 Ready")
+print("✅ XKID Engine v1.4 Ready")
