@@ -547,7 +547,7 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE
+--  FREECAM ENGINE (FIXED)
 -- ══════════════════════════════════════════════════════════════
 local FC = {
     active   = false,
@@ -562,14 +562,14 @@ local FC = {
 
 -- Velocity state
 local I_CamVel        = Vector3.zero
-local I_YawVel        = 0        -- current yaw angular velocity (deg/s)
-local I_PitchVel      = 0        -- current pitch angular velocity (deg/s)
-local heightVelocity  = 0        -- current vertical velocity
+local I_YawVel        = 0
+local I_PitchVel      = 0
+local heightVelocity  = 0
 
 -- Touch state
 local fcMoveTouch  = nil
-local fcMoveSt     = nil          -- anchor point (tidak direset tiap frame)
-local fcJoy        = Vector2.zero -- accumulated joystick value [-1..1]
+local fcMoveSt     = nil
+local fcJoy        = Vector2.zero
 local fcRotTouch   = nil
 local fcRotLast    = nil
 
@@ -580,8 +580,8 @@ local fcConns      = {}
 local FC_UI_Btns = {
     up        = false,
     down      = false,
-    rotLeft   = false,   -- putar kiri  = yaw CCW = nilai positif
-    rotRight  = false,   -- putar kanan = yaw CW  = nilai negatif
+    rotLeft   = false,
+    rotRight  = false,
     zoomIn    = false,
     zoomOut   = false,
 }
@@ -631,14 +631,13 @@ local function makeFCBtn(name, txt, pos, actionKey)
             press(false)
         end
     end)
-    -- Pastikan lepas jika input keluar dari tombol
     b.MouseLeave:Connect(function() press(false) end)
 
     return b
 end
 
--- Layout 2×3 di sisi kanan layar
--- Baris 1: ↺ (kiri)  ↻ (kanan)
+-- Layout 2x3 di sisi kanan layar
+-- Baris 1: ↺ (putar kiri = yaw+)  ↻ (putar kanan = yaw-)
 -- Baris 2: ↑ (naik)  + (zoom in)
 -- Baris 3: ↓ (turun) - (zoom out)
 makeFCBtn("BtnRotL", "↺", UDim2.new(1, -118, 0.5, -84), "rotLeft")
@@ -670,10 +669,9 @@ local function startFreecamCapture()
         end
     end))
 
-    -- Mouse drag rotation (smooth via velocity target)
+    -- Mouse drag rotation
     table.insert(fcConns, UIS.InputChanged:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseMovement and FC._mouseRot then
-            -- Tambah ke velocity target agar ada momentum sedikit
             I_YawVel   = I_YawVel   - inp.Delta.X * FC.sens * 120
             I_PitchVel = I_PitchVel - inp.Delta.Y * FC.sens * 120
         end
@@ -683,16 +681,14 @@ local function startFreecamCapture()
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
         if inp.Position.X > Cam.ViewportSize.X / 2 then
-            -- Sisi kanan = rotasi
             if not fcRotTouch then
                 fcRotTouch = inp
                 fcRotLast  = inp.Position
             end
         else
-            -- Sisi kiri = joystick gerak
             if not fcMoveTouch then
                 fcMoveTouch = inp
-                fcMoveSt    = inp.Position  -- anchor tetap, tidak bergeser
+                fcMoveSt    = inp.Position
                 fcJoy       = Vector2.zero
             end
         end
@@ -704,16 +700,14 @@ local function startFreecamCapture()
             local dx = inp.Position.X - fcRotLast.X
             local dy = inp.Position.Y - fcRotLast.Y
             fcRotLast = inp.Position
-            -- Geser kanan → yaw negatif (putar kanan), geser kiri → yaw positif (putar kiri)
             I_YawVel   = I_YawVel   - dx * FC.sens * 80
             I_PitchVel = I_PitchVel - dy * FC.sens * 80
         end
 
-        -- Move joystick — dihitung dari anchor tetap (fcMoveSt)
+        -- Move joystick
         if inp == fcMoveTouch and fcMoveSt then
             local dx = inp.Position.X - fcMoveSt.X
             local dy = inp.Position.Y - fcMoveSt.Y
-            -- Dead zone 20px, max zone 90px
             local function applyDead(val, dead, maxRange)
                 if math.abs(val) < dead then return 0 end
                 return math.clamp((val - math.sign(val) * dead) / (maxRange - dead), -1, 1)
@@ -747,12 +741,10 @@ local function stopFreecamCapture()
     fcKeysHeld   = {}
     FC._mouseRot = false
     UIS.MouseBehavior = Enum.MouseBehavior.Default
-    -- Reset velocity
     I_CamVel       = Vector3.zero
     I_YawVel       = 0
     I_PitchVel     = 0
     heightVelocity = 0
-    -- Reset UI buttons
     for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end
 end
 
@@ -762,22 +754,17 @@ local function startFreecamLoop()
         if not FC.active then return end
         Cam.CameraType = Enum.CameraType.Scriptable
 
-        -- Clamp dt untuk menghindari spike besar
         local safeDt = math.clamp(dt, 0.001, 0.05)
 
         -- ── 1. ROTASI ─────────────────────────────────────────
-        -- Tombol rotasi: kiri = +yaw (counter-clockwise), kanan = -yaw (clockwise)
-        -- Seperti memutar kenop radio: ↺ = kiri, ↻ = kanan
+        -- FIXED: ↺ (kiri) = yaw+ (putar kiri), ↻ (kanan) = yaw- (putar kanan)
         local btnYawTarget = 0
-        if FC_UI_Btns.rotLeft  then btnYawTarget =  200 * FC.sens end  -- kiri  = yaw bertambah
-        if FC_UI_Btns.rotRight then btnYawTarget = -200 * FC.sens end  -- kanan = yaw berkurang
+        if FC_UI_Btns.rotLeft  then btnYawTarget =  200 * FC.sens end
+        if FC_UI_Btns.rotRight then btnYawTarget = -200 * FC.sens end
 
         if btnYawTarget ~= 0 then
-            -- Lerp menuju target kecepatan tombol (responsif tapi mulus)
             I_YawVel = I_YawVel + (btnYawTarget - I_YawVel) * math.clamp(safeDt * 12, 0, 1)
         else
-            -- Brake halus jika tidak ada input tombol
-            -- Mouse/touch drag mengisi I_YawVel langsung per frame, biarkan menghilang
             I_YawVel   = I_YawVel   * math.max(0, 1 - safeDt * 14)
             I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14)
         end
@@ -786,12 +773,10 @@ local function startFreecamLoop()
         FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80)
 
         -- ── 2. POSISI (WASD / Joystick) ───────────────────────
-        -- Bangun CFrame kamera untuk referensi arah
         local camCF = CFrame.new(FC.pos)
             * CFrame.Angles(0, math.rad(FC.yawDeg), 0)
             * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
 
-        -- Input arah (keyboard atau joystick sentuh)
         local joyX, joyY = fcJoy.X, fcJoy.Y
         if not onMobile then
             if fcKeysHeld[Enum.KeyCode.W] then joyY = joyY - 1 end
@@ -800,28 +785,23 @@ local function startFreecamLoop()
             if fcKeysHeld[Enum.KeyCode.A] then joyX = joyX - 1 end
         end
 
-        -- Normalisasi agar diagonal tidak lebih cepat
         local rawMove = Vector2.new(joyX, joyY)
         if rawMove.Magnitude > 1 then rawMove = rawMove.Unit end
 
-        -- Target velocity dalam world space
         local moveTarget = (camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X)
             * (FC.speed * 60)
 
-        -- Lerp lambat untuk start/stop mulus — kunci anti patah-patah
-        -- Factor 8 = cukup responsif tapi tidak langsung berhenti mendadak
         local lerpFactor = math.clamp(safeDt * 8, 0, 1)
         I_CamVel = I_CamVel:Lerp(moveTarget, lerpFactor)
 
         -- ── 3. KETINGGIAN (E/Q atau tombol ↑↓) ───────────────
+        -- FIXED: Height lerp lebih lambat (factor 3)
         local heightTarget = 0
         if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up   then heightTarget =  FC.speed * 60 end
         if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end
 
-        -- Lerp sangat halus untuk up/down agar tidak terlalu cepat
-        -- Factor 5 = lambat dan mulus, terasa seperti drone naik perlahan
         heightVelocity = heightVelocity + (heightTarget - heightVelocity)
-            * math.clamp(safeDt * 5, 0, 1)
+            * math.clamp(safeDt * 3, 0, 1)
 
         -- ── 4. ZOOM (FOV) ──────────────────────────────────────
         if FC_UI_Btns.zoomIn  then Cam.FieldOfView = math.clamp(Cam.FieldOfView - 1.2, 10, 120) end
@@ -1143,18 +1123,40 @@ secSP:Toggle({ Title = "First Person View", Value = false, Callback = function(v
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: FREECAM (SMOOTH DEDICATED TAB)
+--  TAB 5: FREECAM (SMOOTH DEDICATED TAB) - FIXED
 -- ══════════════════════════════════════════════════════════════
 local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video" })
 
 local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true })
 secFC:Toggle({ Title = "Enable Freecam", Value = false, Callback = function(v)
-    FC.active = v; if v then local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry)
+    FC.active = v
+    if v then
+        local cf = Cam.CFrame; FC.pos = cf.Position
+        local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry)
         local hrp = getRoot(); if hrp then FC.savedCF = hrp.CFrame; hrp.Anchored = true end
         FC.origFov = Cam.FieldOfView
-        startFreecamCapture(); startFreecamLoop(); if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end; notify("Freecam", "Drone deployed ✅", 2)
-    else stopFreecamLoop(); stopFreecamCapture(); local hrp = getRoot(); if hrp then hrp.Anchored = false; if FC.savedCF then hrp.CFrame = FC.savedCF end end
-        Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; notify("Freecam", "Drone recalled ❌", 2)
+        startFreecamCapture(); startFreecamLoop()
+        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end
+        notify("Freecam", "Drone deployed ✅", 2)
+    else
+        stopFreecamLoop(); stopFreecamCapture()
+        -- FIXED: Unfreeze karakter
+        local hrp = getRoot()
+        if hrp then
+            hrp.Anchored = false
+            if FC.savedCF then hrp.CFrame = FC.savedCF; FC.savedCF = nil end
+        end
+        local hum = getHum()
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            hum.WalkSpeed = State.Move.ws
+            hum.UseJumpPower = true
+            hum.JumpPower = State.Move.jp
+        end
+        Cam.CameraType = Enum.CameraType.Custom
+        Cam.FieldOfView = FC.origFov
+        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end
+        notify("Freecam", "Drone recalled ❌", 2)
     end
 end})
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
@@ -1390,4 +1392,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine Final Ready")
+print("✅ XKID Engine Final Ready - Freecam Fixed")
