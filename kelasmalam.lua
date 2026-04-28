@@ -165,10 +165,6 @@ local function isOnGround()
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
 
-local function lerpNum(a, b, t)
-    return a + (b - a) * t
-end
-
 local START_TIME = os.time()
 local cachedMapName, lastMapCheck = nil, 0
 local sharedFPS, sharedPing = 60, 0
@@ -547,7 +543,7 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (SMOOTH LERP UI OVERLAY) - FIXED & RESTORED
+--  FREECAM ENGINE (PREMIUM SMOOTH LERP UI OVERLAY) - V1.8
 -- ══════════════════════════════════════════════════════════════
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70 }
 local fcMoveTouch, fcMoveSt, fcRotTouch, fcRotLast = nil, nil, nil, nil
@@ -556,8 +552,21 @@ local FC_UI_Btns = { up = false, down = false, rotLeft = false, rotRight = false
 
 local I_FlyJoy = Vector2.zero
 local I_CamVel = Vector3.zero
-local I_HeightVel = 0
-local I_RotVel = 0
+
+-- Premium Velocity System
+local rotVelocity = 0
+local heightVelocity = 0
+local zoomVelocity = 0
+
+-- Constants for premium smooth physics
+local ACCEL_ROT = 80
+local DAMP_ROT = 0.005 
+
+local ACCEL_HEIGHT = 40
+local DAMP_HEIGHT = 0.01
+
+local ACCEL_ZOOM = 150
+local DAMP_ZOOM = 0.01
 
 local FCUI = Instance.new("ScreenGui")
 FCUI.Name = "XKID_FreecamUI"
@@ -588,7 +597,7 @@ local function makeFCBtn(name, txt, pos, actionKey)
     return b
 end
 
--- Layout Kanan 2x3 Matrix (Sumbu Yaw + Zoom)
+-- Layout Kanan 2x3 Matrix
 local btnRotL = makeFCBtn("BtnRotL", "↺", UDim2.new(1, -120, 0.5, -80), "rotLeft")
 local btnRotR = makeFCBtn("BtnRotR", "↻", UDim2.new(1, -60, 0.5, -80), "rotRight")
 local btnUp   = makeFCBtn("BtnUp", "↑", UDim2.new(1, -120, 0.5, -20), "up")
@@ -641,14 +650,15 @@ end
 local function stopFreecamCapture()
     for _, c in ipairs(fcConns) do c:Disconnect() end
     fcConns = {}; fcMoveTouch = nil; fcMoveSt = nil; fcRotTouch = nil; fcRotLast = nil; State.Move.inf_virtual_joy = Vector2.zero; fcKeysHeld = {}; FC_UI_Btns = { up = false, down = false, rotLeft = false, rotRight = false, zoomIn = false, zoomOut = false }
-    I_FlyJoy = Vector2.zero; I_CamVel = Vector3.zero; I_HeightVel = 0; I_RotVel = 0
+    I_FlyJoy = Vector2.zero; I_CamVel = Vector3.zero
+    rotVelocity = 0; heightVelocity = 0; zoomVelocity = 0
 end
 
 local function startFreecamLoop()
     RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not FC.active then return end; Cam.CameraType = Enum.CameraType.Scriptable
         
-        -- Instant Joystick Input (No delay)
+        -- Horizontal Movement (Joystick/Keys)
         local targetJoy = onMobile and (State.Move.inf_virtual_joy or Vector2.zero) or Vector2.zero
         if not onMobile then
             if fcKeysHeld[Enum.KeyCode.W] then targetJoy = targetJoy + Vector2.new(0, -1) end
@@ -656,37 +666,45 @@ local function startFreecamLoop()
             if fcKeysHeld[Enum.KeyCode.D] then targetJoy = targetJoy + Vector2.new(1, 0) end
             if fcKeysHeld[Enum.KeyCode.A] then targetJoy = targetJoy + Vector2.new(-1, 0) end
         end
-        I_FlyJoy = targetJoy 
+        I_FlyJoy = I_FlyJoy:Lerp(targetJoy, math.clamp(dt * 8, 0, 1))
 
-        -- Smooth Height Velocity (Nerfed to 0.5 for stability)
-        local targetHeight = 0
-        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then targetHeight = 0.5 end
-        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then targetHeight = -0.5 end
-        I_HeightVel = lerpNum(I_HeightVel, targetHeight, math.clamp(dt * 15, 0, 1))
+        -- 1. Premium Height Control
+        local inputH = 0
+        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then inputH = 1 end
+        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then inputH = -1 end
+        heightVelocity = heightVelocity + (inputH * ACCEL_HEIGHT * dt)
+        heightVelocity = heightVelocity * (DAMP_HEIGHT ^ dt)
 
-        -- Smooth Yaw Rotation (Jam 9 / Jam 3)
-        local targetRot = 0
-        if FC_UI_Btns.rotLeft then targetRot = 1 end
-        if FC_UI_Btns.rotRight then targetRot = -1 end
-        I_RotVel = lerpNum(I_RotVel, targetRot, math.clamp(dt * 15, 0, 1))
-        FC.yawDeg = FC.yawDeg + (I_RotVel * FC.sens * 10 * dt * 60)
+        -- 2. Premium Rotation Control (Yaw)
+        local inputRot = 0
+        if FC_UI_Btns.rotLeft then inputRot = 1 end
+        if FC_UI_Btns.rotRight then inputRot = -1 end
+        rotVelocity = rotVelocity + (inputRot * ACCEL_ROT * dt)
+        rotVelocity = rotVelocity * (DAMP_ROT ^ dt)
+        FC.yawDeg = FC.yawDeg + (rotVelocity * dt * FC.sens * 10)
 
-        -- Smooth FOV (Cinematic Zoom)
-        local targetFov = Cam.FieldOfView
-        if FC_UI_Btns.zoomIn then targetFov = math.clamp(targetFov - 1.5, 10, 120) end
-        if FC_UI_Btns.zoomOut then targetFov = math.clamp(targetFov + 1.5, 10, 120) end
-        Cam.FieldOfView = lerpNum(Cam.FieldOfView, targetFov, math.clamp(dt * 10, 0, 1))
+        -- 3. Premium Zoom Control (FOV)
+        local inputZoom = 0
+        if FC_UI_Btns.zoomIn then inputZoom = -1 end 
+        if FC_UI_Btns.zoomOut then inputZoom = 1 end 
+        zoomVelocity = zoomVelocity + (inputZoom * ACCEL_ZOOM * dt)
+        zoomVelocity = zoomVelocity * (DAMP_ZOOM ^ dt)
+        Cam.FieldOfView = math.clamp(Cam.FieldOfView + (zoomVelocity * dt), 10, 120)
 
-        -- Calculate Target Movement Vector
+        -- Apply Movement Logic
         local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
-        local inputMove = (camCF.LookVector * (-I_FlyJoy.Y) + camCF.RightVector * I_FlyJoy.X + Vector3.new(0, I_HeightVel, 0))
-        
-        -- Smooth Acceleration / Gliding
+        local inputMove = (camCF.LookVector * (-I_FlyJoy.Y) + camCF.RightVector * I_FlyJoy.X)
         I_CamVel = I_CamVel:Lerp(inputMove, math.clamp(dt * 15, 0, 1))
-
-        -- Apply Final Position & Rotation
-        if I_CamVel.Magnitude > 0.01 then FC.pos = FC.pos + (I_CamVel * FC.speed * dt * 60) end
+        
+        local finalMove = I_CamVel + Vector3.new(0, heightVelocity, 0)
+        if finalMove.Magnitude > 0.001 then 
+            FC.pos = FC.pos + (finalMove * FC.speed * dt * 60) 
+        end
         Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
+        
+        local hrp, hum = getRoot(), getHum()
+        if hrp and not hrp.Anchored then hrp.Anchored = true end
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Physics); hum.WalkSpeed = 0; hum.JumpPower = 0 end
     end)
 end
 
