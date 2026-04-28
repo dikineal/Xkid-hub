@@ -1610,3 +1610,4 @@ pcall(function() Window:SelectTab(T_HOME) end)
 
 notify("System", "System Initialized 💎", 3)
 print("✅ @WTF.XKID Script Loaded | Professional Edition")
+
