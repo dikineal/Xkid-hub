@@ -165,6 +165,10 @@ local function isOnGround()
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
 
+local function lerpNum(a, b, t)
+    return a + (b - a) * t
+end
+
 local START_TIME = os.time()
 local cachedMapName, lastMapCheck = nil, 0
 local sharedFPS, sharedPing = 60, 0
@@ -543,30 +547,18 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (PREMIUM SMOOTH LERP UI OVERLAY) - V1.8
+--  FREECAM ENGINE (PREMIUM SMOOTH CONTROL - V1.9)
 -- ══════════════════════════════════════════════════════════════
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70 }
 local fcMoveTouch, fcMoveSt, fcRotTouch, fcRotLast = nil, nil, nil, nil
 local fcKeysHeld = {}
 local FC_UI_Btns = { up = false, down = false, rotLeft = false, rotRight = false, zoomIn = false, zoomOut = false }
 
-local I_FlyJoy = Vector2.zero
+-- Velocity Variables
 local I_CamVel = Vector3.zero
-
--- Premium Velocity System
-local rotVelocity = 0
+local I_YawVelTarget = 0
+local I_PitchVelTarget = 0
 local heightVelocity = 0
-local zoomVelocity = 0
-
--- Constants for premium smooth physics
-local ACCEL_ROT = 80
-local DAMP_ROT = 0.005 
-
-local ACCEL_HEIGHT = 40
-local DAMP_HEIGHT = 0.01
-
-local ACCEL_ZOOM = 150
-local DAMP_ZOOM = 0.01
 
 local FCUI = Instance.new("ScreenGui")
 FCUI.Name = "XKID_FreecamUI"
@@ -619,7 +611,8 @@ local function startFreecamCapture()
     end))
     table.insert(fcConns, UIS.InputChanged:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseMovement and FC._mouseRot then
-            FC.yawDeg = FC.yawDeg - inp.Delta.X * FC.sens; FC.pitchDeg = math.clamp(FC.pitchDeg - inp.Delta.Y * FC.sens, -80, 80)
+            I_YawVelTarget = I_YawVelTarget - (inp.Delta.X * FC.sens * 30)
+            I_PitchVelTarget = I_PitchVelTarget - (inp.Delta.Y * FC.sens * 30)
         end
     end))
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
@@ -632,7 +625,12 @@ local function startFreecamCapture()
     end))
     table.insert(fcConns, UIS.TouchMoved:Connect(function(inp)
         if inp == fcRotTouch and fcRotLast then
-            FC.yawDeg = FC.yawDeg - (inp.Position.X - fcRotLast.X) * FC.sens; FC.pitchDeg = math.clamp(FC.pitchDeg - (inp.Position.Y - fcRotLast.Y) * FC.sens, -80, 80); fcRotLast = inp.Position
+            local dx = inp.Position.X - fcRotLast.X
+            local dy = inp.Position.Y - fcRotLast.Y
+            fcRotLast = inp.Position
+            -- Swipe Kiri Kanan = Putar Kiri Kanan (Visual Natural)
+            I_YawVelTarget = I_YawVelTarget - (dx * FC.sens * 15)
+            I_PitchVelTarget = I_PitchVelTarget - (dy * FC.sens * 15)
         end
         if inp == fcMoveTouch and fcMoveSt then
             local dx, dy = inp.Position.X - fcMoveSt.X, inp.Position.Y - fcMoveSt.Y
@@ -650,15 +648,14 @@ end
 local function stopFreecamCapture()
     for _, c in ipairs(fcConns) do c:Disconnect() end
     fcConns = {}; fcMoveTouch = nil; fcMoveSt = nil; fcRotTouch = nil; fcRotLast = nil; State.Move.inf_virtual_joy = Vector2.zero; fcKeysHeld = {}; FC_UI_Btns = { up = false, down = false, rotLeft = false, rotRight = false, zoomIn = false, zoomOut = false }
-    I_FlyJoy = Vector2.zero; I_CamVel = Vector3.zero
-    rotVelocity = 0; heightVelocity = 0; zoomVelocity = 0
+    I_CamVel = Vector3.zero; I_YawVelTarget = 0; I_PitchVelTarget = 0; heightVelocity = 0
 end
 
 local function startFreecamLoop()
     RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not FC.active then return end; Cam.CameraType = Enum.CameraType.Scriptable
         
-        -- Horizontal Movement (Joystick/Keys)
+        -- 1. PREMIUM MOVEMENT (Joystick/WASD)
         local targetJoy = onMobile and (State.Move.inf_virtual_joy or Vector2.zero) or Vector2.zero
         if not onMobile then
             if fcKeysHeld[Enum.KeyCode.W] then targetJoy = targetJoy + Vector2.new(0, -1) end
@@ -666,39 +663,42 @@ local function startFreecamLoop()
             if fcKeysHeld[Enum.KeyCode.D] then targetJoy = targetJoy + Vector2.new(1, 0) end
             if fcKeysHeld[Enum.KeyCode.A] then targetJoy = targetJoy + Vector2.new(-1, 0) end
         end
-        I_FlyJoy = I_FlyJoy:Lerp(targetJoy, math.clamp(dt * 8, 0, 1))
-
-        -- 1. Premium Height Control
-        local inputH = 0
-        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then inputH = 1 end
-        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then inputH = -1 end
-        heightVelocity = heightVelocity + (inputH * ACCEL_HEIGHT * dt)
-        heightVelocity = heightVelocity * (DAMP_HEIGHT ^ dt)
-
-        -- 2. Premium Rotation Control (Yaw)
-        local inputRot = 0
-        if FC_UI_Btns.rotLeft then inputRot = 1 end
-        if FC_UI_Btns.rotRight then inputRot = -1 end
-        rotVelocity = rotVelocity + (inputRot * ACCEL_ROT * dt)
-        rotVelocity = rotVelocity * (DAMP_ROT ^ dt)
-        FC.yawDeg = FC.yawDeg + (rotVelocity * dt * FC.sens * 10)
-
-        -- 3. Premium Zoom Control (FOV)
-        local inputZoom = 0
-        if FC_UI_Btns.zoomIn then inputZoom = -1 end 
-        if FC_UI_Btns.zoomOut then inputZoom = 1 end 
-        zoomVelocity = zoomVelocity + (inputZoom * ACCEL_ZOOM * dt)
-        zoomVelocity = zoomVelocity * (DAMP_ZOOM ^ dt)
-        Cam.FieldOfView = math.clamp(Cam.FieldOfView + (zoomVelocity * dt), 10, 120)
-
-        -- Apply Movement Logic
         local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
-        local inputMove = (camCF.LookVector * (-I_FlyJoy.Y) + camCF.RightVector * I_FlyJoy.X)
-        I_CamVel = I_CamVel:Lerp(inputMove, math.clamp(dt * 15, 0, 1))
+        local moveTarget = (camCF.LookVector * (-targetJoy.Y) + camCF.RightVector * targetJoy.X) * (FC.speed * 60)
+        -- Responsif & Fast Stop Logic
+        I_CamVel = I_CamVel:Lerp(moveTarget, math.clamp(dt * 25, 0, 1)) 
+
+        -- 2. PREMIUM ELEVATE (Up/Down)
+        local targetHeight = 0
+        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then targetHeight = FC.speed * 60 end
+        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then targetHeight = -FC.speed * 60 end
+        heightVelocity = lerpNum(heightVelocity, targetHeight, math.clamp(dt * 15, 0, 1))
+
+        -- 3. PREMIUM ROTATION (Touch Delta + UI Buttons)
+        local uiYawInput = 0
+        if FC_UI_Btns.rotLeft then uiYawInput = 150 * FC.sens end
+        if FC_UI_Btns.rotRight then uiYawInput = -150 * FC.sens end
         
+        if uiYawInput ~= 0 then
+            I_YawVelTarget = lerpNum(I_YawVelTarget, uiYawInput, math.clamp(dt * 10, 0, 1))
+        else
+            I_YawVelTarget = lerpNum(I_YawVelTarget, 0, math.clamp(dt * 15, 0, 1)) -- Smooth Braking
+        end
+        I_PitchVelTarget = lerpNum(I_PitchVelTarget, 0, math.clamp(dt * 15, 0, 1)) -- Smooth Pitch Braking
+
+        FC.yawDeg = FC.yawDeg + (I_YawVelTarget * dt)
+        FC.pitchDeg = math.clamp(FC.pitchDeg + (I_PitchVelTarget * dt), -80, 80)
+
+        -- 4. PREMIUM ZOOM (FOV)
+        local targetFov = Cam.FieldOfView
+        if FC_UI_Btns.zoomIn then targetFov = math.clamp(targetFov - 2, 10, 120) end
+        if FC_UI_Btns.zoomOut then targetFov = math.clamp(targetFov + 2, 10, 120) end
+        Cam.FieldOfView = lerpNum(Cam.FieldOfView, targetFov, math.clamp(dt * 10, 0, 1))
+
+        -- Apply Final Movement
         local finalMove = I_CamVel + Vector3.new(0, heightVelocity, 0)
-        if finalMove.Magnitude > 0.001 then 
-            FC.pos = FC.pos + (finalMove * FC.speed * dt * 60) 
+        if finalMove.Magnitude > 0.01 then
+            FC.pos = FC.pos + (finalMove * dt)
         end
         Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
         
@@ -1250,4 +1250,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine v1.8 Ready")
+print("✅ XKID Engine v1.9 Ready")
