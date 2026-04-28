@@ -5,7 +5,7 @@
 ========================
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
-  💬 Discord: 4sharken
+  💬 Discord: @4Sharken
 ]]
 
 local RS = game:GetService("RunService")
@@ -771,29 +771,29 @@ end)
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard" })
 local secWelcome = T_HOME:Section({ Title = "System Access", Opened = true })
 
-secWelcome:Paragraph({ Title = "Identity Data", Desc = "Logged in as @WTF.XKID\n\nTikTok: @wtf.xkid\nDiscord: 4Sharken" })
+secWelcome:Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] Operator : @WTF.XKID\n[ 📱 ] TikTok   : @wtf.xkid\n[ 💬 ] Discord  : @4Sharken" })
 secWelcome:Button({ Title = "Copy Discord Link", Desc = "Join the network", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
 
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true })
 local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
-local netLabel = secStatus:Paragraph({ Title = "PERFORMANCE", Desc = "Loading..." })
+local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
 local secSecHome = T_HOME:Section({ Title = "Security Check", Opened = true })
-local securityLabel = secSecHome:Paragraph({ Title = "Status", Desc = "Protected" })
+local securityLabel = secSecHome:Paragraph({ Title = "Diagnostics", Desc = "Protected" })
 
 task.spawn(function()
     task.wait(2)
     local function lerpColor(c1, c2, t) return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t) end
     local function toHex(c) return string.format("#%02X%02X%02X", c.R*255, c.G*255, c.B*255) end
-    local function makeBar(val, maxVal, len, mode)
+    local function makeBarA(val, maxVal, len, mode)
         local fill = math.clamp(math.floor((val/maxVal)*len), 0, len)
         local res = ""
         for i=1, len do
             if i <= fill then
                 local t = (i-1)/math.max(1, len-1)
                 local col = mode == "FPS" and lerpColor(Color3.fromRGB(0,255,255), Color3.fromRGB(0,100,255), t) or (t < 0.5 and lerpColor(Color3.fromRGB(0,255,0), Color3.fromRGB(255,255,0), t*2) or lerpColor(Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,0), (t-0.5)*2))
-                res = res .. '<font color="'..toHex(col)..'">█</font>'
+                res = res .. '<font color="'..toHex(col)..'">▰</font>'
             else
-                res = res .. '<font color="#444444">░</font>'
+                res = res .. '<font color="#444444">▱</font>'
             end
         end
         return res
@@ -806,26 +806,26 @@ task.spawn(function()
                 local pCount = #Players:GetPlayers(); local mCount = Players.MaxPlayers
                 local uptime = formatTime(os.difftime(os.time(), START_TIME))
                 local job = game.JobId ~= "" and game.JobId:sub(1, 8).."..." or "N/A"
-                srvLabel:SetDesc(string.format("🗺️ Map: %s\n🆔 Job: %s\n👥 Players: %d/%d\n⏳ Uptime: %s", cachedMapName, job, pCount, mCount, uptime))
+                srvLabel:SetDesc(string.format("[ 🗺️ ] Grid     : %s\n[ 🆔 ] Node     : %s\n[ 👥 ] Entities : %d / %d\n[ ⏳ ] Session  : %s", cachedMapName, job, pCount, mCount, uptime))
             end
         end)
         pcall(function()
             if netLabel then
                 local fps = math.clamp(sharedFPS, 0, 300)
                 local ping = math.clamp(sharedPing, 0, 9999)
-                local fpsBar = makeBar(fps, 120, 14, "FPS")
-                local pingBar = makeBar(ping, 200, 14, "PING")
+                local fpsBar = makeBarA(fps, 120, 14, "FPS")
+                local pingBar = makeBarA(ping, 200, 14, "PING")
                 
-                netLabel:SetDesc(string.format("<b>FPS</b>   %s <font color='#FFFFFF'>%d</font>\n<b>PING</b>  %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping))
+                netLabel:SetDesc(string.format("<b>FPS  </b> %s <font color='#FFFFFF'>%d</font>\n<b>PING </b> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping))
             end
         end)
         pcall(function()
             if securityLabel then
-                local afk = State.Security.afkConn and "Active ✅" or "Disabled ❌"
-                local lag = State.Security.antiLag and "Boosted ⚡" or "Normal"
-                local sl = State.Security.shiftLock and "Locked 🔒" or "Unlocked"
-                local vd = State.Security.voidConn and "Active 🛡️" or "Disabled ❌"
-                securityLabel:SetDesc(string.format("⏰ Anti-AFK: %s\n🔒 Shift Lock: %s\n🕳️ Anti-Void: %s\n⚡ FPS Boost: %s", afk, sl, vd, lag))
+                local afk = State.Security.afkConn and "🟢 ONLINE" or "🔴 OFFLINE"
+                local sl = State.Security.shiftLock and "🟢 LOCKED" or "🔴 UNLOCKED"
+                local vd = State.Security.voidConn and "🟢 SECURED" or "🔴 OFFLINE"
+                local lag = State.Security.antiLag and "🟢 ACTIVE" or "🔴 INACTIVE"
+                securityLabel:SetDesc(string.format("[ ⏰ ] AFK Protocol : %s\n[ 🔒 ] Shift Lock   : %s\n[ 🕳️ ] Void Shield  : %s\n[ ⚡ ] Frame Boost  : %s", afk, sl, vd, lag))
             end
         end)
     end
@@ -874,7 +874,7 @@ end})
 -- ══════════════════════════════════════════════════════════════
 --  TAB 3: TELEPORT
 -- ══════════════════════════════════════════════════════════════
-local T_TP = Window:Tab({ Title = "Teleport", Icon = "crosshair" })
+local T_TP = Window:Tab({ Title = "Navigation", Icon = "crosshair" })
 T_TP:Section({ Title = "Point Teleport", Opened = true }):Toggle({ Title = "Click TP Tool", Value = false, Callback = function(v)
     if v then
         if State.Teleport.clickTool then State.Teleport.clickTool:Destroy() end
@@ -926,7 +926,7 @@ end
 -- ══════════════════════════════════════════════════════════════
 --  TAB 4: CAMERA
 -- ══════════════════════════════════════════════════════════════
-local T_CAM = Window:Tab({ Title = "Camera", Icon = "focus" })
+local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus" })
 T_CAM:Section({ Title = "Zoom Override", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
 
 local secFC = T_CAM:Section({ Title = "Freecam", Opened = true })
@@ -1027,14 +1027,14 @@ local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Lev
 secGfx:Slider({ Title="Quality Level", Step=1, Value={Min=1,Max=10,Default=5}, Callback=function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: ESP
+--  TAB 6: RADAR
 -- ══════════════════════════════════════════════════════════════
-local T_ESP = Window:Tab({ Title = "ESP", Icon = "cpu" })
+local T_ESP = Window:Tab({ Title = "Radar", Icon = "cpu" })
 local secESP = T_ESP:Section({ Title = "Detection System", Opened = true })
 secESP:Toggle({ Title = "Enable Radar", Value = false, Callback = function(v)
     State.ESP.active = v
     if not v and State.ESP.cache then for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end) end end
-    notify("ESP", v and "System active ✅" or "System disabled ❌", 2)
+    notify("Radar", v and "System active ✅" or "System disabled ❌", 2)
 end})
 secESP:Dropdown({ Title = "Tracer Origin", Values = {"Bottom","Center","Mouse","OFF"}, Value = "Bottom", Callback = function(v) State.ESP.tracerMode = v end })
 secESP:Toggle({ Title = "Highlight Entity", Value = false, Callback = function(v) State.ESP.highlightMode = v end })
