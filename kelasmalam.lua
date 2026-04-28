@@ -169,21 +169,42 @@ local START_TIME = os.time()
 local cachedMapName, lastMapCheck = nil, 0
 local sharedFPS, sharedPing = 60, 0
 
--- Trackers
-TrackC(RS.RenderStepped:Connect(function(dt) if dt > 0 then sharedFPS = math.floor(1 / dt) end end))
+-- FPS Tracker
+TrackC(RS.RenderStepped:Connect(function(dt)
+    if dt > 0 then sharedFPS = math.floor(1 / dt) end
+end))
+
+-- Ping Tracker
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.5)
-        pcall(function() local item = StatsService.Network.ServerStatsItem["Data Ping"]; if item then sharedPing = math.floor(item:GetValue()) end end)
+        pcall(function()
+            local item = StatsService.Network.ServerStatsItem["Data Ping"]
+            if item then sharedPing = math.floor(item:GetValue()) end
+        end)
     end
 end)
+
+-- Map Cache
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
-        pcall(function() if tick() - lastMapCheck > 30 or not cachedMapName then cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name; lastMapCheck = tick() end end)
+        pcall(function()
+            if tick() - lastMapCheck > 30 or not cachedMapName then
+                cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+                lastMapCheck = tick()
+            end
+        end)
         task.wait(5)
     end
 end)
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
+
+-- Garbage collector
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        task.wait(120)
+        collectgarbage("collect")
+    end
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  CHARACTER HANDLER
@@ -237,7 +258,7 @@ local function toggleShiftLock(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FAST RESPAWN & REFRESH
+--  FAST RESPAWN
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
@@ -272,6 +293,9 @@ local function fastRespawn()
     end)
 end
 
+-- ══════════════════════════════════════════════════════════════
+--  REFRESH CHARACTER
+-- ══════════════════════════════════════════════════════════════
 local function refreshCharacter()
     if State.Avatar.isRefreshing then return end
     local char, hrp = LP.Character, getRoot()
@@ -543,7 +567,7 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (SMOOTH LERP UI OVERLAY)
+--  FREECAM ENGINE (SMOOTH LERP UI OVERLAY) - FIXED & RESTORED
 -- ══════════════════════════════════════════════════════════════
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70 }
 local fcMoveTouch, fcMoveSt, fcRotTouch, fcRotLast = nil, nil, nil, nil
@@ -555,8 +579,13 @@ local I_CamVel = Vector3.zero
 local I_HeightVel = 0
 local I_PitchVel = 0
 
+-- Build Mobile Overlay UI for Freecam
 local FCUI = Instance.new("ScreenGui")
-FCUI.Name = "XKID_FreecamUI"; FCUI.ResetOnSpawn = false; FCUI.ZIndexBehavior = Enum.ZIndexBehavior.Global; FCUI.Enabled = false; FCUI.Parent = CoreGui
+FCUI.Name = "XKID_FreecamUI"
+FCUI.ResetOnSpawn = false
+FCUI.ZIndexBehavior = Enum.ZIndexBehavior.Global
+FCUI.Enabled = false
+FCUI.Parent = CoreGui
 getgenv()._XKID_FCUI = FCUI
 
 local function makeFCBtn(name, txt, pos, actionKey)
@@ -564,20 +593,31 @@ local function makeFCBtn(name, txt, pos, actionKey)
     b.Name = name; b.Size = UDim2.new(0, 50, 0, 50); b.Position = pos
     b.BackgroundColor3 = Color3.fromRGB(15, 15, 15); b.BackgroundTransparency = 0.4
     b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 26; b.Font = Enum.Font.GothamBold
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10)
+    local uic = Instance.new("UICorner", b); uic.CornerRadius = UDim.new(0, 10)
     local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(220, 20, 60); uis.Thickness = 2; uis.Transparency = 0.3
-    b.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then FC_UI_Btns[actionKey] = true; b.BackgroundTransparency = 0.1 end end)
-    b.InputEnded:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then FC_UI_Btns[actionKey] = false; b.BackgroundTransparency = 0.4 end end)
+    
+    b.InputBegan:Connect(function(inp) 
+        if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then 
+            FC_UI_Btns[actionKey] = true; b.BackgroundTransparency = 0.1 
+        end 
+    end)
+    b.InputEnded:Connect(function(inp) 
+        if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then 
+            FC_UI_Btns[actionKey] = false; b.BackgroundTransparency = 0.4 
+        end 
+    end)
     return b
 end
 
--- Layout Kanan 2x3 Matrix
+-- Layout Kanan 2x3 Matrix (Smooth Action Buttons)
 local btnRotL = makeFCBtn("BtnRotL", "↺", UDim2.new(1, -120, 0.5, -80), "rotUp")
 local btnRotR = makeFCBtn("BtnRotR", "↻", UDim2.new(1, -60, 0.5, -80), "rotDown")
 local btnUp   = makeFCBtn("BtnUp", "↑", UDim2.new(1, -120, 0.5, -20), "up")
 local btnZIn  = makeFCBtn("BtnZIn", "+", UDim2.new(1, -60, 0.5, -20), "zoomIn")
 local btnDown = makeFCBtn("BtnDown", "↓", UDim2.new(1, -120, 0.5, 40), "down")
 local btnZOut = makeFCBtn("BtnZOut", "-", UDim2.new(1, -60, 0.5, 40), "zoomOut")
+
+local fcConns = {}
 
 local function startFreecamCapture()
     fcKeysHeld = {}
@@ -596,8 +636,11 @@ local function startFreecamCapture()
     end))
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp.Position.X > Cam.ViewportSize.X / 2 then if not fcRotTouch then fcRotTouch = inp; fcRotLast = inp.Position end
-        else if not fcMoveTouch then fcMoveTouch = inp; fcMoveSt = inp.Position end end
+        if inp.Position.X > Cam.ViewportSize.X / 2 then 
+            if not fcRotTouch then fcRotTouch = inp; fcRotLast = inp.Position end
+        else 
+            if not fcMoveTouch then fcMoveTouch = inp; fcMoveSt = inp.Position end 
+        end
     end))
     table.insert(fcConns, UIS.TouchMoved:Connect(function(inp)
         if inp == fcRotTouch and fcRotLast then
@@ -636,24 +679,25 @@ local function startFreecamLoop()
         end
         I_FlyJoy = I_FlyJoy:Lerp(targetJoy, math.clamp(dt * 8, 0, 1))
 
-        -- Smooth Height
+        -- Smooth Height Velocity
         local targetHeight = 0
         if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then targetHeight = 1 end
         if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then targetHeight = -1 end
-        I_HeightVel = math.lerp(I_HeightVel, targetHeight, math.clamp(dt * 10, 0, 1))
+        -- Custom Lerp math
+        I_HeightVel = I_HeightVel + (targetHeight - I_HeightVel) * math.clamp(dt * 10, 0, 1)
 
         -- Smooth Pitch (Vertical Rotation)
         local targetPitch = 0
         if FC_UI_Btns.rotUp then targetPitch = 1 end
         if FC_UI_Btns.rotDown then targetPitch = -1 end
-        I_PitchVel = math.lerp(I_PitchVel, targetPitch, math.clamp(dt * 8, 0, 1))
+        I_PitchVel = I_PitchVel + (targetPitch - I_PitchVel) * math.clamp(dt * 8, 0, 1)
         FC.pitchDeg = math.clamp(FC.pitchDeg + (I_PitchVel * FC.sens * 8 * dt * 60), -80, 80)
 
         -- Smooth FOV (Cinematic Zoom)
         local targetFov = Cam.FieldOfView
         if FC_UI_Btns.zoomIn then targetFov = math.clamp(targetFov - 1.5, 10, 120) end
         if FC_UI_Btns.zoomOut then targetFov = math.clamp(targetFov + 1.5, 10, 120) end
-        Cam.FieldOfView = math.lerp(Cam.FieldOfView, targetFov, math.clamp(dt * 10, 0, 1))
+        Cam.FieldOfView = Cam.FieldOfView + (targetFov - Cam.FieldOfView) * math.clamp(dt * 10, 0, 1)
 
         -- Apply Movement
         local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
@@ -1022,17 +1066,11 @@ local function applyFilter(filter)
         Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
     elseif filter == "Soft Pastel HD" then
         cc.TintColor = Color3.fromRGB(255, 240, 245)
-        cc.Saturation = -0.05
-        cc.Contrast = 0.05
-        bloom.Intensity = 0.3
-        bloom.Size = 24
-        Lighting.ClockTime = 8
+        cc.Saturation = -0.05; cc.Contrast = 0.05
+        bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
     elseif filter == "Cinematic Soft" then
-        cc.Saturation = 0.1
-        cc.Contrast = 0.15
-        cc.Brightness = 0.05
-        bloom.Intensity = 0.2
-        Lighting.ClockTime = 17
+        cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05
+        bloom.Intensity = 0.2; Lighting.ClockTime = 17
     elseif filter == "Ultra HD" then
         cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
     elseif filter == "Realistic" then
@@ -1162,7 +1200,7 @@ T_SEC:Section({ Title = "Camera Lock", Opened = true }):Toggle({ Title = "Force 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 10: SETTINGS (CONFIG)
 -- ══════════════════════════════════════════════════════════════
-local T_SET = Window:Tab({ Title = "Settings", Icon = "settings" })
+local T_SET = Window:Tab({ Title = "Config", Icon = "settings" })
 local secCfg = T_SET:Section({ Title = "File Management", Opened = true })
 local cfgName = "XKID_Config"
 local currentConfig = "No config"
@@ -1217,4 +1255,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine v1.6 Ready")
+print("✅ XKID Engine v1.7 Ready")
