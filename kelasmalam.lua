@@ -307,7 +307,7 @@ local function refreshCharacter()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  ESP ENGINE (OPTIMIZED)
+--  ESP ENGINE
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -517,7 +517,7 @@ local function toggleFly(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SMART CLICK TP (RAYCAST INJECTION)
+--  SMART CLICK TP
 -- ══════════════════════════════════════════════════════════════
 local function toggleSmartTP(v)
     State.Teleport.clickActive = v
@@ -543,7 +543,7 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (ROLL/TILT + SMOOTH + FIXED HEIGHT STOP)
+--  FREECAM ENGINE (ALL BUGS FIXED - ROLL/TILT + HOLD/TAP + CLEANUP)
 -- ══════════════════════════════════════════════════════════════
 local FC = {
     active   = false,
@@ -609,8 +609,15 @@ local function makeFCBtn(name, txt, pos, actionKey)
     uis.Transparency = 0.3
 
     local function press(down)
-        FC_UI_Btns[actionKey]        = down
-        b.BackgroundTransparency     = down and 0.05 or 0.4
+        FC_UI_Btns[actionKey] = down
+        b.BackgroundTransparency = down and 0.05 or 0.4
+        
+        -- Tap langsung kasih roll sedikit
+        if actionKey == "rollLeft" and down then
+            I_RollVel = -15
+        elseif actionKey == "rollRight" and down then
+            I_RollVel = 15
+        end
     end
 
     b.InputBegan:Connect(function(inp)
@@ -667,16 +674,9 @@ local function startFreecamCapture()
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
         if inp.Position.X > Cam.ViewportSize.X / 2 then
-            if not fcRotTouch then
-                fcRotTouch = inp
-                fcRotLast  = inp.Position
-            end
+            if not fcRotTouch then fcRotTouch = inp; fcRotLast = inp.Position end
         else
-            if not fcMoveTouch then
-                fcMoveTouch = inp
-                fcMoveSt    = inp.Position
-                fcJoy       = Vector2.zero
-            end
+            if not fcMoveTouch then fcMoveTouch = inp; fcMoveSt = inp.Position; fcJoy = Vector2.zero end
         end
     end))
 
@@ -688,7 +688,6 @@ local function startFreecamCapture()
             I_YawVel   = I_YawVel   - dx * FC.sens * 80
             I_PitchVel = I_PitchVel - dy * FC.sens * 80
         end
-
         if inp == fcMoveTouch and fcMoveSt then
             local dx = inp.Position.X - fcMoveSt.X
             local dy = inp.Position.Y - fcMoveSt.Y
@@ -696,24 +695,14 @@ local function startFreecamCapture()
                 if math.abs(val) < dead then return 0 end
                 return math.clamp((val - math.sign(val) * dead) / (maxRange - dead), -1, 1)
             end
-            fcJoy = Vector2.new(
-                applyDead(dx, 15, 70),
-                applyDead(dy, 15, 70)
-            )
+            fcJoy = Vector2.new(applyDead(dx, 15, 70), applyDead(dy, 15, 70))
         end
     end))
 
     table.insert(fcConns, UIS.InputEnded:Connect(function(inp)
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp == fcRotTouch then
-            fcRotTouch = nil
-            fcRotLast  = nil
-        end
-        if inp == fcMoveTouch then
-            fcMoveTouch = nil
-            fcMoveSt    = nil
-            fcJoy       = Vector2.zero
-        end
+        if inp == fcRotTouch then fcRotTouch = nil; fcRotLast = nil end
+        if inp == fcMoveTouch then fcMoveTouch = nil; fcMoveSt = nil; fcJoy = Vector2.zero end
     end))
 end
 
@@ -730,6 +719,7 @@ local function stopFreecamCapture()
     I_PitchVel     = 0
     I_RollVel      = 0
     heightVelocity = 0
+    FC.rollDeg     = 0
     for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end
 end
 
@@ -737,39 +727,33 @@ local function startFreecamLoop()
     RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not FC.active then return end
         Cam.CameraType = Enum.CameraType.Scriptable
-
         local safeDt = math.clamp(dt, 0.001, 0.05)
 
-        -- ── 1. YAW & PITCH (mouse drag / touch drag) ──────────
+        -- YAW & PITCH
         I_YawVel   = I_YawVel   * math.max(0, 1 - safeDt * 14)
         I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14)
-
         FC.yawDeg   = FC.yawDeg   + I_YawVel   * safeDt
         FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80)
 
-        -- ── 2. ROLL / TILT (↺ ↻ buttons) ─────────────────────
+        -- ROLL (↺ ↻) - Hold & Tap
         local targetRoll = 0
         if FC_UI_Btns.rollLeft  then targetRoll = -35 end
         if FC_UI_Btns.rollRight then targetRoll =  35 end
 
-        I_RollVel = I_RollVel + (targetRoll - I_RollVel) * math.clamp(safeDt * 6, 0, 1)
-        FC.rollDeg = FC.rollDeg + I_RollVel * safeDt
-
-        if not FC_UI_Btns.rollLeft and not FC_UI_Btns.rollRight then
-            FC.rollDeg = FC.rollDeg * math.max(0, 1 - safeDt * 8)
-            if math.abs(FC.rollDeg) < 0.1 then
-                FC.rollDeg = 0
-                I_RollVel = 0
+        if targetRoll ~= 0 then
+            I_RollVel = I_RollVel + (targetRoll - I_RollVel) * math.clamp(safeDt * 8, 0, 1)
+        else
+            FC.rollDeg = FC.rollDeg * math.max(0, 1 - safeDt * 6)
+            I_RollVel = I_RollVel * math.max(0, 1 - safeDt * 10)
+            if math.abs(FC.rollDeg) < 0.1 and math.abs(I_RollVel) < 0.5 then
+                FC.rollDeg = 0; I_RollVel = 0
             end
         end
-
+        FC.rollDeg = FC.rollDeg + I_RollVel * safeDt
         FC.rollDeg = math.clamp(FC.rollDeg, -45, 45)
 
-        -- ── 3. POSISI (WASD / Joystick) ───────────────────────
-        local camCF = CFrame.new(FC.pos)
-            * CFrame.Angles(0, math.rad(FC.yawDeg), 0)
-            * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
-
+        -- POSISI
+        local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
         local joyX, joyY = fcJoy.X, fcJoy.Y
         if not onMobile then
             if fcKeysHeld[Enum.KeyCode.W] then joyY = joyY - 1 end
@@ -777,54 +761,58 @@ local function startFreecamLoop()
             if fcKeysHeld[Enum.KeyCode.D] then joyX = joyX + 1 end
             if fcKeysHeld[Enum.KeyCode.A] then joyX = joyX - 1 end
         end
-
         local rawMove = Vector2.new(joyX, joyY)
         if rawMove.Magnitude > 1 then rawMove = rawMove.Unit end
+        local moveTarget = (camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X) * (FC.speed * 60)
+        I_CamVel = I_CamVel:Lerp(moveTarget, math.clamp(safeDt * 3.5, 0, 1))
 
-        local moveTarget = (camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X)
-            * (FC.speed * 60)
-
-        local lerpFactor = math.clamp(safeDt * 3.5, 0, 1)
-        I_CamVel = I_CamVel:Lerp(moveTarget, lerpFactor)
-
-        -- ── 4. KETINGGIAN (E/Q atau tombol ↑↓) ───────────────
+        -- HEIGHT
         local heightTarget = 0
         if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up   then heightTarget =  FC.speed * 60 end
         if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end
-
         if heightTarget == 0 then
             heightVelocity = heightVelocity * math.max(0, 1 - safeDt * 10)
             if math.abs(heightVelocity) < 0.5 then heightVelocity = 0 end
         else
-            heightVelocity = heightVelocity + (heightTarget - heightVelocity)
-                * math.clamp(safeDt * 3, 0, 1)
+            heightVelocity = heightVelocity + (heightTarget - heightVelocity) * math.clamp(safeDt * 3, 0, 1)
         end
 
-        -- ── 5. ZOOM (FOV) ──────────────────────────────────────
+        -- ZOOM
         if FC_UI_Btns.zoomIn  then Cam.FieldOfView = math.clamp(Cam.FieldOfView - 1.2, 10, 120) end
         if FC_UI_Btns.zoomOut then Cam.FieldOfView = math.clamp(Cam.FieldOfView + 1.2, 10, 120) end
 
-        -- ── 6. APPLY (DENGAN ROLL) ────────────────────────────
-        local finalVel = I_CamVel + Vector3.new(0, heightVelocity, 0)
-        FC.pos = FC.pos + finalVel * safeDt
-
-        Cam.CFrame = CFrame.new(FC.pos)
-            * CFrame.Angles(0, math.rad(FC.yawDeg), 0)
-            * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
-            * CFrame.Angles(0, 0, math.rad(FC.rollDeg))
+        -- APPLY
+        FC.pos = FC.pos + (I_CamVel + Vector3.new(0, heightVelocity, 0)) * safeDt
+        Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0) * CFrame.Angles(0, 0, math.rad(FC.rollDeg))
 
         local hrp, hum = getRoot(), getHum()
         if hrp and not hrp.Anchored then hrp.Anchored = true end
-        if hum then
-            hum:ChangeState(Enum.HumanoidStateType.Physics)
-            hum.WalkSpeed = 0
-            hum.JumpPower = 0
-        end
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Physics); hum.WalkSpeed = 0; hum.JumpPower = 0 end
     end)
 end
 
 local function stopFreecamLoop()
     RS:UnbindFromRenderStep("XKIDFreecam")
+end
+
+-- Cleanup total freecam
+local function fullCleanupFreecam()
+    stopFreecamLoop()
+    stopFreecamCapture()
+    FC.rollDeg = 0; I_RollVel = 0
+    local hrp = getRoot()
+    if hrp then
+        hrp.Anchored = false
+        if FC.savedCF then hrp.CFrame = FC.savedCF; FC.savedCF = nil end
+    end
+    local hum = getHum()
+    if hum then
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp
+    end
+    Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov
+    if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end
+    for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -924,7 +912,7 @@ else
 end
 
 -- ══════════════════════════════════════════════════════════════
---  MAIN WINDOW UI SETUP
+--  MAIN WINDOW
 -- ══════════════════════════════════════════════════════════════
 task.wait(0.3)
 local Window = WindUI:CreateWindow({
@@ -1120,7 +1108,7 @@ secSP:Toggle({ Title = "First Person View", Value = false, Callback = function(v
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: FREECAM (ROLL/TILT + SMOOTH)
+--  TAB 5: FREECAM (ALL BUGS FIXED)
 -- ══════════════════════════════════════════════════════════════
 local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video" })
 
@@ -1136,39 +1124,77 @@ secFC:Toggle({ Title = "Enable Freecam", Value = false, Callback = function(v)
         if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end
         notify("Freecam", "Drone deployed ✅", 2)
     else
-        stopFreecamLoop(); stopFreecamCapture()
-        local hrp = getRoot()
-        if hrp then
-            hrp.Anchored = false
-            if FC.savedCF then hrp.CFrame = FC.savedCF; FC.savedCF = nil end
-        end
-        local hum = getHum()
-        if hum then
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-            hum.WalkSpeed = State.Move.ws
-            hum.UseJumpPower = true
-            hum.JumpPower = State.Move.jp
-        end
-        Cam.CameraType = Enum.CameraType.Custom
-        Cam.FieldOfView = FC.origFov
-        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end
+        fullCleanupFreecam()
         notify("Freecam", "Drone recalled ❌", 2)
     end
 end})
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 
+-- Cleanup cinematic
+local function fullCleanupCinema()
+    if State.Cinema.hideUI then
+        State.Cinema.hideUI = false
+        for _, gui in pairs(State.Cinema.cachedGuis) do
+            if gui and gui.Parent then gui.Enabled = true end
+        end
+        State.Cinema.cachedGuis = {}
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+    end
+    if State.Cinema.hideNames then
+        State.Cinema.hideNames = false
+        if State.Cinema.nameConn then State.Cinema.nameConn:Disconnect(); State.Cinema.nameConn = nil end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character then
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
+                for _, desc in ipairs(p.Character:GetDescendants()) do
+                    if desc:IsA("BillboardGui") then desc.Enabled = true end
+                end
+            end
+        end
+    end
+end
+
 local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true })
 secCine:Toggle({ Title = "Hide All UI (Safe Mode)", Value = false, Callback = function(v)
-    State.Cinema.hideUI = v; if v then for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end); notify("Cinematic", "UI Hidden 🎬", 2)
-    else for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end); notify("Cinematic", "UI Restored ✅", 2) end
+    if v then
+        fullCleanupCinema()
+        State.Cinema.hideUI = true
+        State.Cinema.cachedGuis = {}
+        for _, gui in pairs(LP.PlayerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                table.insert(State.Cinema.cachedGuis, gui)
+                gui.Enabled = false
+            end
+        end
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+        notify("Cinematic", "UI Hidden 🎬", 2)
+    else
+        fullCleanupCinema()
+        notify("Cinematic", "UI Restored ✅", 2)
+    end
 end})
 secCine:Toggle({ Title = "Hide Player Names & Bubble Chat", Value = false, Callback = function(v)
-    State.Cinema.hideNames = v; if v then State.Cinema.nameConn = TrackC(RS.Heartbeat:Connect(function() for _, p in ipairs(Players:GetPlayers()) do if p.Character then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") then desc.Enabled = false end end end end end))
-        notify("Cinematic", "Names & Chat wiped 🧹", 2) else if State.Cinema.nameConn then State.Cinema.nameConn:Disconnect(); State.Cinema.nameConn = nil end
-        for _, p in ipairs(Players:GetPlayers()) do if p.Character then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") then desc.Enabled = true end end end end; notify("Cinematic", "Names & Chat restored ✅", 2) end
+    if v then
+        fullCleanupCinema()
+        State.Cinema.hideNames = true
+        State.Cinema.nameConn = TrackC(RS.Heartbeat:Connect(function()
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Character then
+                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                    if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
+                    for _, desc in ipairs(p.Character:GetDescendants()) do
+                        if desc:IsA("BillboardGui") then desc.Enabled = false end
+                    end
+                end
+            end
+        end))
+        notify("Cinematic", "Names & Chat wiped 🧹", 2)
+    else
+        fullCleanupCinema()
+        notify("Cinematic", "Names & Chat restored ✅", 2)
+    end
 end})
 
 -- ══════════════════════════════════════════════════════════════
@@ -1192,22 +1218,15 @@ local function applyFilter(filter)
     
     if filter == "Full Bright HD" then
         cc:Destroy(); bloom:Destroy()
-        Lighting.GlobalShadows = false
-        Lighting.Brightness = 3
-        Lighting.ClockTime = 12
-        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
     elseif filter == "Soft Pastel HD" then
-        cc.TintColor = Color3.fromRGB(255, 240, 245)
-        cc.Saturation = -0.05; cc.Contrast = 0.05
+        cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05
         bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
     elseif filter == "Cinematic Soft" then
-        cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05
-        bloom.Intensity = 0.2; Lighting.ClockTime = 17
-    elseif filter == "Ultra HD" then
-        cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
-    elseif filter == "Realistic" then
-        cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
+        cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 17
+    elseif filter == "Ultra HD" then cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
+    elseif filter == "Realistic" then cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
     elseif filter == "Night HD" then
         cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1
     end
@@ -1388,4 +1407,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine - Freecam Roll/Tilt Ready")
+print("✅ XKID Engine - All Bugs Fixed")
