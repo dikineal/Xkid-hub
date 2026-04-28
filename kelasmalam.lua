@@ -694,7 +694,7 @@ end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 
 -- ══════════════════════════════════════════════════════════════
---  CHAT LOGGER (FIXED)
+--  CHAT LOGGER
 -- ══════════════════════════════════════════════════════════════
 local chatLogPanel = nil
 local function logMsg(speakerName, msg)
@@ -776,12 +776,29 @@ secWelcome:Button({ Title = "Copy Discord Link", Desc = "Join the network", Call
 
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true })
 local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
-local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
+local netLabel = secStatus:Paragraph({ Title = "PERFORMANCE", Desc = "Loading..." })
 local secSecHome = T_HOME:Section({ Title = "Security Check", Opened = true })
 local securityLabel = secSecHome:Paragraph({ Title = "Status", Desc = "Protected" })
 
 task.spawn(function()
     task.wait(2)
+    local function lerpColor(c1, c2, t) return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t) end
+    local function toHex(c) return string.format("#%02X%02X%02X", c.R*255, c.G*255, c.B*255) end
+    local function makeBar(val, maxVal, len, mode)
+        local fill = math.clamp(math.floor((val/maxVal)*len), 0, len)
+        local res = ""
+        for i=1, len do
+            if i <= fill then
+                local t = (i-1)/math.max(1, len-1)
+                local col = mode == "FPS" and lerpColor(Color3.fromRGB(0,255,255), Color3.fromRGB(0,100,255), t) or (t < 0.5 and lerpColor(Color3.fromRGB(0,255,0), Color3.fromRGB(255,255,0), t*2) or lerpColor(Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,0), (t-0.5)*2))
+                res = res .. '<font color="'..toHex(col)..'">█</font>'
+            else
+                res = res .. '<font color="#444444">░</font>'
+            end
+        end
+        return res
+    end
+
     while getgenv()._XKID_RUNNING do
         task.wait(0.5)
         pcall(function()
@@ -794,9 +811,12 @@ task.spawn(function()
         end)
         pcall(function()
             if netLabel then
-                local fps = math.clamp(sharedFPS, 0, 300); local ping = math.clamp(sharedPing, 0, 9999)
-                local pc = ping < 100 and "🟢" or (ping < 200 and "🟡" or "🔴")
-                netLabel:SetDesc(string.format("🖥️ FPS: %d ⚡\n📶 Ping: %d ms %s", fps, ping, pc))
+                local fps = math.clamp(sharedFPS, 0, 300)
+                local ping = math.clamp(sharedPing, 0, 9999)
+                local fpsBar = makeBar(fps, 120, 14, "FPS")
+                local pingBar = makeBar(ping, 200, 14, "PING")
+                
+                netLabel:SetDesc(string.format("<b>FPS</b>   %s <font color='#FFFFFF'>%d</font>\n<b>PING</b>  %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping))
             end
         end)
         pcall(function()
@@ -854,7 +874,7 @@ end})
 -- ══════════════════════════════════════════════════════════════
 --  TAB 3: TELEPORT
 -- ══════════════════════════════════════════════════════════════
-local T_TP = Window:Tab({ Title = "Navigation", Icon = "crosshair" })
+local T_TP = Window:Tab({ Title = "Teleport", Icon = "crosshair" })
 T_TP:Section({ Title = "Point Teleport", Opened = true }):Toggle({ Title = "Click TP Tool", Value = false, Callback = function(v)
     if v then
         if State.Teleport.clickTool then State.Teleport.clickTool:Destroy() end
@@ -906,7 +926,7 @@ end
 -- ══════════════════════════════════════════════════════════════
 --  TAB 4: CAMERA
 -- ══════════════════════════════════════════════════════════════
-local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus" })
+local T_CAM = Window:Tab({ Title = "Camera", Icon = "focus" })
 T_CAM:Section({ Title = "Zoom Override", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
 
 local secFC = T_CAM:Section({ Title = "Freecam", Opened = true })
@@ -1007,14 +1027,14 @@ local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Lev
 secGfx:Slider({ Title="Quality Level", Step=1, Value={Min=1,Max=10,Default=5}, Callback=function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: RADAR
+--  TAB 6: ESP
 -- ══════════════════════════════════════════════════════════════
-local T_ESP = Window:Tab({ Title = "Radar", Icon = "cpu" })
+local T_ESP = Window:Tab({ Title = "ESP", Icon = "cpu" })
 local secESP = T_ESP:Section({ Title = "Detection System", Opened = true })
 secESP:Toggle({ Title = "Enable Radar", Value = false, Callback = function(v)
     State.ESP.active = v
     if not v and State.ESP.cache then for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end) end end
-    notify("Radar", v and "System active ✅" or "System disabled ❌", 2)
+    notify("ESP", v and "System active ✅" or "System disabled ❌", 2)
 end})
 secESP:Dropdown({ Title = "Tracer Origin", Values = {"Bottom","Center","Mouse","OFF"}, Value = "Bottom", Callback = function(v) State.ESP.tracerMode = v end })
 secESP:Toggle({ Title = "Highlight Entity", Value = false, Callback = function(v) State.ESP.highlightMode = v end })
@@ -1149,4 +1169,4 @@ task.spawn(function() pcall(function() cachedMapName = game:GetService("Marketpl
 task.wait(0.5)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine v1.0 Ready")
+print("✅ XKID Engine v1.1 Ready")
