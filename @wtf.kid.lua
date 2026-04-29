@@ -48,7 +48,6 @@ if getgenv()._XKID_LOADED then
     pcall(function() RS:UnbindFromRenderStep("XKIDSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
     pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
-    -- Restore names
     for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
         if p.Character then
             local hum = p.Character:FindFirstChildOfClass("Humanoid")
@@ -215,7 +214,6 @@ TrackC(LP.CharacterAdded:Connect(function(char)
             State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
         end
     end
-    -- Re-apply cinematic names jika sedang aktif saat respawn
     if State.Cinema.hideNames then
         task.wait(0.3)
         for _, p in ipairs(Players:GetPlayers()) do
@@ -566,7 +564,7 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (HOLD ROLL + FULL 360 + SEPARATE CINEMA CLEANUP)
+--  FREECAM ENGINE (SMOOTH ROLL + BETTER ICONS)
 -- ══════════════════════════════════════════════════════════════
 local FC = {
     active   = false,
@@ -595,7 +593,6 @@ local fcRotLast    = nil
 local fcKeysHeld   = {}
 local fcConns      = {}
 
--- TOMBOL ROLL: HOLD = muter, lepas = stop (FULL 360)
 local FC_UI_Btns = {
     up        = false,
     down      = false,
@@ -622,7 +619,7 @@ local function makeFCBtn(name, txt, pos, actionKey)
     b.BackgroundTransparency = 0.4
     b.Text                 = txt
     b.TextColor3           = Color3.fromRGB(255, 255, 255)
-    b.TextSize             = 26
+    b.TextSize             = 22
     b.Font                 = Enum.Font.GothamBold
     b.AutoButtonColor      = false
 
@@ -632,7 +629,6 @@ local function makeFCBtn(name, txt, pos, actionKey)
     uis.Thickness   = 2
     uis.Transparency = 0.3
 
-    -- Semua tombol pakai HOLD mode
     local function press(down)
         FC_UI_Btns[actionKey] = down
         b.BackgroundTransparency = down and 0.05 or 0.4
@@ -654,8 +650,9 @@ local function makeFCBtn(name, txt, pos, actionKey)
     return b
 end
 
-makeFCBtn("BtnRollL", "↺", UDim2.new(1, -118, 0.5, -84), "rollLeft")
-makeFCBtn("BtnRollR", "↻", UDim2.new(1, -58,  0.5, -84), "rollRight")
+-- Icons: R-L (Roll Left), R-R (Roll Right) - teks jelas kebaca
+makeFCBtn("BtnRollL", "L", UDim2.new(1, -118, 0.5, -84), "rollLeft")
+makeFCBtn("BtnRollR", "R", UDim2.new(1, -58,  0.5, -84), "rollRight")
 makeFCBtn("BtnUp",    "↑", UDim2.new(1, -118, 0.5, -26), "up")
 makeFCBtn("BtnZIn",   "+", UDim2.new(1, -58,  0.5, -26), "zoomIn")
 makeFCBtn("BtnDown",  "↓", UDim2.new(1, -118, 0.5,  32), "down")
@@ -752,16 +749,16 @@ local function startFreecamLoop()
         FC.yawDeg   = FC.yawDeg   + I_YawVel   * safeDt
         FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80)
 
-        -- ROLL (↺ ↻) - HOLD MODE: tahan = muter, lepas = stop smooth, FULL 360
+        -- ROLL (L/R) - HOLD = muter, lepas = stop smooth, FULL 360, MORE SMOOTH
         local rollSpeed = 0
-        if FC_UI_Btns.rollLeft  then rollSpeed = -120 end  -- kiri = CCW
-        if FC_UI_Btns.rollRight then rollSpeed =  120 end  -- kanan = CW
+        if FC_UI_Btns.rollLeft  then rollSpeed = -80 end
+        if FC_UI_Btns.rollRight then rollSpeed =  80 end
 
         if rollSpeed ~= 0 then
-            I_RollVel = I_RollVel + (rollSpeed - I_RollVel) * math.clamp(safeDt * 6, 0, 1)
+            I_RollVel = I_RollVel + (rollSpeed - I_RollVel) * math.clamp(safeDt * 8, 0, 1)
         else
-            I_RollVel = I_RollVel * math.max(0, 1 - safeDt * 4)
-            if math.abs(I_RollVel) < 1 then I_RollVel = 0 end
+            I_RollVel = I_RollVel * math.max(0, 1 - safeDt * 3)
+            if math.abs(I_RollVel) < 0.5 then I_RollVel = 0 end
         end
         FC.rollDeg = (FC.rollDeg + I_RollVel * safeDt) % 360
 
@@ -808,7 +805,6 @@ local function stopFreecamLoop()
     RS:UnbindFromRenderStep("XKIDFreecam")
 end
 
--- Cleanup total freecam
 local function fullCleanupFreecam()
     stopFreecamLoop()
     stopFreecamCapture()
@@ -1121,7 +1117,7 @@ secSP:Toggle({ Title = "First Person View", Value = false, Callback = function(v
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: FREECAM (HOLD ROLL + FULL 360 + SEPARATE CINEMA CLEANUP)
+--  TAB 5: FREECAM
 -- ══════════════════════════════════════════════════════════════
 local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video" })
 
@@ -1144,7 +1140,6 @@ end})
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 
--- SEPARATE CLEANUP FUNCTIONS (FIXED: no more conflict)
 local function cleanupHideUI()
     if not State.Cinema.hideUI then return end
     State.Cinema.hideUI = false
@@ -1215,16 +1210,16 @@ secCine:Toggle({ Title = "Hide Player Names & Bubble Chat", Value = false, Callb
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: WORLD EDITOR
+--  TAB 6: FILTER (RENAMED + NEW FILTERS + FIXED ATMOSPHERE + FPS SELECTOR)
 -- ══════════════════════════════════════════════════════════════
-local T_WO = Window:Tab({ Title = "World Editor", Icon = "layers" })
-local secFilter = T_WO:Section({ Title = "Aesthetic Shaders", Opened = true })
+local T_WO = Window:Tab({ Title = "Filter", Icon = "layers" })
+local secFilter = T_WO:Section({ Title = "Presets", Opened = true })
 
 local function resetLighting()
     for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end
     Lighting.ClockTime = 14; Lighting.Brightness = 1; Lighting.ExposureCompensation = 0
     Lighting.Ambient = Color3.fromRGB(127, 127, 127); Lighting.OutdoorAmbient = Color3.fromRGB(127, 127, 127)
-    Lighting.GlobalShadows = true; Lighting.FogEnd = 100000; notify("World Editor", "Shaders reset ✅", 2)
+    Lighting.GlobalShadows = true; Lighting.FogEnd = 100000; notify("Filter", "Reset to default ✅", 2)
 end
 
 local function applyFilter(filter)
@@ -1242,12 +1237,28 @@ local function applyFilter(filter)
         bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
     elseif filter == "Cinematic Soft" then
         cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 17
-    elseif filter == "Ultra HD" then cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
-    elseif filter == "Realistic" then cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
+    elseif filter == "Ultra HD" then
+        cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
+    elseif filter == "Realistic" then
+        cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
     elseif filter == "Night HD" then
         cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1
+    elseif filter == "📸 Warm Vintage" then
+        cc.TintColor = Color3.fromRGB(255, 230, 180); cc.Saturation = -0.2; cc.Contrast = 0.1; cc.Brightness = 0.05
+        bloom.Intensity = 0.25; bloom.Size = 30; Lighting.ClockTime = 17
+    elseif filter == "🎞️ Cinematic Film" then
+        cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05
+        bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16
+    elseif filter == "🌅 Golden Hour" then
+        cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1
+        bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5
+    elseif filter == "🌙 Moody Blue" then
+        cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1
+        bloom.Intensity = 0.1; Lighting.ClockTime = 2
+    elseif filter == "🖤 B&W Classic HD" then
+        cc.Saturation = -1; cc.Contrast = 0.3; cc.Brightness = 0.05; bloom.Intensity = 0.05; Lighting.ClockTime = 12
     end
-    notify("World Editor", filter.." applied ✅", 2)
+    notify("Filter", filter.." applied ✅", 2)
 end
 
 secFilter:Button({ Title = "☀️ Full Bright HD",  Callback = function() applyFilter("Full Bright HD")  end })
@@ -1256,20 +1267,46 @@ secFilter:Button({ Title = "🎬 Cinematic Soft",   Callback = function() applyF
 secFilter:Button({ Title = "💎 Ultra HD",      Callback = function() applyFilter("Ultra HD")     end })
 secFilter:Button({ Title = "🌍 Realistic",     Callback = function() applyFilter("Realistic")    end })
 secFilter:Button({ Title = "🌃 Night HD",      Callback = function() applyFilter("Night HD")     end })
-secFilter:Button({ Title = "🔄 Reset Lighting",Callback = function() applyFilter("Default")      end })
+secFilter:Button({ Title = "📸 Warm Vintage",    Callback = function() applyFilter("📸 Warm Vintage")  end })
+secFilter:Button({ Title = "🎞️ Cinematic Film",  Callback = function() applyFilter("🎞️ Cinematic Film") end })
+secFilter:Button({ Title = "🌅 Golden Hour",     Callback = function() applyFilter("🌅 Golden Hour")   end })
+secFilter:Button({ Title = "🌙 Moody Blue",      Callback = function() applyFilter("🌙 Moody Blue")    end })
+secFilter:Button({ Title = "🖤 B&W Classic HD",  Callback = function() applyFilter("🖤 B&W Classic HD") end })
+secFilter:Button({ Title = "🔄 Reset Filter",   Callback = function() applyFilter("Default")      end })
 
-local secAtmos = T_WO:Section({ Title = "Atmosphere Control", Opened = false })
+-- FIXED: Atmosphere sliders dengan default di tengah
+local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
 local function getEff(cls) for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" and v:IsA(cls) then return v end end; local e = Instance.new(cls); e.Name = "_XKID_FILTER"; e.Parent = Lighting; return e end
-secAtmos:Slider({ Title="Brightness", Step=0.1, Value={Min=0,Max=10,Default=1}, Callback=function(v) Lighting.Brightness=v end })
-secAtmos:Slider({ Title="Exposure", Step=0.1, Value={Min=-5,Max=5,Default=0}, Callback=function(v) Lighting.ExposureCompensation=v end })
-secAtmos:Slider({ Title="ClockTime", Step=0.1, Value={Min=0,Max=24,Default=14}, Callback=function(v) Lighting.ClockTime=v end })
-secAtmos:Slider({ Title="Contrast", Step=0.1, Value={Min=-2,Max=2,Default=0}, Callback=function(v) getEff("ColorCorrectionEffect").Contrast=v end })
-secAtmos:Slider({ Title="Bloom", Step=0.1, Value={Min=0,Max=5,Default=0}, Callback=function(v) getEff("BloomEffect").Intensity=v end })
-secAtmos:Button({ Title="🔄 Reset Atmosphere", Callback=function() Lighting.Brightness = 1; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14; getEff("ColorCorrectionEffect").Contrast = 0; getEff("BloomEffect").Intensity = 0; notify("Atmosphere", "Reset to normal ✅", 2) end })
 
-local secGfx = T_WO:Section({ Title = "Graphics Override", Opened = false })
+-- Default di tengah: Min=0, Max=10, Default=5
+secAtmos:Slider({ Title = "Brightness", Step = 0.1, Value = {Min = 0, Max = 10, Default = 5}, Callback = function(v) Lighting.Brightness = v end })
+secAtmos:Slider({ Title = "Exposure", Step = 0.1, Value = {Min = -5, Max = 5, Default = 0}, Callback = function(v) Lighting.ExposureCompensation = v end })
+secAtmos:Slider({ Title = "ClockTime", Step = 0.1, Value = {Min = 0, Max = 24, Default = 14}, Callback = function(v) Lighting.ClockTime = v end })
+secAtmos:Slider({ Title = "Contrast", Step = 0.1, Value = {Min = -2, Max = 2, Default = 0}, Callback = function(v) getEff("ColorCorrectionEffect").Contrast = v end })
+secAtmos:Slider({ Title = "Bloom", Step = 0.1, Value = {Min = 0, Max = 5, Default = 0}, Callback = function(v) getEff("BloomEffect").Intensity = v end })
+secAtmos:Button({ Title = "Reset Atmosphere", Callback = function() 
+    Lighting.Brightness = 5; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14
+    getEff("ColorCorrectionEffect").Contrast = 0; getEff("BloomEffect").Intensity = 0
+    notify("Filter", "Atmosphere reset ✅", 2) 
+end })
+
+-- Graphics dengan FPS Selector
+local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
 local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Level09",[6]="Level11",[7]="Level13",[8]="Level15",[9]="Level17",[10]="Level21"}
-secGfx:Slider({ Title="Quality Level", Step=1, Value={Min=1,Max=10,Default=1}, Callback=function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
+secGfx:Slider({ Title = "Quality Level", Step = 1, Value = {Min = 1, Max = 10, Default = 1}, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
+secGfx:Dropdown({ 
+    Title = "FPS Cap", 
+    Values = {"30", "60", "120", "144", "240", "Unlimited"}, 
+    Value = "60",
+    Callback = function(v) 
+        if v == "Unlimited" then
+            pcall(function() setfpscap(9999) end)
+        else
+            pcall(function() setfpscap(tonumber(v)) end)
+        end
+        notify("Graphics", "FPS cap: "..v, 2)
+    end 
+})
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 7: RADAR
@@ -1330,16 +1367,25 @@ secSrv:Toggle({ Title = "Auto Rejoin", Value = false, Callback = function(v)
     else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end; notify("Security", "Auto Rejoin disabled ❌", 2) end
 end})
 secSrv:Button({ Title = "Force Rejoin", Callback = function() notify("System", "Rejoining... ⚡", 2); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
-secSrv:Button({ Title = "Server Hop ⚡", Callback = function()
-    notify("System", "Searching new grid... ⚡", 2)
+secSrv:Button({ Title = "Server Hop", Callback = function()
+    notify("System", "Searching for active servers... 🔍", 2)
     pcall(function()
         local req = (syn and syn.request) or (http and http.request) or http_request or request
         if not req then notify("Error", "HTTP request failed ⚠️", 2); return end
-        local res = req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100", Method = "GET"})
+        -- Changed: Desc order = ramai dulu, filter playing > 0
+        local res = req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100", Method = "GET"})
         if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body)
-            if body and body.data then for _, v in ipairs(body.data) do if v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); return end end end
+            if body and body.data then 
+                for _, v in ipairs(body.data) do 
+                    if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then 
+                        TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP)
+                        notify("Server Hop", "Joining server with "..v.playing.." players ✅", 2)
+                        return 
+                    end 
+                end
+                notify("Server Hop", "No suitable server found 😕", 2)
+            end
         end
-        notify("System", "No servers found ❌", 2)
     end)
 end})
 
@@ -1424,4 +1470,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine - All Fixes Applied")
+print("✅ XKID Engine - Final Version")
