@@ -48,6 +48,16 @@ if getgenv()._XKID_LOADED then
     pcall(function() RS:UnbindFromRenderStep("XKIDSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
     pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+    -- Restore names
+    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+        if p.Character then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
+            for _, desc in ipairs(p.Character:GetDescendants()) do
+                if desc:IsA("BillboardGui") then desc.Enabled = true end
+            end
+        end
+    end
     task.wait(0.2)
     collectgarbage("collect")
 end
@@ -203,6 +213,19 @@ TrackC(LP.CharacterAdded:Connect(function(char)
             State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp)
             State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
             State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
+        end
+    end
+    -- Re-apply cinematic names jika sedang aktif saat respawn
+    if State.Cinema.hideNames then
+        task.wait(0.3)
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character then
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
+                for _, desc in ipairs(p.Character:GetDescendants()) do
+                    if desc:IsA("BillboardGui") then desc.Enabled = false end
+                end
+            end
         end
     end
 end))
@@ -536,13 +559,14 @@ local function toggleSmartTP(v)
             end
         end))
         notify("Teleport", "Smart TP: Double Tap / Ctrl+Click ✅", 2)
-    else        if State.Teleport.clickConn then State.Teleport.clickConn:Disconnect(); State.Teleport.clickConn = nil end
+    else
+        if State.Teleport.clickConn then State.Teleport.clickConn:Disconnect(); State.Teleport.clickConn = nil end
         notify("Teleport", "Smart TP Disabled ❌", 2)
     end
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (ROLL/TILT - CLICK TO ROTATE FREELY)
+--  FREECAM ENGINE (HOLD ROLL + FULL 360 + SEPARATE CINEMA CLEANUP)
 -- ══════════════════════════════════════════════════════════════
 local FC = {
     active   = false,
@@ -571,12 +595,12 @@ local fcRotLast    = nil
 local fcKeysHeld   = {}
 local fcConns      = {}
 
--- TOMBOL ROLL: true = tombol aktif (ditekan), berputar bebas
+-- TOMBOL ROLL: HOLD = muter, lepas = stop (FULL 360)
 local FC_UI_Btns = {
     up        = false,
     down      = false,
-    rollLeft  = false,   -- tekan sekali = muter kiri terus, tekan lagi = stop
-    rollRight = false,   -- tekan sekali = muter kanan terus, tekan lagi = stop
+    rollLeft  = false,
+    rollRight = false,
     zoomIn    = false,
     zoomOut   = false,
 }
@@ -608,32 +632,24 @@ local function makeFCBtn(name, txt, pos, actionKey)
     uis.Thickness   = 2
     uis.Transparency = 0.3
 
-    if actionKey == "rollLeft" or actionKey == "rollRight" then
-        -- TOGGLE MODE: tekan sekali = muter terus, tekan lagi = stop
-        b.Activated:Connect(function()
-            FC_UI_Btns[actionKey] = not FC_UI_Btns[actionKey]
-            b.BackgroundTransparency = FC_UI_Btns[actionKey] and 0.05 or 0.4
-        end)
-    else
-        -- HOLD MODE: tahan = aktif, lepas = stop
-        local function press(down)
-            FC_UI_Btns[actionKey] = down
-            b.BackgroundTransparency = down and 0.05 or 0.4
-        end
-        b.InputBegan:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.Touch
-            or inp.UserInputType == Enum.UserInputType.MouseButton1 then
-                press(true)
-            end
-        end)
-        b.InputEnded:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.Touch
-            or inp.UserInputType == Enum.UserInputType.MouseButton1 then
-                press(false)
-            end
-        end)
-        b.MouseLeave:Connect(function() press(false) end)
+    -- Semua tombol pakai HOLD mode
+    local function press(down)
+        FC_UI_Btns[actionKey] = down
+        b.BackgroundTransparency = down and 0.05 or 0.4
     end
+    b.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.Touch
+        or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            press(true)
+        end
+    end)
+    b.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.Touch
+        or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            press(false)
+        end
+    end)
+    b.MouseLeave:Connect(function() press(false) end)
 
     return b
 end
@@ -736,23 +752,18 @@ local function startFreecamLoop()
         FC.yawDeg   = FC.yawDeg   + I_YawVel   * safeDt
         FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80)
 
-        -- ROLL (↺ ↻) - TOGGLE MODE: tekan sekali = muter bebas, tekan lagi = stop
-        if FC_UI_Btns.rollLeft then
-            -- Putar kiri terus
-            FC.rollDeg = FC.rollDeg - 60 * safeDt
-        elseif FC_UI_Btns.rollRight then
-            -- Putar kanan terus
-            FC.rollDeg = FC.rollDeg + 60 * safeDt
+        -- ROLL (↺ ↻) - HOLD MODE: tahan = muter, lepas = stop smooth, FULL 360
+        local rollSpeed = 0
+        if FC_UI_Btns.rollLeft  then rollSpeed = -120 end  -- kiri = CCW
+        if FC_UI_Btns.rollRight then rollSpeed =  120 end  -- kanan = CW
+
+        if rollSpeed ~= 0 then
+            I_RollVel = I_RollVel + (rollSpeed - I_RollVel) * math.clamp(safeDt * 6, 0, 1)
         else
-            -- Tidak ada yang ditekan: balik ke 0 perlahan
-            if math.abs(FC.rollDeg) > 0.1 then
-                FC.rollDeg = FC.rollDeg * math.max(0, 1 - safeDt * 5)
-            else
-                FC.rollDeg = 0
-            end
+            I_RollVel = I_RollVel * math.max(0, 1 - safeDt * 4)
+            if math.abs(I_RollVel) < 1 then I_RollVel = 0 end
         end
-        
-        FC.rollDeg = math.clamp(FC.rollDeg, -45, 45)
+        FC.rollDeg = (FC.rollDeg + I_RollVel * safeDt) % 360
 
         -- POSISI
         local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
@@ -1110,7 +1121,7 @@ secSP:Toggle({ Title = "First Person View", Value = false, Callback = function(v
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: FREECAM (TOGGLE ROLL - KLIK SEKALI MUTER BEBAS)
+--  TAB 5: FREECAM (HOLD ROLL + FULL 360 + SEPARATE CINEMA CLEANUP)
 -- ══════════════════════════════════════════════════════════════
 local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video" })
 
@@ -1133,26 +1144,30 @@ end})
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 
--- Cleanup cinematic
-local function fullCleanupCinema()
-    if State.Cinema.hideUI then
-        State.Cinema.hideUI = false
-        for _, gui in pairs(State.Cinema.cachedGuis) do
-            if gui and gui.Parent then gui.Enabled = true end
-        end
-        State.Cinema.cachedGuis = {}
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+-- SEPARATE CLEANUP FUNCTIONS (FIXED: no more conflict)
+local function cleanupHideUI()
+    if not State.Cinema.hideUI then return end
+    State.Cinema.hideUI = false
+    for _, gui in pairs(State.Cinema.cachedGuis) do
+        if gui and gui.Parent then gui.Enabled = true end
     end
-    if State.Cinema.hideNames then
-        State.Cinema.hideNames = false
-        if State.Cinema.nameConn then State.Cinema.nameConn:Disconnect(); State.Cinema.nameConn = nil end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.Character then
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
-                for _, desc in ipairs(p.Character:GetDescendants()) do
-                    if desc:IsA("BillboardGui") then desc.Enabled = true end
-                end
+    State.Cinema.cachedGuis = {}
+    pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+end
+
+local function cleanupHideNames()
+    if not State.Cinema.hideNames then return end
+    State.Cinema.hideNames = false
+    if State.Cinema.nameConn then
+        State.Cinema.nameConn:Disconnect()
+        State.Cinema.nameConn = nil
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
+            for _, desc in ipairs(p.Character:GetDescendants()) do
+                if desc:IsA("BillboardGui") then desc.Enabled = true end
             end
         end
     end
@@ -1161,7 +1176,7 @@ end
 local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true })
 secCine:Toggle({ Title = "Hide All UI (Safe Mode)", Value = false, Callback = function(v)
     if v then
-        fullCleanupCinema()
+        cleanupHideUI()
         State.Cinema.hideUI = true
         State.Cinema.cachedGuis = {}
         for _, gui in pairs(LP.PlayerGui:GetChildren()) do
@@ -1173,13 +1188,13 @@ secCine:Toggle({ Title = "Hide All UI (Safe Mode)", Value = false, Callback = fu
         pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
         notify("Cinematic", "UI Hidden 🎬", 2)
     else
-        fullCleanupCinema()
+        cleanupHideUI()
         notify("Cinematic", "UI Restored ✅", 2)
     end
 end})
 secCine:Toggle({ Title = "Hide Player Names & Bubble Chat", Value = false, Callback = function(v)
     if v then
-        fullCleanupCinema()
+        cleanupHideNames()
         State.Cinema.hideNames = true
         State.Cinema.nameConn = TrackC(RS.Heartbeat:Connect(function()
             for _, p in ipairs(Players:GetPlayers()) do
@@ -1194,7 +1209,7 @@ secCine:Toggle({ Title = "Hide Player Names & Bubble Chat", Value = false, Callb
         end))
         notify("Cinematic", "Names & Chat wiped 🧹", 2)
     else
-        fullCleanupCinema()
+        cleanupHideNames()
         notify("Cinematic", "Names & Chat restored ✅", 2)
     end
 end})
@@ -1409,4 +1424,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine - Toggle Roll Freecam")
+print("✅ XKID Engine - All Fixes Applied")
