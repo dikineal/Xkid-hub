@@ -361,7 +361,6 @@ task.spawn(function()
         if State.ESP.active then
             local tempSorted = {}
             local myHrp = getCharRoot(LP.Character)
-            
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LP and p.Character then
                     local isSus, isGlitch, reason = false, false, ""
@@ -382,10 +381,8 @@ task.spawn(function()
                             if (bws and bws.Value > 2.0) or (bhs and bhs.Value > 2.0) then isSus = true; reason = "Glitch Avatar" end
                         end
                     end
-                    
                     initPlayerCache(p)
                     if State.ESP.cache[p] then State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason end
-                    
                     if myHrp then
                         local hrp = getCharRoot(p.Character)
                         local hum = p.Character:FindFirstChildOfClass("Humanoid")
@@ -418,19 +415,15 @@ TrackC(RS.RenderStepped:Connect(function()
         local player, char, hrp, dist = data.p, data.char, data.hrp, data.dist
         local c = State.ESP.cache[player]
         if not c then continue end
-
         local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
         if not onScreen then continue end
-
         local isSus, isGlitch = c.isSuspect, c.isGlitch
         local useHl = isSus or isGlitch or State.ESP.highlightMode
         local txt = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
         if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason end
-        
         local cColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
         local tColor = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N)
         local bColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
-
         pcall(function()
             if c.texts then c.texts.Text = txt; c.texts.Color = cColor; c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true end
             if State.ESP.tracerMode ~= "OFF" and c.tracer then
@@ -440,7 +433,6 @@ TrackC(RS.RenderStepped:Connect(function()
                 c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y); c.tracer.Color = tColor; c.tracer.Visible = true
             end
         end)
-
         if useHl and hlCount < 30 then
             hlCount = hlCount + 1
             pcall(function()
@@ -564,7 +556,7 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (SMOOTH ROLL + BETTER ICONS)
+--  FREECAM ENGINE
 -- ══════════════════════════════════════════════════════════════
 local FC = {
     active   = false,
@@ -650,7 +642,6 @@ local function makeFCBtn(name, txt, pos, actionKey)
     return b
 end
 
--- Icons: R-L (Roll Left), R-R (Roll Right) - teks jelas kebaca
 makeFCBtn("BtnRollL", "L", UDim2.new(1, -118, 0.5, -84), "rollLeft")
 makeFCBtn("BtnRollR", "R", UDim2.new(1, -58,  0.5, -84), "rollRight")
 makeFCBtn("BtnUp",    "↑", UDim2.new(1, -118, 0.5, -26), "up")
@@ -660,7 +651,6 @@ makeFCBtn("BtnZOut",  "-", UDim2.new(1, -58,  0.5,  32), "zoomOut")
 
 local function startFreecamCapture()
     fcKeysHeld = {}
-
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp then return end
         fcKeysHeld[inp.KeyCode] = true
@@ -669,7 +659,6 @@ local function startFreecamCapture()
             UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
         end
     end))
-
     table.insert(fcConns, UIS.InputEnded:Connect(function(inp)
         fcKeysHeld[inp.KeyCode] = false
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then
@@ -677,14 +666,12 @@ local function startFreecamCapture()
             UIS.MouseBehavior = Enum.MouseBehavior.Default
         end
     end))
-
     table.insert(fcConns, UIS.InputChanged:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseMovement and FC._mouseRot then
             I_YawVel   = I_YawVel   - inp.Delta.X * FC.sens * 120
             I_PitchVel = I_PitchVel - inp.Delta.Y * FC.sens * 120
         end
     end))
-
     table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
         if inp.Position.X > Cam.ViewportSize.X / 2 then
@@ -693,7 +680,6 @@ local function startFreecamCapture()
             if not fcMoveTouch then fcMoveTouch = inp; fcMoveSt = inp.Position; fcJoy = Vector2.zero end
         end
     end))
-
     table.insert(fcConns, UIS.TouchMoved:Connect(function(inp)
         if inp == fcRotTouch and fcRotLast then
             local dx = inp.Position.X - fcRotLast.X
@@ -712,7 +698,6 @@ local function startFreecamCapture()
             fcJoy = Vector2.new(applyDead(dx, 15, 70), applyDead(dy, 15, 70))
         end
     end))
-
     table.insert(fcConns, UIS.InputEnded:Connect(function(inp)
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
         if inp == fcRotTouch then fcRotTouch = nil; fcRotLast = nil end
@@ -743,17 +728,14 @@ local function startFreecamLoop()
         Cam.CameraType = Enum.CameraType.Scriptable
         local safeDt = math.clamp(dt, 0.001, 0.05)
 
-        -- YAW & PITCH
         I_YawVel   = I_YawVel   * math.max(0, 1 - safeDt * 14)
         I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14)
         FC.yawDeg   = FC.yawDeg   + I_YawVel   * safeDt
         FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80)
 
-        -- ROLL (L/R) - HOLD = muter, lepas = stop smooth, FULL 360, MORE SMOOTH
         local rollSpeed = 0
         if FC_UI_Btns.rollLeft  then rollSpeed = -80 end
         if FC_UI_Btns.rollRight then rollSpeed =  80 end
-
         if rollSpeed ~= 0 then
             I_RollVel = I_RollVel + (rollSpeed - I_RollVel) * math.clamp(safeDt * 8, 0, 1)
         else
@@ -762,7 +744,6 @@ local function startFreecamLoop()
         end
         FC.rollDeg = (FC.rollDeg + I_RollVel * safeDt) % 360
 
-        -- POSISI
         local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
         local joyX, joyY = fcJoy.X, fcJoy.Y
         if not onMobile then
@@ -776,7 +757,6 @@ local function startFreecamLoop()
         local moveTarget = (camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X) * (FC.speed * 60)
         I_CamVel = I_CamVel:Lerp(moveTarget, math.clamp(safeDt * 3.5, 0, 1))
 
-        -- HEIGHT
         local heightTarget = 0
         if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up   then heightTarget =  FC.speed * 60 end
         if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end
@@ -787,11 +767,9 @@ local function startFreecamLoop()
             heightVelocity = heightVelocity + (heightTarget - heightVelocity) * math.clamp(safeDt * 3, 0, 1)
         end
 
-        -- ZOOM
         if FC_UI_Btns.zoomIn  then Cam.FieldOfView = math.clamp(Cam.FieldOfView - 1.2, 10, 120) end
         if FC_UI_Btns.zoomOut then Cam.FieldOfView = math.clamp(Cam.FieldOfView + 1.2, 10, 120) end
 
-        -- APPLY
         FC.pos = FC.pos + (I_CamVel + Vector3.new(0, heightVelocity, 0)) * safeDt
         Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0) * CFrame.Angles(0, 0, math.rad(FC.rollDeg))
 
@@ -952,7 +930,6 @@ end)
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard" })
 local secWelcome = T_HOME:Section({ Title = "System Access", Opened = true })
-
 secWelcome:Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
 secWelcome:Button({ Title = "Copy Discord Link", Desc = "Join the network", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
 
@@ -1210,7 +1187,7 @@ secCine:Toggle({ Title = "Hide Player Names & Bubble Chat", Value = false, Callb
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: FILTER (RENAMED + NEW FILTERS + FIXED ATMOSPHERE + FPS SELECTOR)
+--  TAB 6: FILTER (ALL DROPDOWN)
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "Filter", Icon = "layers" })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true })
@@ -1228,7 +1205,22 @@ local function applyFilter(filter)
     local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"
     local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"
     
-    if filter == "Full Bright HD" then
+    if filter == "Mendung HD" then
+        cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15
+        bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7
+    elseif filter == "Cool Blue HD" then
+        cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05
+        bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2
+    elseif filter == "Soft Fade HD" then
+        cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1
+        bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3
+    elseif filter == "Adaptif Langit HD" then
+        cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05
+        bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5
+    elseif filter == "Edgy HD" then
+        cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1
+        bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8
+    elseif filter == "Full Bright HD" then
         cc:Destroy(); bloom:Destroy()
         Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12
         Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
@@ -1243,42 +1235,33 @@ local function applyFilter(filter)
         cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
     elseif filter == "Night HD" then
         cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1
-    elseif filter == "📸 Warm Vintage" then
-        cc.TintColor = Color3.fromRGB(255, 230, 180); cc.Saturation = -0.2; cc.Contrast = 0.1; cc.Brightness = 0.05
-        bloom.Intensity = 0.25; bloom.Size = 30; Lighting.ClockTime = 17
-    elseif filter == "🎞️ Cinematic Film" then
+    elseif filter == "Senja" then
+        cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05
+        bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5
+    elseif filter == "Cinematic Film" then
         cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05
         bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16
-    elseif filter == "🌅 Golden Hour" then
+    elseif filter == "Golden Hour" then
         cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1
         bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5
-    elseif filter == "🌙 Moody Blue" then
+    elseif filter == "Moody Blue" then
         cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1
         bloom.Intensity = 0.1; Lighting.ClockTime = 2
-    elseif filter == "🖤 B&W Classic HD" then
-        cc.Saturation = -1; cc.Contrast = 0.3; cc.Brightness = 0.05; bloom.Intensity = 0.05; Lighting.ClockTime = 12
     end
     notify("Filter", filter.." applied ✅", 2)
 end
 
-secFilter:Button({ Title = "☀️ Full Bright HD",  Callback = function() applyFilter("Full Bright HD")  end })
-secFilter:Button({ Title = "🌸 Soft Pastel HD",   Callback = function() applyFilter("Soft Pastel HD")  end })
-secFilter:Button({ Title = "🎬 Cinematic Soft",   Callback = function() applyFilter("Cinematic Soft")  end })
-secFilter:Button({ Title = "💎 Ultra HD",      Callback = function() applyFilter("Ultra HD")     end })
-secFilter:Button({ Title = "🌍 Realistic",     Callback = function() applyFilter("Realistic")    end })
-secFilter:Button({ Title = "🌃 Night HD",      Callback = function() applyFilter("Night HD")     end })
-secFilter:Button({ Title = "📸 Warm Vintage",    Callback = function() applyFilter("📸 Warm Vintage")  end })
-secFilter:Button({ Title = "🎞️ Cinematic Film",  Callback = function() applyFilter("🎞️ Cinematic Film") end })
-secFilter:Button({ Title = "🌅 Golden Hour",     Callback = function() applyFilter("🌅 Golden Hour")   end })
-secFilter:Button({ Title = "🌙 Moody Blue",      Callback = function() applyFilter("🌙 Moody Blue")    end })
-secFilter:Button({ Title = "🖤 B&W Classic HD",  Callback = function() applyFilter("🖤 B&W Classic HD") end })
-secFilter:Button({ Title = "🔄 Reset Filter",   Callback = function() applyFilter("Default")      end })
+-- ALL FILTERS IN ONE DROPDOWN
+secFilter:Dropdown({ 
+    Title = "Select Filter", 
+    Values = {"Default", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue"}, 
+    Value = "Default",
+    Callback = function(v) applyFilter(v) end 
+})
 
--- FIXED: Atmosphere sliders dengan default di tengah
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
 local function getEff(cls) for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" and v:IsA(cls) then return v end end; local e = Instance.new(cls); e.Name = "_XKID_FILTER"; e.Parent = Lighting; return e end
 
--- Default di tengah: Min=0, Max=10, Default=5
 secAtmos:Slider({ Title = "Brightness", Step = 0.1, Value = {Min = 0, Max = 10, Default = 5}, Callback = function(v) Lighting.Brightness = v end })
 secAtmos:Slider({ Title = "Exposure", Step = 0.1, Value = {Min = -5, Max = 5, Default = 0}, Callback = function(v) Lighting.ExposureCompensation = v end })
 secAtmos:Slider({ Title = "ClockTime", Step = 0.1, Value = {Min = 0, Max = 24, Default = 14}, Callback = function(v) Lighting.ClockTime = v end })
@@ -1290,7 +1273,6 @@ secAtmos:Button({ Title = "Reset Atmosphere", Callback = function()
     notify("Filter", "Atmosphere reset ✅", 2) 
 end })
 
--- Graphics dengan FPS Selector
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
 local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Level09",[6]="Level11",[7]="Level13",[8]="Level15",[9]="Level17",[10]="Level21"}
 secGfx:Slider({ Title = "Quality Level", Step = 1, Value = {Min = 1, Max = 10, Default = 1}, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
@@ -1299,11 +1281,8 @@ secGfx:Dropdown({
     Values = {"30", "60", "120", "144", "240", "Unlimited"}, 
     Value = "60",
     Callback = function(v) 
-        if v == "Unlimited" then
-            pcall(function() setfpscap(9999) end)
-        else
-            pcall(function() setfpscap(tonumber(v)) end)
-        end
+        if v == "Unlimited" then pcall(function() setfpscap(9999) end)
+        else pcall(function() setfpscap(tonumber(v)) end) end
         notify("Graphics", "FPS cap: "..v, 2)
     end 
 })
@@ -1372,7 +1351,6 @@ secSrv:Button({ Title = "Server Hop", Callback = function()
     pcall(function()
         local req = (syn and syn.request) or (http and http.request) or http_request or request
         if not req then notify("Error", "HTTP request failed ⚠️", 2); return end
-        -- Changed: Desc order = ramai dulu, filter playing > 0
         local res = req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100", Method = "GET"})
         if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body)
             if body and body.data then 
@@ -1470,4 +1448,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine - Final Version")
+print("✅ XKID Engine - All Filters Dropdown")
