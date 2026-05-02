@@ -47,7 +47,11 @@ if getgenv()._XKID_LOADED then
     pcall(function() RS:UnbindFromRenderStep("XKIDFly") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
+    -- Restore ALL UI and names on cleanup
     pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+    for _, gui in pairs(LP.PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") then gui.Enabled = true end
+    end
     for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
         pcall(function()
             if p.Character then
@@ -221,10 +225,10 @@ TrackC(LP.CharacterAdded:Connect(function(char)
             State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
         end
     end
-    -- Re-apply nametag hide setelah respawn
     if State.Cinema.hideNametag then
         task.wait(0.3)
         for _, p in ipairs(Players:GetPlayers()) do
+            if p == LP then continue end
             if p.Character then
                 local hum = p.Character:FindFirstChildOfClass("Humanoid")
                 if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
@@ -234,7 +238,6 @@ TrackC(LP.CharacterAdded:Connect(function(char)
             end
         end
     end
-    -- Re-apply bubble hide setelah respawn
     if State.Cinema.hideBubble then
         task.wait(0.3)
         for _, p in ipairs(Players:GetPlayers()) do
@@ -829,30 +832,44 @@ secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, 
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  CINEMATIC MODE (SEPARATE: Hide UI, Show Nametag, Show Bubble)
+--  CINEMATIC MODE (NORMAL - NO DOUBLE TEXT)
 -- ══════════════════════════════════════════════════════════════
 local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true })
 
--- Hide All UI
+-- Hide All UI (HANYA ScreenGui)
 secCine:Toggle({ Title = "Hide All UI", Value = false, Callback = function(v)
     if v then
-        State.Cinema.hideUI = true; State.Cinema.cachedGuis = {}
-        for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end); notify("Cinematic", "UI Hidden 🎬", 2)
+        -- Cache & hide hanya ScreenGui
+        State.Cinema.hideUI = true
+        State.Cinema.cachedGuis = {}
+        for _, gui in pairs(LP.PlayerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                table.insert(State.Cinema.cachedGuis, gui)
+                gui.Enabled = false
+            end
+        end
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+        notify("Cinematic", "UI Hidden 🎬", 2)
     else
+        -- Restore HANYA ScreenGui yang di-cache
         State.Cinema.hideUI = false
-        for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end); notify("Cinematic", "UI Restored ✅", 2)
+        for _, gui in pairs(State.Cinema.cachedGuis) do
+            if gui and gui.Parent then gui.Enabled = true end
+        end
+        State.Cinema.cachedGuis = {}
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+        notify("Cinematic", "UI Restored ✅", 2)
     end
 end})
 
--- Show Nametag (ON = nametag kelihatan, OFF = nametag disembunyiin)
+-- Show Nametag (ON = kelihatan, OFF = sembunyi)
 secCine:Toggle({ Title = "Show Nametag", Value = true, Callback = function(v)
     if v then
         -- RESTORE NAMETAGS
         if State.Cinema.nametagConn then State.Cinema.nametagConn:Disconnect(); State.Cinema.nametagConn = nil end
         State.Cinema.hideNametag = false
         for _, p in ipairs(Players:GetPlayers()) do
+            if p == LP then continue end
             if p.Character then
                 local hum = p.Character:FindFirstChildOfClass("Humanoid")
                 if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
@@ -865,8 +882,8 @@ secCine:Toggle({ Title = "Show Nametag", Value = true, Callback = function(v)
     else
         -- HIDE NAMETAGS
         State.Cinema.hideNametag = true
-        -- Langsung hide yang sekarang ada
         for _, p in ipairs(Players:GetPlayers()) do
+            if p == LP then continue end
             if p.Character then
                 local hum = p.Character:FindFirstChildOfClass("Humanoid")
                 if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
@@ -875,7 +892,6 @@ secCine:Toggle({ Title = "Show Nametag", Value = true, Callback = function(v)
                 end
             end
         end
-        -- Heartbeat loop buat player baru/respawn
         if State.Cinema.nametagConn then State.Cinema.nametagConn:Disconnect() end
         State.Cinema.nametagConn = TrackC(RS.Heartbeat:Connect(function()
             for _, p in ipairs(Players:GetPlayers()) do
@@ -893,7 +909,7 @@ secCine:Toggle({ Title = "Show Nametag", Value = true, Callback = function(v)
     end
 end})
 
--- Show Bubble Chat (ON = bubble chat kelihatan, OFF = bubble chat disembunyiin)
+-- Show Bubble Chat (ON = kelihatan, OFF = sembunyi)
 secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v)
     if v then
         -- RESTORE BUBBLE CHATS
@@ -910,7 +926,6 @@ secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v
     else
         -- HIDE BUBBLE CHATS
         State.Cinema.hideBubble = true
-        -- Langsung hide yang sekarang ada
         for _, p in ipairs(Players:GetPlayers()) do
             if p.PlayerGui then
                 for _, v in ipairs(p.PlayerGui:GetDescendants()) do
@@ -918,7 +933,6 @@ secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v
                 end
             end
         end
-        -- Heartbeat loop buat player baru/respawn
         if State.Cinema.bubbleConn then State.Cinema.bubbleConn:Disconnect() end
         State.Cinema.bubbleConn = TrackC(RS.Heartbeat:Connect(function()
             for _, p in ipairs(Players:GetPlayers()) do
@@ -934,51 +948,112 @@ secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: FILTER (ALL DROPDOWN + BLOOM TOGGLE)
+--  TAB 6: FILTER (FIXED + ALL DROPDOWN)
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "Filter", Icon = "layers" })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true })
-local function resetLighting()
+
+local function resetFilterOnly()
     for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end
-    Lighting.ClockTime = 14; Lighting.Brightness = 1; Lighting.ExposureCompensation = 0
-    Lighting.Ambient = Color3.fromRGB(127, 127, 127); Lighting.OutdoorAmbient = Color3.fromRGB(127, 127, 127)
-    Lighting.GlobalShadows = true; Lighting.FogEnd = 100000; notify("Filter", "Reset to default ✅", 2)
 end
+
 local function applyFilter(filter)
-    resetLighting(); if filter == "Default" then return end
+    resetFilterOnly()
+    if filter == "Default" then notify("Filter", "Reset to default ✅", 2); return end
+    
     local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"
     local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"
-    local f = {
-        ["Mendung HD"] = function() cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15; bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7 end,
-        ["Cool Blue HD"] = function() cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2 end,
-        ["Soft Fade HD"] = function() cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3 end,
-        ["Adaptif Langit HD"] = function() cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05; bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5 end,
-        ["Edgy HD"] = function() cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1; bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8 end,
-        ["Full Bright HD"] = function() cc:Destroy(); bloom:Destroy(); Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12; Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255) end,
-        ["Soft Pastel HD"] = function() cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05; bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8 end,
-        ["Cinematic Soft"] = function() cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 17 end,
-        ["Ultra HD"] = function() cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2 end,
-        ["Realistic"] = function() cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15 end,
-        ["Night HD"] = function() cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1 end,
-        ["Senja"] = function() cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05; bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5 end,
-        ["Cinematic Film"] = function() cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05; bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16 end,
-        ["Golden Hour"] = function() cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5 end,
-        ["Moody Blue"] = function() cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1; bloom.Intensity = 0.1; Lighting.ClockTime = 2 end,
-    }
-    if f[filter] then f[filter]() end; notify("Filter", filter.." applied ✅", 2)
+    bloom.Intensity = 0; bloom.Size = 24
+    
+    if filter == "Mendung HD" then
+        cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15
+        bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7
+    elseif filter == "Cool Blue HD" then
+        cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05
+        bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2
+    elseif filter == "Soft Fade HD" then
+        cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1
+        bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3
+    elseif filter == "Adaptif Langit HD" then
+        cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05
+        bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5
+    elseif filter == "Edgy HD" then
+        cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1
+        bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8
+    elseif filter == "Full Bright HD" then
+        cc:Destroy(); bloom:Destroy()
+        Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    elseif filter == "Soft Pastel HD" then
+        cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05
+        bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
+    elseif filter == "Cinematic Soft" then
+        cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05
+        bloom.Intensity = 0.2; Lighting.ClockTime = 17
+    elseif filter == "Ultra HD" then
+        cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
+    elseif filter == "Realistic" then
+        cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
+    elseif filter == "Night HD" then
+        cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2
+        bloom.Intensity = 0.15; Lighting.ClockTime = 1
+    elseif filter == "Senja" then
+        cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05
+        bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5
+    elseif filter == "Cinematic Film" then
+        cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05
+        bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16
+    elseif filter == "Golden Hour" then
+        cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1
+        bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5
+    elseif filter == "Moody Blue" then
+        cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1
+        bloom.Intensity = 0.1; Lighting.ClockTime = 2
+    end
+    notify("Filter", filter.." applied ✅", 2)
 end
+
 secFilter:Dropdown({ Title = "Select Filter", Values = {"Default", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue"}, Value = "Default", Callback = function(v) applyFilter(v) end })
 
+-- ══════════════════════════════════════════════════════════════
+--  ATMOSPHERE (FIXED - INDEPENDENT SLIDERS)
+-- ══════════════════════════════════════════════════════════════
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
-local function getEff(cls) for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" and v:IsA(cls) then return v end end; local e = Instance.new(cls); e.Name = "_XKID_FILTER"; e.Parent = Lighting; return e end
+
 local bloomActive = false
-secAtmos:Toggle({ Title = "Bloom ON/OFF", Value = false, Callback = function(v) bloomActive = v; if v then getEff("BloomEffect").Intensity = 0.5 else getEff("BloomEffect").Intensity = 0; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") and e.Name ~= "_XKID_FILTER" then e:Destroy() end end end; notify("Filter", v and "Bloom activated" or "Bloom removed", 2) end})
-secAtmos:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = {Min = 0, Max = 5, Default = 0.5}, Callback = function(v) if bloomActive then getEff("BloomEffect").Intensity = v end end })
+secAtmos:Toggle({ Title = "Bloom ON/OFF", Value = false, Callback = function(v)
+    bloomActive = v
+    if v then
+        local bloom = nil
+        for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") and e.Name == "_XKID_FILTER" then bloom = e; break end end
+        if not bloom then bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER" end
+        bloom.Intensity = 0.5
+        notify("Atmosphere", "Bloom activated ✨", 2)
+    else
+        for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e:Destroy() end end
+        notify("Atmosphere", "Bloom removed", 2)
+    end
+end})
+
+secAtmos:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = {Min = 0, Max = 5, Default = 0.5}, Callback = function(v) if not bloomActive then return end; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e.Intensity = v; break end end end })
+
 secAtmos:Slider({ Title = "Brightness", Step = 0.1, Value = {Min = 0, Max = 10, Default = 5}, Callback = function(v) Lighting.Brightness = v end })
+
 secAtmos:Slider({ Title = "Exposure", Step = 0.1, Value = {Min = -5, Max = 5, Default = 0}, Callback = function(v) Lighting.ExposureCompensation = v end })
+
 secAtmos:Slider({ Title = "ClockTime", Step = 0.1, Value = {Min = 0, Max = 24, Default = 14}, Callback = function(v) Lighting.ClockTime = v end })
-secAtmos:Slider({ Title = "Contrast", Step = 0.1, Value = {Min = -2, Max = 2, Default = 0}, Callback = function(v) getEff("ColorCorrectionEffect").Contrast = v end })
-secAtmos:Button({ Title = "Reset Atmosphere", Callback = function() Lighting.Brightness = 5; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14; getEff("ColorCorrectionEffect").Contrast = 0; getEff("BloomEffect").Intensity = 0; bloomActive = false; notify("Filter", "Atmosphere reset ✅", 2) end })
+
+secAtmos:Slider({ Title = "Contrast", Step = 0.1, Value = {Min = -2, Max = 2, Default = 0}, Callback = function(v) 
+    for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = v; return end end
+    local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.Contrast = v
+end })
+
+secAtmos:Button({ Title = "Reset Atmosphere", Callback = function() 
+    Lighting.Brightness = 5; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14
+    for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = 0 end; if e:IsA("BloomEffect") then e:Destroy() end end
+    bloomActive = false
+    notify("Atmosphere", "Reset to default ✅", 2) 
+end })
 
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
 local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Level09",[6]="Level11",[7]="Level13",[8]="Level15",[9]="Level17",[10]="Level21"}
@@ -1052,4 +1127,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine - Separate Cinematic Toggles")
+print("✅ XKID Engine - Normal Hide UI + Fixed Filter & Atmosphere")
