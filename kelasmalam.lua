@@ -47,7 +47,6 @@ if getgenv()._XKID_LOADED then
     pcall(function() RS:UnbindFromRenderStep("XKIDFly") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
-    -- Restore ALL UI and names on cleanup
     pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
     for _, gui in pairs(LP.PlayerGui:GetChildren()) do
         if gui:IsA("ScreenGui") then gui.Enabled = true end
@@ -107,7 +106,7 @@ local State = {
     Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
     SoftFling = { active = false, power = 50000 },
     Teleport  = { selectedTarget = "", clickTool = nil, clickConn = nil, clickActive = false, lastTap = 0 },
-    Security  = { afkConn = nil, antiLag = false, shiftLock = false, shiftLockGyro = nil, voidConn = nil, arConn = nil, arFallback = nil },
+    Security  = { afkActive = true, shiftLock = false, shiftLockGyro = nil, voidConn = nil, antiLag = false },
     Cinema    = { hideUI = false, hideNametag = false, hideBubble = false, nametagConn = nil, bubbleConn = nil, cachedGuis = {} },
     Avatar    = { isRefreshing = false },
     Utility   = { chatLog = false, chatTarget = nil, chatHistory = {} },
@@ -204,6 +203,85 @@ task.spawn(function()
     end
 end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
+
+-- ══════════════════════════════════════════════════════════════
+--  ANTI AFK / ANTI KICK SYSTEM (MOBILE + PC)
+-- ══════════════════════════════════════════════════════════════
+local AntiAFK = {
+    idleConn = nil,
+    heartbeatConn = nil,
+    kickConn = nil,
+    promptConn = nil,
+}
+
+local function startAntiAFK()
+    State.Security.afkActive = true
+    
+    -- Method 1: Idle detection (Mobile & PC aman)
+    if not AntiAFK.idleConn then
+        AntiAFK.idleConn = TrackC(LP.Idled:Connect(function()
+            if not State.Security.afkActive then return end
+            pcall(function()
+                VirtualUser:Button2Down(Vector2.zero, Cam.CFrame)
+                task.wait(1)
+                VirtualUser:Button2Up(Vector2.zero, Cam.CFrame)
+            end)
+        end))
+    end
+    
+    -- Method 2: Heartbeat backup (jalan tiap 30-120 detik)
+    if not AntiAFK.heartbeatConn then
+        task.spawn(function()
+            while State.Security.afkActive and getgenv()._XKID_RUNNING do
+                task.wait(math.random(30, 120))
+                if not State.Security.afkActive then break end
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    VirtualUser:Button2Down(Vector2.zero, Cam.CFrame)
+                    task.wait(0.5)
+                    VirtualUser:Button2Up(Vector2.zero, Cam.CFrame)
+                end)
+            end
+        end)
+    end
+    
+    -- Method 3: Error message detection (anti kick)
+    if not AntiAFK.kickConn then
+        AntiAFK.kickConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err)
+            if err ~= "" then
+                notify("Anti Kick", "Kick detected! Rejoining... 🔄", 3)
+                task.wait(1)
+                pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+            end
+        end))
+    end
+    
+    -- Method 4: Kick popup detection
+    if not AntiAFK.promptConn then
+        AntiAFK.promptConn = TrackC(CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
+            if child.Name == "ErrorPrompt" then
+                notify("Anti Kick", "Kick popup! Rejoining... 🔄", 3)
+                task.wait(1)
+                pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+            end
+        end))
+    end
+    
+    notify("Anti AFK", "Full protection active 🛡️", 2)
+end
+
+local function stopAntiAFK()
+    State.Security.afkActive = false
+    
+    if AntiAFK.idleConn then AntiAFK.idleConn:Disconnect(); AntiAFK.idleConn = nil end
+    if AntiAFK.kickConn then AntiAFK.kickConn:Disconnect(); AntiAFK.kickConn = nil end
+    if AntiAFK.promptConn then AntiAFK.promptConn:Disconnect(); AntiAFK.promptConn = nil end
+    
+    notify("Anti AFK", "Protection disabled ❌", 2)
+end
+
+-- Auto-start
+startAntiAFK()
 
 -- ══════════════════════════════════════════════════════════════
 --  CHARACTER HANDLER
@@ -766,7 +844,7 @@ task.spawn(function()
         task.wait(0.5)
         pcall(function() if srvLabel and cachedMapName then local pCount, mCount = #Players:GetPlayers(), Players.MaxPlayers; local uptime = formatTime(os.difftime(os.time(), START_TIME)); local job = game.JobId ~= "" and game.JobId:sub(1, 8).."..." or "N/A"; srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s", cachedMapName, job, pCount, mCount, uptime)) end end)
         pcall(function() if netLabel then local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999); local fpsBar = makeBarA(fps, 120, 14, "FPS"); local pingBar = makeBarA(ping, 200, 14, "PING"); netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping)) end end)
-        pcall(function() if securityLabel then local afk = State.Security.afkConn and "🟢 ONLINE" or "🔴 OFFLINE"; local sl = State.Security.shiftLock and "🟢 LOCKED" or "🔴 UNLOCKED"; local vd = State.Security.voidConn and "🟢 SECURED" or "🔴 OFFLINE"; local lag = State.Security.antiLag and "🟢 ACTIVE" or "🔴 INACTIVE"; securityLabel:SetDesc(string.format("[ ⏰ ] <font face='RobotoMono'>AFK Protocol :</font> %s\n[ 🔒 ] <font face='RobotoMono'>Shift Lock   :</font> %s\n[ 🕳️ ] <font face='RobotoMono'>Void Shield  :</font> %s\n[ ⚡ ] <font face='RobotoMono'>Frame Boost  :</font> %s", afk, sl, vd, lag)) end end)
+        pcall(function() if securityLabel then local afk = State.Security.afkActive and "🟢 ONLINE" or "🔴 OFFLINE"; local sl = State.Security.shiftLock and "🟢 LOCKED" or "🔴 UNLOCKED"; local vd = State.Security.voidConn and "🟢 SECURED" or "🔴 OFFLINE"; local lag = State.Security.antiLag and "🟢 ACTIVE" or "🔴 INACTIVE"; securityLabel:SetDesc(string.format("[ ⏰ ] <font face='RobotoMono'>AFK Protocol :</font> %s\n[ 🔒 ] <font face='RobotoMono'>Shift Lock   :</font> %s\n[ 🕳️ ] <font face='RobotoMono'>Void Shield  :</font> %s\n[ ⚡ ] <font face='RobotoMono'>Frame Boost  :</font> %s", afk, sl, vd, lag)) end end)
     end
 end)
 
@@ -832,228 +910,88 @@ secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, 
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  CINEMATIC MODE (NORMAL - NO DOUBLE TEXT)
+--  CINEMATIC MODE
 -- ══════════════════════════════════════════════════════════════
 local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true })
-
--- Hide All UI (HANYA ScreenGui)
 secCine:Toggle({ Title = "Hide All UI", Value = false, Callback = function(v)
     if v then
-        -- Cache & hide hanya ScreenGui
-        State.Cinema.hideUI = true
-        State.Cinema.cachedGuis = {}
-        for _, gui in pairs(LP.PlayerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Enabled then
-                table.insert(State.Cinema.cachedGuis, gui)
-                gui.Enabled = false
-            end
-        end
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
-        notify("Cinematic", "UI Hidden 🎬", 2)
+        State.Cinema.hideUI = true; State.Cinema.cachedGuis = {}
+        for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end); notify("Cinematic", "UI Hidden 🎬", 2)
     else
-        -- Restore HANYA ScreenGui yang di-cache
         State.Cinema.hideUI = false
-        for _, gui in pairs(State.Cinema.cachedGuis) do
-            if gui and gui.Parent then gui.Enabled = true end
-        end
-        State.Cinema.cachedGuis = {}
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
-        notify("Cinematic", "UI Restored ✅", 2)
+        for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end); notify("Cinematic", "UI Restored ✅", 2)
     end
 end})
-
--- Show Nametag (ON = kelihatan, OFF = sembunyi)
 secCine:Toggle({ Title = "Show Nametag", Value = true, Callback = function(v)
     if v then
-        -- RESTORE NAMETAGS
         if State.Cinema.nametagConn then State.Cinema.nametagConn:Disconnect(); State.Cinema.nametagConn = nil end
         State.Cinema.hideNametag = false
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p == LP then continue end
-            if p.Character then
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
-                for _, desc in ipairs(p.Character:GetDescendants()) do
-                    if desc:IsA("BillboardGui") and desc.Parent then desc.Enabled = true end
-                end
-            end
-        end
+        for _, p in ipairs(Players:GetPlayers()) do if p == LP then continue end; if p.Character then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end; for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") and desc.Parent then desc.Enabled = true end end end end
         notify("Cinematic", "Nametags visible ✅", 2)
     else
-        -- HIDE NAMETAGS
         State.Cinema.hideNametag = true
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p == LP then continue end
-            if p.Character then
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
-                for _, desc in ipairs(p.Character:GetDescendants()) do
-                    if desc:IsA("BillboardGui") then desc.Enabled = false end
-                end
-            end
-        end
+        for _, p in ipairs(Players:GetPlayers()) do if p == LP then continue end; if p.Character then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end; for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") then desc.Enabled = false end end end end
         if State.Cinema.nametagConn then State.Cinema.nametagConn:Disconnect() end
-        State.Cinema.nametagConn = TrackC(RS.Heartbeat:Connect(function()
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p == LP then continue end
-                if p.Character then
-                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                    if hum and hum.DisplayDistanceType ~= Enum.HumanoidDisplayDistanceType.None then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
-                    for _, desc in ipairs(p.Character:GetDescendants()) do
-                        if desc:IsA("BillboardGui") and desc.Enabled then desc.Enabled = false end
-                    end
-                end
-            end
-        end))
+        State.Cinema.nametagConn = TrackC(RS.Heartbeat:Connect(function() for _, p in ipairs(Players:GetPlayers()) do if p == LP then continue end; if p.Character then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum and hum.DisplayDistanceType ~= Enum.HumanoidDisplayDistanceType.None then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end; for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") and desc.Enabled then desc.Enabled = false end end end end end))
         notify("Cinematic", "Nametags hidden 🙈", 2)
     end
 end})
-
--- Show Bubble Chat (ON = kelihatan, OFF = sembunyi)
 secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v)
     if v then
-        -- RESTORE BUBBLE CHATS
         if State.Cinema.bubbleConn then State.Cinema.bubbleConn:Disconnect(); State.Cinema.bubbleConn = nil end
         State.Cinema.hideBubble = false
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.PlayerGui then
-                for _, v in ipairs(p.PlayerGui:GetDescendants()) do
-                    if v:IsA("BillboardGui") then v.Enabled = true end
-                end
-            end
-        end
+        for _, p in ipairs(Players:GetPlayers()) do if p.PlayerGui then for _, v in ipairs(p.PlayerGui:GetDescendants()) do if v:IsA("BillboardGui") then v.Enabled = true end end end end
         notify("Cinematic", "Bubble chat visible 💬", 2)
     else
-        -- HIDE BUBBLE CHATS
         State.Cinema.hideBubble = true
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.PlayerGui then
-                for _, v in ipairs(p.PlayerGui:GetDescendants()) do
-                    if v:IsA("BillboardGui") then v.Enabled = false end
-                end
-            end
-        end
+        for _, p in ipairs(Players:GetPlayers()) do if p.PlayerGui then for _, v in ipairs(p.PlayerGui:GetDescendants()) do if v:IsA("BillboardGui") then v.Enabled = false end end end end
         if State.Cinema.bubbleConn then State.Cinema.bubbleConn:Disconnect() end
-        State.Cinema.bubbleConn = TrackC(RS.Heartbeat:Connect(function()
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p.PlayerGui then
-                    for _, v in ipairs(p.PlayerGui:GetDescendants()) do
-                        if v:IsA("BillboardGui") and v.Enabled then v.Enabled = false end
-                    end
-                end
-            end
-        end))
+        State.Cinema.bubbleConn = TrackC(RS.Heartbeat:Connect(function() for _, p in ipairs(Players:GetPlayers()) do if p.PlayerGui then for _, v in ipairs(p.PlayerGui:GetDescendants()) do if v:IsA("BillboardGui") and v.Enabled then v.Enabled = false end end end end end))
         notify("Cinematic", "Bubble chat hidden 🙊", 2)
     end
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: FILTER (FIXED + ALL DROPDOWN)
+--  TAB 6: FILTER
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "Filter", Icon = "layers" })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true })
-
-local function resetFilterOnly()
-    for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end
-end
-
+local function resetFilterOnly() for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end end
 local function applyFilter(filter)
-    resetFilterOnly()
-    if filter == "Default" then notify("Filter", "Reset to default ✅", 2); return end
-    
+    resetFilterOnly(); if filter == "Default" then notify("Filter", "Reset to default ✅", 2); return end
     local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"
-    local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"
-    bloom.Intensity = 0; bloom.Size = 24
-    
-    if filter == "Mendung HD" then
-        cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15
-        bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7
-    elseif filter == "Cool Blue HD" then
-        cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05
-        bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2
-    elseif filter == "Soft Fade HD" then
-        cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1
-        bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3
-    elseif filter == "Adaptif Langit HD" then
-        cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05
-        bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5
-    elseif filter == "Edgy HD" then
-        cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1
-        bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8
-    elseif filter == "Full Bright HD" then
-        cc:Destroy(); bloom:Destroy()
-        Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12
-        Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-    elseif filter == "Soft Pastel HD" then
-        cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05
-        bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
-    elseif filter == "Cinematic Soft" then
-        cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05
-        bloom.Intensity = 0.2; Lighting.ClockTime = 17
-    elseif filter == "Ultra HD" then
-        cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
-    elseif filter == "Realistic" then
-        cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
-    elseif filter == "Night HD" then
-        cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2
-        bloom.Intensity = 0.15; Lighting.ClockTime = 1
-    elseif filter == "Senja" then
-        cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05
-        bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5
-    elseif filter == "Cinematic Film" then
-        cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05
-        bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16
-    elseif filter == "Golden Hour" then
-        cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1
-        bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5
-    elseif filter == "Moody Blue" then
-        cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1
-        bloom.Intensity = 0.1; Lighting.ClockTime = 2
+    local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"; bloom.Intensity = 0; bloom.Size = 24
+    if filter == "Mendung HD" then cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15; bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7
+    elseif filter == "Cool Blue HD" then cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2
+    elseif filter == "Soft Fade HD" then cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3
+    elseif filter == "Adaptif Langit HD" then cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05; bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5
+    elseif filter == "Edgy HD" then cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1; bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8
+    elseif filter == "Full Bright HD" then cc:Destroy(); bloom:Destroy(); Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12; Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    elseif filter == "Soft Pastel HD" then cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05; bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
+    elseif filter == "Cinematic Soft" then cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 17
+    elseif filter == "Ultra HD" then cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
+    elseif filter == "Realistic" then cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
+    elseif filter == "Night HD" then cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1
+    elseif filter == "Senja" then cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05; bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5
+    elseif filter == "Cinematic Film" then cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05; bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16
+    elseif filter == "Golden Hour" then cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5
+    elseif filter == "Moody Blue" then cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1; bloom.Intensity = 0.1; Lighting.ClockTime = 2
     end
     notify("Filter", filter.." applied ✅", 2)
 end
-
 secFilter:Dropdown({ Title = "Select Filter", Values = {"Default", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue"}, Value = "Default", Callback = function(v) applyFilter(v) end })
 
--- ══════════════════════════════════════════════════════════════
---  ATMOSPHERE (FIXED - INDEPENDENT SLIDERS)
--- ══════════════════════════════════════════════════════════════
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
-
 local bloomActive = false
-secAtmos:Toggle({ Title = "Bloom ON/OFF", Value = false, Callback = function(v)
-    bloomActive = v
-    if v then
-        local bloom = nil
-        for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") and e.Name == "_XKID_FILTER" then bloom = e; break end end
-        if not bloom then bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER" end
-        bloom.Intensity = 0.5
-        notify("Atmosphere", "Bloom activated ✨", 2)
-    else
-        for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e:Destroy() end end
-        notify("Atmosphere", "Bloom removed", 2)
-    end
-end})
-
+secAtmos:Toggle({ Title = "Bloom ON/OFF", Value = false, Callback = function(v) bloomActive = v; if v then local bloom = nil; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") and e.Name == "_XKID_FILTER" then bloom = e; break end end; if not bloom then bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER" end; bloom.Intensity = 0.5; notify("Atmosphere", "Bloom activated ✨", 2) else for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e:Destroy() end end; notify("Atmosphere", "Bloom removed", 2) end end})
 secAtmos:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = {Min = 0, Max = 5, Default = 0.5}, Callback = function(v) if not bloomActive then return end; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e.Intensity = v; break end end end })
-
 secAtmos:Slider({ Title = "Brightness", Step = 0.1, Value = {Min = 0, Max = 10, Default = 5}, Callback = function(v) Lighting.Brightness = v end })
-
 secAtmos:Slider({ Title = "Exposure", Step = 0.1, Value = {Min = -5, Max = 5, Default = 0}, Callback = function(v) Lighting.ExposureCompensation = v end })
-
 secAtmos:Slider({ Title = "ClockTime", Step = 0.1, Value = {Min = 0, Max = 24, Default = 14}, Callback = function(v) Lighting.ClockTime = v end })
-
-secAtmos:Slider({ Title = "Contrast", Step = 0.1, Value = {Min = -2, Max = 2, Default = 0}, Callback = function(v) 
-    for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = v; return end end
-    local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.Contrast = v
-end })
-
-secAtmos:Button({ Title = "Reset Atmosphere", Callback = function() 
-    Lighting.Brightness = 5; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14
-    for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = 0 end; if e:IsA("BloomEffect") then e:Destroy() end end
-    bloomActive = false
-    notify("Atmosphere", "Reset to default ✅", 2) 
-end })
+secAtmos:Slider({ Title = "Contrast", Step = 0.1, Value = {Min = -2, Max = 2, Default = 0}, Callback = function(v) for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = v; return end end; local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.Contrast = v end })
+secAtmos:Button({ Title = "Reset Atmosphere", Callback = function() Lighting.Brightness = 5; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = 0 end; if e:IsA("BloomEffect") then e:Destroy() end end; bloomActive = false; notify("Atmosphere", "Reset to default ✅", 2) end })
 
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
 local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Level09",[6]="Level11",[7]="Level13",[8]="Level15",[9]="Level17",[10]="Level21"}
@@ -1061,7 +999,7 @@ secGfx:Slider({ Title = "Quality Level", Step = 1, Value = {Min = 1, Max = 10, D
 secGfx:Dropdown({ Title = "FPS Cap", Values = {"30", "60", "120", "144", "240", "Unlimited"}, Value = "60", Callback = function(v) if v == "Unlimited" then pcall(function() setfpscap(9999) end) else pcall(function() setfpscap(tonumber(v)) end) end; notify("Graphics", "FPS cap: "..v, 2) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: RADAR
+--  TAB 7: RADAR, TAB 8: UTILITY, TAB 9: SECURITY, TAB 10: SETTINGS
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "Radar", Icon = "cpu" })
 local secESP = T_ESP:Section({ Title = "Detection System", Opened = true })
@@ -1074,9 +1012,6 @@ secESPColor:Dropdown({ Title="Normal Color", Values={"Hijau","Merah","Biru","Kun
 secESPColor:Dropdown({ Title="Suspect Color", Values={"Merah","Hijau","Biru","Kuning","Ungu","Cyan","Orange","Pink","Putih","Hitam","Crimson"}, Value="Crimson", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_S=colorMap[v]; State.ESP.boxColor_S=colorMap[v] end end })
 secESPColor:Dropdown({ Title="Glitch Acc Color", Values={"Orange","Merah","Hijau","Biru","Kuning","Ungu","Cyan","Pink","Putih","Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G=colorMap[v]; State.ESP.boxColor_G=colorMap[v] end end })
 
--- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY
--- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal" })
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Callback = function(v) State.Utility.chatLog = v; notify("Utility", v and "Logger running ✅" or "Logger stopped ❌", 2) end })
@@ -1087,26 +1022,19 @@ secChat:Button({ Title = "Clear Log", Callback = function() State.Utility.chatHi
 local secMisc = T_UTIL:Section({ Title = "Data Extraction", Opened = true })
 secMisc:Button({ Title = "Copy JobID", Callback = function() pcall(function() setclipboard(game.JobId) end); notify("Utility", "JobID copied ✅", 2) end })
 
--- ══════════════════════════════════════════════════════════════
---  TAB 9: SECURITY
--- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert" })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true })
-secProt:Toggle({ Title = "Anti Void 🛡️", Value = false, Callback = function(v) if v then State.Security.voidConn = TrackC(RS.Heartbeat:Connect(function() local hrp = getRoot(); if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then hrp.AssemblyLinearVelocity = Vector3.zero; hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0); notify("Security", "Anti-Void saved entity 🛡️", 2) end end)) else if State.Security.voidConn then State.Security.voidConn:Disconnect(); State.Security.voidConn = nil end end; notify("Security", v and "Anti-Void Enabled ✅" or "Anti-Void Disabled ❌", 2) end})
-secProt:Toggle({ Title = "Anti AFK", Value = true, Callback = function(v) if v then if not State.Security.afkConn then State.Security.afkConn = TrackC(LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); task.wait(1) end)) end else if State.Security.afkConn then State.Security.afkConn:Disconnect(); State.Security.afkConn = nil end end end})
-secProt:Button({ Title = "Stuck Fix", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied ✅", 2) end })
+secProt:Toggle({ Title = "Anti AFK / Anti Kick 🛡️", Value = true, Callback = function(v) if v then startAntiAFK() else stopAntiAFK() end end })
+secProt:Toggle({ Title = "Anti Void 🕳️", Value = false, Callback = function(v) if v then State.Security.voidConn = TrackC(RS.Heartbeat:Connect(function() local hrp = getRoot(); if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then hrp.AssemblyLinearVelocity = Vector3.zero; hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0); notify("Security", "Saved from void!", 2) end end)) else if State.Security.voidConn then State.Security.voidConn:Disconnect(); State.Security.voidConn = nil end end; notify("Security", v and "Anti-Void enabled" or "Anti-Void disabled", 2) end})
+secProt:Button({ Title = "Stuck Fix 🔧", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied ✅", 2) end })
 local secSrv = T_SEC:Section({ Title = "Server Control", Opened = true })
-secSrv:Toggle({ Title = "Auto Rejoin", Value = false, Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then notify("Security", "Error detected, rejoining... ⚠️", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)); notify("Security", "Auto Rejoin standby ✅", 2) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end; notify("Security", "Auto Rejoin disabled ❌", 2) end end})
-secSrv:Button({ Title = "Force Rejoin", Callback = function() notify("System", "Rejoining... ⚡", 2); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
-secSrv:Button({ Title = "Server Hop", Callback = function() notify("System", "Searching for active servers... 🔍", 2); pcall(function() local req = (syn and syn.request) or (http and http.request) or http_request or request; if not req then notify("Error", "HTTP request failed ⚠️", 2); return end; local res = req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100", Method = "GET"}); if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body); if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); notify("Server Hop", "Joining server with "..v.playing.." players ✅", 2); return end end; notify("Server Hop", "No suitable server found 😕", 2) end end end) end})
+secSrv:Toggle({ Title = "Auto Rejoin 🔄", Value = false, Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then notify("Security", "Rejoining...", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)); notify("Security", "Auto Rejoin standby ✅", 2) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end; notify("Security", "Auto Rejoin disabled ❌", 2) end end})
+secSrv:Button({ Title = "Force Rejoin", Callback = function() notify("System", "Rejoining...", 2); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
+secSrv:Button({ Title = "Server Hop", Callback = function() notify("System", "Searching servers...", 2); pcall(function() local req = (syn and syn.request) or (http and http.request) or http_request or request; if not req then notify("Error", "HTTP failed", 2); return end; local res = req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100", Method = "GET"}); if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body); if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); notify("Server Hop", "Joining server with "..v.playing.." players ✅", 2); return end end end; notify("Server Hop", "No server found", 2) end end) end})
 local secPerf = T_SEC:Section({ Title = "Performance Tweaks", Opened = true })
-local advCache = { mats = {}, texs = {}, shadows = true, level = 10, brightness = 0, clockTime = 0, fogEnd = 0 }
-secPerf:Toggle({ Title = "FPS Boost ⚡", Value = false, Callback = function(v) State.Security.antiLag = v; if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end); advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness; advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd; pcall(function() settings().Rendering.QualityLevel = 1 end); Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000; for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end end; notify("Performance", "FPS Boost activated ⚡", 2) else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end); Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness; Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd; for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end; for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end; advCache.mats = {}; advCache.texs = {}; notify("Performance", "Graphics restored ✅", 2) end end})
+secPerf:Toggle({ Title = "FPS Boost ⚡", Value = false, Callback = function(v) State.Security.antiLag = v; if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end); advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness; advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd; pcall(function() settings().Rendering.QualityLevel = 1 end); Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000; for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end end; notify("Performance", "FPS Boost activated", 2) else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end); Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness; Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd; for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end; for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end; advCache.mats = {}; advCache.texs = {}; notify("Performance", "Graphics restored", 2) end end})
 T_SEC:Section({ Title = "Camera Lock", Opened = true }):Toggle({ Title = "Force Shift Lock", Value = false, Callback = function(v) toggleShiftLock(v) end })
 
--- ══════════════════════════════════════════════════════════════
---  TAB 10: SETTINGS (CONFIG)
--- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Config", Icon = "settings" })
 local secCfg = T_SET:Section({ Title = "File Management", Opened = true })
 local cfgName = "XKID_Config"; local currentConfig = "No config"
@@ -1127,4 +1055,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine - Normal Hide UI + Fixed Filter & Atmosphere")
+print("✅ XKID Engine - Anti AFK Mobile + PC Ready")
