@@ -94,6 +94,7 @@ local CoreGui      = game:GetService("CoreGui")
 local GuiService   = game:GetService("GuiService")
 local TextChatService = game:GetService("TextChatService")
 local StarterGui   = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
@@ -109,7 +110,7 @@ local State = {
     Security  = { afkActive = true, shiftLock = false, shiftLockGyro = nil, voidConn = nil, antiLag = false },
     Cinema    = { hideUI = false, hideNametag = false, hideBubble = false, nametagConn = nil, bubbleConn = nil, cachedGuis = {} },
     Avatar    = { isRefreshing = false },
-    Utility   = { chatLog = false, chatTargets = {}, chatHistory = {} },
+    Utility   = { chatLog = false, chatTargets = {}, chatHistory = {}, autoLike = false },
     ESP = {
         active          = false,
         cache           = getgenv()._XKID_ESP_CACHE,
@@ -134,6 +135,72 @@ local colorMap = {
     ["Putih"] = Color3.fromRGB(255, 255, 255), ["Hitam"] = Color3.fromRGB(0, 0, 0),
     ["Crimson"] = Color3.fromRGB(220, 20, 60),
 }
+
+-- ══════════════════════════════════════════════════════════════
+--  LIKE SYSTEM
+-- ══════════════════════════════════════════════════════════════
+local LikeEvent = nil
+local GetLikeDataRemote = nil
+
+pcall(function()
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    if remotes then
+        LikeEvent = remotes:FindFirstChild("LikePlayerEvent")
+        GetLikeDataRemote = remotes:FindFirstChild("GetLikeDataRemote")
+    end
+end)
+
+local function likePlayer(player)
+    if not player or not LikeEvent then return false end
+    local success = pcall(function()
+        LikeEvent:FireServer(player)
+    end)
+    return success
+end
+
+local function likeAllPlayers()
+    if not LikeEvent then
+        notify("Like", "Like remote not found! ⚠️", 2)
+        return
+    end
+    local count = 0
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then
+            if likePlayer(p) then
+                count = count + 1
+                task.wait(0.1)
+            end
+        end
+    end
+    notify("Like", "Liked "..count.." players! ❤️", 2)
+end
+
+local function startAutoLike()
+    if not LikeEvent then
+        notify("Like", "Like remote not found! ⚠️", 2)
+        State.Utility.autoLike = false
+        return
+    end
+    State.Utility.autoLike = true
+    task.spawn(function()
+        while State.Utility.autoLike and getgenv()._XKID_RUNNING do
+            for _, p in ipairs(Players:GetPlayers()) do
+                if not State.Utility.autoLike then break end
+                if p ~= LP then
+                    likePlayer(p)
+                    task.wait(0.15)
+                end
+            end
+            task.wait(3)
+        end
+    end)
+    notify("Auto Like", "Auto Like active ❤️", 2)
+end
+
+local function stopAutoLike()
+    State.Utility.autoLike = false
+    notify("Auto Like", "Auto Like stopped", 2)
+end
 
 -- ══════════════════════════════════════════════════════════════
 --  HELPER FUNCTIONS
@@ -264,7 +331,6 @@ startAntiAFK()
 --  CHARACTER HANDLER (FIX: Fly State After Respawn)
 -- ══════════════════════════════════════════════════════════════
 TrackC(LP.CharacterAdded:Connect(function(char)
-    -- FIX: Matiin fly pas respawn
     if State.Fly.active then
         State.Fly.active = false
         RS:UnbindFromRenderStep("XKIDFly")
@@ -345,7 +411,7 @@ local function toggleShiftLock(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FAST RESPAWN & REFRESH
+--  FAST RESPAWN
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
@@ -377,40 +443,6 @@ local function fastRespawn()
         end)
         char:BreakJoints()
         task.delay(8, function() if not done then conn:Disconnect(); LP.RespawnLocation = prevRespawn; State.Avatar.isRefreshing = false; Cam.CameraType = Enum.CameraType.Custom end end)
-    end)
-end
-
-local function refreshCharacter()
-    if State.Avatar.isRefreshing then return end
-    local char, hrp = LP.Character, getRoot()
-    if not char or not hrp then notify("Error", "Character not found ⚠️", 2); return end
-    State.Avatar.isRefreshing = true; notify("System", "Refreshing character...", 1.5)
-    local savedCF, prevRespawn = hrp.CFrame, LP.RespawnLocation
-    LP.RespawnLocation = nil
-    task.spawn(function()
-        local done = false; local conn
-        conn = LP.CharacterAdded:Connect(function(newChar)
-            if done then return end; done = true; conn:Disconnect()
-            local newHrp = newChar:FindFirstChild("HumanoidRootPart")
-            if newHrp then newHrp.CFrame = savedCF + Vector3.new(0, 3.5, 0); newHrp.AssemblyLinearVelocity = Vector3.zero end
-            local newHum = newChar:WaitForChild("Humanoid", 10); newHrp = newChar:WaitForChild("HumanoidRootPart", 10)
-            task.wait(0.15)
-            if newHrp and newHum then
-                local t0 = tick(); local hold
-                hold = RS.Heartbeat:Connect(function()
-                    if tick() - t0 > 0.5 then hold:Disconnect(); return end
-                    if newHrp and newHrp.Parent then newHrp.CFrame = savedCF + Vector3.new(0, 3.5, 0); newHrp.AssemblyLinearVelocity = Vector3.zero end
-                end)
-                Cam.CameraSubject = newHum; Cam.CameraType = Enum.CameraType.Custom
-                if State.Move.ws ~= 16 then newHum.WalkSpeed = State.Move.ws end
-                if State.Move.jp ~= 50 then newHum.UseJumpPower = true; newHum.JumpPower = State.Move.jp end
-                notify("System", "Refresh success ✅", 2)
-            else notify("Error", "Refresh failed ❌", 2) end
-            LP.RespawnLocation = prevRespawn; State.Avatar.isRefreshing = false
-        end)
-        local ok = pcall(function() LP:LoadCharacter() end)
-        if not ok then char:BreakJoints() end
-        task.delay(15, function() if not done then conn:Disconnect(); LP.RespawnLocation = prevRespawn; State.Avatar.isRefreshing = false; Cam.CameraType = Enum.CameraType.Custom end end)
     end)
 end
 
@@ -623,7 +655,7 @@ local function toggleFly(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SMART CLICK TP (FIX: Less Responsive - longer double tap window)
+--  SMART CLICK TP (FIX: Less Responsive)
 -- ══════════════════════════════════════════════════════════════
 local function toggleSmartTP(v)
     State.Teleport.clickActive = v
@@ -634,7 +666,6 @@ local function toggleSmartTP(v)
                 local m = LP:GetMouse()
                 if m.Hit then getRoot().CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0)); getRoot().AssemblyLinearVelocity = Vector3.zero end
             elseif inp.UserInputType == Enum.UserInputType.Touch then
-                -- FIX: longer double tap window (0.8 instead of 0.4)
                 if tick() - State.Teleport.lastTap < 0.8 and tick() - State.Teleport.lastTap > 0.1 then
                     local m = LP:GetMouse()
                     if m.Hit then getRoot().CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0)); getRoot().AssemblyLinearVelocity = Vector3.zero end
@@ -642,7 +673,7 @@ local function toggleSmartTP(v)
                 State.Teleport.lastTap = tick()
             end
         end))
-        notify("Teleport", "Smart TP: Double Tap (slower) / Ctrl+Click ✅", 2)
+        notify("Teleport", "Smart TP: Double Tap / Ctrl+Click ✅", 2)
     else
         if State.Teleport.clickConn then State.Teleport.clickConn:Disconnect(); State.Teleport.clickConn = nil end
         notify("Teleport", "Smart TP Disabled ❌", 2)
@@ -776,7 +807,6 @@ local chatTargetsLabel = nil
 local function logMsg(speakerName, msg)
     if not State.Utility.chatLog then return end
     if #State.Utility.chatTargets > 0 then
-        -- Cek apakah speaker ada di daftar target
         local found = false
         for _, t in ipairs(State.Utility.chatTargets) do
             if t.Name == speakerName or t.DisplayName == speakerName then found = true; break end
@@ -827,10 +857,9 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: SYSTEM HUB
+--  TAB 1: SYSTEM HUB (NO IDENTITY DATA)
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard" })
-T_HOME:Section({ Title = "System Access", Opened = true }):Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
 T_HOME:Section({ Title = "Discord", Opened = true }):Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
 
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true })
@@ -856,11 +885,10 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 2: PLAYER CORE
+--  TAB 2: PLAYER CORE (NO REFRESH CHARACTER)
 -- ══════════════════════════════════════════════════════════════
 local T_AV = Window:Tab({ Title = "Player Core", Icon = "fingerprint" })
 T_AV:Section({ Title = "State Control", Opened = true }):Button({ Title = "Fast Respawn 💀", Desc = "Respawn on death point", Callback = function() fastRespawn() end })
-T_AV:Section({ Title = "State Control", Opened = true }):Button({ Title = "Refresh Character", Desc = "Reload without kill", Callback = function() refreshCharacter() end })
 
 local secMov = T_AV:Section({ Title = "Movement", Opened = true })
 secMov:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
@@ -873,7 +901,7 @@ secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, De
 local noclipConn = nil
 secAbi:Toggle({ Title = "NoClip", Value = false, Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end end end})
 
--- HARD FLING (replaces Soft Fling)
+-- HARD FLING
 local hardFlingConn = nil
 secAbi:Toggle({ Title = "Hard Fling 💥", Value = false, Callback = function(v)
     State.HardFling.active = v; State.Move.ncp = v
@@ -979,7 +1007,7 @@ secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: FILTER
+--  TAB 6: FILTER (FIXED)
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "Filter", Icon = "layers" })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true })
@@ -1008,19 +1036,28 @@ local function applyFilter(filter)
 end
 secFilter:Dropdown({ Title = "Select Filter", Values = {"Default", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue"}, Value = "Default", Callback = function(v) applyFilter(v) end })
 
+-- ══════════════════════════════════════════════════════════════
+--  ATMOSPHERE (FIXED - Default Roblox)
+-- ══════════════════════════════════════════════════════════════
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
 local bloomActive = false
 secAtmos:Toggle({ Title = "Bloom ON/OFF", Value = false, Callback = function(v) bloomActive = v; if v then local bloom = nil; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") and e.Name == "_XKID_FILTER" then bloom = e; break end end; if not bloom then bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER" end; bloom.Intensity = 0.5; notify("Atmosphere", "Bloom activated ✨", 2) else for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e:Destroy() end end; notify("Atmosphere", "Bloom removed", 2) end end})
 secAtmos:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = {Min = 0, Max = 5, Default = 0.5}, Callback = function(v) if not bloomActive then return end; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e.Intensity = v; break end end end })
-secAtmos:Slider({ Title = "Brightness", Step = 0.1, Value = {Min = 0, Max = 10, Default = 5}, Callback = function(v) Lighting.Brightness = v end })
+secAtmos:Slider({ Title = "Brightness", Step = 0.1, Value = {Min = 0, Max = 10, Default = 1}, Callback = function(v) Lighting.Brightness = v end })
 secAtmos:Slider({ Title = "Exposure", Step = 0.1, Value = {Min = -5, Max = 5, Default = 0}, Callback = function(v) Lighting.ExposureCompensation = v end })
 secAtmos:Slider({ Title = "ClockTime", Step = 0.1, Value = {Min = 0, Max = 24, Default = 14}, Callback = function(v) Lighting.ClockTime = v end })
 secAtmos:Slider({ Title = "Contrast", Step = 0.1, Value = {Min = -2, Max = 2, Default = 0}, Callback = function(v) for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = v; return end end; local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.Contrast = v end })
-secAtmos:Button({ Title = "Reset Atmosphere", Callback = function() Lighting.Brightness = 5; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = 0 end; if e:IsA("BloomEffect") then e:Destroy() end end; bloomActive = false; notify("Atmosphere", "Reset to default ✅", 2) end })
+secAtmos:Button({ Title = "Reset Atmosphere", Callback = function() 
+    Lighting.Brightness = 1; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14
+    for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = 0 end; if e:IsA("BloomEffect") then e:Destroy() end end
+    bloomActive = false; notify("Atmosphere", "Reset to Roblox default ✅", 2) 
+end })
 
+-- ══════════════════════════════════════════════════════════════
+--  GRAPHICS (FIXED - Direct Quality Level)
+-- ══════════════════════════════════════════════════════════════
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
-local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Level09",[6]="Level11",[7]="Level13",[8]="Level15",[9]="Level17",[10]="Level21"}
-secGfx:Slider({ Title = "Quality Level", Step = 1, Value = {Min = 1, Max = 10, Default = 1}, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
+secGfx:Slider({ Title = "Quality Level", Step = 1, Value = {Min = 1, Max = 21, Default = 1}, Callback = function(v) pcall(function() settings().Rendering.QualityLevel = v end) end })
 secGfx:Dropdown({ Title = "FPS Cap", Values = {"30", "60", "120", "144", "240", "Unlimited"}, Value = "60", Callback = function(v) if v == "Unlimited" then pcall(function() setfpscap(9999) end) else pcall(function() setfpscap(tonumber(v)) end) end; notify("Graphics", "FPS cap: "..v, 2) end })
 
 -- ══════════════════════════════════════════════════════════════
@@ -1036,7 +1073,7 @@ secESP:Toggle({ Title = "Enable Radar", Value = false, Callback = function(v)
                 if c.texts then c.texts.Visible = false end
                 if c.tracer then c.tracer.Visible = false end
                 for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end
-                if c.hl then c.hl:Destroy(); c.hl = nil end  -- FIX: Destroy highlight
+                if c.hl then c.hl:Destroy(); c.hl = nil end
             end)
         end
     end
@@ -1051,27 +1088,62 @@ secESPColor:Dropdown({ Title="Suspect Color", Values={"Merah","Hijau","Biru","Ku
 secESPColor:Dropdown({ Title="Glitch Acc Color", Values={"Orange","Merah","Hijau","Biru","Kuning","Ungu","Cyan","Pink","Putih","Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G=colorMap[v]; State.ESP.boxColor_G=colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY (MULTI TARGET CHAT LOGGER)
+--  TAB 8: UTILITY (MULTI TARGET CHAT LOGGER + AUTO LIKE)
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal" })
+
+-- Auto Like System
+local secLike = T_UTIL:Section({ Title = "Auto Like System ❤️", Opened = true })
+local likeTarget = ""
+
+if not LikeEvent then
+    secLike:Paragraph({ Title = "Status", Desc = "⚠️ Like Remote tidak ditemukan di game ini!" })
+end
+
+local likeDropdown = secLike:Dropdown({ 
+    Title = "Select Player to Like", 
+    Values = getDisplayNames(), 
+    Callback = function(v) likeTarget = v end 
+})
+
+secLike:Button({ Title = "❤️ Like Selected Player", Callback = function()
+    if not LikeEvent then notify("Like", "Remote not found!", 2); return end
+    local p = findPlayerByDisplay(likeTarget)
+    if p then 
+        if likePlayer(p) then notify("Like", "Liked "..p.DisplayName.." ❤️", 2) end
+    else 
+        notify("Like", "Select a player first!", 2) 
+    end
+end})
+
+secLike:Button({ Title = "❤️ Like All Players", Desc = "Like semua player sekali klik", Callback = function()
+    likeAllPlayers()
+end})
+
+secLike:Toggle({ Title = "Auto Like All Players", Value = false, Callback = function(v)
+    if v then startAutoLike() else stopAutoLike() end
+end})
+
+secLike:Button({ Title = "🔄 Refresh List", Callback = function()
+    pcall(function() likeDropdown:Refresh(getDisplayNames(), true) end)
+end})
+
+-- Chat Logger
 local secChat = T_UTIL:Section({ Title = "Chat Logger (Multi Target)", Opened = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Callback = function(v) State.Utility.chatLog = v; notify("Utility", v and "Logger running ✅" or "Logger stopped ❌", 2) end })
 
 chatTargetsLabel = secChat:Paragraph({ Title = "Active Targets", Desc = "None" })
 
--- Add target dropdown
 local addTargetDrop = secChat:Dropdown({ 
     Title = "Add Target", 
     Values = getDisplayNames(), 
     Callback = function(v) 
         local p = findPlayerByDisplay(v)
         if not p then return end
-        -- Cek apakah udah ada
         for _, t in ipairs(State.Utility.chatTargets) do
             if t.Name == p.Name then notify("Chat Log", "Target already added! ⚠️", 2); return end
         end
         table.insert(State.Utility.chatTargets, p)
-        -- Update label
         local names = {}
         for _, t in ipairs(State.Utility.chatTargets) do table.insert(names, t.DisplayName) end
         pcall(function() chatTargetsLabel:SetDesc("Tracking: " .. table.concat(names, ", ")) end)
@@ -1079,7 +1151,6 @@ local addTargetDrop = secChat:Dropdown({
     end 
 })
 
--- Remove last target
 secChat:Button({ Title = "Remove Last Target", Callback = function()
     if #State.Utility.chatTargets > 0 then
         local removed = table.remove(State.Utility.chatTargets)
@@ -1087,12 +1158,9 @@ secChat:Button({ Title = "Remove Last Target", Callback = function()
         for _, t in ipairs(State.Utility.chatTargets) do table.insert(names, t.DisplayName) end
         pcall(function() chatTargetsLabel:SetDesc(#State.Utility.chatTargets > 0 and "Tracking: " .. table.concat(names, ", ") or "None") end)
         notify("Chat Log", "Removed: "..removed.DisplayName.." ❌", 2)
-    else
-        notify("Chat Log", "No targets to remove!", 2)
-    end
+    else notify("Chat Log", "No targets to remove!", 2) end
 end})
 
--- Remove specific target
 local removeTargetDrop = secChat:Dropdown({ 
     Title = "Remove Specific Target", 
     Values = {"None"}, 
@@ -1101,12 +1169,10 @@ local removeTargetDrop = secChat:Dropdown({
         for i, t in ipairs(State.Utility.chatTargets) do
             if t.DisplayName == v or t.Name == v then
                 table.remove(State.Utility.chatTargets, i)
-                -- Update label
                 local names = {}
                 for _, t2 in ipairs(State.Utility.chatTargets) do table.insert(names, t2.DisplayName) end
                 pcall(function() chatTargetsLabel:SetDesc(#State.Utility.chatTargets > 0 and "Tracking: " .. table.concat(names, ", ") or "None") end)
                 notify("Chat Log", "Removed: "..v.." ❌", 2)
-                -- Refresh remove dropdown
                 local newVals = {"None"}
                 for _, t2 in ipairs(State.Utility.chatTargets) do table.insert(newVals, t2.DisplayName) end
                 pcall(function() removeTargetDrop:Refresh(newVals, true) end)
@@ -1143,25 +1209,19 @@ secProt:Button({ Title = "Stuck Fix 🔧", Callback = function() local hrp, hum 
 local secSrv = T_SEC:Section({ Title = "Server Control", Opened = true })
 secSrv:Toggle({ Title = "Auto Rejoin 🔄", Value = false, Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then notify("Security", "Rejoining...", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)); notify("Security", "Auto Rejoin standby ✅", 2) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end; notify("Security", "Auto Rejoin disabled ❌", 2) end end})
 secSrv:Button({ Title = "Force Rejoin", Callback = function() notify("System", "Rejoining...", 2); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
-
--- FIXED Server Hop
 secSrv:Button({ Title = "Server Hop", Callback = function()
     notify("System", "Searching servers... 🔍", 2)
     task.spawn(function()
         pcall(function()
             local req = (syn and syn.request) or (http and http.request) or http_request or request
             if not req then notify("Error", "HTTP not supported", 2); return end
-            
             local success, res = pcall(function()
                 return req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100", Method = "GET"})
             end)
-            
             if not success or not res then notify("Server Hop", "Request failed ❌", 2); return end
             if res.StatusCode ~= 200 then notify("Server Hop", "API error: "..res.StatusCode, 2); return end
-            
             local body = HttpService:JSONDecode(res.Body)
             if not body or not body.data or #body.data == 0 then notify("Server Hop", "No servers found", 2); return end
-            
             table.sort(body.data, function(a, b) return a.playing > b.playing end)
             for _, v in ipairs(body.data) do
                 if v.id ~= game.JobId and v.playing > 0 then
@@ -1204,4 +1264,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine - All Fixes Applied")
+print("✅ XKID Engine - Auto Like + All Fixes Ready")
