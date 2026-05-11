@@ -140,13 +140,10 @@ local colorMap = {
 --  LIKE SYSTEM
 -- ══════════════════════════════════════════════════════════════
 local LikeEvent = nil
-local GetLikeDataRemote = nil
-
 pcall(function()
     local remotes = ReplicatedStorage:FindFirstChild("Remotes")
     if remotes then
         LikeEvent = remotes:FindFirstChild("LikePlayerEvent")
-        GetLikeDataRemote = remotes:FindFirstChild("GetLikeDataRemote")
     end
 end)
 
@@ -156,23 +153,6 @@ local function likePlayer(player)
         LikeEvent:FireServer(player)
     end)
     return success
-end
-
-local function likeAllPlayers()
-    if not LikeEvent then
-        notify("Like", "Like remote not found! ⚠️", 2)
-        return
-    end
-    local count = 0
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LP then
-            if likePlayer(p) then
-                count = count + 1
-                task.wait(0.1)
-            end
-        end
-    end
-    notify("Like", "Liked "..count.." players! ❤️", 2)
 end
 
 local function startAutoLike()
@@ -328,7 +308,7 @@ end
 startAntiAFK()
 
 -- ══════════════════════════════════════════════════════════════
---  CHARACTER HANDLER (FIX: Fly State After Respawn)
+--  CHARACTER HANDLER
 -- ══════════════════════════════════════════════════════════════
 TrackC(LP.CharacterAdded:Connect(function(char)
     if State.Fly.active then
@@ -447,7 +427,7 @@ local function fastRespawn()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  ESP ENGINE (FIX: Highlights Persist)
+--  ESP ENGINE
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -525,7 +505,6 @@ TrackC(RS.RenderStepped:Connect(function()
     if not myHrp then return end
     local vp = Cam.ViewportSize; local center = Vector2.new(vp.X / 2, vp.Y / 2)
     
-    -- Cleanup orphan highlights
     for _, c in pairs(State.ESP.cache) do
         pcall(function()
             if c.hl and not c.hl.Parent then c.hl:Destroy(); c.hl = nil end
@@ -655,7 +634,7 @@ local function toggleFly(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SMART CLICK TP (FIX: Less Responsive)
+--  SMART CLICK TP
 -- ══════════════════════════════════════════════════════════════
 local function toggleSmartTP(v)
     State.Teleport.clickActive = v
@@ -681,7 +660,7 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE
+--  FREECAM ENGINE (FIX: NO FALL)
 -- ══════════════════════════════════════════════════════════════
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70 }
 local I_CamVel = Vector3.zero; local I_YawVel = 0; local I_PitchVel = 0; local I_RollVel = 0; local heightVelocity = 0
@@ -759,11 +738,55 @@ local function startFreecamLoop()
 end
 local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 
+-- FIX: No more fall on freecam off
 local function fullCleanupFreecam()
-    stopFreecamLoop(); stopFreecamCapture(); FC.rollDeg = 0
-    local hrp = getRoot(); if hrp then hrp.Anchored = false; if FC.savedCF then hrp.CFrame = FC.savedCF; FC.savedCF = nil end end
-    local hum = getHum(); if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end
-    Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov
+    stopFreecamLoop()
+    stopFreecamCapture()
+    FC.rollDeg = 0
+    
+    local hrp = getRoot()
+    local hum = getHum()
+    
+    if hrp and FC.savedCF then
+        local safeCF = FC.savedCF + Vector3.new(0, 3, 0)
+        
+        -- BodyPosition nahan posisi dulu
+        local bp = Instance.new("BodyPosition", hrp)
+        bp.Position = safeCF.Position
+        bp.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+        bp.D = 500
+        bp.P = 50000
+        
+        hrp.Anchored = false
+        
+        -- Double restore
+        task.wait(0.05)
+        hrp.CFrame = safeCF
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        
+        task.wait(0.05)
+        hrp.CFrame = safeCF
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        
+        task.wait(0.05)
+        bp:Destroy()
+        
+        FC.savedCF = nil
+    elseif hrp then
+        hrp.Anchored = false
+    end
+    
+    if hum then
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        hum.WalkSpeed = State.Move.ws
+        hum.UseJumpPower = true
+        hum.JumpPower = State.Move.jp
+    end
+    
+    Cam.CameraType = Enum.CameraType.Custom
+    Cam.FieldOfView = FC.origFov
+    
     if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end
     for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end
 end
@@ -799,7 +822,7 @@ end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 
 -- ══════════════════════════════════════════════════════════════
---  CHAT LOGGER (MULTI TARGET)
+--  CHAT LOGGER (MULTI TARGET - FIX CLEAR ALL)
 -- ══════════════════════════════════════════════════════════════
 local chatLogPanel = nil
 local chatTargetsLabel = nil
@@ -857,7 +880,7 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: SYSTEM HUB (NO IDENTITY DATA)
+--  TAB 1: SYSTEM HUB
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard" })
 T_HOME:Section({ Title = "Discord", Opened = true }):Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
@@ -885,7 +908,7 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 2: PLAYER CORE (NO REFRESH CHARACTER)
+--  TAB 2: PLAYER CORE
 -- ══════════════════════════════════════════════════════════════
 local T_AV = Window:Tab({ Title = "Player Core", Icon = "fingerprint" })
 T_AV:Section({ Title = "State Control", Opened = true }):Button({ Title = "Fast Respawn 💀", Desc = "Respawn on death point", Callback = function() fastRespawn() end })
@@ -901,7 +924,6 @@ secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, De
 local noclipConn = nil
 secAbi:Toggle({ Title = "NoClip", Value = false, Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end end end})
 
--- HARD FLING
 local hardFlingConn = nil
 secAbi:Toggle({ Title = "Hard Fling 💥", Value = false, Callback = function(v)
     State.HardFling.active = v; State.Move.ncp = v
@@ -958,13 +980,24 @@ secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Defaul
 -- ══════════════════════════════════════════════════════════════
 local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video" })
 local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true })
-secFC:Toggle({ Title = "Enable Freecam", Value = false, Callback = function(v) FC.active = v; if v then local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry); local hrp = getRoot(); if hrp then FC.savedCF = hrp.CFrame; hrp.Anchored = true end; FC.origFov = Cam.FieldOfView; startFreecamCapture(); startFreecamLoop(); if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end; notify("Freecam", "Drone deployed ✅", 2) else fullCleanupFreecam(); notify("Freecam", "Drone recalled ❌", 2) end end})
+secFC:Toggle({ Title = "Enable Freecam", Value = false, Callback = function(v)
+    FC.active = v
+    if v then
+        local cf = Cam.CFrame; FC.pos = cf.Position
+        local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry)
+        local hrp = getRoot(); if hrp then FC.savedCF = hrp.CFrame; hrp.Anchored = true end
+        FC.origFov = Cam.FieldOfView
+        startFreecamCapture(); startFreecamLoop()
+        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end
+        notify("Freecam", "Drone deployed ✅", 2)
+    else
+        fullCleanupFreecam()
+        notify("Freecam", "Drone recalled ❌", 2)
+    end
+end})
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 
--- ══════════════════════════════════════════════════════════════
---  CINEMATIC MODE
--- ══════════════════════════════════════════════════════════════
 local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true })
 secCine:Toggle({ Title = "Hide All UI", Value = false, Callback = function(v)
     if v then
@@ -1007,7 +1040,7 @@ secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: FILTER (FIXED)
+--  TAB 6: FILTER
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "Filter", Icon = "layers" })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true })
@@ -1036,9 +1069,6 @@ local function applyFilter(filter)
 end
 secFilter:Dropdown({ Title = "Select Filter", Values = {"Default", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue"}, Value = "Default", Callback = function(v) applyFilter(v) end })
 
--- ══════════════════════════════════════════════════════════════
---  ATMOSPHERE (FIXED - Default Roblox)
--- ══════════════════════════════════════════════════════════════
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false })
 local bloomActive = false
 secAtmos:Toggle({ Title = "Bloom ON/OFF", Value = false, Callback = function(v) bloomActive = v; if v then local bloom = nil; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") and e.Name == "_XKID_FILTER" then bloom = e; break end end; if not bloom then bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER" end; bloom.Intensity = 0.5; notify("Atmosphere", "Bloom activated ✨", 2) else for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e:Destroy() end end; notify("Atmosphere", "Bloom removed", 2) end end})
@@ -1053,9 +1083,6 @@ secAtmos:Button({ Title = "Reset Atmosphere", Callback = function()
     bloomActive = false; notify("Atmosphere", "Reset to Roblox default ✅", 2) 
 end })
 
--- ══════════════════════════════════════════════════════════════
---  GRAPHICS (FIXED - Direct Quality Level)
--- ══════════════════════════════════════════════════════════════
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false })
 secGfx:Slider({ Title = "Quality Level", Step = 1, Value = {Min = 1, Max = 21, Default = 1}, Callback = function(v) pcall(function() settings().Rendering.QualityLevel = v end) end })
 secGfx:Dropdown({ Title = "FPS Cap", Values = {"30", "60", "120", "144", "240", "Unlimited"}, Value = "60", Callback = function(v) if v == "Unlimited" then pcall(function() setfpscap(9999) end) else pcall(function() setfpscap(tonumber(v)) end) end; notify("Graphics", "FPS cap: "..v, 2) end })
@@ -1088,47 +1115,20 @@ secESPColor:Dropdown({ Title="Suspect Color", Values={"Merah","Hijau","Biru","Ku
 secESPColor:Dropdown({ Title="Glitch Acc Color", Values={"Orange","Merah","Hijau","Biru","Kuning","Ungu","Cyan","Pink","Putih","Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G=colorMap[v]; State.ESP.boxColor_G=colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY (MULTI TARGET CHAT LOGGER + AUTO LIKE)
+--  TAB 8: UTILITY (AUTO LIKE + CHAT LOGGER - FIXED)
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal" })
 
--- Auto Like System
+-- Auto Like System (only toggle)
 local secLike = T_UTIL:Section({ Title = "Auto Like System ❤️", Opened = true })
-local likeTarget = ""
-
 if not LikeEvent then
     secLike:Paragraph({ Title = "Status", Desc = "⚠️ Like Remote tidak ditemukan di game ini!" })
 end
-
-local likeDropdown = secLike:Dropdown({ 
-    Title = "Select Player to Like", 
-    Values = getDisplayNames(), 
-    Callback = function(v) likeTarget = v end 
-})
-
-secLike:Button({ Title = "❤️ Like Selected Player", Callback = function()
-    if not LikeEvent then notify("Like", "Remote not found!", 2); return end
-    local p = findPlayerByDisplay(likeTarget)
-    if p then 
-        if likePlayer(p) then notify("Like", "Liked "..p.DisplayName.." ❤️", 2) end
-    else 
-        notify("Like", "Select a player first!", 2) 
-    end
-end})
-
-secLike:Button({ Title = "❤️ Like All Players", Desc = "Like semua player sekali klik", Callback = function()
-    likeAllPlayers()
-end})
-
 secLike:Toggle({ Title = "Auto Like All Players", Value = false, Callback = function(v)
     if v then startAutoLike() else stopAutoLike() end
 end})
 
-secLike:Button({ Title = "🔄 Refresh List", Callback = function()
-    pcall(function() likeDropdown:Refresh(getDisplayNames(), true) end)
-end})
-
--- Chat Logger
+-- Chat Logger Multi Target (FIXED)
 local secChat = T_UTIL:Section({ Title = "Chat Logger (Multi Target)", Opened = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Callback = function(v) State.Utility.chatLog = v; notify("Utility", v and "Logger running ✅" or "Logger stopped ❌", 2) end })
 
@@ -1161,45 +1161,31 @@ secChat:Button({ Title = "Remove Last Target", Callback = function()
     else notify("Chat Log", "No targets to remove!", 2) end
 end})
 
-local removeTargetDrop = secChat:Dropdown({ 
-    Title = "Remove Specific Target", 
-    Values = {"None"}, 
-    Callback = function(v)
-        if v == "None" then return end
-        for i, t in ipairs(State.Utility.chatTargets) do
-            if t.DisplayName == v or t.Name == v then
-                table.remove(State.Utility.chatTargets, i)
-                local names = {}
-                for _, t2 in ipairs(State.Utility.chatTargets) do table.insert(names, t2.DisplayName) end
-                pcall(function() chatTargetsLabel:SetDesc(#State.Utility.chatTargets > 0 and "Tracking: " .. table.concat(names, ", ") or "None") end)
-                notify("Chat Log", "Removed: "..v.." ❌", 2)
-                local newVals = {"None"}
-                for _, t2 in ipairs(State.Utility.chatTargets) do table.insert(newVals, t2.DisplayName) end
-                pcall(function() removeTargetDrop:Refresh(newVals, true) end)
-                return
-            end
-        end
-    end 
-})
-
-secChat:Button({ Title = "🔄 Refresh Lists", Callback = function() 
+secChat:Button({ Title = "🔄 Refresh Player List", Callback = function() 
     pcall(function() addTargetDrop:Refresh(getDisplayNames(), true) end)
-    local newVals = {"None"}
-    for _, t in ipairs(State.Utility.chatTargets) do table.insert(newVals, t.DisplayName) end
-    pcall(function() removeTargetDrop:Refresh(newVals, true) end)
-    notify("Utility", "Lists refreshed ✅", 2) 
+    notify("Utility", "List refreshed ✅", 2) 
 end})
 
 chatLogPanel = secChat:Paragraph({ Title = "Console Output", Desc = "Waiting for data..." })
 
-secChat:Button({ Title = "Clear Log", Callback = function() State.Utility.chatHistory = {}; pcall(function() chatLogPanel:SetDesc("Waiting for data...") end); notify("Utility", "Log cleared ❌", 2) end })
-secChat:Button({ Title = "Clear All Targets", Callback = function() State.Utility.chatTargets = {}; pcall(function() chatTargetsLabel:SetDesc("None") end); pcall(function() removeTargetDrop:Refresh({"None"}, true) end); notify("Utility", "All targets cleared ❌", 2) end })
+secChat:Button({ Title = "Clear Log", Callback = function() 
+    State.Utility.chatHistory = {}
+    pcall(function() chatLogPanel:SetDesc("Waiting for data...") end)
+    notify("Utility", "Log cleared ❌", 2) 
+end})
+
+secChat:Button({ Title = "Clear All Targets", Callback = function() 
+    -- FIXED: benar-benar kosongin array, bukan malah nge-log semua
+    State.Utility.chatTargets = {}
+    pcall(function() chatTargetsLabel:SetDesc("None") end)
+    notify("Utility", "All targets cleared ❌", 2) 
+end})
 
 local secMisc = T_UTIL:Section({ Title = "Data Extraction", Opened = true })
 secMisc:Button({ Title = "Copy JobID", Callback = function() pcall(function() setclipboard(game.JobId) end); notify("Utility", "JobID copied ✅", 2) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 9: SECURITY (FIXED SERVER HOP)
+--  TAB 9: SECURITY
 -- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert" })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true })
@@ -1264,4 +1250,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine Ready ⚡", 2)
-print("✅ XKID Engine - Auto Like + All Fixes Ready")
+print("✅ XKID Engine - Freecam Fixed + All Fixes")
