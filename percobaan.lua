@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v2.0.9 - Fluent Modded Edition
+  📌 v2.0.9 - Fluent Modded RGB Edition
 ]]
 
 local RS = game:GetService("RunService")
@@ -35,7 +35,7 @@ getgenv()._XKID_ESP_CACHE = {}
 if getgenv()._XKID_LOADED then
     pcall(function()
         for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
-            if v.Name == "Fluent" or v.Name == "XKID_FreecamUI" then v:Destroy() end
+            if v.Name == "Fluent" or v.Name == "XKID_FreecamUI" or v.Name == "XKID_Floater" then v:Destroy() end
         end
         for _, v in pairs(game:GetService("Lighting"):GetChildren()) do
             if v.Name == "_XKID_FILTER" then v:Destroy() end
@@ -432,7 +432,7 @@ local function refreshCharacter()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  ESP ENGINE
+--  ESP ENGINE (FULL - KEMBALI KE MODE LAMA)
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -467,7 +467,26 @@ task.spawn(function()
             local myHrp = getCharRoot(LP.Character)
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LP and p.Character then
+                    local isSus, isGlitch, reason = false, false, ""
+                    for _, v in pairs(p.Character:GetChildren()) do
+                        if v:IsA("BasePart") and (v.Size.X > 30 or v.Size.Y > 30 or v.Size.Z > 30) then isSus = true; reason = "Map Blocker"; break
+                        elseif v:IsA("Accessory") then
+                            local h = v:FindFirstChild("Handle")
+                            if h and h:IsA("BasePart") then
+                                if h.Size.Magnitude > 20 then isSus = true; reason = "Huge Hat"; break
+                                elseif h.Size.Magnitude > 10 or (h.Transparency < 0.1 and h.Material == Enum.Material.Neon) then isGlitch = true; reason = "Glitch Acc" end
+                            end
+                        end
+                    end
+                    if not isSus and not isGlitch then
+                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                        if hum then
+                            local bws, bhs = hum:FindFirstChild("BodyWidthScale"), hum:FindFirstChild("BodyHeightScale")
+                            if (bws and bws.Value > 2.0) or (bhs and bhs.Value > 2.0) then isSus = true; reason = "Glitch Avatar" end
+                        end
+                    end
                     initPlayerCache(p)
+                    if State.ESP.cache[p] then State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason end
                     if myHrp then
                         local hrp = getCharRoot(p.Character)
                         local hum = p.Character:FindFirstChildOfClass("Humanoid")
@@ -493,22 +512,48 @@ TrackC(RS.RenderStepped:Connect(function()
     for _, c in pairs(State.ESP.cache) do
         pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end)
     end
+    local hlCount = 0
     for _, data in ipairs(espsortedPlayers) do
         local player, char, hrp, dist = data.p, data.char, data.hrp, data.dist
         local c = State.ESP.cache[player]
         if not c then continue end
         local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
         if not onScreen then continue end
+        local isSus, isGlitch = c.isSuspect, c.isGlitch
+        local useHl = isSus or isGlitch or State.ESP.highlightMode
         local txt = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
+        if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason end
+        local cColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
+        local tColor = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N)
+        local bColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
         pcall(function()
-            if c.texts then c.texts.Text = txt; c.texts.Color = State.ESP.nameColor; c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true end
+            if c.texts then c.texts.Text = txt; c.texts.Color = cColor; c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true end
             if State.ESP.tracerMode ~= "OFF" and c.tracer then
                 local origin = Vector2.new(vp.X / 2, vp.Y)
                 if State.ESP.tracerMode == "Center" then origin = center
                 elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
-                c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y); c.tracer.Color = State.ESP.tracerColor_N; c.tracer.Visible = true
+                c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y); c.tracer.Color = tColor; c.tracer.Visible = true
             end
         end)
+        if useHl and hlCount < 30 then
+            hlCount = hlCount + 1
+            pcall(function()
+                local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
+                local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
+                if topOn and botOn and #c.boxLines == 4 then
+                    local bh = math.abs(top.Y - bot.Y); local bw = bh * 0.6
+                    c.boxLines[1].From = Vector2.new(rootPos.X - bw/2, top.Y); c.boxLines[1].To = Vector2.new(rootPos.X + bw/2, top.Y)
+                    c.boxLines[2].From = Vector2.new(rootPos.X + bw/2, top.Y); c.boxLines[2].To = Vector2.new(rootPos.X + bw/2, bot.Y)
+                    c.boxLines[3].From = Vector2.new(rootPos.X + bw/2, bot.Y); c.boxLines[3].To = Vector2.new(rootPos.X - bw/2, bot.Y)
+                    c.boxLines[4].From = Vector2.new(rootPos.X - bw/2, bot.Y); c.boxLines[4].To = Vector2.new(rootPos.X - bw/2, top.Y)
+                    for i = 1, 4 do c.boxLines[i].Color = bColor; c.boxLines[i].Visible = true end
+                end
+            end)
+            pcall(function()
+                if not c.hl or c.hl.Parent ~= char then if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end
+                if c.hl then c.hl.FillColor = bColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true end
+            end)
+        end
     end
 end))
 
@@ -733,7 +778,7 @@ end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 
 -- ══════════════════════════════════════════════════════════════
---  CHAT LOGGER
+--  CHAT LOGGER (FULL - BERFUNGSI)
 -- ══════════════════════════════════════════════════════════════
 local chatLogPanel = nil
 local chatTargetLabel = nil
@@ -757,12 +802,71 @@ end
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); if chatLogPanel and State.Utility.chatLog then pcall(function() local t = table.concat(State.Utility.chatHistory, "\n"); if #t > 2000 then t = t:sub(-2000) end; if #t == 0 then t = "Belum ada chat..." end; chatLogPanel:SetContent(t) end) end end end)
 
 -- ══════════════════════════════════════════════════════════════
---  MAIN WINDOW - FLUENT MODDED
+--  RGB THEME REGISTRATION
+-- ══════════════════════════════════════════════════════════════
+local RGB_ACCENT = Color3.fromRGB(255, 0, 0)
+task.spawn(function()
+    local hue = 0
+    while getgenv()._XKID_RUNNING do
+        hue = (hue + 0.005) % 1
+        RGB_ACCENT = Color3.fromHSV(hue, 1, 1)
+        task.wait(0.03)
+    end
+end)
+
+Fluent:RegisterCustomTheme("XKID_RGB", {
+    Accent              = RGB_ACCENT,
+    AcrylicMain         = Color3.fromRGB(15, 15, 20),
+    AcrylicBorder       = Color3.fromRGB(50, 50, 70),
+    AcrylicGradient     = ColorSequence.new(Color3.fromRGB(15, 15, 20), Color3.fromRGB(10, 10, 15)),
+    AcrylicNoise        = 0.8,
+    TitleBarLine        = Color3.fromRGB(50, 50, 70),
+    Tab                 = Color3.fromRGB(25, 25, 35),
+    Element             = Color3.fromRGB(20, 20, 30),
+    ElementBorder       = Color3.fromRGB(50, 50, 70),
+    InElementBorder     = Color3.fromRGB(60, 60, 85),
+    ElementTransparency = 0.85,
+    ToggleSlider        = Color3.fromRGB(40, 40, 60),
+    ToggleToggled       = RGB_ACCENT,
+    SliderRail          = Color3.fromRGB(40, 40, 60),
+    DropdownFrame       = Color3.fromRGB(20, 20, 32),
+    DropdownHolder      = Color3.fromRGB(15, 15, 25),
+    DropdownBorder      = Color3.fromRGB(50, 50, 70),
+    DropdownOption      = Color3.fromRGB(28, 28, 42),
+    Keybind             = Color3.fromRGB(28, 28, 42),
+    Input               = Color3.fromRGB(18, 18, 28),
+    InputFocused        = Color3.fromRGB(12, 12, 20),
+    InputIndicator      = Color3.fromRGB(60, 60, 90),
+    InputIndicatorFocus = RGB_ACCENT,
+    Dialog              = Color3.fromRGB(15, 15, 25),
+    DialogHolder        = Color3.fromRGB(12, 12, 20),
+    DialogHolderLine    = Color3.fromRGB(40, 40, 60),
+    DialogButton        = Color3.fromRGB(22, 22, 35),
+    DialogButtonBorder  = Color3.fromRGB(50, 50, 70),
+    DialogBorder        = Color3.fromRGB(50, 50, 70),
+    DialogInput         = Color3.fromRGB(18, 18, 28),
+    DialogInputLine     = Color3.fromRGB(60, 60, 90),
+    Text                = Color3.fromRGB(240, 240, 255),
+    SubText             = Color3.fromRGB(140, 140, 175),
+    Hover               = Color3.fromRGB(35, 35, 55),
+    HoverChange         = 0.04,
+    ShineEnabled        = true,
+    StrokeShine         = true,
+    StrokeDark          = Color3.fromRGB(40, 40, 60),
+    IconColor           = RGB_ACCENT,
+    IconSize            = 18,
+    Background          = nil,
+    BackgroundTransparency = 0,
+    ThemeAccentColors   = { Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 0, 255) },
+})
+
+-- ══════════════════════════════════════════════════════════════
+--  MAIN WINDOW
 -- ══════════════════════════════════════════════════════════════
 local Window = Fluent:CreateWindow({
     Title = "XKID", SubTitle = "Engine v"..CURRENT_VERSION,
     TabWidth = 139, Size = UDim2.fromOffset(580, 460),
-    Acrylic = true, Theme = "AMOLED",
+    Acrylic = true, Theme = "XKID_RGB",
     MinimizeKey = Enum.KeyCode.RightShift,
     UserInfo = true, UserInfoTop = false,
     UserInfoTitle = "", UserInfoSubtitle = "@WTF.XKID",
@@ -772,10 +876,16 @@ local Window = Fluent:CreateWindow({
 
 local SaveManager = Fluent.SaveManager
 local InterfaceManager = Fluent.InterfaceManager
+local FloatingButtonManager = Fluent.FloatingButtonManager
+
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
+FloatingButtonManager:SetLibrary(Fluent)
+
 InterfaceManager:SetFolder("XKIDScript")
 SaveManager:SetFolder("XKIDScript/Config")
+FloatingButtonManager:SetFolder("XKIDScript/Floating")
+
 SaveManager:IgnoreThemeSettings()
 
 -- ══════════════════════════════════════════════════════════════
@@ -809,6 +919,12 @@ task.spawn(function()
         pcall(function()
             local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999)
             netLabel:SetContent(string.format("FPS: %d | PING: %dms", fps, ping))
+        end)
+        pcall(function()
+            local afk = State.Security.afkActive and "🟢" or "🔴"
+            local sl = State.Security.shiftLock and "🟢" or "🔴"
+            local vd = State.Security.voidConn and "🟢" or "🔴"
+            securityLabel:SetContent(string.format("AFK: %s | ShiftLock: %s | Void: %s", afk, sl, vd))
         end)
     end
 end)
@@ -962,6 +1078,7 @@ local T_ESP = Window:AddTab({ Title = "Radar", Icon = "solar/cpu-bold" })
 local secESP = T_ESP:AddSection("Detection System")
 secESP:AddToggle("EnableESP", { Title = "Enable Radar", Icon = "solar/radar-bold", Default = false, Callback = function(v) State.ESP.active = v end })
 secESP:AddDropdown("TracerMode", { Title = "Tracer Origin", Icon = "solar/target-bold", Values = {"Bottom","Center","Mouse","OFF"}, Default = "Bottom", Multi = false, NoSearch = true, Callback = function(v) State.ESP.tracerMode = v end })
+secESP:AddToggle("HighlightESP", { Title = "Highlight Entity", Icon = "solar/lightbulb-bold", Default = false, Callback = function(v) State.ESP.highlightMode = v end })
 secESP:AddSlider("ScanDist", { Title = "Scan Distance", Icon = "solar/ruler-bold", Default = 300, Min = 50, Max = 500, Rounding = 1, Callback = function(v) State.ESP.maxDrawDistance = v end })
 
 -- ══════════════════════════════════════════════════════════════
@@ -1010,11 +1127,110 @@ secCamLock:AddToggle("ShiftLock", { Title = "Force Shift Lock", Icon = "solar/lo
 local T_SET = Window:AddTab({ Title = "Config", Icon = "solar/settings-bold" })
 InterfaceManager:BuildInterfaceSection(T_SET)
 SaveManager:BuildConfigSection(T_SET)
+FloatingButtonManager:BuildConfigSection(T_SET)
+
+-- ══════════════════════════════════════════════════════════════
+--  FLOATING BUTTON (MOBILE + PC MINIMIZE)
+-- ══════════════════════════════════════════════════════════════
+local floaterGui = Instance.new("ScreenGui")
+floaterGui.Name = "XKID_Floater"
+floaterGui.Parent = LP:WaitForChild("PlayerGui")
+floaterGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+floaterGui.ResetOnSpawn = false
+
+local floaterBtn = Instance.new("TextButton")
+floaterBtn.Name = "FloaterButton"
+floaterBtn.Parent = floaterGui
+floaterBtn.BackgroundColor3 = Color3.fromRGB(220, 20, 60)
+floaterBtn.Position = UDim2.new(0.85, 0, 0.5, 0)
+floaterBtn.Size = UDim2.new(0, 48, 0, 48)
+floaterBtn.Text = "🔄"
+floaterBtn.TextSize = 24
+floaterBtn.Visible = false
+Instance.new("UICorner", floaterBtn).CornerRadius = UDim.new(1, 0)
+
+local floaterStroke = Instance.new("UIStroke", floaterBtn)
+floaterStroke.Thickness = 2
+floaterStroke.Color = Color3.fromRGB(255, 255, 255)
+
+task.spawn(function()
+    local hue = 0
+    while getgenv()._XKID_RUNNING do
+        hue = (hue + 0.01) % 1
+        floaterBtn.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
+        floaterStroke.Color = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
+        task.wait(0.03)
+    end
+end)
+
+local function makeFloaterDraggable(btn)
+    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = btn.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    btn.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+makeFloaterDraggable(floaterBtn)
+
+floaterBtn.MouseButton1Click:Connect(function()
+    Window:Minimize()
+    floaterBtn.Visible = true
+end)
+
+local function onMinimize()
+    floaterBtn.Visible = true
+end
+
+local function onRestore()
+    floaterBtn.Visible = false
+end
+
+-- Deteksi minimize/restore Fluent
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        pcall(function()
+            local fluentGui = CoreGui:FindFirstChild("Fluent")
+            if fluentGui then
+                local mainFrame = fluentGui:FindFirstChild("MainFrame") or fluentGui:FindFirstChild("Main")
+                if mainFrame then
+                    if mainFrame.Visible == false and not floaterBtn.Visible then
+                        onMinimize()
+                    elseif mainFrame.Visible == true and floaterBtn.Visible then
+                        onRestore()
+                    end
+                end
+            end
+        end)
+        task.wait(0.5)
+    end
+end)
+
+FloatingButtonManager:AddButton("XKID_Floater", floaterBtn, false, false)
 
 -- ══════════════════════════════════════════════════════════════
 --  STARTUP
 -- ══════════════════════════════════════════════════════════════
 SaveManager:LoadAutoloadConfig()
+FloatingButtonManager:LoadAutoloadConfig()
 pcall(function() Window:SelectTab(1) end)
-notify("System", "XKID Engine v"..CURRENT_VERSION.." - Fluent Modded ⚡", 3)
-print("✅ XKID Engine v"..CURRENT_VERSION.." - Fluent Modded Edition")
+notify("System", "XKID Engine v"..CURRENT_VERSION.." - RGB Edition Ready ⚡", 3)
+print("✅ XKID Engine v"..CURRENT_VERSION.." - Fluent RGB Edition")
