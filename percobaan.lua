@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v2.0.9 - Fluent Modded RGB Edition
+  📌 v2.0.9 — WindUI Boreal Edition
 ]]
 
 local RS = game:GetService("RunService")
@@ -35,7 +35,7 @@ getgenv()._XKID_ESP_CACHE = {}
 if getgenv()._XKID_LOADED then
     pcall(function()
         for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
-            if v.Name == "Fluent" or v.Name == "XKID_FreecamUI" or v.Name == "XKID_Floater" then v:Destroy() end
+            if v.Name == "WindUI" or v.Name == "XKID_FreecamUI" or v.Name == "XKID_FlyUI" then v:Destroy() end
         end
         for _, v in pairs(game:GetService("Lighting"):GetChildren()) do
             if v.Name == "_XKID_FILTER" then v:Destroy() end
@@ -78,10 +78,10 @@ getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
 -- ══════════════════════════════════════════════════════════════
---  LOAD FLUENT MODDED
+--  LOAD WINDUI BOREAL
 -- ══════════════════════════════════════════════════════════════
-local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentLite"))()
-task.wait(0.3)
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/FayintExploit/Windui-boreal/refs/heads/main/WindUI%20boreal"))()
+task.wait(0.5)
 
 -- ══════════════════════════════════════════════════════════════
 --  SERVICES
@@ -159,7 +159,7 @@ local function getCharRoot(char)
     return char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
 end
 local function notify(title, content, dur)
-    pcall(function() Fluent:Notify({ Title = title, Content = content, Duration = dur or 2 }) end)
+    pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 }) end)
 end
 local function formatTime(seconds)
     local m = math.floor(seconds / 60); local s = seconds % 60
@@ -187,11 +187,6 @@ local function isOnGround()
     params.FilterDescendantsInstances = { LP.Character }
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
-local function RefreshDropdown(dropdown, newValues)
-    pcall(function()
-        dropdown:SetValues(newValues)
-    end)
-end
 
 local START_TIME = os.time()
 local cachedMapName, lastMapCheck = nil, 0
@@ -214,7 +209,7 @@ end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
 -- ══════════════════════════════════════════════════════════════
---  ANTI AFK / ANTI KICK SYSTEM
+--  ANTI AFK / ANTI KICK SYSTEM (MOBILE + PC)
 -- ══════════════════════════════════════════════════════════════
 local AntiAFK = {
     idleConn = nil,
@@ -432,7 +427,7 @@ local function refreshCharacter()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  ESP ENGINE (FULL - KEMBALI KE MODE LAMA)
+--  ESP ENGINE
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -658,7 +653,7 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE
+--  FREECAM ENGINE (Lock posisi)
 -- ══════════════════════════════════════════════════════════════
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70, lockGyro = nil, lockPos = nil }
 local I_CamVel = Vector3.zero; local I_YawVel = 0; local I_PitchVel = 0; local I_RollVel = 0; local heightVelocity = 0
@@ -778,7 +773,7 @@ end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 
 -- ══════════════════════════════════════════════════════════════
---  CHAT LOGGER (FULL - BERFUNGSI)
+--  CHAT LOGGER
 -- ══════════════════════════════════════════════════════════════
 local chatLogPanel = nil
 local chatTargetLabel = nil
@@ -799,438 +794,409 @@ else
     for _, p in ipairs(Players:GetPlayers()) do pcall(function() TrackC(p.Chatted:Connect(function(m) logMsg(p.Name, m) end)) end) end
     TrackC(Players.PlayerAdded:Connect(function(p) pcall(function() TrackC(p.Chatted:Connect(function(m) logMsg(p.Name, m) end)) end) end))
 end
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); if chatLogPanel and State.Utility.chatLog then pcall(function() local t = table.concat(State.Utility.chatHistory, "\n"); if #t > 2000 then t = t:sub(-2000) end; if #t == 0 then t = "Belum ada chat..." end; chatLogPanel:SetContent(t) end) end end end)
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); if chatLogPanel and State.Utility.chatLog then pcall(function() local t = table.concat(State.Utility.chatHistory, "\n"); if #t > 2000 then t = t:sub(-2000) end; if #t == 0 then t = "Belum ada chat..." end; chatLogPanel:SetDesc(t) end) end end end)
 
 -- ══════════════════════════════════════════════════════════════
---  RGB THEME REGISTRATION
--- ══════════════════════════════════════════════════════════════
-local RGB_ACCENT = Color3.fromRGB(255, 0, 0)
-task.spawn(function()
-    local hue = 0
-    while getgenv()._XKID_RUNNING do
-        hue = (hue + 0.005) % 1
-        RGB_ACCENT = Color3.fromHSV(hue, 1, 1)
-        task.wait(0.03)
-    end
+--  ╔════════════════════════════════════════════════════════╗
+--  ║        WINDUI BOREAL — MAIN WINDOW                   ║
+--  ╚════════════════════════════════════════════════════════╝
+-- ══════════════════════════════════════════════════════════
+local Window = WindUI:CreateWindow({
+    Title = "XKID Engine",
+    Author = "@WTF.XKID • v" .. CURRENT_VERSION,
+    Folder = "XKIDScript",
+    Icon = "terminal",
+    IconThemed = true,
+
+    Theme = "Midnight",
+    Size = UDim2.fromOffset(580, 500),
+    Transparent = false,
+    Acrylic = false,
+    SideBarWidth = 180,
+    ScrollBarEnabled = true,
+    HideSearchBar = true,
+    Resizable = false,
+    ModernLayout = false,
+    ModernLayoutMergeElements = false,
+
+    User = {
+        Enabled = true,
+        Anonymous = false,
+        Callback = function()
+            notify("System", "XKID Engine Identity Verified ✅", 3)
+        end
+    },
+
+    Topbar = {
+        Height = 48,
+        ButtonsType = "Default"
+    },
+
+    OpenButton = {
+        Enabled = true,
+        Title = "XKID",
+        Icon = "terminal",
+        Position = UDim2.new(0, 120, 0, 120),
+        Draggable = true,
+        OnlyMobile = false,
+        Scale = 0.85
+    },
+
+    Watermark = {
+        Enabled = true,
+        Text = "XKID Engine v" .. CURRENT_VERSION .. " | Boreal",
+        Position = "bottom-right",
+        Opacity = 0.4,
+        Size = 12
+    }
+})
+
+-- Simpan instance window
+getgenv()._XKID_INSTANCE = Window
+
+-- Event handlers
+Window:OnOpen(function()
+    notify("Window", "Opened successfully.", "check", 2)
 end)
 
-Fluent:RegisterCustomTheme("XKID_RGB", {
-    Accent              = RGB_ACCENT,
-    AcrylicMain         = Color3.fromRGB(15, 15, 20),
-    AcrylicBorder       = Color3.fromRGB(50, 50, 70),
-    AcrylicGradient     = ColorSequence.new(Color3.fromRGB(15, 15, 20), Color3.fromRGB(10, 10, 15)),
-    AcrylicNoise        = 0.8,
-    TitleBarLine        = Color3.fromRGB(50, 50, 70),
-    Tab                 = Color3.fromRGB(25, 25, 35),
-    Element             = Color3.fromRGB(20, 20, 30),
-    ElementBorder       = Color3.fromRGB(50, 50, 70),
-    InElementBorder     = Color3.fromRGB(60, 60, 85),
-    ElementTransparency = 0.85,
-    ToggleSlider        = Color3.fromRGB(40, 40, 60),
-    ToggleToggled       = RGB_ACCENT,
-    SliderRail          = Color3.fromRGB(40, 40, 60),
-    DropdownFrame       = Color3.fromRGB(20, 20, 32),
-    DropdownHolder      = Color3.fromRGB(15, 15, 25),
-    DropdownBorder      = Color3.fromRGB(50, 50, 70),
-    DropdownOption      = Color3.fromRGB(28, 28, 42),
-    Keybind             = Color3.fromRGB(28, 28, 42),
-    Input               = Color3.fromRGB(18, 18, 28),
-    InputFocused        = Color3.fromRGB(12, 12, 20),
-    InputIndicator      = Color3.fromRGB(60, 60, 90),
-    InputIndicatorFocus = RGB_ACCENT,
-    Dialog              = Color3.fromRGB(15, 15, 25),
-    DialogHolder        = Color3.fromRGB(12, 12, 20),
-    DialogHolderLine    = Color3.fromRGB(40, 40, 60),
-    DialogButton        = Color3.fromRGB(22, 22, 35),
-    DialogButtonBorder  = Color3.fromRGB(50, 50, 70),
-    DialogBorder        = Color3.fromRGB(50, 50, 70),
-    DialogInput         = Color3.fromRGB(18, 18, 28),
-    DialogInputLine     = Color3.fromRGB(60, 60, 90),
-    Text                = Color3.fromRGB(240, 240, 255),
-    SubText             = Color3.fromRGB(140, 140, 175),
-    Hover               = Color3.fromRGB(35, 35, 55),
-    HoverChange         = 0.04,
-    ShineEnabled        = true,
-    StrokeShine         = true,
-    StrokeDark          = Color3.fromRGB(40, 40, 60),
-    IconColor           = RGB_ACCENT,
-    IconSize            = 18,
-    Background          = nil,
-    BackgroundTransparency = 0,
-    ThemeAccentColors   = { Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 0, 255) },
+Window:OnClose(function()
+    notify("Window", "Closed.", "panel-left-close", 2)
+end)
+
+Window:OnDestroy(function()
+    print("Window destroyed")
+end)
+
+-- Tag version
+Window:Tag({
+    Title = "v" .. CURRENT_VERSION,
+    Color = Color3.fromRGB(220, 20, 60),
+    Icon = "badge-check"
 })
 
--- ══════════════════════════════════════════════════════════════
---  MAIN WINDOW
--- ══════════════════════════════════════════════════════════════
-local Window = Fluent:CreateWindow({
-    Title = "XKID", SubTitle = "Engine v"..CURRENT_VERSION,
-    TabWidth = 139, Size = UDim2.fromOffset(580, 460),
-    Acrylic = true, Theme = "XKID_RGB",
-    MinimizeKey = Enum.KeyCode.RightShift,
-    UserInfo = true, UserInfoTop = false,
-    UserInfoTitle = "", UserInfoSubtitle = "@WTF.XKID",
-    UserInfoColor = Color3.fromRGB(220, 20, 60),
-    Search = true,
+-- Sidebar quick actions
+Window:SideBarLabel({
+    Title = "Quick Actions",
+    Icon = "zap"
 })
 
-local SaveManager = Fluent.SaveManager
-local InterfaceManager = Fluent.InterfaceManager
-local FloatingButtonManager = Fluent.FloatingButtonManager
+Window:SideBarButton({
+    Title = "Rejoin",
+    Icon = "refresh-cw",
+    Variant = "Secondary",
+    Callback = function()
+        notify("System", "Rejoining...", 2)
+        pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+    end
+})
 
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-FloatingButtonManager:SetLibrary(Fluent)
+Window:SideBarButton({
+    Title = "Server Hop",
+    Icon = "shuffle",
+    Variant = "Secondary",
+    Callback = function()
+        notify("System", "Searching servers...", 2)
+        pcall(function()
+            local req = (syn and syn.request) or (http and http.request) or http_request or request
+            if not req then notify("Error", "HTTP failed", 2); return end
+            local res = req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100", Method = "GET"})
+            if res.StatusCode == 200 then
+                local body = HttpService:JSONDecode(res.Body)
+                if body and body.data then
+                    for _, v in ipairs(body.data) do
+                        if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then
+                            TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP)
+                            notify("Server Hop", "Joining server with "..v.playing.." players ✅", 2)
+                            return
+                        end
+                    end
+                end
+                notify("Server Hop", "No server found", 2)
+            end
+        end)
+    end
+})
 
-InterfaceManager:SetFolder("XKIDScript")
-SaveManager:SetFolder("XKIDScript/Config")
-FloatingButtonManager:SetFolder("XKIDScript/Floating")
-
-SaveManager:IgnoreThemeSettings()
+Window:SideBarDivider({})
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 1: SYSTEM HUB
 -- ══════════════════════════════════════════════════════════════
-local T_HOME = Window:AddTab({ Title = "System Hub", Icon = "solar/home-bold" })
+local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard", ShowTabTitle = true, Border = true })
 
-local secCredits = T_HOME:AddSection("Credits")
-secCredits:AddParagraph({ Title = "💎 XKID Engine v"..CURRENT_VERSION, Content = "Dibuat oleh @WTF.XKID\n📱 Tiktok: @wtf.xkid\n💬 Discord: @4Sharken" })
+local secCredits = T_HOME:Section({ Title = "Credits", Opened = true, Box = true })
+secCredits:Paragraph({ Title = "💎 XKID Engine", Desc = "v"..CURRENT_VERSION.." | @WTF.XKID" })
+secCredits:Paragraph({ Title = "📱 Tiktok", Desc = "@wtf.xkid" })
+secCredits:Paragraph({ Title = "💬 Discord", Desc = "@4Sharken" })
 
-local secDiscord = T_HOME:AddSection("Discord")
-secDiscord:AddButton({ Title = "Copy Discord Link", Icon = "solar/copy-bold", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
+local secSysAccess = T_HOME:Section({ Title = "System Access", Opened = true, Box = true })
+secSysAccess:Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
 
-local secStatus = T_HOME:AddSection("Live Monitor")
-local srvLabel = secStatus:AddParagraph({ Title = "Server Info", Content = "Loading..." })
-local netLabel = secStatus:AddParagraph({ Title = "Performance", Content = "Loading..." })
-local securityLabel = secStatus:AddParagraph({ Title = "Diagnostics", Content = "Protected" })
+local secDiscord = T_HOME:Section({ Title = "Discord", Opened = true, Box = true })
+secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Icon = "copy", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
+
+local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true, Box = true })
+local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
+local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
+
+local secSecHome = T_HOME:Section({ Title = "Security Check", Opened = true, Box = true })
+local securityLabel = secSecHome:Paragraph({ Title = "Diagnostics", Desc = "Protected" })
 
 task.spawn(function()
     task.wait(2)
+    local function lerpColor(c1, c2, t) return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t) end
+    local function toHex(c) return string.format("#%02X%02X%02X", c.R*255, c.G*255, c.B*255) end
+    local function makeBarA(val, maxVal, len, mode)
+        local fill = math.clamp(math.floor((val/maxVal)*len), 0, len); local res = ""
+        for i=1, len do if i <= fill then local t = (i-1)/math.max(1, len-1); local col = mode == "FPS" and lerpColor(Color3.fromRGB(0,255,255), Color3.fromRGB(0,100,255), t) or (t < 0.5 and lerpColor(Color3.fromRGB(0,255,0), Color3.fromRGB(255,255,0), t*2) or lerpColor(Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,0), (t-0.5)*2)); res = res .. '<font color="'..toHex(col)..'">▰</font>' else res = res .. '<font color="#444444">▱</font>' end end; return res
+    end
     while getgenv()._XKID_RUNNING do
         task.wait(0.5)
-        pcall(function()
-            if cachedMapName then
-                local pCount, mCount = #Players:GetPlayers(), Players.MaxPlayers
-                local uptime = formatTime(os.difftime(os.time(), START_TIME))
-                local job = game.JobId ~= "" and game.JobId:sub(1, 8).."..." or "N/A"
-                srvLabel:SetContent(string.format("Grid: %s\nNode: %s\nEntities: %d / %d\nSession: %s", cachedMapName, job, pCount, mCount, uptime))
-            end
-        end)
-        pcall(function()
-            local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999)
-            netLabel:SetContent(string.format("FPS: %d | PING: %dms", fps, ping))
-        end)
-        pcall(function()
-            local afk = State.Security.afkActive and "🟢" or "🔴"
-            local sl = State.Security.shiftLock and "🟢" or "🔴"
-            local vd = State.Security.voidConn and "🟢" or "🔴"
-            securityLabel:SetContent(string.format("AFK: %s | ShiftLock: %s | Void: %s", afk, sl, vd))
-        end)
+        pcall(function() if srvLabel and cachedMapName then local pCount, mCount = #Players:GetPlayers(), Players.MaxPlayers; local uptime = formatTime(os.difftime(os.time(), START_TIME)); local job = game.JobId ~= "" and game.JobId:sub(1, 8).."..." or "N/A"; srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s", cachedMapName, job, pCount, mCount, uptime)) end end)
+        pcall(function() if netLabel then local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999); local fpsBar = makeBarA(fps, 120, 14, "FPS"); local pingBar = makeBarA(ping, 200, 14, "PING"); netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping)) end end)
+        pcall(function() if securityLabel then local afk = State.Security.afkActive and "🟢 ONLINE" or "🔴 OFFLINE"; local sl = State.Security.shiftLock and "🟢 LOCKED" or "🔴 UNLOCKED"; local vd = State.Security.voidConn and "🟢 SECURED" or "🔴 OFFLINE"; local lag = State.Security.antiLag and "🟢 ACTIVE" or "🔴 INACTIVE"; securityLabel:SetDesc(string.format("[ ⏰ ] <font face='RobotoMono'>AFK Protocol :</font> %s\n[ 🔒 ] <font face='RobotoMono'>Shift Lock   :</font> %s\n[ 🕳️ ] <font face='RobotoMono'>Void Shield  :</font> %s\n[ ⚡ ] <font face='RobotoMono'>Frame Boost  :</font> %s", afk, sl, vd, lag)) end end)
     end
 end)
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 2: PLAYER CORE
 -- ══════════════════════════════════════════════════════════════
-local T_AV = Window:AddTab({ Title = "Player Core", Icon = "solar/user-circle-bold" })
+local T_AV = Window:Tab({ Title = "Player Core", Icon = "fingerprint", ShowTabTitle = true, Border = true })
 
-local secStateCtrl = T_AV:AddSection("State Control")
-secStateCtrl:AddButton({ Title = "Fast Respawn 💀", Icon = "solar/skull-bold", Callback = function() fastRespawn() end })
-secStateCtrl:AddButton({ Title = "Refresh Character", Icon = "solar/refresh-bold", Callback = function() refreshCharacter() end })
+local secStateCtrl = T_AV:Section({ Title = "State Control", Opened = true, Box = true })
+secStateCtrl:Button({ Title = "Fast Respawn 💀", Desc = "Respawn on death point", Icon = "skull", Callback = function() fastRespawn() end })
+secStateCtrl:Button({ Title = "Refresh Character", Desc = "Reload without kill", Icon = "refresh-cw", Callback = function() refreshCharacter() end })
 
-local secMov = T_AV:AddSection("Movement")
-secMov:AddSlider("WalkSpeed", { Title = "Walk Speed", Icon = "solar/running-bold", Default = 16, Min = 16, Max = 500, Rounding = 1, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
-secMov:AddSlider("JumpPower", { Title = "Jump Power", Icon = "solar/arrow-up-bold", Default = 50, Min = 50, Max = 500, Rounding = 1, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end end })
-secMov:AddToggle("InfJump", { Title = "Infinite Jump", Icon = "solar/infinity-bold", Default = false, Callback = function(v) if v then State.Move.infJ = TrackC(UIS.JumpRequest:Connect(function() if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end end)) else if State.Move.infJ then State.Move.infJ:Disconnect(); State.Move.infJ = nil end end end })
+local secMov = T_AV:Section({ Title = "Movement", Opened = true, Box = true })
+secMov:Slider({ Title = "Walk Speed", Desc = "Current: "..tostring(State.Move.ws), Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, IsTooltip = true, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
+secMov:Slider({ Title = "Jump Power", Desc = "Current: "..tostring(State.Move.jp), Step = 1, Value = { Min = 50, Max = 500, Default = 50 }, IsTooltip = true, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end end })
+secMov:Toggle({ Title = "Infinite Jump", Value = false, Type = "Toggle", Icon = "arrow-big-up", Callback = function(v) if v then State.Move.infJ = TrackC(UIS.JumpRequest:Connect(function() if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end end)) else if State.Move.infJ then State.Move.infJ:Disconnect(); State.Move.infJ = nil end end end})
 
-local secAbi = T_AV:AddSection("Abilities")
-secAbi:AddToggle("FlyToggle", { Title = "Fly ✈️", Icon = "solar/plain-3-bold", Default = false, Callback = function(v) toggleFly(v) end })
-secAbi:AddSlider("FlySpeed", { Title = "Fly Speed", Icon = "solar/speed-bold", Default = 60, Min = 10, Max = 300, Rounding = 1, Callback = function(v) State.Move.flyS = v end })
+local secAbi = T_AV:Section({ Title = "Abilities", Opened = true, Box = true })
+secAbi:Toggle({ Title = "Fly ✈️", Value = false, Type = "Toggle", Icon = "bird", Callback = function(v) toggleFly(v) end })
+secAbi:Slider({ Title = "Fly Speed", Desc = "Current: "..tostring(State.Move.flyS), Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, IsTooltip = true, Callback = function(v) State.Move.flyS = v end })
 local noclipConn = nil
-secAbi:AddToggle("NoClip", { Title = "NoClip", Icon = "solar/ghost-bold", Default = false, Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end end end })
+secAbi:Toggle({ Title = "NoClip", Value = false, Type = "Toggle", Icon = "ghost", Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end end end})
 local softFlingConn = nil
-secAbi:AddToggle("SoftFling", { Title = "Soft Fling ⚡", Icon = "solar/flash-bold", Default = false, Callback = function(v) State.SoftFling.active = v; State.Move.ncp = v; if v then if not softFlingConn then softFlingConn = TrackC(RS.Heartbeat:Connect(function() if not State.SoftFling.active then return end; local r = getRoot(); if not r then return end; pcall(function() r.AssemblyAngularVelocity = Vector3.new(0, State.SoftFling.power, 0) end); if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if softFlingConn then softFlingConn:Disconnect(); softFlingConn = nil end end end })
+secAbi:Toggle({ Title = "Soft Fling ⚡", Value = false, Type = "Toggle", Icon = "zap", Callback = function(v) State.SoftFling.active = v; State.Move.ncp = v; if v then if not softFlingConn then softFlingConn = TrackC(RS.Heartbeat:Connect(function() if not State.SoftFling.active then return end; local r = getRoot(); if not r then return end; pcall(function() r.AssemblyAngularVelocity = Vector3.new(0, State.SoftFling.power, 0); r.AssemblyLinearVelocity = Vector3.new(r.AssemblyLinearVelocity.X, 50, r.AssemblyLinearVelocity.Z) end); if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if softFlingConn then softFlingConn:Disconnect(); softFlingConn = nil end end end})
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 3: NAVIGATION
 -- ══════════════════════════════════════════════════════════════
-local T_TP = Window:AddTab({ Title = "Navigation", Icon = "solar/map-point-bold" })
+local T_TP = Window:Tab({ Title = "Navigation", Icon = "crosshair", ShowTabTitle = true, Border = true })
 
-local secDirTP = T_TP:AddSection("Direct Teleport")
-secDirTP:AddToggle("SmartTP", { Title = "Smart Touch/Click TP", Icon = "solar/mouse-bold", Default = false, Callback = toggleSmartTP })
+local secDirTP = T_TP:Section({ Title = "Direct Teleport", Opened = true, Box = true })
+secDirTP:Toggle({ Title = "Smart Touch/Click TP", Value = false, Type = "Toggle", Icon = "pointer", Callback = toggleSmartTP })
 
-local secTP = T_TP:AddSection("Target Teleport")
+local secTP = T_TP:Section({ Title = "Target Teleport", Opened = true, Box = true })
 local tpTarget = ""
-secTP:AddInput("SearchPlayer", { Title = "Search Player", Icon = "solar/magnifer-bold", Placeholder = "Type player name...", Callback = function(v) tpTarget = v end })
-secTP:AddButton({ Title = "Execute TP ⚡", Icon = "solar/plain-3-bold", Callback = function()
-    pcall(function()
-        if tpTarget == "" then notify("Teleport", "Input target!", 2); return end
-        local target = nil
-        for _, p in pairs(Players:GetPlayers()) do if p ~= LP and (string.find(string.lower(p.Name), string.lower(tpTarget)) or string.find(string.lower(p.DisplayName), string.lower(tpTarget))) then target = p; break end end
-        if not target or not target.Character then notify("Teleport", "Invalid Target", 2); return end
-        local tHrp = getCharRoot(target.Character); local myHrp = getRoot()
-        if not tHrp or not myHrp then return end
-        myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3) + Vector3.new(0, 2, 0)
-        notify("Teleport", "Teleported to "..target.DisplayName.." ✅", 2)
-    end)
-end })
-
+secTP:Input({ Title = "Search Player", Placeholder = "Type name...", Icon = "search", Callback = function(v) tpTarget = v end })
+secTP:Button({ Title = "Execute TP ⚡", Desc = "Teleport to target", Icon = "navigation", Callback = function() pcall(function() if tpTarget == "" then notify("Teleport", "Input target! ⚠️", 2); return end; local target = nil; for _, p in pairs(Players:GetPlayers()) do if p ~= LP and (string.find(string.lower(p.Name), string.lower(tpTarget)) or string.find(string.lower(p.DisplayName), string.lower(tpTarget))) then target = p; break end end; if not target or not target.Parent or not target.Character then notify("Teleport", "Invalid Target ❌", 2); return end; local tHrp = getCharRoot(target.Character); local tHum = target.Character:FindFirstChildOfClass("Humanoid"); local myHrp = getRoot(); if not tHrp or not tHum or not myHrp or tHum.Health <= 0 then notify("Teleport", "Target is dead/failed ⚠️", 2); return end; myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3) + Vector3.new(0, 2, 0); myHrp.AssemblyLinearVelocity = Vector3.zero; notify("Teleport", "Teleporting to "..target.DisplayName.." ✅", 2) end) end})
 local pDropOpts = getDisplayNames()
-local tpDropdown = secTP:AddDropdown("PlayerList", { Title = "Player List", Icon = "solar/users-group-rounded-bold", Values = pDropOpts, Default = pDropOpts[1], Multi = false, NoSearch = true, Callback = function(v) tpTarget = v end })
-secTP:AddButton({ Title = "🔄 Refresh Player List", Icon = "solar/refresh-bold", Callback = function()
-    local newValues = getDisplayNames()
-    RefreshDropdown(tpDropdown, newValues)
-    notify("System", "List updated ✅", 2)
-end })
+local tpDropdown = secTP:Dropdown({ Title = "Player List", Values = pDropOpts, SearchBarEnabled = false, Callback = function(v) tpTarget = v end })
+secTP:Button({ Title = "Refresh List", Icon = "refresh-cw", Callback = function() pDropOpts = getDisplayNames(); pcall(function() tpDropdown:Refresh(pDropOpts, true) end); notify("System", "List updated ✅", 2) end })
 
-local secLoc = T_TP:AddSection("Coordinates Cache")
+local secLoc = T_TP:Section({ Title = "Coordinates Cache", Opened = true, Box = true })
 local SavedLocs = {}
 for i = 1, 3 do local idx = i
-    secLoc:AddButton({ Title = "💾 Save Slot "..idx, Icon = "solar/diskette-bold", Callback = function() local r = getRoot(); if not r then return end; SavedLocs[idx] = r.CFrame; notify("Slot", "Slot "..idx.." saved ✅", 2) end })
-    secLoc:AddButton({ Title = "📍 Load Slot "..idx, Icon = "solar/map-arrow-up-bold", Callback = function() if not SavedLocs[idx] then notify("Error", "Slot is empty", 2); return end; local r = getRoot(); if not r then return end; r.CFrame = SavedLocs[idx]; notify("Slot", "Loaded slot "..idx.." ✅", 2) end })
+    secLoc:Button({ Title = "💾 Save Slot "..idx, Desc = "Save current position", Icon = "save", Callback = function() local r = getRoot(); if not r then notify("Error", "Character not found ⚠️", 2); return end; SavedLocs[idx] = r.CFrame; notify("Slot", "Slot "..idx.." saved ✅", 2) end })
+    secLoc:Button({ Title = "📍 Load Slot "..idx, Desc = "Teleport to saved position", Icon = "map-pin", Callback = function() if not SavedLocs[idx] then notify("Error", "Slot is empty ⚠️", 2); return end; local r = getRoot(); if not r then return end; r.CFrame = SavedLocs[idx]; notify("Slot", "Loaded slot "..idx.." ✅", 2) end })
 end
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 4: VISION
 -- ══════════════════════════════════════════════════════════════
-local T_CAM = Window:AddTab({ Title = "Vision", Icon = "solar/eye-bold" })
+local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus", ShowTabTitle = true, Border = true })
 
-local secZoom = T_CAM:AddSection("Zoom Override")
-secZoom:AddToggle("MaxZoom", { Title = "Max Zoom Out", Icon = "solar/magnifer-zoom-out-bold", Default = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end) end })
+local secZoom = T_CAM:Section({ Title = "Zoom Override", Opened = true, Box = true })
+secZoom:Toggle({ Title = "Max Zoom Out", Value = false, Type = "Toggle", Icon = "zoom-out", Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
 
-local secSP = T_CAM:AddSection("Spectator Mode")
+local secSP = T_CAM:Section({ Title = "Spectator Mode", Opened = true, Box = true })
 local specDropOpts = getDisplayNames()
-local specDropdown = secSP:AddDropdown("SpecTarget", { Title = "Select Target", Icon = "solar/user-speak-bold", Values = specDropOpts, Default = specDropOpts[1], Multi = false, NoSearch = true, Callback = function(v)
-    local p = findPlayerByDisplay(v)
-    if p then
-        Spec.target = p
-        if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ()
-            Spec.orbitYaw = math.deg(ry); Spec.orbitPitch = 20; Spec.fpYaw = math.deg(ry)
-        end
-        notify("Spectate", "Target: "..p.DisplayName.." ✅", 2)
-    end
-end })
-secSP:AddButton({ Title = "🔄 Refresh Target List", Icon = "solar/refresh-bold", Callback = function()
-    local newValues = getDisplayNames()
-    RefreshDropdown(specDropdown, newValues)
-    notify("System", "List updated ✅", 2)
-end })
-secSP:AddToggle("EnableSpec", { Title = "Enable Spectate", Icon = "solar/playlist-bold", Default = false, Callback = function(v) Spec.active = v; if v then if not Spec.target or not Spec.target.Character then Spec.active = false; return end; Spec.origFov = Cam.FieldOfView; startSpecCapture(); startSpecLoop() else stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov end end })
-secSP:AddToggle("FPMode", { Title = "First Person View", Icon = "solar/gameboy-bold", Default = false, Callback = function(v) Spec.mode = v and "first" or "third" end })
-secSP:AddSlider("SpecDist", { Title = "Distance", Icon = "solar/ruler-bold", Default = 8, Min = 3, Max = 30, Rounding = 1, Callback = function(v) Spec.dist = v end })
+local specDropdown = secSP:Dropdown({ Title = "Select Target", Values = specDropOpts, SearchBarEnabled = false, Callback = function(v) local p = findPlayerByDisplay(v); if p then Spec.target = p; if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ(); Spec.orbitYaw = math.deg(ry); Spec.orbitPitch = 20; Spec.fpYaw = math.deg(ry) end; notify("Spectate", "Target locked: "..p.DisplayName.." ✅", 2) end end})
+secSP:Button({ Title = "Refresh Target List", Icon = "refresh-cw", Callback = function() specDropOpts = getDisplayNames(); pcall(function() specDropdown:Refresh(specDropOpts, true) end); notify("System", "List updated ✅", 2) end })
+secSP:Toggle({ Title = "Enable Spectate", Value = false, Type = "Toggle", Icon = "eye", Callback = function(v) Spec.active = v; if v then if not Spec.target or not Spec.target.Parent or not Spec.target.Character or not Spec.target.Character:FindFirstChild("HumanoidRootPart") then notify("Spectate", "Select target first! ⚠️", 2); Spec.active = false; return end; Spec.origFov = Cam.FieldOfView; startSpecCapture(); startSpecLoop(); notify("Spectate", "Tracking "..Spec.target.DisplayName.." 👀", 2) else stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov; notify("Spectate", "Tracking stopped ❌", 2) end end})
+secSP:Toggle({ Title = "First Person View", Value = false, Type = "Checkbox", Icon = "view", Callback = function(v) Spec.mode = v and "first" or "third" end })
+secSP:Slider({ Title = "Distance", Desc = "Current: 8", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, IsTooltip = true, Callback = function(v) Spec.dist = v end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 5: FREECAM
 -- ══════════════════════════════════════════════════════════════
-local T_FREE = Window:AddTab({ Title = "Freecam", Icon = "solar/video-frame-bold" })
+local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video", ShowTabTitle = true, Border = true })
 
-local secFC = T_FREE:AddSection("Drone Engine")
-secFC:AddToggle("EnableFC", { Title = "Enable Freecam", Icon = "solar/drone-bold", Default = false, Callback = function(v) FC.active = v; if v then local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry); local hrp = getRoot(); if hrp then FC.savedCF = hrp.CFrame; pcall(function() if FC.lockGyro then FC.lockGyro:Destroy() end end); pcall(function() if FC.lockPos then FC.lockPos:Destroy() end end); FC.lockGyro = Instance.new("BodyGyro", hrp); FC.lockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9); FC.lockPos = Instance.new("BodyPosition", hrp); FC.lockPos.MaxForce = Vector3.new(9e9, 9e9, 9e9); hrp.Anchored = true end; FC.origFov = Cam.FieldOfView; startFreecamCapture(); startFreecamLoop(); if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end else fullCleanupFreecam() end end })
-secFC:AddSlider("FCSpeed", { Title = "Camera Speed", Icon = "solar/speed-bold", Default = 3, Min = 1, Max = 20, Rounding = 1, Callback = function(v) FC.speed = v end })
-secFC:AddSlider("FCSens", { Title = "Sensitivity", Icon = "solar/tuning-bold", Default = 0.25, Min = 0.1, Max = 1.0, Rounding = 2, Callback = function(v) FC.sens = v end })
+local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true, Box = true })
+secFC:Toggle({ Title = "Enable Freecam", Value = false, Type = "Toggle", Icon = "camera", Callback = function(v) FC.active = v; if v then local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry); local hrp = getRoot(); if hrp then FC.savedCF = hrp.CFrame; pcall(function() if FC.lockGyro then FC.lockGyro:Destroy() end end); pcall(function() if FC.lockPos then FC.lockPos:Destroy() end end); FC.lockGyro = Instance.new("BodyGyro", hrp); FC.lockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9); FC.lockGyro.CFrame = hrp.CFrame; FC.lockPos = Instance.new("BodyPosition", hrp); FC.lockPos.MaxForce = Vector3.new(9e9, 9e9, 9e9); FC.lockPos.Position = hrp.Position; hrp.Anchored = true end; FC.origFov = Cam.FieldOfView; startFreecamCapture(); startFreecamLoop(); if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end; notify("Freecam", "Drone deployed ✅", 2) else fullCleanupFreecam(); notify("Freecam", "Drone recalled ❌", 2) end end})
+secFC:Slider({ Title = "Camera Speed", Desc = "Current: 3", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, IsTooltip = true, Callback = function(v) FC.speed = v end })
+secFC:Slider({ Title = "Sensitivity", Desc = "Current: 0.25", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, IsTooltip = true, Callback = function(v) FC.sens = v end })
 
-local secCine = T_FREE:AddSection("Cinematic Mode")
-secCine:AddToggle("HideUI", { Title = "Hide All UI", Icon = "solar/eye-closed-bold", Default = false, Callback = function(v)
+-- ══════════════════════════════════════════════════════════════
+--  CINEMATIC MODE
+-- ══════════════════════════════════════════════════════════════
+local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true, Box = true })
+secCine:Toggle({ Title = "Hide All UI", Value = false, Type = "Toggle", Icon = "monitor-off", Callback = function(v)
     if v then
         State.Cinema.hideUI = true; State.Cinema.cachedGuis = {}
         for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end); notify("Cinematic", "UI Hidden 🎬", 2)
     else
         State.Cinema.hideUI = false
         for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end); notify("Cinematic", "UI Restored ✅", 2)
     end
-end })
+end})
+secCine:Toggle({ Title = "Show Nametag", Value = true, Type = "Toggle", Icon = "user", Callback = function(v)
+    if v then
+        if State.Cinema.nametagConn then State.Cinema.nametagConn:Disconnect(); State.Cinema.nametagConn = nil end
+        State.Cinema.hideNametag = false
+        for _, p in ipairs(Players:GetPlayers()) do if p == LP then continue end; if p.Character then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end; for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") and desc.Parent then desc.Enabled = true end end end end
+        notify("Cinematic", "Nametags visible ✅", 2)
+    else
+        State.Cinema.hideNametag = true
+        for _, p in ipairs(Players:GetPlayers()) do if p == LP then continue end; if p.Character then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end; for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") then desc.Enabled = false end end end end
+        if State.Cinema.nametagConn then State.Cinema.nametagConn:Disconnect() end
+        State.Cinema.nametagConn = TrackC(RS.Heartbeat:Connect(function() for _, p in ipairs(Players:GetPlayers()) do if p == LP then continue end; if p.Character then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum and hum.DisplayDistanceType ~= Enum.HumanoidDisplayDistanceType.None then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end; for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") and desc.Enabled then desc.Enabled = false end end end end end))
+        notify("Cinematic", "Nametags hidden 🙈", 2)
+    end
+end})
+secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Type = "Toggle", Icon = "message-square", Callback = function(v)
+    if v then
+        if State.Cinema.bubbleConn then State.Cinema.bubbleConn:Disconnect(); State.Cinema.bubbleConn = nil end
+        State.Cinema.hideBubble = false
+        for _, p in ipairs(Players:GetPlayers()) do if p.PlayerGui then for _, v in ipairs(p.PlayerGui:GetDescendants()) do if v:IsA("BillboardGui") then v.Enabled = true end end end end
+        notify("Cinematic", "Bubble chat visible 💬", 2)
+    else
+        State.Cinema.hideBubble = true
+        for _, p in ipairs(Players:GetPlayers()) do if p.PlayerGui then for _, v in ipairs(p.PlayerGui:GetDescendants()) do if v:IsA("BillboardGui") then v.Enabled = false end end end end
+        if State.Cinema.bubbleConn then State.Cinema.bubbleConn:Disconnect() end
+        State.Cinema.bubbleConn = TrackC(RS.Heartbeat:Connect(function() for _, p in ipairs(Players:GetPlayers()) do if p.PlayerGui then for _, v in ipairs(p.PlayerGui:GetDescendants()) do if v:IsA("BillboardGui") and v.Enabled then v.Enabled = false end end end end end))
+        notify("Cinematic", "Bubble chat hidden 🙊", 2)
+    end
+end})
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 6: FILTER
 -- ══════════════════════════════════════════════════════════════
-local T_WO = Window:AddTab({ Title = "Filter", Icon = "solar/layers-bold" })
+local T_WO = Window:Tab({ Title = "Filter", Icon = "layers", ShowTabTitle = true, Border = true })
 
-local secFilter = T_WO:AddSection("Presets")
+local secFilter = T_WO:Section({ Title = "Presets", Opened = true, Box = true })
 local function resetFilterOnly() for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end end
 local function applyFilter(filter)
-    resetFilterOnly(); if filter == "Default" then return end
+    resetFilterOnly(); if filter == "Default" then notify("Filter", "Reset to default ✅", 2); return end
     local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"
     local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"; bloom.Intensity = 0; bloom.Size = 24
-    if filter == "Full Bright HD" then cc:Destroy(); bloom:Destroy(); Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12; Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-    elseif filter == "Mendung HD" then cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15; bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7
+    if filter == "Mendung HD" then cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15; bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7
     elseif filter == "Cool Blue HD" then cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2
+    elseif filter == "Soft Fade HD" then cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3
+    elseif filter == "Adaptif Langit HD" then cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05; bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5
     elseif filter == "Edgy HD" then cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1; bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8
-    elseif filter == "Senja" then cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05; bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5
+    elseif filter == "Full Bright HD" then cc:Destroy(); bloom:Destroy(); Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12; Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    elseif filter == "Soft Pastel HD" then cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05; bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
+    elseif filter == "Cinematic Soft" then cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 17
+    elseif filter == "Ultra HD" then cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
+    elseif filter == "Realistic" then cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
     elseif filter == "Night HD" then cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1
+    elseif filter == "Senja" then cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05; bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5
+    elseif filter == "Cinematic Film" then cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05; bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16
+    elseif filter == "Golden Hour" then cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5
+    elseif filter == "Moody Blue" then cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1; bloom.Intensity = 0.1; Lighting.ClockTime = 2
     end
     notify("Filter", filter.." applied ✅", 2)
 end
-secFilter:AddDropdown("SelectFilter", { Title = "Select Filter", Icon = "solar/pallete-bold", Values = {"Default","Full Bright HD","Mendung HD","Cool Blue HD","Edgy HD","Senja","Night HD"}, Default = "Default", Multi = false, NoSearch = true, Callback = function(v) applyFilter(v) end })
+secFilter:Dropdown({ Title = "Select Filter", Values = {"Default", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue"}, Value = "Default", SearchBarEnabled = false, Callback = function(v) applyFilter(v) end })
 
-local secAtmos = T_WO:AddSection("Atmosphere")
-secAtmos:AddSlider("Brightness", { Title = "Brightness", Icon = "solar/sun-bold", Default = 5, Min = 0, Max = 10, Rounding = 1, Callback = function(v) Lighting.Brightness = v end })
-secAtmos:AddSlider("ClockTime", { Title = "ClockTime", Icon = "solar/clock-circle-bold", Default = 14, Min = 0, Max = 24, Rounding = 1, Callback = function(v) Lighting.ClockTime = v end })
-secAtmos:AddButton({ Title = "Reset Atmosphere", Icon = "solar/refresh-bold", Callback = function() Lighting.Brightness = 5; Lighting.ClockTime = 14; resetFilterOnly() end })
+local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false, Box = true })
+local bloomActive = false
+secAtmos:Toggle({ Title = "Bloom ON/OFF", Value = false, Type = "Toggle", Icon = "sparkles", Callback = function(v) bloomActive = v; if v then local bloom = nil; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") and e.Name == "_XKID_FILTER" then bloom = e; break end end; if not bloom then bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER" end; bloom.Intensity = 0.5; notify("Atmosphere", "Bloom activated ✨", 2) else for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e:Destroy() end end; notify("Atmosphere", "Bloom removed", 2) end end})
+secAtmos:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = {Min = 0, Max = 5, Default = 0.5}, IsTooltip = true, Callback = function(v) if not bloomActive then return end; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e.Intensity = v; break end end end })
+secAtmos:Slider({ Title = "Brightness", Step = 0.1, Value = {Min = 0, Max = 10, Default = 5}, IsTooltip = true, Callback = function(v) Lighting.Brightness = v end })
+secAtmos:Slider({ Title = "Exposure", Step = 0.1, Value = {Min = -5, Max = 5, Default = 0}, IsTooltip = true, Callback = function(v) Lighting.ExposureCompensation = v end })
+secAtmos:Slider({ Title = "ClockTime", Step = 0.1, Value = {Min = 0, Max = 24, Default = 14}, IsTooltip = true, Callback = function(v) Lighting.ClockTime = v end })
+secAtmos:Slider({ Title = "Contrast", Step = 0.1, Value = {Min = -2, Max = 2, Default = 0}, IsTooltip = true, Callback = function(v) for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = v; return end end; local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.Contrast = v end })
+secAtmos:Button({ Title = "Reset Atmosphere", Icon = "rotate-ccw", Callback = function() Lighting.Brightness = 5; Lighting.ExposureCompensation = 0; Lighting.ClockTime = 14; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("ColorCorrectionEffect") then e.Contrast = 0 end; if e:IsA("BloomEffect") then e:Destroy() end end; bloomActive = false; notify("Atmosphere", "Reset to default ✅", 2) end })
+
+local secGfx = T_WO:Section({ Title = "Graphics", Opened = false, Box = true })
+local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Level09",[6]="Level11",[7]="Level13",[8]="Level15",[9]="Level17",[10]="Level21"}
+secGfx:Slider({ Title = "Quality Level", Step = 1, Value = {Min = 1, Max = 10, Default = 1}, IsTooltip = true, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
+secGfx:Dropdown({ Title = "FPS Cap", Values = {"30", "60", "120", "144", "240", "Unlimited"}, Value = "60", SearchBarEnabled = false, Callback = function(v) if v == "Unlimited" then pcall(function() setfpscap(9999) end) else pcall(function() setfpscap(tonumber(v)) end) end; notify("Graphics", "FPS cap: "..v, 2) end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 7: RADAR
 -- ══════════════════════════════════════════════════════════════
-local T_ESP = Window:AddTab({ Title = "Radar", Icon = "solar/cpu-bold" })
+local T_ESP = Window:Tab({ Title = "Radar", Icon = "cpu", ShowTabTitle = true, Border = true })
 
-local secESP = T_ESP:AddSection("Detection System")
-secESP:AddToggle("EnableESP", { Title = "Enable Radar", Icon = "solar/radar-bold", Default = false, Callback = function(v) State.ESP.active = v end })
-secESP:AddDropdown("TracerMode", { Title = "Tracer Origin", Icon = "solar/target-bold", Values = {"Bottom","Center","Mouse","OFF"}, Default = "Bottom", Multi = false, NoSearch = true, Callback = function(v) State.ESP.tracerMode = v end })
-secESP:AddToggle("HighlightESP", { Title = "Highlight Entity", Icon = "solar/lightbulb-bold", Default = false, Callback = function(v) State.ESP.highlightMode = v end })
-secESP:AddSlider("ScanDist", { Title = "Scan Distance", Icon = "solar/ruler-bold", Default = 300, Min = 50, Max = 500, Rounding = 1, Callback = function(v) State.ESP.maxDrawDistance = v end })
+local secESP = T_ESP:Section({ Title = "Detection System", Opened = true, Box = true })
+secESP:Toggle({ Title = "Enable Radar", Value = false, Type = "Toggle", Icon = "radar", Callback = function(v) State.ESP.active = v; if not v and State.ESP.cache then for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end) end end; notify("Radar", v and "System active ✅" or "System disabled ❌", 2) end})
+secESP:Dropdown({ Title = "Tracer Origin", Values = {"Bottom","Center","Mouse","OFF"}, Value = "Bottom", SearchBarEnabled = false, Callback = function(v) State.ESP.tracerMode = v end })
+secESP:Toggle({ Title = "Highlight Entity", Value = false, Type = "Checkbox", Icon = "highlighter", Callback = function(v) State.ESP.highlightMode = v end })
+secESP:Slider({ Title = "Scan Distance", Desc = "Current: 300", Step = 10, Value = { Min = 50, Max = 500, Default = 300 }, IsTooltip = true, Callback = function(v) State.ESP.maxDrawDistance = v end })
+
+local secESPColor = T_ESP:Section({ Title = "Color Config", Opened = false, Box = true })
+secESPColor:Dropdown({ Title="Normal Color", Values={"Hijau","Merah","Biru","Kuning","Ungu","Cyan","Orange","Pink","Putih","Hitam"}, Value="Hijau", SearchBarEnabled = false, Callback=function(v) if colorMap[v] then State.ESP.tracerColor_N=colorMap[v] end end })
+secESPColor:Dropdown({ Title="Suspect Color", Values={"Merah","Hijau","Biru","Kuning","Ungu","Cyan","Orange","Pink","Putih","Hitam","Crimson"}, Value="Crimson", SearchBarEnabled = false, Callback=function(v) if colorMap[v] then State.ESP.tracerColor_S=colorMap[v]; State.ESP.boxColor_S=colorMap[v] end end })
+secESPColor:Dropdown({ Title="Glitch Acc Color", Values={"Orange","Merah","Hijau","Biru","Kuning","Ungu","Cyan","Pink","Putih","Hitam"}, Value="Orange", SearchBarEnabled = false, Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G=colorMap[v]; State.ESP.boxColor_G=colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY
+--  TAB 8: UTILITY (CHAT LOGGER)
 -- ══════════════════════════════════════════════════════════════
-local T_UTIL = Window:AddTab({ Title = "Utility", Icon = "solar/terminal-bold" })
+local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal", ShowTabTitle = true, Border = true })
 
-local secChat = T_UTIL:AddSection("Chat Logger")
-secChat:AddToggle("EnableLogger", { Title = "Enable Logger", Icon = "solar/chat-round-bold", Default = false, Callback = function(v) State.Utility.chatLog = v end })
-secChat:AddToggle("SilentMode", { Title = "Silent Mode", Icon = "solar/volume-cross-bold", Default = false, Callback = function(v) State.Utility.chatSilent = v end })
+local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true, Box = true })
+secChat:Toggle({ Title = "Enable Logger", Value = false, Type = "Toggle", Icon = "file-text", Callback = function(v) State.Utility.chatLog = v; if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end; notify("Utility", v and "Logger ON ✅" or "Logger OFF ❌", 2) end })
+secChat:Toggle({ Title = "Silent Mode", Value = false, Type = "Checkbox", Icon = "volume-x", Callback = function(v) State.Utility.chatSilent = v end })
 
-local chatDropOpts = getDisplayNames()
-chatTargetDrop = secChat:AddDropdown("ChatTarget", { Title = "Select Target", Icon = "solar/user-speak-bold", Values = chatDropOpts, Default = chatDropOpts[1], Multi = false, NoSearch = true, Callback = function(v)
-    local p = findPlayerByDisplay(v)
-    if p then State.Utility.chatTarget = p; pcall(function() chatTargetLabel:SetContent("Tracking: "..p.DisplayName) end) end
-end })
-chatTargetLabel = secChat:AddParagraph({ Title = "Target", Content = "None" })
-secChat:AddButton({ Title = "Clear Target", Icon = "solar/close-circle-bold", Callback = function() State.Utility.chatTarget = nil; pcall(function() chatTargetLabel:SetContent("None") end); pcall(function() chatTargetDrop:SetValues(getDisplayNames()) end) end })
-secChat:AddButton({ Title = "🔄 Refresh List", Icon = "solar/refresh-bold", Callback = function() RefreshDropdown(chatTargetDrop, getDisplayNames()) end })
-chatLogPanel = secChat:AddParagraph({ Title = "Console", Content = "Belum ada chat..." })
-secChat:AddButton({ Title = "Clear Log", Icon = "solar/trash-bin-bold", Callback = function() State.Utility.chatHistory = {}; pcall(function() chatLogPanel:SetContent("Belum ada chat...") end) end })
+chatTargetLabel = secChat:Paragraph({ Title = "Target", Desc = "None" })
+chatTargetDrop = secChat:Dropdown({ Title = "Select Target", Values = getDisplayNames(), SearchBarEnabled = false, Callback = function(v) local p = findPlayerByDisplay(v); if p then State.Utility.chatTarget = p; pcall(function() chatTargetLabel:SetDesc("Tracking: "..p.DisplayName) end); notify("Chat", "Tracking: "..p.DisplayName.." ✅", 2) end end})
+secChat:Button({ Title = "Clear Target", Icon = "x", Callback = function() State.Utility.chatTarget = nil; pcall(function() chatTargetLabel:SetDesc("None") end); pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end); notify("Chat", "Target cleared ❌", 2) end })
+secChat:Button({ Title = "Refresh List", Icon = "refresh-cw", Callback = function() pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end) end })
+chatLogPanel = secChat:Paragraph({ Title = "Console", Desc = "Belum ada chat..." })
+secChat:Button({ Title = "Clear Log", Icon = "trash-2", Callback = function() State.Utility.chatHistory = {}; pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end); notify("Utility", "Log cleared ❌", 2) end })
 
-local secMisc = T_UTIL:AddSection("Data Extraction")
-secMisc:AddButton({ Title = "Copy JobID", Icon = "solar/copy-bold", Callback = function() pcall(function() setclipboard(game.JobId) end); notify("Utility", "JobID copied ✅", 2) end })
+local secMisc = T_UTIL:Section({ Title = "Data Extraction", Opened = true, Box = true })
+secMisc:Button({ Title = "Copy JobID", Desc = "Copy server Job ID", Icon = "copy", Callback = function() pcall(function() setclipboard(game.JobId) end); notify("Utility", "JobID copied ✅", 2) end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 9: SECURITY
 -- ══════════════════════════════════════════════════════════════
-local T_SEC = Window:AddTab({ Title = "Security", Icon = "solar/shield-bold" })
+local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert", ShowTabTitle = true, Border = true })
 
-local secProt = T_SEC:AddSection("Protection Protocols")
-secProt:AddToggle("AntiAFK", { Title = "Anti AFK / Anti Kick 🛡️", Icon = "solar/shield-check-bold", Default = true, Callback = function(v) if v then startAntiAFK() else stopAntiAFK() end end })
-secProt:AddToggle("AntiVoid", { Title = "Anti Void 🕳️", Icon = "solar/black-hole-bold", Default = false, Callback = function(v) if v then State.Security.voidConn = TrackC(RS.Heartbeat:Connect(function() local hrp = getRoot(); if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then hrp.AssemblyLinearVelocity = Vector3.zero; hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0) end end)) else if State.Security.voidConn then State.Security.voidConn:Disconnect(); State.Security.voidConn = nil end end end })
-secProt:AddButton({ Title = "Stuck Fix 🔧", Icon = "solar/wrench-bold", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end end })
+local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true, Box = true })
+secProt:Toggle({ Title = "Anti AFK / Anti Kick 🛡️", Value = true, Type = "Toggle", Icon = "shield-check", Callback = function(v) if v then startAntiAFK() else stopAntiAFK() end end })
+secProt:Toggle({ Title = "Anti Void 🕳️", Value = false, Type = "Toggle", Icon = "alert-triangle", Callback = function(v) if v then State.Security.voidConn = TrackC(RS.Heartbeat:Connect(function() local hrp = getRoot(); if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then hrp.AssemblyLinearVelocity = Vector3.zero; hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0); notify("Security", "Saved from void!", 2) end end)) else if State.Security.voidConn then State.Security.voidConn:Disconnect(); State.Security.voidConn = nil end end; notify("Security", v and "Anti-Void enabled" or "Anti-Void disabled", 2) end})
+secProt:Button({ Title = "Stuck Fix 🔧", Desc = "Get unstuck from walls/ground", Icon = "wrench", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied ✅", 2) end })
 
-local secSrv = T_SEC:AddSection("Server Control")
-secSrv:AddButton({ Title = "Force Rejoin", Icon = "solar/restart-bold", Callback = function() pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
-secSrv:AddButton({ Title = "Server Hop", Icon = "solar/globus-bold", Callback = function() pcall(function() local req = (syn and syn.request) or (http and http.request) or http_request or request; if not req then return end; local res = req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100", Method = "GET"}); if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body); if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); return end end end end end) end })
+local secSrv = T_SEC:Section({ Title = "Server Control", Opened = true, Box = true })
+secSrv:Toggle({ Title = "Auto Rejoin 🔄", Value = false, Type = "Toggle", Icon = "refresh-cw", Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then notify("Security", "Rejoining...", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)); notify("Security", "Auto Rejoin standby ✅", 2) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end; notify("Security", "Auto Rejoin disabled ❌", 2) end end})
+secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Icon = "log-in", Callback = function() notify("System", "Rejoining...", 2); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
+secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Icon = "shuffle", Callback = function() notify("System", "Searching servers...", 2); pcall(function() local req = (syn and syn.request) or (http and http.request) or http_request or request; if not req then notify("Error", "HTTP failed", 2); return end; local res = req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100", Method = "GET"}); if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body); if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); notify("Server Hop", "Joining server with "..v.playing.." players ✅", 2); return end end end; notify("Server Hop", "No server found", 2) end end) end})
 
-local secCamLock = T_SEC:AddSection("Camera Lock")
-secCamLock:AddToggle("ShiftLock", { Title = "Force Shift Lock", Icon = "solar/lock-bold", Default = false, Callback = function(v) toggleShiftLock(v) end })
+local secPerf = T_SEC:Section({ Title = "Performance Tweaks", Opened = true, Box = true })
+local advCache = { level = nil, shadows = true, brightness = 5, clockTime = 14, fogEnd = 100000, mats = {}, texs = {} }
+secPerf:Toggle({ Title = "FPS Boost ⚡", Value = false, Type = "Toggle", Icon = "zap", Callback = function(v) State.Security.antiLag = v; if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end); advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness; advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd; pcall(function() settings().Rendering.QualityLevel = 1 end); Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000; for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end end; notify("Performance", "FPS Boost activated", 2) else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end); Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness; Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd; for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end; for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end; advCache.mats = {}; advCache.texs = {}; notify("Performance", "Graphics restored", 2) end end})
+
+local secCamLock = T_SEC:Section({ Title = "Camera Lock", Opened = true, Box = true })
+secCamLock:Toggle({ Title = "Force Shift Lock", Value = false, Type = "Toggle", Icon = "lock", Callback = function(v) toggleShiftLock(v) end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 10: CONFIG
 -- ══════════════════════════════════════════════════════════════
-local T_SET = Window:AddTab({ Title = "Config", Icon = "solar/settings-bold" })
-InterfaceManager:BuildInterfaceSection(T_SET)
-SaveManager:BuildConfigSection(T_SET)
-FloatingButtonManager:BuildConfigSection(T_SET)
+local T_SET = Window:Tab({ Title = "Config", Icon = "settings", ShowTabTitle = true, Border = true })
 
--- ══════════════════════════════════════════════════════════════
---  FLOATING BUTTON (MOBILE + PC MINIMIZE)
--- ══════════════════════════════════════════════════════════════
-local floaterGui = Instance.new("ScreenGui")
-floaterGui.Name = "XKID_Floater"
-floaterGui.Parent = LP:WaitForChild("PlayerGui")
-floaterGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-floaterGui.ResetOnSpawn = false
+local secCfg = T_SET:Section({ Title = "File Management", Opened = true, Box = true })
+local cfgName = "XKID_Config"; local currentConfig = "No config"
+secCfg:Input({ Title = "Config Name", Placeholder = "XKID_Config", Value = "XKID_Config", Callback = function(v) cfgName = v end })
+secCfg:Button({ Title = "💾 Save Config", Desc = "Save current settings", Icon = "save", Callback = function() pcall(function() if makefolder and writefile then if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local data = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS }, ESP = { tracerMode = State.ESP.tracerMode, maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag } }; writefile("XKID_HUB/"..cfgName..".json", HttpService:JSONEncode(data)); notify("Config", "Data saved ✅", 2) end end) end})
+local configDrop = secCfg:Dropdown({ Title = "📂 Load Config", Values = getConfigList(), SearchBarEnabled = false, Callback = function(selected) currentConfig = selected; if selected == "No config" then return end; pcall(function() if isfile and readfile and isfile("XKID_HUB/"..selected..".json") then local data = HttpService:JSONDecode(readfile("XKID_HUB/"..selected..".json")); if data then if data.Move then State.Move.ws = data.Move.ws or 16; State.Move.jp = data.Move.jp or 50; State.Move.flyS = data.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if data.ESP then State.ESP.tracerMode = data.ESP.tracerMode or "Bottom"; State.ESP.maxDrawDistance = data.ESP.maxDrawDistance or 300; State.ESP.highlightMode = data.ESP.highlightMode or false end; if data.Security and data.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(data.Security.shiftLock) end; notify("Config", "Data loaded ✅", 2) end end end) end})
+secCfg:Button({ Title = "🗑️ Delete Config", Desc = "Delete selected config file", Icon = "trash-2", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" then pcall(function() if isfile and delfile and isfile("XKID_HUB/"..currentConfig..".json") then delfile("XKID_HUB/"..currentConfig..".json"); notify("Config", currentConfig .. " deleted 🗑️", 2); pcall(function() configDrop:Refresh(getConfigList(), true) end); currentConfig = "No config" end end) else notify("Config", "Select config from Load List first! ⚠️", 2) end end})
+secCfg:Button({ Title = "🔄 Refresh Files", Desc = "Refresh config list", Icon = "refresh-cw", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end); notify("Config", "Files updated ✅", 2) end })
 
-local floaterBtn = Instance.new("TextButton")
-floaterBtn.Name = "FloaterButton"
-floaterBtn.Parent = floaterGui
-floaterBtn.BackgroundColor3 = Color3.fromRGB(220, 20, 60)
-floaterBtn.Position = UDim2.new(0.85, 0, 0.5, 0)
-floaterBtn.Size = UDim2.new(0, 48, 0, 48)
-floaterBtn.Text = "🔄"
-floaterBtn.TextSize = 24
-floaterBtn.Visible = false
-Instance.new("UICorner", floaterBtn).CornerRadius = UDim.new(1, 0)
-
-local floaterStroke = Instance.new("UIStroke", floaterBtn)
-floaterStroke.Thickness = 2
-floaterStroke.Color = Color3.fromRGB(255, 255, 255)
-
-task.spawn(function()
-    local hue = 0
-    while getgenv()._XKID_RUNNING do
-        hue = (hue + 0.01) % 1
-        floaterBtn.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
-        floaterStroke.Color = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
-        task.wait(0.03)
-    end
-end)
-
-local function makeFloaterDraggable(btn)
-    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
-    btn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = btn.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    btn.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    UIS.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-end
-makeFloaterDraggable(floaterBtn)
-
-floaterBtn.MouseButton1Click:Connect(function()
-    Window:Minimize()
-    floaterBtn.Visible = true
-end)
-
-local function onMinimize()
-    floaterBtn.Visible = true
-end
-
-local function onRestore()
-    floaterBtn.Visible = false
-end
-
--- Deteksi minimize/restore Fluent
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        pcall(function()
-            local fluentGui = CoreGui:FindFirstChild("Fluent")
-            if fluentGui then
-                local mainFrame = fluentGui:FindFirstChild("MainFrame") or fluentGui:FindFirstChild("Main")
-                if mainFrame then
-                    if mainFrame.Visible == false and not floaterBtn.Visible then
-                        onMinimize()
-                    elseif mainFrame.Visible == true and floaterBtn.Visible then
-                        onRestore()
-                    end
-                end
-            end
-        end)
-        task.wait(0.5)
-    end
-end)
-
-FloatingButtonManager:AddButton("XKID_Floater", floaterBtn, false, false)
+local secTheme = T_SET:Section({ Title = "Interface", Opened = true, Box = true })
+secTheme:Dropdown({ Title = "Theme", Values = (function() local n = {}; pcall(function() for name in pairs(WindUI:GetThemes()) do table.insert(n, name) end end); table.sort(n); if #n == 0 then n = {"Midnight","Dark","Light","Ocean","Sunset","Forest","Crimson"} end; return n end)(), Value = "Midnight", SearchBarEnabled = false, Callback = function(s) pcall(function() WindUI:SetTheme(s) end) end })
+secTheme:Paragraph({ Title = "💡 Toggle Info", Desc = "Use the floating XKID button to open/close the window. Shortcut keys are disabled for mobile compatibility." })
 
 -- ══════════════════════════════════════════════════════════════
 --  STARTUP
 -- ══════════════════════════════════════════════════════════════
-SaveManager:LoadAutoloadConfig()
-FloatingButtonManager:LoadAutoloadConfig()
-pcall(function() Window:SelectTab(1) end)
-notify("System", "XKID Engine v"..CURRENT_VERSION.." - RGB Edition Ready ⚡", 3)
-print("✅ XKID Engine v"..CURRENT_VERSION.." - Fluent RGB Edition")
+pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+pcall(function() Window:SelectTab(T_HOME) end)
+notify("System", "XKID Engine v"..CURRENT_VERSION.." Ready ⚡", 3)
+print("✅ XKID Engine v"..CURRENT_VERSION.." - WindUI Boreal Edition")
