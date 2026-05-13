@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v2.0.3
+  📌 v2.0.4 - FIXED TABS
 ]]
 
 local RS = game:GetService("RunService")
@@ -27,7 +27,7 @@ local LP = Players.LocalPlayer
 local Cam = workspace.CurrentCamera
 local onMobile = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "2.0.3"
+local CURRENT_VERSION = "2.0.4"
 
 -- ══════════════════════════════════════════════════════════════
 --  0. CLEANUP AWAL
@@ -837,7 +837,7 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  MAIN WINDOW
+--  MAIN WINDOW (FIXED TABS)
 -- ══════════════════════════════════════════════════════════════
 task.wait(0.3)
 local Window = WindUI:CreateWindow({
@@ -850,26 +850,14 @@ local Window = WindUI:CreateWindow({
 })
 getgenv()._XKID_INSTANCE = Window.Instance; WindUI:SetTheme("Crimson")
 
-task.spawn(function()
-    local hue = 0
-    while getgenv()._XKID_RUNNING do
-        hue = (hue + 0.005) % 1
-        local seq = ColorSequence.new(Color3.fromHSV(hue, 1, 1), Color3.fromHSV((hue + 0.5) % 1, 1, 1))
-        pcall(function()
-            local wind = CoreGui:FindFirstChild("WindUI"); if not wind then return end
-            local openBtn = wind:FindFirstChild("OpenButton", true); if not openBtn then return end
-            local stroke = openBtn:FindFirstChildOfClass("UIStroke")
-            if stroke then local grad = stroke:FindFirstChildOfClass("UIGradient"); if not grad then grad = Instance.new("UIGradient", stroke) end; grad.Color = seq; grad.Rotation = (grad.Rotation + 5) % 360 end
-            local bgGrad = openBtn:FindFirstChildOfClass("UIGradient"); if bgGrad then bgGrad.Color = seq; bgGrad.Rotation = (bgGrad.Rotation + 2) % 360 end
-        end)
-        task.wait(0.03)
-    end
-end)
+-- Store all tabs in array for reference
+local tabs = {}
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 1: SYSTEM HUB
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard" })
+table.insert(tabs, T_HOME)
 T_HOME:Section({ Title = "Credits", Opened = true })
     :Paragraph({ Title = "💎 XKID Engine", Desc = "v"..CURRENT_VERSION.." | @WTF.XKID" })
     :Paragraph({ Title = "📱 Tiktok", Desc = "@wtf.xkid" })
@@ -903,6 +891,7 @@ end)
 --  TAB 2: PLAYER CORE
 -- ══════════════════════════════════════════════════════════════
 local T_AV = Window:Tab({ Title = "Player Core", Icon = "fingerprint" })
+table.insert(tabs, T_AV)
 T_AV:Section({ Title = "State Control", Opened = true }):Button({ Title = "Fast Respawn 💀", Desc = "Respawn on death point", Callback = function() fastRespawn() end })
 
 local secMov = T_AV:Section({ Title = "Movement", Opened = true })
@@ -941,6 +930,7 @@ end})
 --  TAB 3: NAVIGATION
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({ Title = "Navigation", Icon = "crosshair" })
+table.insert(tabs, T_TP)
 T_TP:Section({ Title = "Direct Teleport", Opened = true }):Toggle({ Title = "Smart Touch/Click TP", Value = false, Callback = toggleSmartTP })
 local secTP = T_TP:Section({ Title = "Target Teleport", Opened = true })
 local tpTarget = ""
@@ -960,6 +950,7 @@ end
 --  TAB 4: VISION
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus" })
+table.insert(tabs, T_CAM)
 T_CAM:Section({ Title = "Zoom Override", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
 local secSP = T_CAM:Section({ Title = "Spectator Mode", Opened = true })
 local specDropOpts = getDisplayNames()
@@ -973,6 +964,7 @@ secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Defaul
 --  TAB 5: FREECAM
 -- ══════════════════════════════════════════════════════════════
 local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video" })
+table.insert(tabs, T_FREE)
 local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true })
 secFC:Toggle({ Title = "Enable Freecam", Value = false, Callback = function(v)
     FC.active = v
@@ -1047,9 +1039,10 @@ secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: FILTER (FIXED)
+--  TAB 6: FILTER
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "Filter", Icon = "layers" })
+table.insert(tabs, T_WO)
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true })
 
 local function resetFilterOnly()
@@ -1096,6 +1089,7 @@ secGfx:Dropdown({ Title = "FPS Cap", Values = {"30","60","120","144","240","Unli
 --  TAB 7: RADAR
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "Radar", Icon = "cpu" })
+table.insert(tabs, T_ESP)
 local secESP = T_ESP:Section({ Title = "Detection System", Opened = true })
 secESP:Toggle({ Title = "Enable Radar", Value = false, Callback = function(v)
     State.ESP.active = v
@@ -1124,6 +1118,7 @@ secESPColor:Dropdown({ Title="Glitch Acc Color", Values={"Orange","Merah","Hijau
 --  TAB 8: UTILITY (CHAT LOGGER)
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal" })
+table.insert(tabs, T_UTIL)
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Callback = function(v) State.Utility.chatLog = v; if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end; notify("Utility", v and "Logger ON ✅" or "Logger OFF ❌", 2) end })
 secChat:Toggle({ Title = "Silent Mode", Value = false, Callback = function(v) State.Utility.chatSilent = v; notify("Utility", v and "Silent ON 🔇" or "Notification ON 🔊", 2) end })
@@ -1139,6 +1134,7 @@ secChat:Button({ Title = "Clear Log", Callback = function() State.Utility.chatHi
 --  TAB 9: SECURITY
 -- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert" })
+table.insert(tabs, T_SEC)
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true })
 secProt:Toggle({ Title = "Anti AFK / Anti Kick 🛡️", Value = true, Callback = function(v) if v then startAntiAFK() else stopAntiAFK() end end })
 secProt:Button({ Title = "Stuck Fix 🔧", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied ✅", 2) end })
@@ -1180,6 +1176,7 @@ T_SEC:Section({ Title = "Camera Lock", Opened = true }):Toggle({ Title = "Force 
 --  TAB 10: CONFIG
 -- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Config", Icon = "settings" })
+table.insert(tabs, T_SET)
 local secCfg = T_SET:Section({ Title = "File Management", Opened = true })
 local cfgName = "XKID_Config"; local currentConfig = "No config"
 secCfg:Input({ Title = "Config Name", Default = "XKID_Config", Callback = function(v) cfgName = v end })
@@ -1234,9 +1231,24 @@ secTheme:Toggle({ Title = "Transparency", Value = true, Callback = function(s) S
 secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callback = function(v) State.Settings.toggleKey = typeof(v) == "EnumItem" and v.Name or v; Window:SetToggleKey(typeof(v) == "EnumItem" and v or Enum.KeyCode[v]) end })
 
 -- ══════════════════════════════════════════════════════════════
+--  FORCE UI REFRESH - Ensure all tabs are visible
+-- ══════════════════════════════════════════════════════════════
+task.wait(0.5)
+-- Force select the first tab to initialize the sidebar
+pcall(function() Window:SelectTab(T_HOME) end)
+task.wait(0.1)
+-- Force rebuild sidebar by cycling through tabs
+for i, tab in ipairs(tabs) do
+    pcall(function() 
+        Window:SelectTab(tab)
+        task.wait(0.05)
+    end)
+end
+pcall(function() Window:SelectTab(T_HOME) end)
+
+-- ══════════════════════════════════════════════════════════════
 --  STARTUP
 -- ══════════════════════════════════════════════════════════════
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
-pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine v"..CURRENT_VERSION.." Ready ⚡", 3)
 print("✅ XKID Engine v"..CURRENT_VERSION.." - Ready")
