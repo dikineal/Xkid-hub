@@ -81,6 +81,7 @@ local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return co
 --  LOAD WINDUI
 -- ══════════════════════════════════════════════════════════════
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+task.wait(0.5) -- Beri waktu WindUI untuk inisialisasi penuh
 
 -- ══════════════════════════════════════════════════════════════
 --  SERVICES
@@ -803,7 +804,6 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); if chatLo
 -- ══════════════════════════════════════════════════════════════
 --  MAIN WINDOW
 -- ══════════════════════════════════════════════════════════════
-task.wait(0.3)
 local Window = WindUI:CreateWindow({
     Title = "XKID", Subtitle = "Engine", Author = "by XKID", Folder = "XKIDScript", Icon = "terminal", Theme = "Crimson",
     Acrylic = true, Transparent = true, Size = UDim2.fromOffset(540, 460), MinSize = Vector2.new(440, 360),
@@ -813,6 +813,7 @@ local Window = WindUI:CreateWindow({
     User = { Enabled = true, Anonymous = false, UserId = LP.UserId, Callback = function() notify("System", "XKID Engine Identity Verified ✅", 3) end },
 })
 getgenv()._XKID_INSTANCE = Window.Instance; WindUI:SetTheme("Crimson")
+task.wait(0.3) -- Beri jeda setelah window dibuat
 
 task.spawn(function()
     local hue = 0
@@ -834,16 +835,21 @@ end)
 --  TAB 1: SYSTEM HUB
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard" })
-T_HOME:Section({ Title = "Credits", Opened = true })
-    :Paragraph({ Title = "💎 XKID Engine", Desc = "v"..CURRENT_VERSION.." | @WTF.XKID" })
-    :Paragraph({ Title = "📱 Tiktok", Desc = "@wtf.xkid" })
-    :Paragraph({ Title = "💬 Discord", Desc = "@4Sharken" })
-T_HOME:Section({ Title = "System Access", Opened = true }):Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
-T_HOME:Section({ Title = "Discord", Opened = true }):Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
+local secCredits = T_HOME:Section({ Title = "Credits", Opened = true })
+secCredits:Paragraph({ Title = "💎 XKID Engine", Desc = "v"..CURRENT_VERSION.." | @WTF.XKID" })
+secCredits:Paragraph({ Title = "📱 Tiktok", Desc = "@wtf.xkid" })
+secCredits:Paragraph({ Title = "💬 Discord", Desc = "@4Sharken" })
+
+local secSysAccess = T_HOME:Section({ Title = "System Access", Opened = true })
+secSysAccess:Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
+
+local secDiscord = T_HOME:Section({ Title = "Discord", Opened = true })
+secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
 
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true })
 local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
 local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
+
 local secSecHome = T_HOME:Section({ Title = "Security Check", Opened = true })
 local securityLabel = secSecHome:Paragraph({ Title = "Diagnostics", Desc = "Protected" })
 
@@ -867,8 +873,9 @@ end)
 --  TAB 2: PLAYER CORE
 -- ══════════════════════════════════════════════════════════════
 local T_AV = Window:Tab({ Title = "Player Core", Icon = "fingerprint" })
-T_AV:Section({ Title = "State Control", Opened = true }):Button({ Title = "Fast Respawn 💀", Desc = "Respawn on death point", Callback = function() fastRespawn() end })
-T_AV:Section({ Title = "State Control", Opened = true }):Button({ Title = "Refresh Character", Desc = "Reload without kill", Callback = function() refreshCharacter() end })
+local secStateCtrl = T_AV:Section({ Title = "State Control", Opened = true })
+secStateCtrl:Button({ Title = "Fast Respawn 💀", Desc = "Respawn on death point", Callback = function() fastRespawn() end })
+secStateCtrl:Button({ Title = "Refresh Character", Desc = "Reload without kill", Callback = function() refreshCharacter() end })
 
 local secMov = T_AV:Section({ Title = "Movement", Opened = true })
 secMov:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
@@ -887,7 +894,9 @@ secAbi:Toggle({ Title = "Soft Fling ⚡", Value = false, Callback = function(v) 
 --  TAB 3: NAVIGATION
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({ Title = "Navigation", Icon = "crosshair" })
-T_TP:Section({ Title = "Direct Teleport", Opened = true }):Toggle({ Title = "Smart Touch/Click TP", Value = false, Callback = toggleSmartTP })
+local secDirTP = T_TP:Section({ Title = "Direct Teleport", Opened = true })
+secDirTP:Toggle({ Title = "Smart Touch/Click TP", Value = false, Callback = toggleSmartTP })
+
 local secTP = T_TP:Section({ Title = "Target Teleport", Opened = true })
 local tpTarget = ""
 secTP:Input({ Title = "Search Player", Placeholder = "Type name...", Callback = function(v) tpTarget = v end })
@@ -895,6 +904,7 @@ secTP:Button({ Title = "Execute TP ⚡", Callback = function() pcall(function() 
 local pDropOpts = getDisplayNames()
 local tpDropdown = secTP:Dropdown({ Title = "Player List", Values = pDropOpts, Callback = function(v) tpTarget = v end })
 secTP:Button({ Title = "Refresh List", Callback = function() pDropOpts = getDisplayNames(); pcall(function() tpDropdown:Refresh(pDropOpts, true) end); notify("System", "List updated ✅", 2) end })
+
 local secLoc = T_TP:Section({ Title = "Coordinates Cache", Opened = true })
 local SavedLocs = {}
 for i = 1, 3 do local idx = i
@@ -906,7 +916,9 @@ end
 --  TAB 4: VISION
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus" })
-T_CAM:Section({ Title = "Zoom Override", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
+local secZoom = T_CAM:Section({ Title = "Zoom Override", Opened = true })
+secZoom:Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
+
 local secSP = T_CAM:Section({ Title = "Spectator Mode", Opened = true })
 local specDropOpts = getDisplayNames()
 local specDropdown = secSP:Dropdown({ Title = "Select Target", Values = specDropOpts, Callback = function(v) local p = findPlayerByDisplay(v); if p then Spec.target = p; if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ(); Spec.orbitYaw = math.deg(ry); Spec.orbitPitch = 20; Spec.fpYaw = math.deg(ry) end; notify("Spectate", "Target locked: "..p.DisplayName.." ✅", 2) end end})
@@ -1022,6 +1034,7 @@ secESP:Toggle({ Title = "Enable Radar", Value = false, Callback = function(v) St
 secESP:Dropdown({ Title = "Tracer Origin", Values = {"Bottom","Center","Mouse","OFF"}, Value = "Bottom", Callback = function(v) State.ESP.tracerMode = v end })
 secESP:Toggle({ Title = "Highlight Entity", Value = false, Callback = function(v) State.ESP.highlightMode = v end })
 secESP:Slider({ Title = "Scan Distance", Step = 10, Value = { Min = 50, Max = 500, Default = 300 }, Callback = function(v) State.ESP.maxDrawDistance = v end })
+
 local secESPColor = T_ESP:Section({ Title = "Color Config", Opened = false })
 secESPColor:Dropdown({ Title="Normal Color", Values={"Hijau","Merah","Biru","Kuning","Ungu","Cyan","Orange","Pink","Putih","Hitam"}, Value="Hijau", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_N=colorMap[v] end end })
 secESPColor:Dropdown({ Title="Suspect Color", Values={"Merah","Hijau","Biru","Kuning","Ungu","Cyan","Orange","Pink","Putih","Hitam","Crimson"}, Value="Crimson", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_S=colorMap[v]; State.ESP.boxColor_S=colorMap[v] end end })
@@ -1053,13 +1066,18 @@ local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true })
 secProt:Toggle({ Title = "Anti AFK / Anti Kick 🛡️", Value = true, Callback = function(v) if v then startAntiAFK() else stopAntiAFK() end end })
 secProt:Toggle({ Title = "Anti Void 🕳️", Value = false, Callback = function(v) if v then State.Security.voidConn = TrackC(RS.Heartbeat:Connect(function() local hrp = getRoot(); if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then hrp.AssemblyLinearVelocity = Vector3.zero; hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0); notify("Security", "Saved from void!", 2) end end)) else if State.Security.voidConn then State.Security.voidConn:Disconnect(); State.Security.voidConn = nil end end; notify("Security", v and "Anti-Void enabled" or "Anti-Void disabled", 2) end})
 secProt:Button({ Title = "Stuck Fix 🔧", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied ✅", 2) end })
+
 local secSrv = T_SEC:Section({ Title = "Server Control", Opened = true })
 secSrv:Toggle({ Title = "Auto Rejoin 🔄", Value = false, Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then notify("Security", "Rejoining...", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)); notify("Security", "Auto Rejoin standby ✅", 2) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end; notify("Security", "Auto Rejoin disabled ❌", 2) end end})
 secSrv:Button({ Title = "Force Rejoin", Callback = function() notify("System", "Rejoining...", 2); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
 secSrv:Button({ Title = "Server Hop", Callback = function() notify("System", "Searching servers...", 2); pcall(function() local req = (syn and syn.request) or (http and http.request) or http_request or request; if not req then notify("Error", "HTTP failed", 2); return end; local res = req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100", Method = "GET"}); if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body); if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); notify("Server Hop", "Joining server with "..v.playing.." players ✅", 2); return end end end; notify("Server Hop", "No server found", 2) end end) end})
+
 local secPerf = T_SEC:Section({ Title = "Performance Tweaks", Opened = true })
+local advCache = { level = nil, shadows = true, brightness = 5, clockTime = 14, fogEnd = 100000, mats = {}, texs = {} }
 secPerf:Toggle({ Title = "FPS Boost ⚡", Value = false, Callback = function(v) State.Security.antiLag = v; if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end); advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness; advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd; pcall(function() settings().Rendering.QualityLevel = 1 end); Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000; for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end end; notify("Performance", "FPS Boost activated", 2) else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end); Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness; Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd; for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end; for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end; advCache.mats = {}; advCache.texs = {}; notify("Performance", "Graphics restored", 2) end end})
-T_SEC:Section({ Title = "Camera Lock", Opened = true }):Toggle({ Title = "Force Shift Lock", Value = false, Callback = function(v) toggleShiftLock(v) end })
+
+local secCamLock = T_SEC:Section({ Title = "Camera Lock", Opened = true })
+secCamLock:Toggle({ Title = "Force Shift Lock", Value = false, Callback = function(v) toggleShiftLock(v) end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 10: CONFIG
@@ -1072,6 +1090,7 @@ secCfg:Button({ Title = "💾 Save Config", Callback = function() pcall(function
 local configDrop = secCfg:Dropdown({ Title = "📂 Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected; if selected == "No config" then return end; pcall(function() if isfile and readfile and isfile("XKID_HUB/"..selected..".json") then local data = HttpService:JSONDecode(readfile("XKID_HUB/"..selected..".json")); if data then if data.Move then State.Move.ws = data.Move.ws or 16; State.Move.jp = data.Move.jp or 50; State.Move.flyS = data.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if data.ESP then State.ESP.tracerMode = data.ESP.tracerMode or "Bottom"; State.ESP.maxDrawDistance = data.ESP.maxDrawDistance or 300; State.ESP.highlightMode = data.ESP.highlightMode or false end; if data.Security and data.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(data.Security.shiftLock) end; notify("Config", "Data loaded ✅", 2) end end end) end})
 secCfg:Button({ Title = "🗑️ Hapus Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" then pcall(function() if isfile and delfile and isfile("XKID_HUB/"..currentConfig..".json") then delfile("XKID_HUB/"..currentConfig..".json"); notify("Config", currentConfig .. " dihapus 🗑️", 2); pcall(function() configDrop:Refresh(getConfigList(), true) end); currentConfig = "No config" end end) else notify("Config", "Pilih config dari Load List dulu! ⚠️", 2) end end})
 secCfg:Button({ Title = "🔄 Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end); notify("Config", "Files updated ✅", 2) end })
+
 local secTheme = T_SET:Section({ Title = "Interface", Opened = true })
 secTheme:Dropdown({ Title = "Theme", Values = (function() local n = {}; for name in pairs(WindUI:GetThemes()) do table.insert(n, name) end; table.sort(n); if not table.find(n, "Crimson") then table.insert(n, 1, "Crimson") end; return n end)(), Value = "Crimson", Callback = function(s) pcall(function() WindUI:SetTheme(s) end) end })
 secTheme:Toggle({ Title = "Acrylic Blur", Value = true, Callback = function() pcall(function() WindUI:ToggleAcrylic(not WindUI.Window.Acrylic) end) end })
@@ -1084,4 +1103,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine v"..CURRENT_VERSION.." Ready ⚡", 3)
-print("✅ XKID Engine v"..CURRENT_VERSION.." - Original Base + 3 Fixes")
+print("✅ XKID Engine v"..CURRENT_VERSION.." - Fixed All Tabs & Chaining")
