@@ -129,7 +129,7 @@ local State = {
         nameColor       = Color3.fromRGB(255, 255, 255),
     },
     Filter    = { current = "Default", bloomActive = false, bloomIntensity = 0.5, brightness = 1, exposure = 0, clockTime = 14, contrast = 0, qualityLevel = 1, fpsCap = "60", fullBright = false },
-    Settings  = { theme = "Crimson", acrylic = true, transparency = true, toggleKey = "RightShift", uiSize = 1 },
+    Settings  = { theme = "Crimson", acrylic = true, transparency = true, toggleKey = "RightShift" },
 }
 
 local colorMap = {
@@ -677,7 +677,7 @@ local function toggleSmartTP(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (FIXED - off tanpa animasi jatuh)
+--  FREECAM ENGINE
 -- ══════════════════════════════════════════════════════════════
 local FC = { 
     active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, 
@@ -758,7 +758,6 @@ local function startFreecamLoop()
 end
 local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 
--- ⭐ FIXED: Freecam off tanpa animasi jatuh/lompat
 local function fullCleanupFreecam()
     stopFreecamLoop()
     stopFreecamCapture()
@@ -770,23 +769,15 @@ local function fullCleanupFreecam()
     if hrp then
         if FC.savedCF then
             local safeCF = FC.savedCF + Vector3.new(0, 3, 0)
-            
-            -- ⭐ Langsung pindahkan + freeze velocity (tanpa BodyPosition)
             hrp.CFrame = safeCF
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-            
-            -- ⭐ Baru lepas anchored setelah posisi aman
             hrp.Anchored = false
             
-            -- ⭐ Hold sebentar biar stabil (tanpa animasi)
             local holdStart = tick()
             local holdConn
             holdConn = RS.Heartbeat:Connect(function()
-                if tick() - holdStart > 0.3 then
-                    holdConn:Disconnect()
-                    return
-                end
+                if tick() - holdStart > 0.3 then holdConn:Disconnect(); return end
                 if hrp and hrp.Parent then
                     hrp.AssemblyLinearVelocity = Vector3.zero
                     hrp.AssemblyAngularVelocity = Vector3.zero
@@ -795,20 +786,16 @@ local function fullCleanupFreecam()
         else
             hrp.Anchored = false
         end
-        
         FC.savedCF = nil
     end
     
     if hum then
-        -- ⭐ Reset humanoid tanpa animasi ChangeState
         hum.PlatformStand = false
-        -- ⭐ Jangan pake ChangeState(GettingUp) biar gak loncat!
         hum.WalkSpeed = State.Move.ws
         hum.UseJumpPower = true
         hum.JumpPower = State.Move.jp
     end
     
-    -- ⭐ Kembalikan kamera
     Cam.CameraType = Enum.CameraType.Custom
     Cam.CameraSubject = hum or LP.Character
     Cam.FieldOfView = FC.origFov
@@ -859,7 +846,7 @@ TrackC(Players.PlayerRemoving:Connect(function(p)
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  CHAT LOGGER (FIXED - Tampil isi chat)
+--  CHAT LOGGER (FIXED)
 -- ══════════════════════════════════════════════════════════════
 local chatLogPanel = nil
 local chatTargetsLabel = nil
@@ -868,7 +855,6 @@ local addTargetDrop = nil
 local function logMsg(speakerName, msg)
     if not State.Utility.chatLog then return end
     
-    -- Filter target
     if #State.Utility.chatTargets > 0 then
         local found = false
         for _, t in ipairs(State.Utility.chatTargets) do
@@ -880,54 +866,42 @@ local function logMsg(speakerName, msg)
         if not found then return end
     end
     
-    -- Format entry
     local timestamp = os.date("%H:%M:%S")
     local entry = string.format("[%s] %s: %s", timestamp, speakerName, msg)
     table.insert(State.Utility.chatHistory, entry)
     
-    -- Batasi 50 entry
     if #State.Utility.chatHistory > 50 then
         table.remove(State.Utility.chatHistory, 1)
     end
     
-    -- Update panel langsung
     if chatLogPanel then
         local logText = table.concat(State.Utility.chatHistory, "\n")
         if #logText > 2000 then logText = logText:sub(-2000) end
         pcall(function() chatLogPanel:SetDesc(logText) end)
     end
     
-    -- Notifikasi (kecuali silent mode)
     if not State.Utility.chatSilent then
         notify("Chat", speakerName .. ": " .. msg, 2)
     end
 end
 
--- Connect chat events
 if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
     pcall(function()
         TrackC(TextChatService.MessageReceived:Connect(function(m)
-            if m.TextSource then
-                logMsg(m.TextSource.Name, m.Text)
-            end
+            if m.TextSource then logMsg(m.TextSource.Name, m.Text) end
         end))
     end)
 else
     for _, p in ipairs(Players:GetPlayers()) do
-        pcall(function()
-            TrackC(p.Chatted:Connect(function(m) logMsg(p.Name, m) end))
-        end)
+        pcall(function() TrackC(p.Chatted:Connect(function(m) logMsg(p.Name, m) end)) end)
     end
     TrackC(Players.PlayerAdded:Connect(function(p)
-        pcall(function()
-            TrackC(p.Chatted:Connect(function(m) logMsg(p.Name, m) end))
-        end)
+        pcall(function() TrackC(p.Chatted:Connect(function(m) logMsg(p.Name, m) end)) end)
     end))
 end
 
 local function updateChatTargetLabel()
     local names = {}
-    -- ⭐ Bersihkan target yang sudah tidak valid
     local validTargets = {}
     for _, t in ipairs(State.Utility.chatTargets) do
         if t and t.Parent then
@@ -943,9 +917,7 @@ local function updateChatTargetLabel()
         end
     end)
     pcall(function()
-        if addTargetDrop then
-            addTargetDrop:Refresh(getDisplayNames(), true)
-        end
+        if addTargetDrop then addTargetDrop:Refresh(getDisplayNames(), true) end
     end)
 end
 
@@ -980,49 +952,18 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: INFO (VERSI + KREDIT)
--- ══════════════════════════════════════════════════════════════
-local T_INFO = Window:Tab({ Title = "Info", Icon = "info" })
-
-T_INFO:Section({ Title = "Version", Opened = true })
-    :Paragraph({ Title = "Current Version", Desc = "v" .. CURRENT_VERSION })
-    :Paragraph({ Title = "Last Updated", Desc = LAST_UPDATED })
-
-T_INFO:Section({ Title = "Credits", Opened = true })
-    :Paragraph({ Title = "💎 Creator", Desc = "@WTF.XKID" })
-    :Paragraph({ Title = "📱 Tiktok", Desc = "@wtf.xkid" })
-    :Paragraph({ Title = "💬 Discord", Desc = "@4Sharken" })
-    :Paragraph({ Title = "🌐 Server", Desc = "discord.gg/bzumc2u96" })
-
-T_INFO:Section({ Title = "Features", Opened = true })
-    :Paragraph({ Title = "Total Features", Desc = "30+ features in 9 tabs" })
-    :Paragraph({ Title = "UI Library", Desc = "WindUI by Footagesus" })
-
-T_INFO:Section({ Title = "Changelog v"..CURRENT_VERSION, Opened = true })
-    :Paragraph({ Title = "What's New", Desc = 
-        "✅ Variable order fixed\n" ..
-        "✅ Filter reset sempurna\n" ..
-        "✅ Chat logger tampil isi\n" ..
-        "✅ Freecam off tanpa animasi\n" ..
-        "✅ Server hop fallback executor\n" ..
-        "✅ Anti AFK interval natural\n" ..
-        "✅ Tab Info versi & kredit\n" ..
-        "✅ Auto Like pindah ke Utility"
-    })
-
-T_INFO:Section({ Title = "Quick Tips", Opened = true })
-    :Paragraph({ Title = "💡 Tips", Desc = 
-        "• Ketik /re di chat untuk fast respawn\n" ..
-        "• Shift+Click untuk smart teleport\n" ..
-        "• Klik kanan + drag untuk rotasi freecam\n" ..
-        "• Save config untuk backup setting"
-    })
-
--- ══════════════════════════════════════════════════════════════
---  TAB 2: SYSTEM HUB
+--  TAB 1: SYSTEM HUB + CREDIT
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard" })
-T_HOME:Section({ Title = "Discord", Opened = true }):Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
+
+T_HOME:Section({ Title = "Credits", Opened = true })
+    :Paragraph({ Title = "💎 Creator", Desc = "@WTF.XKID" })
+    :Paragraph({ Title = "📱 Tiktok", Desc = "@wtf.xkid" })
+    :Paragraph({ Title = "💬 Discord", Desc = "@4Sharken / discord.gg/bzumc2u96" })
+    :Paragraph({ Title = "📌 Version", Desc = "v" .. CURRENT_VERSION .. " | " .. LAST_UPDATED })
+
+T_HOME:Section({ Title = "Discord", Opened = true })
+    :Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
 
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true })
 local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
@@ -1046,8 +987,12 @@ task.spawn(function()
     end
 end)
 
+T_HOME:Section({ Title = "Quick Commands", Opened = true })
+    :Paragraph({ Title = "⌨️ Chat", Desc = "/re = Fast Respawn" })
+    :Paragraph({ Title = "🖱️ Mouse", Desc = "Ctrl+Click = Smart TP" })
+
 -- ══════════════════════════════════════════════════════════════
---  TAB 3: PLAYER CORE
+--  TAB 2: PLAYER CORE
 -- ══════════════════════════════════════════════════════════════
 local T_AV = Window:Tab({ Title = "Player Core", Icon = "fingerprint" })
 T_AV:Section({ Title = "State Control", Opened = true }):Button({ Title = "Fast Respawn 💀", Desc = "Respawn on death point", Callback = function() fastRespawn() end })
@@ -1085,7 +1030,7 @@ secAbi:Toggle({ Title = "Hard Fling 💥", Value = false, Callback = function(v)
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 4: NAVIGATION
+--  TAB 3: NAVIGATION
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({ Title = "Navigation", Icon = "crosshair" })
 T_TP:Section({ Title = "Direct Teleport", Opened = true }):Toggle({ Title = "Smart Touch/Click TP", Value = false, Callback = toggleSmartTP })
@@ -1104,7 +1049,7 @@ for i = 1, 3 do local idx = i
 end
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: VISION
+--  TAB 4: VISION
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus" })
 T_CAM:Section({ Title = "Zoom Override", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
@@ -1117,7 +1062,7 @@ secSP:Toggle({ Title = "First Person View", Value = false, Callback = function(v
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: FREECAM
+--  TAB 5: FREECAM
 -- ══════════════════════════════════════════════════════════════
 local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video" })
 local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true })
@@ -1181,7 +1126,7 @@ secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v
 end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: FILTER (FIXED)
+--  TAB 6: FILTER (FIXED)
 -- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "Filter", Icon = "layers" })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true })
@@ -1277,7 +1222,7 @@ secGfx:Dropdown({ Title = "FPS Cap", Values = {"30", "60", "120", "144", "240", 
 end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: RADAR
+--  TAB 7: RADAR
 -- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "Radar", Icon = "cpu" })
 local secESP = T_ESP:Section({ Title = "Detection System", Opened = true })
@@ -1305,11 +1250,10 @@ secESPColor:Dropdown({ Title="Suspect Color", Values={"Merah","Hijau","Biru","Ku
 secESPColor:Dropdown({ Title="Glitch Acc Color", Values={"Orange","Merah","Hijau","Biru","Kuning","Ungu","Cyan","Pink","Putih","Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G=colorMap[v]; State.ESP.boxColor_G=colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 9: UTILITY (Auto Like + Chat Logger)
+--  TAB 8: UTILITY (Auto Like + Chat Logger)
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal" })
 
--- ⭐ Auto Like dipindahkan ke sini
 local secLike = T_UTIL:Section({ Title = "Auto Like System ❤️", Opened = true })
 if not LikeEvent then
     secLike:Paragraph({ Title = "Status", Desc = "⚠️ Like Remote tidak ditemukan di game ini!" })
@@ -1318,14 +1262,10 @@ secLike:Toggle({ Title = "Auto Like All Players", Value = false, Callback = func
     if v then startAutoLike() else stopAutoLike() end
 end})
 
--- ⭐ Chat Logger (fixed + tanpa export)
 local secChat = T_UTIL:Section({ Title = "Chat Logger (Multi Target)", Opened = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Callback = function(v) 
     State.Utility.chatLog = v
-    if not v then
-        -- Reset panel saat off
-        pcall(function() chatLogPanel:SetDesc("Logger disabled") end)
-    end
+    if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end
     notify("Utility", v and "Logger running ✅" or "Logger stopped ❌", 2) 
 end})
 secChat:Toggle({ Title = "Silent Mode", Value = false, Callback = function(v) 
@@ -1381,7 +1321,7 @@ local secMisc = T_UTIL:Section({ Title = "Data Extraction", Opened = true })
 secMisc:Button({ Title = "Copy JobID", Callback = function() pcall(function() setclipboard(game.JobId) end); notify("Utility", "JobID copied ✅", 2) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 10: SECURITY
+--  TAB 9: SECURITY
 -- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert" })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true })
@@ -1427,7 +1367,7 @@ secPerf:Toggle({ Title = "FPS Boost ⚡", Value = false, Callback = function(v) 
 T_SEC:Section({ Title = "Camera Lock", Opened = true }):Toggle({ Title = "Force Shift Lock", Value = false, Callback = function(v) toggleShiftLock(v) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 11: CONFIG
+--  TAB 10: CONFIG
 -- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Config", Icon = "settings" })
 local secCfg = T_SET:Section({ Title = "File Management", Opened = true })
@@ -1488,7 +1428,7 @@ end})
 
 secCfg:Button({ Title = "🗑️ Hapus Config", Callback = function() 
     if currentConfig ~= "No config" and currentConfig ~= "" then 
-        pcall(function() if isfile and delfile and isfile("XKID_HUB/"..currentConfig..".json") then delfile("XKID_HUB/"..currentConfig..".json"); notify("Config", currentConfig .. " dihapus 🗑���", 2); currentConfig = "No config"; pcall(function() configDrop:Refresh(getConfigList(), true) end) end end) 
+        pcall(function() if isfile and delfile and isfile("XKID_HUB/"..currentConfig..".json") then delfile("XKID_HUB/"..currentConfig..".json"); notify("Config", currentConfig .. " dihapus 🗑️", 2); currentConfig = "No config"; pcall(function() configDrop:Refresh(getConfigList(), true) end) end end) 
     else notify("Config", "Pilih config dari Load List dulu! ⚠️", 2) end 
 end})
 secCfg:Button({ Title = "🔄 Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end); notify("Config", "Files updated ✅", 2) end })
@@ -1503,6 +1443,6 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 --  STARTUP
 -- ══════════════════════════════════════════════════════════════
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
-pcall(function() Window:SelectTab(T_INFO) end)  -- ⭐ Buka tab Info duluan
+pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine v"..CURRENT_VERSION.." Ready ⚡", 3)
-print("✅ XKID Engine v"..CURRENT_VERSION.." - All Fixes Applied")
+print("✅ XKID Engine v"..CURRENT_VERSION.." - Ready")
