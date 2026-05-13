@@ -1048,16 +1048,52 @@ for i = 1, 3 do local idx = i
     secLoc:Button({ Title = "📍 Load Slot "..idx, Callback = function() if not SavedLocs[idx] then notify("Error", "Slot is empty ⚠️", 2); return end; local r = getRoot(); if not r then return end; r.CFrame = SavedLocs[idx]; notify("Slot", "Loaded slot "..idx.." ✅", 2) end })
 end
 
--- ══════════════════════════════════════════════════════════════
+-- -- ══════════════════════════════════════════════════════════════
 --  TAB 4: VISION
 -- ══════════════════════════════════════════════════════════════
 local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus" })
 T_CAM:Section({ Title = "Zoom Override", Opened = true }):Toggle({ Title = "Max Zoom Out", Value = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Vision", v and "Zoom override enabled ✅" or "Zoom normalized", 2) end })
+
 local secSP = T_CAM:Section({ Title = "Spectator Mode", Opened = true })
 local specDropOpts = getDisplayNames()
-local specDropdown = secSP:Dropdown({ Title = "Select Target", Values = specDropOpts, Callback = function(v) local p = findPlayerByDisplay(v); if p then Spec.target = p; if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ(); Spec.orbitYaw = math.deg(ry); Spec.orbitPitch = 20; Spec.fpYaw = math.deg(ry) end; notify("Spectate", "Target locked: "..p.DisplayName.." ✅", 2) end end})
-secSP:Button({ Title = "Refresh Target List", Callback = function() specDropOpts = getDisplayNames(); pcall(function() specDropdown:Refresh(specDropOpts, true) end); notify("System", "List updated ✅", 2) end })
-secSP:Toggle({ Title = "Enable Spectate", Value = false, Callback = function(v) Spec.active = v; if v then if not Spec.target or not Spec.target.Parent or not Spec.target.Character or not Spec.target.Character:FindFirstChild("HumanoidRootPart") then notify("Spectate", "Select target first! ⚠️", 2); Spec.active = false; return end; Spec.origFov = Cam.FieldOfView; startSpecCapture(); startSpecLoop(); notify("Spectate", "Tracking "..Spec.target.DisplayName.." 👀", 2) else stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov; notify("Spectate", "Tracking stopped ❌", 2) end end})
+local specDropdown = secSP:Dropdown({ Title = "Select Target", Values = specDropOpts, Callback = function(v) 
+    local p = findPlayerByDisplay(v)
+    if p then 
+        Spec.target = p
+        if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then 
+            local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ()
+            Spec.orbitYaw = math.deg(ry)
+            Spec.orbitPitch = 20
+            Spec.fpYaw = math.deg(ry)
+        end
+        notify("Spectate", "Target locked: "..p.DisplayName.." ✅", 2)
+    end
+end})
+secSP:Button({ Title = "Refresh Target List", Callback = function() 
+    specDropOpts = getDisplayNames()
+    pcall(function() specDropdown:Refresh(specDropOpts, true) end)
+    notify("System", "List updated ✅", 2)
+end})
+secSP:Toggle({ Title = "Enable Spectate", Value = false, Callback = function(v) 
+    Spec.active = v
+    if v then 
+        if not Spec.target or not Spec.target.Parent or not Spec.target.Character or not Spec.target.Character:FindFirstChild("HumanoidRootPart") then 
+            notify("Spectate", "Select target first! ⚠️", 2)
+            Spec.active = false
+            return 
+        end
+        Spec.origFov = Cam.FieldOfView
+        startSpecCapture()
+        startSpecLoop()
+        notify("Spectate", "Tracking "..Spec.target.DisplayName.." 👀", 2)
+    else 
+        stopSpecLoop()
+        stopSpecCapture()
+        Cam.CameraType = Enum.CameraType.Custom
+        Cam.FieldOfView = Spec.origFov
+        notify("Spectate", "Tracking stopped ❌", 2)
+    end
+end})
 secSP:Toggle({ Title = "First Person View", Value = false, Callback = function(v) Spec.mode = v and "first" or "third" end })
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
