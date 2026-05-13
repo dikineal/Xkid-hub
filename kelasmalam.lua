@@ -6,12 +6,15 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v2.0.8
+  📌 v2.0.9
 ]]
 
 local RS = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
+-- ══════════════════════════════════════════════════════════════
+--  0. CLEANUP AWAL
+-- ══════════════════════════════════════════════════════════════
 if getgenv()._XKID_RUNNING then
     getgenv()._XKID_RUNNING = false
     task.wait(0.1)
@@ -74,8 +77,14 @@ getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
+-- ══════════════════════════════════════════════════════════════
+--  LOAD WINDUI
+-- ══════════════════════════════════════════════════════════════
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
+-- ══════════════════════════════════════════════════════════════
+--  SERVICES
+-- ══════════════════════════════════════════════════════════════
 local Players      = game:GetService("Players")
 local UIS          = game:GetService("UserInputService")
 local VirtualUser  = game:GetService("VirtualUser")
@@ -90,8 +99,11 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "2.0.8"
+local CURRENT_VERSION = "2.0.9"
 
+-- ══════════════════════════════════════════════════════════════
+--  STATE MANAGEMENT
+-- ══════════════════════════════════════════════════════════════
 local State = {
     Move      = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
     Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
@@ -126,6 +138,9 @@ local colorMap = {
     ["Crimson"] = Color3.fromRGB(220, 20, 60),
 }
 
+-- ══════════════════════════════════════════════════════════════
+--  HELPER FUNCTIONS
+-- ══════════════════════════════════════════════════════════════
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
 local function getHum()  return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
 local function getDisplayNames()
@@ -176,6 +191,7 @@ local START_TIME = os.time()
 local cachedMapName, lastMapCheck = nil, 0
 local sharedFPS, sharedPing = 60, 0
 
+-- Trackers
 TrackC(RS.RenderStepped:Connect(function(dt) if dt > 0 then sharedFPS = math.floor(1 / dt) end end))
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
@@ -191,45 +207,88 @@ task.spawn(function()
 end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
--- Anti AFK
-local AntiAFK = { idleConn = nil, heartbeatConn = nil, kickConn = nil, promptConn = nil }
+-- ══════════════════════════════════════════════════════════════
+--  ANTI AFK / ANTI KICK SYSTEM (MOBILE + PC)
+-- ══════════════════════════════════════════════════════════════
+local AntiAFK = {
+    idleConn = nil,
+    heartbeatConn = nil,
+    kickConn = nil,
+    promptConn = nil,
+}
+
 local function startAntiAFK()
     State.Security.afkActive = true
+    
+    -- Method 1: Idle detection (Mobile & PC aman)
     if not AntiAFK.idleConn then
         AntiAFK.idleConn = TrackC(LP.Idled:Connect(function()
             if not State.Security.afkActive then return end
-            pcall(function() VirtualUser:Button2Down(Vector2.zero, Cam.CFrame); task.wait(1); VirtualUser:Button2Up(Vector2.zero, Cam.CFrame) end)
+            pcall(function()
+                VirtualUser:Button2Down(Vector2.zero, Cam.CFrame)
+                task.wait(1)
+                VirtualUser:Button2Up(Vector2.zero, Cam.CFrame)
+            end)
         end))
     end
-    task.spawn(function()
-        while State.Security.afkActive and getgenv()._XKID_RUNNING do
-            task.wait(math.random(30, 120))
-            if not State.Security.afkActive then break end
-            pcall(function() VirtualUser:CaptureController(); VirtualUser:Button2Down(Vector2.zero, Cam.CFrame); task.wait(0.5); VirtualUser:Button2Up(Vector2.zero, Cam.CFrame) end)
-        end
-    end)
+    
+    -- Method 2: Heartbeat backup (jalan tiap 30-120 detik)
+    if not AntiAFK.heartbeatConn then
+        task.spawn(function()
+            while State.Security.afkActive and getgenv()._XKID_RUNNING do
+                task.wait(math.random(30, 120))
+                if not State.Security.afkActive then break end
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    VirtualUser:Button2Down(Vector2.zero, Cam.CFrame)
+                    task.wait(0.5)
+                    VirtualUser:Button2Up(Vector2.zero, Cam.CFrame)
+                end)
+            end
+        end)
+    end
+    
+    -- Method 3: Error message detection (anti kick)
     if not AntiAFK.kickConn then
         AntiAFK.kickConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err)
-            if err ~= "" then notify("Anti Kick", "Kick detected! Rejoining... 🔄", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end
+            if err ~= "" then
+                notify("Anti Kick", "Kick detected! Rejoining... 🔄", 3)
+                task.wait(1)
+                pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+            end
         end))
     end
+    
+    -- Method 4: Kick popup detection
     if not AntiAFK.promptConn then
         AntiAFK.promptConn = TrackC(CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
-            if child.Name == "ErrorPrompt" then notify("Anti Kick", "Kick popup! Rejoining... 🔄", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end
+            if child.Name == "ErrorPrompt" then
+                notify("Anti Kick", "Kick popup! Rejoining... 🔄", 3)
+                task.wait(1)
+                pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+            end
         end))
     end
+    
     notify("Anti AFK", "Full protection active 🛡️", 2)
 end
+
 local function stopAntiAFK()
     State.Security.afkActive = false
+    
     if AntiAFK.idleConn then AntiAFK.idleConn:Disconnect(); AntiAFK.idleConn = nil end
     if AntiAFK.kickConn then AntiAFK.kickConn:Disconnect(); AntiAFK.kickConn = nil end
     if AntiAFK.promptConn then AntiAFK.promptConn:Disconnect(); AntiAFK.promptConn = nil end
+    
     notify("Anti AFK", "Protection disabled ❌", 2)
 end
+
+-- Auto-start
 startAntiAFK()
 
--- Character Handler
+-- ══════════════════════════════════════════════════════════════
+--  CHARACTER HANDLER
+-- ══════════════════════════════════════════════════════════════
 TrackC(LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     local hum = char:FindFirstChildOfClass("Humanoid")
@@ -272,7 +331,9 @@ TrackC(LP.CharacterAdded:Connect(function(char)
     end
 end))
 
--- Shift Lock
+-- ══════════════════════════════════════════════════════════════
+--  SHIFT LOCK ENGINE
+-- ══════════════════════════════════════════════════════════════
 local function toggleShiftLock(v)
     State.Security.shiftLock = v
     if v then
@@ -299,7 +360,9 @@ local function toggleShiftLock(v)
     end
 end
 
--- Fast Respawn & Refresh
+-- ══════════════════════════════════════════════════════════════
+--  FAST RESPAWN & REFRESH
+-- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
     local char, hrp = LP.Character, getRoot()
@@ -367,7 +430,9 @@ local function refreshCharacter()
     end)
 end
 
--- ESP Engine
+-- ══════════════════════════════════════════════════════════════
+--  ESP ENGINE
+-- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
     local cache = { texts = nil, tracer = nil, boxLines = {}, hl = nil, isSuspect = false, isGlitch = false, reason = "" }
@@ -382,6 +447,7 @@ local function initPlayerCache(player)
     end)
     State.ESP.cache[player] = cache
 end
+
 local function clearPlayerCache(player)
     local c = State.ESP.cache[player]; if not c then return end
     pcall(function() if c.texts then c.texts:Remove() end end)
@@ -490,7 +556,9 @@ TrackC(RS.RenderStepped:Connect(function()
     end
 end))
 
--- Fly Engine
+-- ══════════════════════════════════════════════════════════════
+--  FLY ENGINE
+-- ══════════════════════════════════════════════════════════════
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
 local flyVel = Vector3.zero
 
@@ -517,6 +585,7 @@ local function startFlyCapture()
     end))
     State.Fly._keys = keysHeld
 end
+
 local function stopFlyCapture()
     for _, c in ipairs(flyConns) do c:Disconnect() end
     flyConns = {}; flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero; State.Fly._keys = {}
@@ -561,7 +630,9 @@ local function toggleFly(v)
     notify("Movement", "Fly enabled ✈️", 2)
 end
 
--- Smart Click TP
+-- ══════════════════════════════════════════════════════════════
+--  SMART CLICK TP
+-- ══════════════════════════════════════════════════════════════
 local function toggleSmartTP(v)
     State.Teleport.clickActive = v
     if v then
@@ -585,7 +656,9 @@ local function toggleSmartTP(v)
     end
 end
 
--- ⭐ FREECAM (FIXED - Lock posisi karakter)
+-- ══════════════════════════════════════════════════════════════
+--  FREECAM ENGINE (Lock posisi)
+-- ══════════════════════════════════════════════════════════════
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70, lockGyro = nil, lockPos = nil }
 local I_CamVel = Vector3.zero; local I_YawVel = 0; local I_PitchVel = 0; local I_RollVel = 0; local heightVelocity = 0
 local fcMoveTouch, fcMoveSt, fcJoy = nil, nil, Vector2.zero; local fcRotTouch, fcRotLast = nil, nil; local fcKeysHeld, fcConns = {}, {}
@@ -630,11 +703,13 @@ local function startFreecamCapture()
     end))
     table.insert(fcConns, UIS.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp == fcRotTouch then fcRotTouch = nil; fcRotLast = nil end; if inp == fcMoveTouch then fcMoveTouch = nil; fcMoveSt = nil; fcJoy = Vector2.zero end end))
 end
+
 local function stopFreecamCapture()
     for _, c in ipairs(fcConns) do c:Disconnect() end; fcConns = {}; fcMoveTouch = nil; fcMoveSt = nil; fcJoy = Vector2.zero; fcRotTouch = nil; fcRotLast = nil; fcKeysHeld = {}; FC._mouseRot = false; UIS.MouseBehavior = Enum.MouseBehavior.Default
     I_CamVel = Vector3.zero; I_YawVel = 0; I_PitchVel = 0; I_RollVel = 0; heightVelocity = 0; FC.rollDeg = 0
     for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end
 end
+
 local function startFreecamLoop()
     RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not FC.active then return end; Cam.CameraType = Enum.CameraType.Scriptable; local safeDt = math.clamp(dt, 0.001, 0.05)
@@ -655,7 +730,7 @@ local function startFreecamLoop()
         if FC_UI_Btns.zoomOut then Cam.FieldOfView = math.clamp(Cam.FieldOfView + 1.2, 10, 120) end
         FC.pos = FC.pos + (I_CamVel + Vector3.new(0, heightVelocity, 0)) * safeDt
         Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0) * CFrame.Angles(0, 0, math.rad(FC.rollDeg))
-        local hrp = getRoot(); if hrp and not hrp.Anchored then hrp.Anchored = true end
+        local hrp, hum = getRoot(), getHum(); if hrp and not hrp.Anchored then hrp.Anchored = true end; if hum then hum:ChangeState(Enum.HumanoidStateType.Physics); hum.WalkSpeed = 0; hum.JumpPower = 0 end
     end)
 end
 local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
@@ -671,12 +746,15 @@ local function fullCleanupFreecam()
     for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end
 end
 
--- Spectate
+-- ══════════════════════════════════════════════════════════════
+--  SPECTATE ENGINE
+-- ══════════════════════════════════════════════════════════════
 local function inJoystick(pos)
     local ctrl = LP and LP.PlayerGui and LP.PlayerGui:FindFirstChild("TouchGui"); if not ctrl then return false end
     local frame = ctrl:FindFirstChild("TouchControlFrame"); local thumb = frame and frame:FindFirstChild("DynamicThumbstickFrame"); if not thumb then return false end
     return pos.X >= thumb.AbsolutePosition.X and pos.Y >= thumb.AbsolutePosition.Y and pos.X <= thumb.AbsolutePosition.X + thumb.AbsoluteSize.X and pos.Y <= thumb.AbsolutePosition.Y + thumb.AbsoluteSize.Y
 end
+
 local Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, fpYaw = 0, fpPitch = 0 }
 local specTM, specPinch, specPinchD, specPan, specConns = nil, {}, nil, Vector2.zero, {}
 local function startSpecCapture()
@@ -698,7 +776,9 @@ local function startSpecLoop()
 end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 
--- ⭐ CHAT LOGGER (FIXED - Target wajib, DisplayName, Batch update, Silent mode)
+-- ══════════════════════════════════════════════════════════════
+--  CHAT LOGGER (FIXED - Target, DisplayName, Batch, Silent)
+-- ══════════════════════════════════════════════════════════════
 local chatLogPanel = nil
 local chatTargetLabel = nil
 local chatTargetDrop = nil
@@ -751,13 +831,13 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: SYSTEM HUB + CREDIT
+--  TAB 1: SYSTEM HUB
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard" })
 T_HOME:Section({ Title = "Credits", Opened = true })
     :Paragraph({ Title = "💎 XKID Engine", Desc = "v"..CURRENT_VERSION.." | @WTF.XKID" })
     :Paragraph({ Title = "📱 Tiktok", Desc = "@wtf.xkid" })
-    :Paragraph({ Title = "💬 Discord", Desc = "@4Sharken / discord.gg/bzumc2u96" })
+    :Paragraph({ Title = "💬 Discord", Desc = "@4Sharken" })
 T_HOME:Section({ Title = "System Access", Opened = true }):Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
 T_HOME:Section({ Title = "Discord", Opened = true }):Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin ✅", 2) end })
 
@@ -844,7 +924,9 @@ secFC:Toggle({ Title = "Enable Freecam", Value = false, Callback = function(v) F
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 
--- Cinematic Mode
+-- ══════════════════════════════════════════════════════════════
+--  CINEMATIC MODE
+-- ══════════════════════════════════════════════════════════════
 local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true })
 secCine:Toggle({ Title = "Hide All UI", Value = false, Callback = function(v)
     if v then
@@ -886,7 +968,9 @@ secCine:Toggle({ Title = "Show Bubble Chat", Value = true, Callback = function(v
     end
 end})
 
--- TAB 6: FILTER
+-- ══════════════════════════════════════════════════════════════
+--  TAB 6: FILTER
+-- ══════════════════════════════════════════════════════════════
 local T_WO = Window:Tab({ Title = "Filter", Icon = "layers" })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true })
 local function resetFilterOnly() for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end end
@@ -929,7 +1013,9 @@ local gfxMap = {[1]="Level01",[2]="Level03",[3]="Level05",[4]="Level07",[5]="Lev
 secGfx:Slider({ Title = "Quality Level", Step = 1, Value = {Min = 1, Max = 10, Default = 1}, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end end })
 secGfx:Dropdown({ Title = "FPS Cap", Values = {"30", "60", "120", "144", "240", "Unlimited"}, Value = "60", Callback = function(v) if v == "Unlimited" then pcall(function() setfpscap(9999) end) else pcall(function() setfpscap(tonumber(v)) end) end; notify("Graphics", "FPS cap: "..v, 2) end })
 
--- TAB 7: RADAR
+-- ══════════════════════════════════════════════════════════════
+--  TAB 7: RADAR
+-- ══════════════════════════════════════════════════════════════
 local T_ESP = Window:Tab({ Title = "Radar", Icon = "cpu" })
 local secESP = T_ESP:Section({ Title = "Detection System", Opened = true })
 secESP:Toggle({ Title = "Enable Radar", Value = false, Callback = function(v) State.ESP.active = v; if not v and State.ESP.cache then for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end) end end; notify("Radar", v and "System active ✅" or "System disabled ❌", 2) end})
@@ -941,23 +1027,27 @@ secESPColor:Dropdown({ Title="Normal Color", Values={"Hijau","Merah","Biru","Kun
 secESPColor:Dropdown({ Title="Suspect Color", Values={"Merah","Hijau","Biru","Kuning","Ungu","Cyan","Orange","Pink","Putih","Hitam","Crimson"}, Value="Crimson", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_S=colorMap[v]; State.ESP.boxColor_S=colorMap[v] end end })
 secESPColor:Dropdown({ Title="Glitch Acc Color", Values={"Orange","Merah","Hijau","Biru","Kuning","Ungu","Cyan","Pink","Putih","Hitam"}, Value="Orange", Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G=colorMap[v]; State.ESP.boxColor_G=colorMap[v] end end })
 
--- ⭐ TAB 8: UTILITY (CHAT LOGGER IMPROVED)
+-- ══════════════════════════════════════════════════════════════
+--  TAB 8: UTILITY (CHAT LOGGER)
+-- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal" })
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Callback = function(v) State.Utility.chatLog = v; if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end; notify("Utility", v and "Logger ON ✅" or "Logger OFF ❌", 2) end })
-secChat:Toggle({ Title = "Silent Mode", Value = false, Callback = function(v) State.Utility.chatSilent = v; notify("Utility", v and "Silent ON 🔇" or "Notification ON 🔊", 2) end })
+secChat:Toggle({ Title = "Silent Mode", Value = false, Callback = function(v) State.Utility.chatSilent = v end })
 
 chatTargetLabel = secChat:Paragraph({ Title = "Target", Desc = "None" })
 chatTargetDrop = secChat:Dropdown({ Title = "Select Target", Values = getDisplayNames(), Callback = function(v) local p = findPlayerByDisplay(v); if p then State.Utility.chatTarget = p; pcall(function() chatTargetLabel:SetDesc("Tracking: "..p.DisplayName) end); notify("Chat", "Tracking: "..p.DisplayName.." ✅", 2) end end})
 secChat:Button({ Title = "Clear Target", Callback = function() State.Utility.chatTarget = nil; pcall(function() chatTargetLabel:SetDesc("None") end); pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end); notify("Chat", "Target cleared ❌", 2) end })
-secChat:Button({ Title = "🔄 Refresh List", Callback = function() pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end); notify("Utility", "List refreshed ✅", 2) end })
+secChat:Button({ Title = "🔄 Refresh List", Callback = function() pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end) end })
 chatLogPanel = secChat:Paragraph({ Title = "Console", Desc = "Belum ada chat..." })
 secChat:Button({ Title = "Clear Log", Callback = function() State.Utility.chatHistory = {}; pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end); notify("Utility", "Log cleared ❌", 2) end })
 
 local secMisc = T_UTIL:Section({ Title = "Data Extraction", Opened = true })
 secMisc:Button({ Title = "Copy JobID", Callback = function() pcall(function() setclipboard(game.JobId) end); notify("Utility", "JobID copied ✅", 2) end })
 
--- TAB 9: SECURITY
+-- ══════════════════════════════════════════════════════════════
+--  TAB 9: SECURITY
+-- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert" })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true })
 secProt:Toggle({ Title = "Anti AFK / Anti Kick 🛡️", Value = true, Callback = function(v) if v then startAntiAFK() else stopAntiAFK() end end })
@@ -971,7 +1061,9 @@ local secPerf = T_SEC:Section({ Title = "Performance Tweaks", Opened = true })
 secPerf:Toggle({ Title = "FPS Boost ⚡", Value = false, Callback = function(v) State.Security.antiLag = v; if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end); advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness; advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd; pcall(function() settings().Rendering.QualityLevel = 1 end); Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000; for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end end; notify("Performance", "FPS Boost activated", 2) else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end); Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness; Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd; for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end; for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end; advCache.mats = {}; advCache.texs = {}; notify("Performance", "Graphics restored", 2) end end})
 T_SEC:Section({ Title = "Camera Lock", Opened = true }):Toggle({ Title = "Force Shift Lock", Value = false, Callback = function(v) toggleShiftLock(v) end })
 
--- TAB 10: CONFIG
+-- ══════════════════════════════════════════════════════════════
+--  TAB 10: CONFIG
+-- ══════════════════════════════════════════════════════════════
 local T_SET = Window:Tab({ Title = "Config", Icon = "settings" })
 local secCfg = T_SET:Section({ Title = "File Management", Opened = true })
 local cfgName = "XKID_Config"; local currentConfig = "No config"
@@ -992,4 +1084,4 @@ secTheme:Keybind({ Title = "Toggle Key", Value = Enum.KeyCode.RightShift, Callba
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine v"..CURRENT_VERSION.." Ready ⚡", 3)
-print("✅ XKID Engine v"..CURRENT_VERSION.." - Original Base + Freecam Lock + Chat Logger")
+print("✅ XKID Engine v"..CURRENT_VERSION.." - Original Base + 3 Fixes")
