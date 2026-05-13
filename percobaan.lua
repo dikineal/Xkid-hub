@@ -1105,3 +1105,4 @@ pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 e
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID Engine v"..CURRENT_VERSION.." Ready ⚡", 3)
 print("✅ XKID Engine v"..CURRENT_VERSION.." - Fixed All Tabs & Chaining")
+
