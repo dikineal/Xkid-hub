@@ -126,9 +126,9 @@ task.wait(0.2)
 local State = {
     Move      = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
     Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
-    SoftFling = { active = false, power = 50000 },
+    HardFling = { active = false, power = 100000 },
     Teleport  = { selectedTarget = "", clickTool = nil, clickConn = nil, clickActive = false, lastTap = 0 },
-    Security  = { afkActive = true, shiftLock = false, shiftLockGyro = nil, voidConn = nil, antiLag = false },
+    Security  = { afkActive = true, shiftLock = false, shiftLockGyro = nil, antiLag = false, arConn = nil },
     Cinema    = { hideUI = false, hideNamePlayer = false, hideNameConn = nil, cachedGuis = {} },
     Avatar    = { isRefreshing = false },
     Utility   = { chatLog = false, chatTargets = {}, chatHistory = {}, chatSilent = false },
@@ -1208,7 +1208,7 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  FILTER FUNCTIONS (PERBAIKAN: tidak reset Atmosphere)
+--  FILTER FUNCTIONS
 -- ══════════════════════════════════════════════════════════════
 local function resetFilterOnly()
     for _, v in pairs(Lighting:GetChildren()) do
@@ -1217,9 +1217,7 @@ local function resetFilterOnly()
 end
 
 local function applyFilter(filter)
-    -- Hanya hapus efek filter, jangan ubah Atmosphere manual
     resetFilterOnly()
-    -- Reset hanya properti yang diubah filter preset
     Lighting.ClockTime = originalLighting.ClockTime
     Lighting.Brightness = originalLighting.Brightness
     Lighting.Ambient = originalLighting.Ambient
@@ -1287,10 +1285,8 @@ local function applyFilter(filter)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  ╔════════════════════════════════════════════════════════╗
---  ║        WINDUI BOREAL — MAIN WINDOW                   ║
---  ╚════════════════════════════════════════════════════════╝
--- ══════════════════════════════════════════════════════════
+--  MAIN WINDOW
+-- ══════════════════════════════════════════════════════════════
 local Window = WindUI:CreateWindow({
     Title = "XKID",
     Author = "@WTF.XKID • v" .. CURRENT_VERSION,
@@ -1352,18 +1348,8 @@ Window:Tag({
     Icon = "badge-check",
 })
 
--- Sidebar
+-- Sidebar (hanya Fast Respawn)
 Window:SideBarLabel({ Title = "Quick Actions", Icon = "zap" })
-
-Window:SideBarButton({
-    Title = "Rejoin",
-    Icon = "refresh-cw",
-    Variant = "Secondary",
-    Callback = function()
-        notify("System", "Rejoining...", 2)
-        pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
-    end,
-})
 
 Window:SideBarButton({
     Title = "Fast Respawn",
@@ -1466,11 +1452,10 @@ task.spawn(function()
             if securityLabel then
                 local afk = State.Security.afkActive and "🟢 ONLINE" or "🔴 OFFLINE"
                 local sl = State.Security.shiftLock and "🟢 LOCKED" or "🔴 UNLOCKED"
-                local vd = State.Security.voidConn and "🟢 SECURED" or "🔴 OFFLINE"
                 local lag = State.Security.antiLag and "🟢 ACTIVE" or "🔴 INACTIVE"
                 securityLabel:SetDesc(string.format(
-                    "[ ⏰ ] <font face='RobotoMono'>AFK Protocol :</font> %s\n[ 🔒 ] <font face='RobotoMono'>Shift Lock   :</font> %s\n[ 🕳️ ] <font face='RobotoMono'>Void Shield  :</font> %s\n[ ⚡ ] <font face='RobotoMono'>Frame Boost  :</font> %s",
-                    afk, sl, vd, lag
+                    "[ ⏰ ] <font face='RobotoMono'>AFK Protocol :</font> %s\n[ 🔒 ] <font face='RobotoMono'>Shift Lock   :</font> %s\n[ ⚡ ] <font face='RobotoMono'>Frame Boost  :</font> %s",
+                    afk, sl, lag
                 ))
             end
         end)
@@ -1543,21 +1528,22 @@ secAbi:Toggle({
         end
     end,
 })
-local softFlingConn = nil
+local hardFlingConn = nil
 secAbi:Toggle({
-    Title = "Soft Fling ⚡", Value = false, Type = "Toggle", Icon = "zap",
+    Title = "Hard Fling ⚡", Value = false, Type = "Toggle", Icon = "zap",
     Callback = function(v)
-        State.SoftFling.active = v
+        State.HardFling.active = v
         State.Move.ncp = v
         if v then
-            if not softFlingConn then
-                softFlingConn = TrackC(RS.Heartbeat:Connect(function()
-                    if not State.SoftFling.active then return end
+            if not hardFlingConn then
+                hardFlingConn = TrackC(RS.Heartbeat:Connect(function()
+                    if not State.HardFling.active then return end
                     local r = getRoot()
                     if not r then return end
                     pcall(function()
-                        r.AssemblyAngularVelocity = Vector3.new(0, State.SoftFling.power, 0)
-                        r.AssemblyLinearVelocity = Vector3.new(r.AssemblyLinearVelocity.X, 50, r.AssemblyLinearVelocity.Z)
+                        r.AssemblyAngularVelocity = Vector3.new(0, State.HardFling.power, 0)
+                        r.AssemblyLinearVelocity = Vector3.new(r.AssemblyLinearVelocity.X, 100, r.AssemblyLinearVelocity.Z)
+                        r.CFrame = r.CFrame + Vector3.new(0, 10, 0)
                     end)
                     if LP.Character then
                         for _, p in pairs(LP.Character:GetDescendants()) do
@@ -1567,7 +1553,7 @@ secAbi:Toggle({
                 end))
             end
         else
-            if softFlingConn then softFlingConn:Disconnect(); softFlingConn = nil end
+            if hardFlingConn then hardFlingConn:Disconnect(); hardFlingConn = nil end
         end
     end,
 })
@@ -1612,10 +1598,9 @@ secTP:Button({
     end,
 })
 local tpDropdown = secTP:Dropdown({
-    Title = "Player List", SpecialType = "Player", ExcludeLocalPlayer = true, SearchBarEnabled = false,
+    Title = "Player List", Values = getDisplayNames(), SearchBarEnabled = false,
     Callback = function(selected)
-        local name = typeof(selected) == "table" and selected.Title or tostring(selected)
-        tpTarget = name
+        tpTarget = tostring(selected)
     end,
 })
 secTP:Button({
@@ -1667,9 +1652,9 @@ secZoom:Toggle({
 
 local secSP = T_CAM:Section({ Title = "Spectator Mode", Opened = true, Box = true })
 local specDropdown = secSP:Dropdown({
-    Title = "Select Target", SpecialType = "Player", ExcludeLocalPlayer = true, SearchBarEnabled = false,
+    Title = "Select Target", Values = getDisplayNames(), SearchBarEnabled = false,
     Callback = function(selected)
-        local name = typeof(selected) == "table" and selected.Title or tostring(selected)
+        local name = tostring(selected)
         local p = findPlayerByDisplay(name)
         if p then
             Spec.target = p
@@ -2025,7 +2010,7 @@ secESPColor:Dropdown({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY
+--  TAB 8: UTILITY (CHAT LOGGER - SINGLE DROPDOWN)
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal", ShowTabTitle = true, Border = true })
 
@@ -2045,64 +2030,26 @@ secChat:Toggle({
 
 chatTargetLabel = secChat:Paragraph({ Title = "Targets", Desc = "None" })
 
--- Deteksi apakah SpecialType + Multi didukung
-local specialMultiSupported = pcall(function()
-    local testDrop = secChat:Dropdown({
-        Title = "_test_multi_special_",
-        Multi = true,
-        SpecialType = "Player",
-        Values = {},
-        Callback = function() end,
-    })
-end)
-
-if specialMultiSupported then
-    chatTargetDrop = secChat:Dropdown({
-        Title = "Select Targets (Multi)",
-        Multi = true,
-        AllowNone = true,
-        SpecialType = "Player",
-        ExcludeLocalPlayer = true,
-        SearchBarEnabled = false,
-        Callback = function(selected)
-            State.Utility.chatTargets = {}
-            if selected then
-                if typeof(selected) == "table" then
-                    for _, v in ipairs(selected) do
-                        local name = typeof(v) == "table" and v.Title or tostring(v)
-                        table.insert(State.Utility.chatTargets, name)
-                    end
-                end
+chatTargetDrop = secChat:Dropdown({
+    Title = "Select Targets (Multi)",
+    Multi = true,
+    AllowNone = true,
+    Values = getDisplayNames(),
+    SearchBarEnabled = false,
+    Callback = function(selected)
+        State.Utility.chatTargets = {}
+        if selected and typeof(selected) == "table" then
+            for _, name in ipairs(selected) do
+                table.insert(State.Utility.chatTargets, tostring(name))
             end
-            if #State.Utility.chatTargets > 0 then
-                pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end)
-            else
-                pcall(function() chatTargetLabel:SetDesc("None") end)
-            end
-        end,
-    })
-else
-    chatTargetDrop = secChat:Dropdown({
-        Title = "Select Targets (Multi)",
-        Multi = true,
-        AllowNone = true,
-        Values = getDisplayNames(),
-        SearchBarEnabled = false,
-        Callback = function(selected)
-            State.Utility.chatTargets = {}
-            if selected and typeof(selected) == "table" then
-                for _, name in ipairs(selected) do
-                    table.insert(State.Utility.chatTargets, tostring(name))
-                end
-            end
-            if #State.Utility.chatTargets > 0 then
-                pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end)
-            else
-                pcall(function() chatTargetLabel:SetDesc("None") end)
-            end
-        end,
-    })
-end
+        end
+        if #State.Utility.chatTargets > 0 then
+            pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end)
+        else
+            pcall(function() chatTargetLabel:SetDesc("None") end)
+        end
+    end,
+})
 
 secChat:Button({
     Title = "Clear Targets", Icon = "x",
@@ -2130,15 +2077,6 @@ secChat:Button({
     end,
 })
 
-local secMisc = T_UTIL:Section({ Title = "Data Extraction", Opened = true, Box = true })
-secMisc:Button({
-    Title = "Copy JobID", Desc = "Copy server Job ID", Icon = "copy",
-    Callback = function()
-        pcall(function() setclipboard(game.JobId) end)
-        notify("Utility", "JobID copied ✅", 2)
-    end,
-})
-
 -- ══════════════════════════════════════════════════════════════
 --  TAB 9: SECURITY
 -- ══════════════════════════════════════════════════════════════
@@ -2148,24 +2086,6 @@ local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true, B
 secProt:Toggle({
     Title = "Anti AFK / Anti Kick 🛡️", Value = true, Type = "Toggle", Icon = "shield-check",
     Callback = function(v) if v then startAntiAFK() else stopAntiAFK() end end,
-})
-secProt:Toggle({
-    Title = "Anti Void 🕳️", Value = false, Type = "Toggle", Icon = "alert-triangle",
-    Callback = function(v)
-        if v then
-            State.Security.voidConn = TrackC(RS.Heartbeat:Connect(function()
-                local hrp = getRoot()
-                if hrp and hrp.Position.Y <= workspace.FallenPartsDestroyHeight + 50 then
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                    hrp.CFrame = hrp.CFrame + Vector3.new(0, 300, 0)
-                    notify("Security", "Saved from void!", 2)
-                end
-            end))
-        else
-            if State.Security.voidConn then State.Security.voidConn:Disconnect(); State.Security.voidConn = nil end
-        end
-        notify("Security", v and "Anti-Void enabled" or "Anti-Void disabled", 2)
-    end,
 })
 secProt:Button({
     Title = "Stuck Fix 🔧", Desc = "Get unstuck from walls/ground", Icon = "wrench",
