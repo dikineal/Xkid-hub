@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v1.0.0 — WindUI Boreal Edition
+  📌 v1.0.0
 ]]
 
 local RS = game:GetService("RunService")
