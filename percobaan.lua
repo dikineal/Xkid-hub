@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v1.0.0 — WindUI Boreal Edition
+  📌 v1.0.1 — WindUI Boreal Edition
 ]]
 
 local RS = game:GetService("RunService")
@@ -29,10 +29,10 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "1.0.0"
+local CURRENT_VERSION = "1.0.1"
 
 -- ══════════════════════════════════════════════════════════════
---  LIGHTING CACHE (diambil sebelum cleanup, nilai asli game)
+--  LIGHTING CACHE
 -- ══════════════════════════════════════════════════════════════
 local originalLighting = {
     ClockTime = Lighting.ClockTime,
@@ -526,35 +526,11 @@ task.spawn(function()
             local myHrp = getCharRoot(LP.Character)
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LP and p.Character then
-                    local isSus, isGlitch, reason = false, false, ""
-                    for _, v in pairs(p.Character:GetChildren()) do
-                        if v:IsA("BasePart") and (v.Size.X > 30 or v.Size.Y > 30 or v.Size.Z > 30) then
-                            isSus = true; reason = "Map Blocker"; break
-                        elseif v:IsA("Accessory") then
-                            local h = v:FindFirstChild("Handle")
-                            if h and h:IsA("BasePart") then
-                                if h.Size.Magnitude > 20 then
-                                    isSus = true; reason = "Huge Hat"; break
-                                elseif h.Size.Magnitude > 10 or (h.Transparency < 0.1 and h.Material == Enum.Material.Neon) then
-                                    isGlitch = true; reason = "Glitch Acc"
-                                end
-                            end
-                        end
-                    end
-                    if not isSus and not isGlitch then
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        if hum then
-                            local bws, bhs = hum:FindFirstChild("BodyWidthScale"), hum:FindFirstChild("BodyHeightScale")
-                            if (bws and bws.Value > 2.0) or (bhs and bhs.Value > 2.0) then
-                                isSus = true; reason = "Glitch Avatar"
-                            end
-                        end
-                    end
                     initPlayerCache(p)
                     if State.ESP.cache[p] then
-                        State.ESP.cache[p].isSuspect = isSus
-                        State.ESP.cache[p].isGlitch = isGlitch
-                        State.ESP.cache[p].reason = reason
+                        State.ESP.cache[p].isSuspect = false
+                        State.ESP.cache[p].isGlitch = false
+                        State.ESP.cache[p].reason = ""
                     end
                     if myHrp then
                         local hrp = getCharRoot(p.Character)
@@ -589,24 +565,17 @@ TrackC(RS.RenderStepped:Connect(function()
             if c.hl then c.hl.Enabled = false end
         end)
     end
-    local hlCount = 0
     for _, data in ipairs(espsortedPlayers) do
         local player, char, hrp, dist = data.p, data.char, data.hrp, data.dist
         local c = State.ESP.cache[player]
         if not c then continue end
         local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
         if not onScreen then continue end
-        local isSus, isGlitch = c.isSuspect, c.isGlitch
-        local useHl = isSus or isGlitch or State.ESP.highlightMode
         local txt = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
-        if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason end
-        local cColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
-        local tColor = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N)
-        local bColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
         pcall(function()
             if c.texts then
                 c.texts.Text = txt
-                c.texts.Color = cColor
+                c.texts.Color = State.ESP.nameColor
                 c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45)
                 c.texts.Visible = true
             end
@@ -620,45 +589,10 @@ TrackC(RS.RenderStepped:Connect(function()
                 end
                 c.tracer.From = origin
                 c.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
-                c.tracer.Color = tColor
+                c.tracer.Color = State.ESP.tracerColor_N
                 c.tracer.Visible = true
             end
         end)
-        if useHl and hlCount < 30 then
-            hlCount = hlCount + 1
-            pcall(function()
-                local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
-                local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
-                if topOn and botOn and #c.boxLines == 4 then
-                    local bh = math.abs(top.Y - bot.Y)
-                    local bw = bh * 0.6
-                    c.boxLines[1].From = Vector2.new(rootPos.X - bw / 2, top.Y)
-                    c.boxLines[1].To = Vector2.new(rootPos.X + bw / 2, top.Y)
-                    c.boxLines[2].From = Vector2.new(rootPos.X + bw / 2, top.Y)
-                    c.boxLines[2].To = Vector2.new(rootPos.X + bw / 2, bot.Y)
-                    c.boxLines[3].From = Vector2.new(rootPos.X + bw / 2, bot.Y)
-                    c.boxLines[3].To = Vector2.new(rootPos.X - bw / 2, bot.Y)
-                    c.boxLines[4].From = Vector2.new(rootPos.X - bw / 2, bot.Y)
-                    c.boxLines[4].To = Vector2.new(rootPos.X - bw / 2, top.Y)
-                    for i = 1, 4 do
-                        c.boxLines[i].Color = bColor
-                        c.boxLines[i].Visible = true
-                    end
-                end
-            end)
-            pcall(function()
-                if not c.hl or c.hl.Parent ~= char then
-                    if c.hl then c.hl:Destroy() end
-                    c.hl = Instance.new("Highlight", char)
-                    c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                end
-                if c.hl then
-                    c.hl.FillColor = bColor
-                    c.hl.OutlineColor = Color3.new(1, 1, 1)
-                    c.hl.Enabled = true
-                end
-            end)
-        end
     end
 end))
 
@@ -1051,18 +985,6 @@ end
 -- ══════════════════════════════════════════════════════════════
 --  SPECTATE ENGINE
 -- ══════════════════════════════════════════════════════════════
-local function inJoystick(pos)
-    local ctrl = LP and LP.PlayerGui and LP.PlayerGui:FindFirstChild("TouchGui")
-    if not ctrl then return false end
-    local frame = ctrl:FindFirstChild("TouchControlFrame")
-    local thumb = frame and frame:FindFirstChild("DynamicThumbstickFrame")
-    if not thumb then return false end
-    return pos.X >= thumb.AbsolutePosition.X
-        and pos.Y >= thumb.AbsolutePosition.Y
-        and pos.X <= thumb.AbsolutePosition.X + thumb.AbsoluteSize.X
-        and pos.Y <= thumb.AbsolutePosition.Y + thumb.AbsoluteSize.Y
-end
-
 local Spec = {
     active = false, target = nil, mode = "third", dist = 8, origFov = 70,
     orbitYaw = 0, orbitPitch = 0, fpYaw = 0, fpPitch = 0,
@@ -1071,7 +993,7 @@ local specTM, specPinch, specPinchD, specPan, specConns = nil, {}, nil, Vector2.
 
 local function startSpecCapture()
     table.insert(specConns, UIS.InputBegan:Connect(function(inp, gp)
-        if gp or not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch or inJoystick(inp.Position) then return end
+        if gp or not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end
         table.insert(specPinch, inp)
         specTM = #specPinch == 1 and inp or nil
     end))
@@ -1112,8 +1034,7 @@ local function startSpecLoop()
     RS:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value + 1, function()
         if not Spec.active then return end
         pcall(function()
-            if not Spec.target or not Spec.target.Parent or not Spec.target.Character or not Spec.target.Character:FindFirstChild("HumanoidRootPart") then
-                notify("System", "Target not valid! ⚠️", 2)
+            if not Spec.target or not Spec.target.Character or not Spec.target.Character:FindFirstChild("HumanoidRootPart") then
                 Spec.active = false
                 stopSpecLoop()
                 stopSpecCapture()
@@ -1147,7 +1068,7 @@ local function stopSpecLoop()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  CHAT LOGGER (MULTI-TARGET)
+--  CHAT LOGGER (FIXED v1.0.1)
 -- ══════════════════════════════════════════════════════════════
 local chatLogPanel = nil
 local chatTargetLabel = nil
@@ -1156,43 +1077,74 @@ local chatTargetDrop = nil
 local function logMsg(displayName, msg)
     if not State.Utility.chatLog then return end
     if #State.Utility.chatTargets == 0 then return end
+
+    -- Normalisasi: bandingkan case-insensitive dan trim
+    local cleanName = displayName:lower():match("^%s*(.-)%s*$")
     local found = false
     for _, t in ipairs(State.Utility.chatTargets) do
-        if t == displayName then found = true; break end
+        local cleanTarget = t:lower():match("^%s*(.-)%s*$")
+        if cleanName == cleanTarget then
+            found = true
+            break
+        end
     end
     if not found then return end
+
     local entry = string.format("[%s] %s: %s", os.date("%H:%M:%S"), displayName, msg)
     table.insert(State.Utility.chatHistory, entry)
     if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end
     if not State.Utility.chatSilent then notify("Chat", displayName .. ": " .. msg, 2) end
 end
 
-if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-    pcall(function()
-        TrackC(TextChatService.MessageReceived:Connect(function(m)
-            if not State.Utility.chatLog then return end
-            if m.TextSource then logMsg(m.TextSource.Name, m.Text) end
-        end))
-    end)
-else
+-- Event listener (mendukung TextChatService & Legacy)
+task.spawn(function()
+    local connectedPlayers = {}
+
+    local function connectPlayer(p)
+        if connectedPlayers[p] then return end
+        connectedPlayers[p] = true
+
+        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            -- Sudah ditangani oleh MessageReceived global
+        else
+            pcall(function()
+                TrackC(p.Chatted:Connect(function(msg)
+                    logMsg(p.Name, msg)
+                end))
+            end)
+        end
+    end
+
+    -- Connect existing players
     for _, p in ipairs(Players:GetPlayers()) do
+        connectPlayer(p)
+    end
+
+    -- Connect new players
+    TrackC(Players.PlayerAdded:Connect(function(p)
+        connectPlayer(p)
+    end))
+
+    -- TextChatService listener
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
         pcall(function()
-            TrackC(p.Chatted:Connect(function(m)
-                if not State.Utility.chatLog then return end
-                logMsg(p.Name, m)
+            TrackC(TextChatService.MessageReceived:Connect(function(m)
+                local sourceName = nil
+                if m.TextSource then
+                    sourceName = m.TextSource.Name
+                elseif m.PrefixText and m.PrefixText ~= "" then
+                    -- Fallback: ekstrak nama dari prefix (format: "[Nama]:")
+                    sourceName = m.PrefixText:match("%[(.-)%]")
+                end
+                if sourceName then
+                    logMsg(sourceName, m.Text)
+                end
             end))
         end)
     end
-    TrackC(Players.PlayerAdded:Connect(function(p)
-        pcall(function()
-            TrackC(p.Chatted:Connect(function(m)
-                if not State.Utility.chatLog then return end
-                logMsg(p.Name, m)
-            end))
-        end)
-    end))
-end
+end)
 
+-- UI Updater
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.5)
@@ -1348,7 +1300,7 @@ Window:Tag({
     Icon = "badge-check",
 })
 
--- Sidebar (hanya Fast Respawn)
+-- Sidebar
 Window:SideBarLabel({ Title = "Quick Actions", Icon = "zap" })
 
 Window:SideBarButton({
@@ -2010,7 +1962,7 @@ secESPColor:Dropdown({
 })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY (CHAT LOGGER - SINGLE DROPDOWN)
+--  TAB 8: UTILITY
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal", ShowTabTitle = true, Border = true })
 
@@ -2289,4 +2241,4 @@ secCfg:Button({
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID v" .. CURRENT_VERSION .. " Ready ⚡", 3)
-print("✅ XKID v" .. CURRENT_VERSION .. " - WindUI Boreal Edition")
+print("✅ XKID v" .. CURRENT_VERSION .. " - WindUI Boreal Edition | Chat Logger Fixed")
