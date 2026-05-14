@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v1.0.0
+  📌 v1.0.0 — WindUI Boreal Edition
 ]]
 
 local RS = game:GetService("RunService")
@@ -118,7 +118,7 @@ end
 --  LOAD WINDUI BOREAL
 -- ══════════════════════════════════════════════════════════════
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/FayintExploit/Windui-boreal/refs/heads/main/WindUI%20boreal"))()
-task.wait()
+task.wait(0.2)
 
 -- ══════════════════════════════════════════════════════════════
 --  STATE MANAGEMENT
@@ -993,7 +993,7 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  FILTER FUNCTIONS (PERBAIKAN: tidak reset Atmosphere)
+--  FILTER FUNCTIONS
 -- ══════════════════════════════════════════════════════════════
 local function resetFilterOnly()
     for _, v in pairs(Lighting:GetChildren()) do
