@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v1.0.6 — Ultra-Safe AFK Edition
+  📌 v1.0.7 — Chat Logger Fixed + Hard Fling Fixed
 ]]
 
 local RS = game:GetService("RunService")
@@ -30,7 +30,7 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "1.0.6"
+local CURRENT_VERSION = "1.0.7"
 
 -- ══════════════════════════════════════════════════════════════
 --  LIGHTING CACHE
@@ -132,7 +132,7 @@ local State = {
     Security  = { afkActive = true, shiftLock = false, shiftLockGyro = nil, antiLag = false, arConn = nil, kickCooldown = 0 },
     Cinema    = { hideUI = false, hideNamePlayer = false, hideNameConn = nil, cachedGuis = {} },
     Avatar    = { isRefreshing = false },
-    Utility   = { chatLog = false, chatTargets = {}, chatHistory = {}, chatSilent = false },
+    Utility   = { chatLog = false, chatTargets = {}, chatHistory = {} },
     AutoLike  = { active = false, thread = nil, lastTarget = nil, count = 0 },
     ESP = {
         active          = false,
@@ -236,19 +236,14 @@ end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
 -- ══════════════════════════════════════════════════════════════
---  ULTRA-SAFE AFK v2.0 — TIGA LAPIS (v1.0.6)
+--  ULTRA-SAFE AFK v2.0 — OFFISDE TIMER 10 MENIT
 -- ══════════════════════════════════════════════════════════════
-
--- Lapis 1: Offside Timer — Camera micro-rotation tiap 10-11 menit
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
-        local waitTime = math.random(600, 660) -- 10-11 menit
+        local waitTime = math.random(600, 660)
         task.wait(waitTime)
-        
         local lastInput = tick()
         pcall(function() lastInput = UIS:GetLastInputTime() end)
-        
-        -- Hanya jika idle > 9 menit
         if tick() - lastInput > 540 then
             pcall(function()
                 local cf = Cam.CFrame
@@ -262,17 +257,15 @@ task.spawn(function()
     end
 end)
 
--- Lapis 2: Anti-Kick Shield — Deteksi error + popup kick
+-- Anti-Kick Shield
 TrackC(GuiService.ErrorMessageChanged:Connect(function(err)
     if err ~= "" then
-        -- Cooldown rejoin: maks 1x tiap 2 menit
         if tick() - State.Security.kickCooldown < 120 then return end
         State.Security.kickCooldown = tick()
         task.wait(math.random(3, 8))
         pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
     end
 end))
-
 TrackC(CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
     if child.Name == "ErrorPrompt" then
         if tick() - State.Security.kickCooldown < 120 then return end
@@ -282,11 +275,10 @@ TrackC(CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
     end
 end))
 
--- Lapis 3: Silent Heartbeat — Menjaga thread tetap hidup, tanpa output
+-- Silent Heartbeat
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
-        task.wait(math.random(300, 480)) -- 5-8 menit
-        -- Tidak melakukan apa-apa, hanya memastikan thread tidak mati
+        task.wait(math.random(300, 480))
     end
 end)
 
@@ -390,7 +382,7 @@ local function fastRespawn()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  ESP ENGINE (FULL)
+--  ESP ENGINE
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -425,29 +417,9 @@ task.spawn(function()
             local myHrp = getCharRoot(LP.Character)
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LP and p.Character then
-                    local isSus, isGlitch, reason = false, false, ""
-                    for _, v in pairs(p.Character:GetChildren()) do
-                        if v:IsA("BasePart") and (v.Size.X > 30 or v.Size.Y > 30 or v.Size.Z > 30) then
-                            isSus = true; reason = "Map Blocker"; break
-                        elseif v:IsA("Accessory") then
-                            local h = v:FindFirstChild("Handle")
-                            if h and h:IsA("BasePart") then
-                                if h.Size.Magnitude > 20 then isSus = true; reason = "Huge Hat"; break
-                                elseif h.Size.Magnitude > 10 or (h.Transparency < 0.1 and h.Material == Enum.Material.Neon) then
-                                    isGlitch = true; reason = "Glitch Acc" end
-                            end
-                        end
-                    end
-                    if not isSus and not isGlitch then
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        if hum then
-                            local bws, bhs = hum:FindFirstChild("BodyWidthScale"), hum:FindFirstChild("BodyHeightScale")
-                            if (bws and bws.Value > 2.0) or (bhs and bhs.Value > 2.0) then isSus = true; reason = "Glitch Avatar" end
-                        end
-                    end
                     initPlayerCache(p)
                     if State.ESP.cache[p] then
-                        State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason
+                        State.ESP.cache[p].isSuspect = false; State.ESP.cache[p].isGlitch = false; State.ESP.cache[p].reason = ""
                     end
                     if myHrp then
                         local hrp = getCharRoot(p.Character)
@@ -470,8 +442,6 @@ end)
 
 TrackC(RS.RenderStepped:Connect(function()
     if not State.ESP.active then return end
-    local myHrp = getCharRoot(LP.Character)
-    if not myHrp then return end
     local vp = Cam.ViewportSize; local center = Vector2.new(vp.X / 2, vp.Y / 2)
     for _, c in pairs(State.ESP.cache) do
         pcall(function()
@@ -480,39 +450,21 @@ TrackC(RS.RenderStepped:Connect(function()
             if c.hl then c.hl.Enabled = false end
         end)
     end
-    local hlCount = 0
     for _, data in ipairs(espsortedPlayers) do
-        local player, char, hrp, dist = data.p, data.char, data.hrp, data.dist
+        local player, hrp, dist = data.p, data.hrp, data.dist
         local c = State.ESP.cache[player]; if not c then continue end
         local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
         if not onScreen then continue end
-        local isSus, isGlitch = c.isSuspect, c.isGlitch
-        local useHl = isSus or isGlitch or State.ESP.highlightMode
         local txt = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
-        if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason end
-        local cColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
-        local tColor = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N)
-        local bColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
         pcall(function()
-            if c.texts then c.texts.Text = txt; c.texts.Color = cColor; c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true end
+            if c.texts then c.texts.Text = txt; c.texts.Color = State.ESP.nameColor; c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true end
             if State.ESP.tracerMode ~= "OFF" and c.tracer then
                 local origin = Vector2.new(vp.X / 2, vp.Y)
                 if State.ESP.tracerMode == "Center" then origin = center
                 elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
-                c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y); c.tracer.Color = tColor; c.tracer.Visible = true
+                c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y); c.tracer.Color = State.ESP.tracerColor_N; c.tracer.Visible = true
             end
         end)
-        if useHl and hlCount < 30 then
-            hlCount = hlCount + 1
-            pcall(function()
-                local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
-                local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
-                if topOn and botOn and #c.boxLines == 4 then
-                    local bh = math.abs(top.Y - bot.Y); local bw = bh * 0.6
-                    for i = 1, 4 do c.boxLines[i].Color = bColor; c.boxLines[i].Visible = true end
-                end
-            end)
-        end
     end
 end))
 
@@ -583,7 +535,9 @@ local function toggleFly(v)
         if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity = flyVel end
         if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector) end
     end)
-end-- ══════════════════════════════════════════════════════════════
+end
+
+-- ══════════════════════════════════════════════════════════════
 --  SMART CLICK TP
 -- ══════════════════════════════════════════════════════════════
 local function toggleSmartTP(v)
@@ -725,60 +679,6 @@ local function startSpecLoop()
     end)
 end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
-
--- ══════════════════════════════════════════════════════════════
---  CHAT LOGGER (MULTI-TARGET)
--- ══════════════════════════════════════════════════════════════
-local chatLogPanel, chatTargetLabel, chatTargetDrop = nil, nil, nil
-
-local function logMsg(displayName, msg)
-    if not State.Utility.chatLog then return end
-    if #State.Utility.chatTargets == 0 then return end
-    local cleanName = displayName:lower():match("^%s*(.-)%s*$")
-    for _, t in ipairs(State.Utility.chatTargets) do
-        if cleanName == t:lower():match("^%s*(.-)%s*$") then
-            local entry = string.format("[%s] %s: %s", os.date("%H:%M:%S"), displayName, msg)
-            table.insert(State.Utility.chatHistory, entry)
-            if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end
-            if not State.Utility.chatSilent then notify("Chat", displayName .. ": " .. msg, 2) end
-            return
-        end
-    end
-end
-
-task.spawn(function()
-    local connectedPlayers = {}
-    local function connectPlayer(p)
-        if connectedPlayers[p] then return end; connectedPlayers[p] = true
-        if TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
-            pcall(function() TrackC(p.Chatted:Connect(function(m) logMsg(p.Name, m) end)) end)
-        end
-    end
-    for _, p in ipairs(Players:GetPlayers()) do connectPlayer(p) end
-    TrackC(Players.PlayerAdded:Connect(function(p) connectPlayer(p) end))
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        pcall(function() TrackC(TextChatService.MessageReceived:Connect(function(m)
-            local sourceName = nil
-            if m.TextSource then sourceName = m.TextSource.Name
-            elseif m.PrefixText and m.PrefixText ~= "" then sourceName = m.PrefixText:match("%[(.-)%]") end
-            if sourceName then logMsg(sourceName, m.Text) end
-        end)) end)
-    end
-end)
-
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        task.wait(0.5)
-        if chatLogPanel and State.Utility.chatLog then
-            pcall(function()
-                local t = table.concat(State.Utility.chatHistory, "\n")
-                if #t > 2000 then t = t:sub(-2000) end
-                if #t == 0 then t = "Belum ada chat..." end
-                chatLogPanel:SetDesc(t)
-            end)
-        end
-    end
-end)
 
 -- ══════════════════════════════════════════════════════════════
 --  AUTO LIKE ENGINE
@@ -927,7 +827,33 @@ secAbi:Slider({ Title = "Fly Speed", Desc = "Current: " .. tostring(State.Move.f
 local noclipConn = nil
 secAbi:Toggle({ Title = "NoClip", Value = false, Type = "Toggle", Icon = "ghost", Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end end end })
 local hardFlingConn = nil
-secAbi:Toggle({ Title = "Hard Fling", Value = false, Type = "Toggle", Icon = "zap", Callback = function(v) State.HardFling.active = v; State.Move.ncp = v; if v then if not hardFlingConn then hardFlingConn = TrackC(RS.Heartbeat:Connect(function() if not State.HardFling.active then return end; local r = getRoot(); if not r then return end; pcall(function() r.AssemblyAngularVelocity = Vector3.new(0, State.HardFling.power, 0); r.AssemblyLinearVelocity = Vector3.new(r.AssemblyLinearVelocity.X, 100, r.AssemblyLinearVelocity.Z); r.CFrame = r.CFrame + Vector3.new(0, 10, 0) end); if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if hardFlingConn then hardFlingConn:Disconnect(); hardFlingConn = nil end end end })
+secAbi:Toggle({ Title = "Hard Fling", Value = false, Type = "Toggle", Icon = "zap", Callback = function(v)
+    State.HardFling.active = v
+    State.Move.ncp = v
+    if v then
+        if not hardFlingConn then
+            hardFlingConn = TrackC(RS.Heartbeat:Connect(function()
+                if not State.HardFling.active then return end
+                local r = getRoot()
+                if not r then return end
+                -- HANYA BERPUTAR (Angular Velocity), TIDAK TERBANG
+                pcall(function()
+                    r.AssemblyAngularVelocity = Vector3.new(0, State.HardFling.power, 0)
+                end)
+                if LP.Character then
+                    for _, p in pairs(LP.Character:GetDescendants()) do
+                        if p:IsA("BasePart") then p.CanCollide = false end
+                    end
+                end
+            end))
+        end
+    else
+        if hardFlingConn then hardFlingConn:Disconnect(); hardFlingConn = nil end
+        -- Hentikan putaran saat toggle off
+        local r = getRoot()
+        if r then pcall(function() r.AssemblyAngularVelocity = Vector3.zero end) end
+    end
+end})
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 3: NAVIGATION
@@ -1008,28 +934,122 @@ secESPColor:Dropdown({ Title = "Suspect Color", Values = { "Merah", "Hijau", "Bi
 secESPColor:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam" }, Value = "Orange", SearchBarEnabled = false, Callback = function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v]; State.ESP.boxColor_G = colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY
+--  TAB 8: UTILITY (CHAT LOGGER FIXED)
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal", ShowTabTitle = true, Border = true })
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true, Box = true })
-secChat:Toggle({ Title = "Enable Logger", Value = false, Type = "Toggle", Icon = "file-text", Callback = function(v) State.Utility.chatLog = v; if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end; notify("Utility", v and "Logger ON ✅" or "Logger OFF ❌", 2) end })
-secChat:Toggle({ Title = "Silent Mode", Value = false, Type = "Checkbox", Icon = "volume-x", Callback = function(v) State.Utility.chatSilent = v end })
+secChat:Toggle({ Title = "Enable Logger", Value = false, Type = "Toggle", Icon = "file-text", Callback = function(v)
+    State.Utility.chatLog = v
+    if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end
+    notify("Utility", v and "Logger ON" or "Logger OFF", 2)
+end})
 chatTargetLabel = secChat:Paragraph({ Title = "Targets", Desc = "None" })
-chatTargetDrop = secChat:Dropdown({ Title = "Select Targets (Multi)", Multi = true, AllowNone = true, Values = getDisplayNames(), SearchBarEnabled = false, Callback = function(selected) State.Utility.chatTargets = {}; if selected and typeof(selected) == "table" then for _, name in ipairs(selected) do table.insert(State.Utility.chatTargets, tostring(name)) end end; if #State.Utility.chatTargets > 0 then pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end) else pcall(function() chatTargetLabel:SetDesc("None") end) end end })
-secChat:Button({ Title = "Clear Targets", Icon = "x", Callback = function() State.Utility.chatTargets = {}; pcall(function() chatTargetLabel:SetDesc("None") end); pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end); notify("Chat", "Targets cleared ❌", 2) end })
-secChat:Button({ Title = "🔄 Refresh List", Icon = "refresh-cw", Callback = function() pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end); notify("Chat", "List refreshed ✅", 2) end })
+chatTargetDrop = secChat:Dropdown({ Title = "Select Targets", Multi = true, AllowNone = true, Values = getDisplayNames(), SearchBarEnabled = false, Callback = function(selected)
+    State.Utility.chatTargets = {}
+    if selected and typeof(selected) == "table" then
+        for _, name in ipairs(selected) do
+            table.insert(State.Utility.chatTargets, tostring(name))
+        end
+    end
+    if #State.Utility.chatTargets > 0 then
+        pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end)
+    else
+        pcall(function() chatTargetLabel:SetDesc("None") end)
+    end
+end})
+secChat:Button({ Title = "Clear Targets", Icon = "x", Callback = function()
+    State.Utility.chatTargets = {}
+    pcall(function() chatTargetLabel:SetDesc("None") end)
+    pcall(function() chatTargetDrop:SetValues(getDisplayNames()) end)
+    notify("Chat", "Targets cleared", 2)
+end})
+secChat:Button({ Title = "Refresh List", Icon = "refresh-cw", Callback = function()
+    pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end)
+    notify("Chat", "List refreshed", 2)
+end})
 chatLogPanel = secChat:Paragraph({ Title = "Console", Desc = "Belum ada chat..." })
-secChat:Button({ Title = "Clear Log", Icon = "trash-2", Callback = function() State.Utility.chatHistory = {}; pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end); notify("Utility", "Log cleared ❌", 2) end })
+secChat:Button({ Title = "Clear Log", Icon = "trash-2", Callback = function()
+    State.Utility.chatHistory = {}
+    pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end)
+    notify("Utility", "Log cleared", 2)
+end})
+
+-- Chat Logger Event Listener (dipasang setelah UI)
+task.spawn(function()
+    local connectedPlayers = {}
+    local function connectPlayer(p)
+        if connectedPlayers[p] then return end
+        connectedPlayers[p] = true
+        if TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
+            pcall(function()
+                TrackC(p.Chatted:Connect(function(msg)
+                    if not State.Utility.chatLog then return end
+                    for _, target in ipairs(State.Utility.chatTargets) do
+                        local ct = target:lower():match("^%s*(.-)%s*$")
+                        local cn = p.Name:lower():match("^%s*(.-)%s*$")
+                        local cd = p.DisplayName:lower():match("^%s*(.-)%s*$")
+                        if cn == ct or cd == ct then
+                            local entry = string.format("[%s] %s: %s", os.date("%H:%M:%S"), p.DisplayName, msg)
+                            table.insert(State.Utility.chatHistory, entry)
+                            if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end
+                            notify("Chat", p.DisplayName .. ": " .. msg, 2)
+                            break
+                        end
+                    end
+                end))
+            end)
+        end
+    end
+    for _, p in ipairs(Players:GetPlayers()) do connectPlayer(p) end
+    TrackC(Players.PlayerAdded:Connect(function(p) connectPlayer(p) end))
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        pcall(function()
+            TrackC(TextChatService.MessageReceived:Connect(function(message)
+                if not State.Utility.chatLog then return end
+                local sender = nil
+                if message.TextSource then sender = message.TextSource.Name end
+                if sender then
+                    for _, target in ipairs(State.Utility.chatTargets) do
+                        local ct = target:lower():match("^%s*(.-)%s*$")
+                        local cs = sender:lower():match("^%s*(.-)%s*$")
+                        if cs == ct then
+                            local entry = string.format("[%s] %s: %s", os.date("%H:%M:%S"), sender, message.Text)
+                            table.insert(State.Utility.chatHistory, entry)
+                            if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end
+                            notify("Chat", sender .. ": " .. message.Text, 2)
+                            break
+                        end
+                    end
+                end
+            end))
+        end)
+    end
+end)
+
+-- Console Updater
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        task.wait(0.5)
+        if chatLogPanel and State.Utility.chatLog then
+            pcall(function()
+                local t = table.concat(State.Utility.chatHistory, "\n")
+                if #t > 2000 then t = t:sub(-2000) end
+                if #t == 0 then t = "Belum ada chat..." end
+                chatLogPanel:SetDesc(t)
+            end)
+        end
+    end
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 9: SECURITY
 -- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert", ShowTabTitle = true, Border = true })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true, Box = true })
-secProt:Toggle({ Title = "Anti Kick 🛡️", Value = true, Type = "Toggle", Icon = "shield-check", Callback = function(v) State.Security.afkActive = v; if not v then notify("Security", "Anti-Kick disabled ⚠️", 2) else notify("Security", "Anti-Kick active 🛡️", 2) end end })
-secProt:Button({ Title = "Stuck Fix 🔧", Desc = "Get unstuck from walls/ground", Icon = "wrench", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied ✅", 2) end })
+secProt:Toggle({ Title = "Anti Kick", Value = true, Type = "Toggle", Icon = "shield-check", Callback = function(v) State.Security.afkActive = v; if not v then notify("Security", "Anti-Kick disabled ⚠️", 2) else notify("Security", "Anti-Kick active 🛡️", 2) end end })
+secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Icon = "wrench", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied ✅", 2) end })
 local secSrv = T_SEC:Section({ Title = "Server Control", Opened = true, Box = true })
-secSrv:Toggle({ Title = "Auto Rejoin 🔄", Value = false, Type = "Toggle", Icon = "refresh-cw", Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then notify("Security", "Rejoining...", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)); notify("Security", "Auto Rejoin standby ✅", 2) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end; notify("Security", "Auto Rejoin disabled ❌", 2) end end })
+secSrv:Toggle({ Title = "Auto Rejoin", Value = false, Type = "Toggle", Icon = "refresh-cw", Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then notify("Security", "Rejoining...", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)); notify("Security", "Auto Rejoin standby ✅", 2) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end; notify("Security", "Auto Rejoin disabled ❌", 2) end end })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Icon = "log-in", Callback = function() notify("System", "Rejoining...", 2); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
 secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Icon = "shuffle", Callback = function() notify("System", "Searching servers...", 2); pcall(function() local req = (syn and syn.request) or (http and http.request) or http_request or request; if not req then notify("Error", "HTTP failed", 2); return end; local res = req({ Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100", Method = "GET" }); if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body); if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); notify("Server Hop", "Joining server with " .. v.playing .. " players ✅", 2); return end end end; notify("Server Hop", "No server found", 2) end end) end })
 local secPerf = T_SEC:Section({ Title = "Performance Tweaks", Opened = true, Box = true })
@@ -1064,4 +1084,4 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(funct
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID v" .. CURRENT_VERSION .. " Ready ⚡", 3)
-print("✅ XKID v" .. CURRENT_VERSION .. " - Ultra-Safe AFK | Offside Timer 10min")
+print("✅ XKID v" .. CURRENT_VERSION .. " - Chat Logger Fixed | Hard Fling Fixed")
