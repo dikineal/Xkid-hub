@@ -110,14 +110,24 @@ getgenv()._XKID_LOADED = true
 getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS = {}
 local function TrackC(conn)
-    table.insert(getgenv()._XKID_CONNS, conn)
+    if conn then
+        table.insert(getgenv()._XKID_CONNS, conn)
+    end
     return conn
 end
 
 -- ══════════════════════════════════════════════════════════════
 --  LOAD WINDUI BOREAL
 -- ══════════════════════════════════════════════════════════════
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/FayintExploit/Windui-boreal/refs/heads/main/WindUI%20boreal"))()
+local WindUI = nil
+pcall(function()
+    WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/FayintExploit/Windui-boreal/refs/heads/main/WindUI%20boreal"))()
+end)
+if not WindUI then
+    warn("❌ XKID: Failed to load WindUI. Script halted.")
+    getgenv()._XKID_RUNNING = false
+    return
+end
 task.wait(0.2)
 
 -- ══════════════════════════════════════════════════════════════
@@ -187,7 +197,9 @@ local function getCharRoot(char)
 end
 local function notify(title, content, dur)
     pcall(function()
-        WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 })
+        if WindUI and WindUI.Notify then
+            WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 })
+        end
     end)
 end
 local function formatTime(seconds)
@@ -314,7 +326,6 @@ local function performHumanLikeAction()
     else
         -- Jeda panjang + resize viewport mikro
         pcall(function()
-            local vp = Cam.ViewportSize
             -- Tidak ada aksi nyata, hanya membaca data (seperti manusia yang melihat sekitar)
         end)
     end
@@ -325,13 +336,15 @@ local function startAntiAFK()
 
     -- Lapisan 1: Idle Detection dengan jeda acak
     if not AntiAFK.idleConn then
-        AntiAFK.idleConn = TrackC(LP.Idled:Connect(function()
-            if not State.Security.afkActive then return end
-            -- Jeda acak 3-15 detik sebelum merespons (tidak terburu-buru seperti bot)
-            task.wait(math.random(3, 15))
-            if not State.Security.afkActive then return end
-            performHumanLikeAction()
-        end))
+        pcall(function()
+            AntiAFK.idleConn = TrackC(LP.Idled:Connect(function()
+                if not State.Security.afkActive then return end
+                -- Jeda acak 3-15 detik sebelum merespons (tidak terburu-buru seperti bot)
+                task.wait(math.random(3, 15))
+                if not State.Security.afkActive then return end
+                performHumanLikeAction()
+            end))
+        end)
     end
 
     -- Lapisan 2: Heartbeat interval panjang (2-5 menit)
@@ -355,23 +368,33 @@ local function startAntiAFK()
 
     -- Lapisan 3: Kick Detection (tetap aman, tidak meninggalkan jejak)
     if not AntiAFK.kickConn then
-        AntiAFK.kickConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err)
-            if err ~= "" then
-                -- Jeda lebih lama sebelum rejoin (tidak terburu-buru)
-                task.wait(math.random(3, 8))
-                pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
-            end
-        end))
+        pcall(function()
+            AntiAFK.kickConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err)
+                if err ~= "" then
+                    -- Jeda lebih lama sebelum rejoin (tidak terburu-buru)
+                    task.wait(math.random(3, 8))
+                    pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+                end
+            end))
+        end)
     end
 
-    -- Lapisan 4: Kick Popup Detection
+    -- Lapisan 4: Kick Popup Detection (dengan validasi ketat)
     if not AntiAFK.promptConn then
-        AntiAFK.promptConn = TrackC(CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
-            if child.Name == "ErrorPrompt" then
-                task.wait(math.random(3, 8))
-                pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+        pcall(function()
+            local promptOverlay = CoreGui:FindFirstChild("RobloxPromptGui")
+            if promptOverlay then
+                promptOverlay = promptOverlay:FindFirstChild("promptOverlay")
             end
-        end))
+            if promptOverlay then
+                AntiAFK.promptConn = TrackC(promptOverlay.ChildAdded:Connect(function(child)
+                    if child and child.Name == "ErrorPrompt" then
+                        task.wait(math.random(3, 8))
+                        pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+                    end
+                end))
+            end
+        end)
     end
 end
 
@@ -384,7 +407,10 @@ local function stopAntiAFK()
     if AntiAFK.heartbeatThread then task.cancel(AntiAFK.heartbeatThread); AntiAFK.heartbeatThread = nil end
 end
 
-startAntiAFK()
+-- SAFE START: bungkus dengan pcall
+pcall(function()
+    startAntiAFK()
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  CHARACTER HANDLER
@@ -641,7 +667,8 @@ local function toggleFly(v)
             if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end
             if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end
             if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end
-            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) end            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) end
+            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) end
+            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) end
         end
         if move.Magnitude > 0 then flyVel = flyVel:Lerp(move.Unit * spd, 0.15)
         else flyVel = flyVel:Lerp(isOnGround() and Vector3.zero or Vector3.new(0, -0.8, 0), 0.08) end
@@ -814,20 +841,24 @@ task.spawn(function()
     local connectedPlayers = {}
     local function connectPlayer(p)
         if connectedPlayers[p] then return end; connectedPlayers[p] = true
-        if TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
-            pcall(function() TrackC(p.Chatted:Connect(function(m) logMsg(p.Name, m) end)) end)
-        end
+        pcall(function()
+            if TextChatService and TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
+                pcall(function() TrackC(p.Chatted:Connect(function(m) logMsg(p.Name, m) end)) end)
+            end
+        end)
     end
     for _, p in ipairs(Players:GetPlayers()) do connectPlayer(p) end
     TrackC(Players.PlayerAdded:Connect(function(p) connectPlayer(p) end))
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        pcall(function() TrackC(TextChatService.MessageReceived:Connect(function(m)
-            local sourceName = nil
-            if m.TextSource then sourceName = m.TextSource.Name
-            elseif m.PrefixText and m.PrefixText ~= "" then sourceName = m.PrefixText:match("%[(.-)%]") end
-            if sourceName then logMsg(sourceName, m.Text) end
-        end)) end)
-    end
+    pcall(function()
+        if TextChatService and TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            TrackC(TextChatService.MessageReceived:Connect(function(m)
+                local sourceName = nil
+                if m.TextSource then sourceName = m.TextSource.Name
+                elseif m.PrefixText and m.PrefixText ~= "" then sourceName = m.PrefixText:match("%[(.-)%]") end
+                if sourceName then logMsg(sourceName, m.Text) end
+            end))
+        end
+    end)
 end)
 
 task.spawn(function()
@@ -1073,21 +1104,21 @@ secESPColor:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah",
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal", ShowTabTitle = true, Border = true })
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true, Box = true })
-secChat:Toggle({ Title = "Enable Logger", Value = false, Type = "Toggle", Icon = "file-text", Callback = function(v) State.Utility.chatLog = v; if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end end })
+secChat:Toggle({ Title = "Enable Logger", Value = false, Type = "Toggle", Icon = "file-text", Callback = function(v) State.Utility.chatLog = v; if not v and chatLogPanel then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end end })
 secChat:Toggle({ Title = "Silent Mode", Value = false, Type = "Checkbox", Icon = "volume-x", Callback = function(v) State.Utility.chatSilent = v end })
 chatTargetLabel = secChat:Paragraph({ Title = "Targets", Desc = "None" })
-chatTargetDrop = secChat:Dropdown({ Title = "Select Targets (Multi)", Multi = true, AllowNone = true, Values = getDisplayNames(), SearchBarEnabled = false, Callback = function(selected) State.Utility.chatTargets = {}; if selected and typeof(selected) == "table" then for _, name in ipairs(selected) do table.insert(State.Utility.chatTargets, tostring(name)) end end; if #State.Utility.chatTargets > 0 then pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end) else pcall(function() chatTargetLabel:SetDesc("None") end) end end })
-secChat:Button({ Title = "Clear Targets", Icon = "x", Callback = function() State.Utility.chatTargets = {}; pcall(function() chatTargetLabel:SetDesc("None") end); pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end) end })
-secChat:Button({ Title = "Refresh List", Icon = "refresh-cw", Callback = function() pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end) end })
+chatTargetDrop = secChat:Dropdown({ Title = "Select Targets (Multi)", Multi = true, AllowNone = true, Values = getDisplayNames(), SearchBarEnabled = false, Callback = function(selected) State.Utility.chatTargets = {}; if selected and typeof(selected) == "table" then for _, name in ipairs(selected) do table.insert(State.Utility.chatTargets, tostring(name)) end end; if #State.Utility.chatTargets > 0 and chatTargetLabel then pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end) elseif chatTargetLabel then pcall(function() chatTargetLabel:SetDesc("None") end) end end })
+secChat:Button({ Title = "Clear Targets", Icon = "x", Callback = function() State.Utility.chatTargets = {}; if chatTargetLabel then pcall(function() chatTargetLabel:SetDesc("None") end) end; if chatTargetDrop then pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end) end end })
+secChat:Button({ Title = "Refresh List", Icon = "refresh-cw", Callback = function() if chatTargetDrop then pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end) end end })
 chatLogPanel = secChat:Paragraph({ Title = "Console", Desc = "Belum ada chat..." })
-secChat:Button({ Title = "Clear Log", Icon = "trash-2", Callback = function() State.Utility.chatHistory = {}; pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end) end })
+secChat:Button({ Title = "Clear Log", Icon = "trash-2", Callback = function() State.Utility.chatHistory = {}; if chatLogPanel then pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end) end end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 9: SECURITY
 -- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert", ShowTabTitle = true, Border = true })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true, Box = true })
-secProt:Toggle({ Title = "Anti AFK / Anti Kick 🛡️", Value = true, Type = "Toggle", Icon = "shield-check", Callback = function(v) if v then startAntiAFK() else stopAntiAFK() end end })
+secProt:Toggle({ Title = "Anti AFK / Anti Kick 🛡️", Value = true, Type = "Toggle", Icon = "shield-check", Callback = function(v) if v then pcall(function() startAntiAFK() end) else stopAntiAFK() end end })
 secProt:Button({ Title = "Stuck Fix 🔧", Desc = "Get unstuck from walls/ground", Icon = "wrench", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end end })
 local secSrv = T_SEC:Section({ Title = "Server Control", Opened = true, Box = true })
 secSrv:Toggle({ Title = "Auto Rejoin 🔄", Value = false, Type = "Toggle", Icon = "refresh-cw", Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end end end })
@@ -1117,7 +1148,7 @@ secCfg:Button({ Title = "🔄 Refresh Files", Desc = "Refresh config list", Icon
 local secAutoLike = T_SET:Section({ Title = "Auto Like ❤️", Opened = true, Box = true })
 secAutoLike:Toggle({ Title = "Auto Like", Value = false, Type = "Toggle", Icon = "heart", Callback = function(v) if v then startAutoLike() else stopAutoLike() end end })
 local autoLikeInfo = secAutoLike:Paragraph({ Title = "Info", Desc = "Remote: ReplicatedStorage.Remotes.LikePlayerEvent\nTotal likes sent: 0" })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(function() autoLikeInfo:SetDesc("Remote: ReplicatedStorage.Remotes.LikePlayerEvent\nTotal likes sent: " .. State.AutoLike.count) end) end end)
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); if autoLikeInfo then pcall(function() autoLikeInfo:SetDesc("Remote: ReplicatedStorage.Remotes.LikePlayerEvent\nTotal likes sent: " .. State.AutoLike.count) end) end end end)
 
 -- ══════════════════════════════════════════════════════════════
 --  STARTUP
