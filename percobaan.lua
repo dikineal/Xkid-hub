@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v2.0.3 — Anti AFK Fixed + Full Features
+  📌 v3.0.0 — Proper AFK 2026 Edition
 ]]
 
 local RS = game:GetService("RunService")
@@ -30,7 +30,7 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "2.0.3"
+local CURRENT_VERSION = "3.0.0"
 
 -- ══════════════════════════════════════════════════════════════
 --  LIGHTING CACHE
@@ -129,7 +129,7 @@ local State = {
     Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
     HardFling = { active = false, power = 100000 },
     Teleport  = { selectedTarget = "", clickTool = nil, clickConn = nil, clickActive = false, lastTap = 0 },
-    Security  = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false, arConn = nil, kickCooldown = 0 },
+    Security  = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false, arConn = nil },
     Cinema    = { hideUI = false, hideNamePlayer = false, hideNameConn = nil, cachedGuis = {} },
     Avatar    = { isRefreshing = false },
     Utility   = { chatLog = false, chatTargets = {}, chatHistory = {} },
@@ -236,55 +236,44 @@ end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
 -- ══════════════════════════════════════════════════════════════
---  ANTI AFK — SIMPLE TIMER 10 MENIT + CAMERA MICRO-ROTATE (MANUAL)
+--  ANTI AFK PROPER 2026 — PLAYER.IDLED + CAMERA MICRO-ROTATE
 -- ══════════════════════════════════════════════════════════════
-local AFKTimer = { active = false, thread = nil }
+local AFKSystem = { active = false, idleConn = nil, debounce = false }
 
 local function startAFK()
-    if AFKTimer.active then return end
-    AFKTimer.active = true
+    if AFKSystem.active then return end
+    AFKSystem.active = true
     State.Security.afkActive = true
-    AFKTimer.thread = task.spawn(function()
-        while AFKTimer.active and getgenv()._XKID_RUNNING do
-            task.wait(600) -- 10 menit
-            if not AFKTimer.active then break end
-            pcall(function()
-                local cf = Cam.CFrame
-                local rx, ry, rz = cf:ToEulerAnglesYXZ()
-                Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + math.rad(1), rz)
-                task.wait(0.05)
-                Cam.CFrame = cf
-            end)
-        end
-        AFKTimer.thread = nil
-    end)
-    notify("Anti AFK", "Started (every 10 min)", 2)
+    
+    AFKSystem.idleConn = TrackC(LP.Idled:Connect(function()
+        if not AFKSystem.active then return end
+        if AFKSystem.debounce then return end
+        AFKSystem.debounce = true
+        
+        pcall(function()
+            local cf = Cam.CFrame
+            local rx, ry, rz = cf:ToEulerAnglesYXZ()
+            Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + math.rad(1), rz)
+            task.wait(0.05)
+            Cam.CFrame = cf
+        end)
+        
+        task.wait(30)
+        AFKSystem.debounce = false
+    end))
+    
+    notify("Anti AFK", "Ready — will prevent idle kick", 2)
 end
 
 local function stopAFK()
-    AFKTimer.active = false
+    AFKSystem.active = false
     State.Security.afkActive = false
-    if AFKTimer.thread then task.cancel(AFKTimer.thread); AFKTimer.thread = nil end
-    notify("Anti AFK", "Stopped", 2)
+    if AFKSystem.idleConn then
+        AFKSystem.idleConn:Disconnect()
+        AFKSystem.idleConn = nil
+    end
+    notify("Anti AFK", "Disabled", 2)
 end
-
--- Anti-Kick Shield (selalu aktif)
-TrackC(GuiService.ErrorMessageChanged:Connect(function(err)
-    if err ~= "" then
-        if tick() - State.Security.kickCooldown < 120 then return end
-        State.Security.kickCooldown = tick()
-        task.wait(math.random(3, 8))
-        pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
-    end
-end))
-TrackC(CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
-    if child.Name == "ErrorPrompt" then
-        if tick() - State.Security.kickCooldown < 120 then return end
-        State.Security.kickCooldown = tick()
-        task.wait(math.random(3, 8))
-        pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
-    end
-end))
 
 -- ══════════════════════════════════════════════════════════════
 --  CHARACTER HANDLER
@@ -942,7 +931,7 @@ secESPColor:Dropdown({ Title = "Suspect Color", Values = { "Merah", "Hijau", "Bi
 secESPColor:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam" }, Value = "Orange", SearchBarEnabled = false, Callback = function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v]; State.ESP.boxColor_G = colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY (CHAT LOGGER FIXED)
+--  TAB 8: UTILITY (CHAT LOGGER)
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal", ShowTabTitle = true, Border = true })
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true, Box = true })
@@ -1043,11 +1032,9 @@ end)
 -- ══════════════════════════════════════════════════════════════
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert", ShowTabTitle = true, Border = true })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true, Box = true })
-secProt:Toggle({ Title = "Anti Kick", Value = true, Type = "Toggle", Icon = "shield-check", Callback = function(v) end })
 secProt:Toggle({ Title = "Anti AFK", Value = false, Type = "Toggle", Icon = "clock", Callback = function(v) if v then startAFK() else stopAFK() end end })
 secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Icon = "wrench", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied", 2) end })
 local secSrv = T_SEC:Section({ Title = "Server Control", Opened = true, Box = true })
-secSrv:Toggle({ Title = "Auto Rejoin", Value = false, Type = "Toggle", Icon = "refresh-cw", Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then notify("Security", "Rejoining...", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end end end })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Icon = "log-in", Callback = function() pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
 secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Icon = "shuffle", Callback = function() pcall(function() local req = (syn and syn.request) or (http and http.request) or http_request or request; if not req then return end; local res = req({ Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100", Method = "GET" }); if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body); if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); return end end end end end) end })
 local secPerf = T_SEC:Section({ Title = "Performance Tweaks", Opened = true, Box = true })
@@ -1106,4 +1093,4 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(funct
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID v" .. CURRENT_VERSION .. " Ready", 3)
-print("✅ XKID v" .. CURRENT_VERSION .. " - Anti AFK Simple Timer | Full Features")
+print("✅ XKID v" .. CURRENT_VERSION .. " - Proper AFK 2026 | No Auto Rejoin")
