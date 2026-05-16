@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v2.0.1 — System Hub Normal + Full Features
+  📌 v2.0.2 — Idle AFK + 5-Layer Anti-Kick
 ]]
 
 local RS = game:GetService("RunService")
@@ -30,7 +30,7 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "2.0.1"
+local CURRENT_VERSION = "2.0.2"
 
 -- ══════════════════════════════════════════════════════════════
 --  LIGHTING CACHE
@@ -129,7 +129,7 @@ local State = {
     Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
     HardFling = { active = false, power = 100000 },
     Teleport  = { selectedTarget = "", clickTool = nil, clickConn = nil, clickActive = false, lastTap = 0 },
-    Security  = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false, arConn = nil, kickCooldown = 0 },
+    Security  = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false, arConn = nil },
     Cinema    = { hideUI = false, hideNamePlayer = false, hideNameConn = nil, cachedGuis = {} },
     Avatar    = { isRefreshing = false },
     Utility   = { chatLog = false, chatTargets = {}, chatHistory = {} },
@@ -236,58 +236,95 @@ end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
 -- ══════════════════════════════════════════════════════════════
---  ANTI AFK — MANUAL TOGGLE (OFF BY DEFAULT)
+--  ANTI AFK — IDLE EVENT + CAMERA MICRO-ROTATE (MANUAL TOGGLE)
 -- ══════════════════════════════════════════════════════════════
-local OffsideTimer = { active = false, thread = nil }
+local IdleAFK = { active = false, idleConn = nil, debounce = false }
 
-local function startOffsideTimer()
-    if OffsideTimer.active then return end
-    OffsideTimer.active = true
+local function startIdleAFK()
+    if IdleAFK.active then return end
+    IdleAFK.active = true
     State.Security.afkActive = true
-    OffsideTimer.thread = task.spawn(function()
-        while OffsideTimer.active and getgenv()._XKID_RUNNING do
-            task.wait(math.random(600, 660))
-            if not OffsideTimer.active then break end
-            local lastInput = tick()
-            pcall(function() lastInput = UIS:GetLastInputTime() end)
-            if tick() - lastInput > 540 then
-                pcall(function()
-                    local cf = Cam.CFrame
-                    local rx, ry, rz = cf:ToEulerAnglesYXZ()
-                    local offset = math.rad(math.random(30, 80) * 0.01)
-                    Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + offset, rz)
-                    task.wait(0.05)
-                    Cam.CFrame = cf
-                end)
-            end
-        end
-        OffsideTimer.thread = nil
-    end)
-    notify("Anti AFK", "Offside Timer started", 2)
+    
+    IdleAFK.idleConn = TrackC(LP.Idled:Connect(function()
+        if not IdleAFK.active then return end
+        if IdleAFK.debounce then return end
+        IdleAFK.debounce = true
+        
+        pcall(function()
+            local cf = Cam.CFrame
+            local rx, ry, rz = cf:ToEulerAnglesYXZ()
+            Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + math.rad(1), rz)
+            task.wait(0.05)
+            Cam.CFrame = cf
+        end)
+        
+        task.wait(math.random(20, 40))
+        IdleAFK.debounce = false
+    end))
+    
+    notify("Anti AFK", "Idle AFK started", 2)
 end
 
-local function stopOffsideTimer()
-    OffsideTimer.active = false
+local function stopIdleAFK()
+    IdleAFK.active = false
     State.Security.afkActive = false
-    if OffsideTimer.thread then task.cancel(OffsideTimer.thread); OffsideTimer.thread = nil end
-    notify("Anti AFK", "Offside Timer stopped", 2)
+    if IdleAFK.idleConn then
+        IdleAFK.idleConn:Disconnect()
+        IdleAFK.idleConn = nil
+    end
+    notify("Anti AFK", "Idle AFK stopped", 2)
 end
 
--- Anti-Kick Shield (selalu aktif)
+-- ══════════════════════════════════════════════════════════════
+--  ANTI-KICK SHIELD — 5 LAPIS + AUTO REJOIN
+-- ══════════════════════════════════════════════════════════════
+local KickShield = { lastRejoin = 0, rejoinCount = 0, maxRejoin = 10 }
+
+local function attemptRejoin(reason)
+    if tick() - KickShield.lastRejoin < 30 then return end
+    if KickShield.rejoinCount >= KickShield.maxRejoin then return end
+    
+    KickShield.lastRejoin = tick()
+    KickShield.rejoinCount = KickShield.rejoinCount + 1
+    
+    notify("Anti Kick", reason .. " | Rejoining... (#" .. KickShield.rejoinCount .. ")", 3)
+    task.wait(2)
+    
+    pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+    task.wait(5)
+    pcall(function() TPService:Teleport(game.PlaceId, LP) end)
+end
+
+-- Lapis 1: Error Message
 TrackC(GuiService.ErrorMessageChanged:Connect(function(err)
-    if err ~= "" then
-        if tick() - State.Security.kickCooldown < 120 then return end
-        State.Security.kickCooldown = tick()
-        task.wait(math.random(3, 8))
-        pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+    if err ~= "" and err ~= " " then attemptRejoin("Error: " .. err:sub(1, 30)) end
+end))
+
+-- Lapis 2: Kick Popup
+TrackC(CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
+    if child.Name == "ErrorPrompt" or child.Name == "KickPrompt" then attemptRejoin("Kick popup") end
+end))
+
+-- Lapis 3: Player Removing
+TrackC(LP:GetPropertyChangedSignal("Parent"):Connect(function()
+    if not LP.Parent then task.wait(1); attemptRejoin("Disconnected") end
+end))
+
+-- Lapis 4: GUI Monitor
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        task.wait(15)
+        pcall(function()
+            if not LP.PlayerGui or not LP.PlayerGui.Parent then attemptRejoin("GUI missing") end
+        end)
     end
 end))
-TrackC(CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
-    if child.Name == "ErrorPrompt" then
-        if tick() - State.Security.kickCooldown < 120 then return end
-        State.Security.kickCooldown = tick()
-        task.wait(math.random(3, 8))
-        pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
+
+-- Lapis 5: Fallback rejoin tiap 25 menit
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        task.wait(1500)
+        if LP and LP.Parent then KickShield.rejoinCount = math.max(0, KickShield.rejoinCount - 1) end
     end
 end))
 
@@ -806,98 +843,35 @@ Window:SideBarButton({ Title = "Fast Respawn", Icon = "skull", Variant = "Second
 Window:SideBarDivider({})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: SYSTEM HUB (NORMAL — LIVE MONITOR BAR + SECURITY ICONS)
+--  TAB 1: SYSTEM HUB
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard", ShowTabTitle = true, Border = true })
-
 local secSysAccess = T_HOME:Section({ Title = "System Access", Opened = true, Box = true })
 secSysAccess:Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
-
 local secDiscord = T_HOME:Section({ Title = "Discord", Opened = true, Box = true })
 secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Icon = "copy", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin", 2) end })
-
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true, Box = true })
 local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
 local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
-
 local secSecHome = T_HOME:Section({ Title = "Security Check", Opened = true, Box = true })
 local securityLabel = secSecHome:Paragraph({ Title = "Diagnostics", Desc = "Protected" })
 
 task.spawn(function()
     task.wait(2)
-    local function lerpColor(c1, c2, t)
-        return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t)
-    end
-    local function toHex(c)
-        return string.format("#%02X%02X%02X", c.R * 255, c.G * 255, c.B * 255)
-    end
+    local function lerpColor(c1, c2, t) return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t) end
+    local function toHex(c) return string.format("#%02X%02X%02X", c.R * 255, c.G * 255, c.B * 255) end
     local function makeBarA(val, maxVal, len, mode)
-        local fill = math.clamp(math.floor((val / maxVal) * len), 0, len)
-        local res = ""
-        for i = 1, len do
-            if i <= fill then
-                local t = (i - 1) / math.max(1, len - 1)
-                local col
-                if mode == "FPS" then
-                    col = lerpColor(Color3.fromRGB(0, 255, 255), Color3.fromRGB(0, 100, 255), t)
-                else
-                    if t < 0.5 then
-                        col = lerpColor(Color3.fromRGB(0, 255, 0), Color3.fromRGB(255, 255, 0), t * 2)
-                    else
-                        col = lerpColor(Color3.fromRGB(255, 255, 0), Color3.fromRGB(255, 0, 0), (t - 0.5) * 2)
-                    end
-                end
-                res = res .. '<font color="' .. toHex(col) .. '">▰</font>'
-            else
-                res = res .. '<font color="#444444">▱</font>'
-            end
-        end
+        local fill = math.clamp(math.floor((val / maxVal) * len), 0, len); local res = ""
+        for i = 1, len do if i <= fill then local t = (i - 1) / math.max(1, len - 1)
+            local col = mode == "FPS" and lerpColor(Color3.fromRGB(0,255,255), Color3.fromRGB(0,100,255), t) or (t < 0.5 and lerpColor(Color3.fromRGB(0,255,0), Color3.fromRGB(255,255,0), t*2) or lerpColor(Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,0), (t-0.5)*2))
+            res = res .. '<font color="' .. toHex(col) .. '">▰</font>' else res = res .. '<font color="#444444">▱</font>' end end
         return res
     end
-
     while getgenv()._XKID_RUNNING do
         task.wait(0.5)
-        
-        -- Server Info
-        pcall(function()
-            if srvLabel and cachedMapName then
-                local pCount = #Players:GetPlayers()
-                local mCount = Players.MaxPlayers
-                local uptime = formatTime(os.difftime(os.time(), START_TIME))
-                local job = game.JobId ~= "" and game.JobId:sub(1, 8) .. "..." or "N/A"
-                srvLabel:SetDesc(string.format(
-                    "[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s",
-                    cachedMapName, job, pCount, mCount, uptime
-                ))
-            end
-        end)
-        
-        -- Performance Bar
-        pcall(function()
-            if netLabel then
-                local fps = math.clamp(sharedFPS, 0, 300)
-                local ping = math.clamp(sharedPing, 0, 9999)
-                local fpsBar = makeBarA(fps, 120, 14, "FPS")
-                local pingBar = makeBarA(ping, 200, 14, "PING")
-                netLabel:SetDesc(string.format(
-                    "<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>",
-                    fpsBar, fps, pingBar, ping
-                ))
-            end
-        end)
-        
-        -- Security Check (dengan ikon hijau/merah)
-        pcall(function()
-            if securityLabel then
-                local afk = State.Security.afkActive and "🟢 ONLINE" or "🔴 OFFLINE"
-                local sl = State.Security.shiftLock and "🟢 LOCKED" or "🔴 UNLOCKED"
-                local lag = State.Security.antiLag and "🟢 ACTIVE" or "🔴 INACTIVE"
-                securityLabel:SetDesc(string.format(
-                    "[ ⏰ ] <font face='RobotoMono'>AFK Protocol :</font> %s\n[ 🔒 ] <font face='RobotoMono'>Shift Lock   :</font> %s\n[ ⚡ ] <font face='RobotoMono'>Frame Boost  :</font> %s",
-                    afk, sl, lag
-                ))
-            end
-        end)
+        pcall(function() if srvLabel and cachedMapName then local pCount, mCount = #Players:GetPlayers(), Players.MaxPlayers; local uptime = formatTime(os.difftime(os.time(), START_TIME)); local job = game.JobId ~= "" and game.JobId:sub(1, 8) .. "..." or "N/A"; srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s", cachedMapName, job, pCount, mCount, uptime)) end end)
+        pcall(function() if netLabel then local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999); local fpsBar = makeBarA(fps, 120, 14, "FPS"); local pingBar = makeBarA(ping, 200, 14, "PING"); netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping)) end end)
+        pcall(function() if securityLabel then local afk = State.Security.afkActive and "🟢 ONLINE" or "🔴 OFFLINE"; local sl = State.Security.shiftLock and "🟢 LOCKED" or "🔴 UNLOCKED"; local lag = State.Security.antiLag and "🟢 ACTIVE" or "🔴 INACTIVE"; securityLabel:SetDesc(string.format("[ ⏰ ] <font face='RobotoMono'>AFK Protocol :</font> %s\n[ 🔒 ] <font face='RobotoMono'>Shift Lock   :</font> %s\n[ ⚡ ] <font face='RobotoMono'>Frame Boost  :</font> %s", afk, sl, lag)) end end)
     end
 end)
 
@@ -1112,7 +1086,7 @@ end)
 local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert", ShowTabTitle = true, Border = true })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true, Box = true })
 secProt:Toggle({ Title = "Anti Kick", Value = true, Type = "Toggle", Icon = "shield-check", Callback = function(v) end })
-secProt:Toggle({ Title = "Anti AFK", Value = false, Type = "Toggle", Icon = "clock", Callback = function(v) if v then startOffsideTimer() else stopOffsideTimer() end end })
+secProt:Toggle({ Title = "Anti AFK", Value = false, Type = "Toggle", Icon = "clock", Callback = function(v) if v then startIdleAFK() else stopIdleAFK() end end })
 secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Icon = "wrench", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied", 2) end })
 local secSrv = T_SEC:Section({ Title = "Server Control", Opened = true, Box = true })
 secSrv:Toggle({ Title = "Auto Rejoin", Value = false, Type = "Toggle", Icon = "refresh-cw", Callback = function(v) if v then State.Security.arConn = TrackC(GuiService.ErrorMessageChanged:Connect(function(err) if err and err ~= "" then notify("Security", "Rejoining...", 3); task.wait(1); pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end end)) else if State.Security.arConn then State.Security.arConn:Disconnect(); State.Security.arConn = nil end end end })
@@ -1124,30 +1098,21 @@ secPerf:Toggle({ Title = "FPS Boost", Value = false, Type = "Toggle", Icon = "za
     State.Security.antiLag = v
     if v then
         pcall(function() advCache.level = settings().Rendering.QualityLevel end)
-        advCache.shadows = Lighting.GlobalShadows
-        advCache.brightness = Lighting.Brightness
-        advCache.clockTime = Lighting.ClockTime
-        advCache.fogEnd = Lighting.FogEnd
+        advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness
+        advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd
         pcall(function() settings().Rendering.QualityLevel = 1 end)
-        Lighting.GlobalShadows = false
-        Lighting.Brightness = 1
-        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000
         for _, obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                advCache.mats[obj] = obj.Material
-                obj.Material = Enum.Material.SmoothPlastic
+            if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic
             elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
-                advCache.texs[obj] = obj.Enabled
-                obj.Enabled = false
+                advCache.texs[obj] = obj.Enabled; obj.Enabled = false
             end
         end
         notify("Performance", "FPS Boost activated", 2)
     else
         pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end)
-        Lighting.GlobalShadows = advCache.shadows
-        Lighting.Brightness = advCache.brightness
-        Lighting.ClockTime = advCache.clockTime
-        Lighting.FogEnd = advCache.fogEnd
+        Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness
+        Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd
         for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end
         for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end
         advCache.mats = {}; advCache.texs = {}
@@ -1183,4 +1148,4 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(funct
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 notify("System", "XKID v" .. CURRENT_VERSION .. " Ready", 3)
-print("✅ XKID v" .. CURRENT_VERSION .. " - System Hub Normal + Full Features")
+print("✅ XKID v" .. CURRENT_VERSION .. " - Idle AFK + 5-Layer Anti-Kick")
