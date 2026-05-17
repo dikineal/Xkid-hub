@@ -7,7 +7,7 @@
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
   📌 v2.0.9
-  🔧 RExMaster Patch: Mobile Polish + NoClip Reconnect + IJ Leak Fix
+  🔧 RExMaster Patch: Mobile Polish + NoClip Reconnect + IJ Leak Fix + Smart TP Toggle
 ]]
 
 local RS = game:GetService("RunService")
@@ -93,7 +93,7 @@ local State = {
     Move = {ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60},
     Fly = {active = false, bv = nil, bg = nil, _keys = {}},
     HardFling = {active = false, power = 50000},
-    Teleport = {clickConn = nil, clickActive = false, lastTap = 0, tool = nil},
+    Teleport = {clickConn = nil, clickActive = false, toolActive = false, tool = nil},
     Security = {afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false},
     Cinema = {hideUI = false, hideNamePlayer = false, hideNameConn = nil, cachedGuis = {}},
     Avatar = {isRefreshing = false},
@@ -313,36 +313,56 @@ local function fastRespawn()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SMART CLICK TP (INVENTORY TOOL) - PATCHED: Double Tap 0.55s
+--  SMART CLICK TP (TOGGLE VIA TOOL - NO DOUBLE TAP)
 -- ══════════════════════════════════════════════════════════════
+local function executeTP()
+    local hrp = getRoot()
+    if not hrp then return end
+    local m = LP:GetMouse()
+    if m.Hit then
+        hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0,3.5,0))
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        notify("Teleport", "TP Executed", 1)
+    end
+end
+
 local function toggleSmartTP(v)
     State.Teleport.clickActive = v
     if v then
+        -- Buat tool di inventory sebagai toggle
         pcall(function()
             local tool = Instance.new("Tool")
             tool.Name = "XKID Smart TP"
             tool.RequiresHandle = false
             tool.Parent = LP.Backpack
             State.Teleport.tool = tool
+            State.Teleport.toolActive = false
             tool.Activated:Connect(function()
-                local m = LP:GetMouse()
-                if m.Hit then getRoot().CFrame = CFrame.new(m.Hit.Position + Vector3.new(0,3.5,0)); getRoot().AssemblyLinearVelocity = Vector3.zero; notify("Teleport", "TP Executed", 1) end
+                State.Teleport.toolActive = not State.Teleport.toolActive
+                if State.Teleport.toolActive then
+                    notify("Teleport", "TP Mode: ON — Tap screen to teleport", 2)
+                else
+                    notify("Teleport", "TP Mode: OFF", 2)
+                end
             end)
         end)
+        -- Tap handler: hanya TP kalau toolActive == true
         State.Teleport.clickConn = TrackC(UIS.InputBegan:Connect(function(inp, gp)
             if gp then return end
-            if inp.UserInputType == Enum.UserInputType.Touch then
-                if tick() - State.Teleport.lastTap < 0.55 then
-                    local m = LP:GetMouse()
-                    if m.Hit then getRoot().CFrame = CFrame.new(m.Hit.Position+Vector3.new(0,3.5,0)); getRoot().AssemblyLinearVelocity = Vector3.zero; notify("Teleport", "TP Executed", 1) end
+            if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+                if State.Teleport.toolActive then
+                    executeTP()
+                    -- Reset toggle setelah TP (sekali pakai)
+                    State.Teleport.toolActive = false
+                    notify("Teleport", "TP Mode: OFF", 1.5)
                 end
-                State.Teleport.lastTap = tick()
             end
         end))
-        notify("Teleport", "Smart TP: Double Tap or use tool", 2)
+        notify("Teleport", "Smart TP Ready — Equip tool & click to toggle ON/OFF", 3)
     else
         if State.Teleport.clickConn then State.Teleport.clickConn:Disconnect(); State.Teleport.clickConn = nil end
         pcall(function() if State.Teleport.tool then State.Teleport.tool:Destroy(); State.Teleport.tool = nil end end)
+        State.Teleport.toolActive = false
         notify("Teleport", "Smart TP Disabled", 2)
     end
 end
@@ -416,7 +436,6 @@ local function toggleFly(v)
         local keys=State.Fly._keys or {}
         if onMobile then
             if flyJoy.Magnitude < 0.1 then
-                -- fallback: kalau joystick idle, cek keyboard juga (hybrid support)
                 if keys[Enum.KeyCode.W] then move=move+camCF.LookVector end
                 if keys[Enum.KeyCode.S] then move=move-camCF.LookVector end
                 if keys[Enum.KeyCode.D] then move=move+camCF.RightVector end
@@ -502,7 +521,6 @@ local function startFreecamLoop()
             if fcKeysHeld[Enum.KeyCode.D] then joyX=joyX+1 end
             if fcKeysHeld[Enum.KeyCode.A] then joyX=joyX-1 end
         else
-            -- hybrid support: kalau joystick idle cek keyboard
             if fcJoy.Magnitude < 0.1 then
                 if fcKeysHeld[Enum.KeyCode.W] then joyY=joyY-1 end
                 if fcKeysHeld[Enum.KeyCode.S] then joyY=joyY+1 end
@@ -628,11 +646,11 @@ local hardFlingConn=nil
 secAbi:Toggle({Title="Hard Fling ⚡",Value=false,Callback=function(v) State.HardFling.active=v;State.Move.ncp=v;if v then if not hardFlingConn then hardFlingConn=TrackC(RS.Heartbeat:Connect(function() if not State.HardFling.active then return end;local r=getRoot();if not r then return end;pcall(function() r.AssemblyAngularVelocity=Vector3.new(0,State.HardFling.power,0);r.AssemblyLinearVelocity=Vector3.new(r.AssemblyLinearVelocity.X,100,r.AssemblyLinearVelocity.Z) end);if LP.Character then for _,p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end end end)) end else if hardFlingConn then hardFlingConn:Disconnect();hardFlingConn=nil end end end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 3: NAVIGATION
+--  TAB 3: NAVIGATION (Smart TP via Toggle Tool - No Double Tap)
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({Title="Navigation",Icon="crosshair"})
 local secDirTP = T_TP:Section({Title="Direct Teleport",Opened=true})
-secDirTP:Toggle({Title="Smart Touch/Click TP",Value=false,Callback=toggleSmartTP})
+secDirTP:Toggle({Title="Smart TP (Toggle Tool)",Value=false,Callback=toggleSmartTP})
 local secTP = T_TP:Section({Title="Target Teleport",Opened=true})
 local tpTarget=""
 secTP:Input({Title="Search Player",Placeholder="Type name...",Callback=function(v) tpTarget=v end})
