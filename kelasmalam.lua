@@ -7,7 +7,7 @@
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
   📌 v2.0.9
-  🔧 RExMaster Patch: Mobile Polish + NoClip Reconnect + IJ Leak Fix + Smart TP Toggle
+  🔧 RExMaster Patch: Mobile Polish + NoClip Reconnect + IJ Leak Fix + Smart TP Toggle + FC Buttons Fix + Silent TP
 ]]
 
 local RS = game:GetService("RunService")
@@ -313,7 +313,7 @@ local function fastRespawn()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SMART CLICK TP (TOGGLE VIA TOOL - NO DOUBLE TAP)
+--  SMART CLICK TP (TOGGLE VIA TOOL - SILENT, NO NOTIFS)
 -- ══════════════════════════════════════════════════════════════
 local function executeTP()
     local hrp = getRoot()
@@ -322,14 +322,12 @@ local function executeTP()
     if m.Hit then
         hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0,3.5,0))
         hrp.AssemblyLinearVelocity = Vector3.zero
-        notify("Teleport", "TP Executed", 1)
     end
 end
 
 local function toggleSmartTP(v)
     State.Teleport.clickActive = v
     if v then
-        -- Buat tool di inventory sebagai toggle
         pcall(function()
             local tool = Instance.new("Tool")
             tool.Name = "XKID Smart TP"
@@ -339,31 +337,21 @@ local function toggleSmartTP(v)
             State.Teleport.toolActive = false
             tool.Activated:Connect(function()
                 State.Teleport.toolActive = not State.Teleport.toolActive
-                if State.Teleport.toolActive then
-                    notify("Teleport", "TP Mode: ON — Tap screen to teleport", 2)
-                else
-                    notify("Teleport", "TP Mode: OFF", 2)
-                end
             end)
         end)
-        -- Tap handler: hanya TP kalau toolActive == true
         State.Teleport.clickConn = TrackC(UIS.InputBegan:Connect(function(inp, gp)
             if gp then return end
             if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
                 if State.Teleport.toolActive then
                     executeTP()
-                    -- Reset toggle setelah TP (sekali pakai)
                     State.Teleport.toolActive = false
-                    notify("Teleport", "TP Mode: OFF", 1.5)
                 end
             end
         end))
-        notify("Teleport", "Smart TP Ready — Equip tool & click to toggle ON/OFF", 3)
     else
         if State.Teleport.clickConn then State.Teleport.clickConn:Disconnect(); State.Teleport.clickConn = nil end
         pcall(function() if State.Teleport.tool then State.Teleport.tool:Destroy(); State.Teleport.tool = nil end end)
         State.Teleport.toolActive = false
-        notify("Teleport", "Smart TP Disabled", 2)
     end
 end
 
@@ -463,7 +451,7 @@ local function toggleFly(v)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE (PATCHED: Mobile Deadzone 10)
+--  FREECAM ENGINE (PATCHED: Mobile Deadzone 10, Buttons Original Pos)
 -- ══════════════════════════════════════════════════════════════
 local FC={active=false,pos=Vector3.zero,pitchDeg=0,yawDeg=0,rollDeg=0,speed=3,sens=0.25,savedCF=nil,origFov=70,lockGyro=nil,lockPos=nil}
 local I_CamVel=Vector3.zero;local I_YawVel=0;local I_PitchVel=0;local I_RollVel=0;local heightVelocity=0
@@ -482,12 +470,13 @@ local function makeFCBtn(name,txt,pos,actionKey)
     b.MouseLeave:Connect(function() press(false) end)
     return b
 end
-makeFCBtn("BtnRollL","L",UDim2.new(1,-118,1,-120),"rollLeft")
-makeFCBtn("BtnRollR","R",UDim2.new(1,-58,1,-120),"rollRight")
-makeFCBtn("BtnUp","↑",UDim2.new(1,-118,1,-62),"up")
-makeFCBtn("BtnZIn","+",UDim2.new(1,-58,1,-62),"zoomIn")
-makeFCBtn("BtnDown","↓",UDim2.new(1,-118,1,-4),"down")
-makeFCBtn("BtnZOut","-",UDim2.new(1,-58,1,-4),"zoomOut")
+-- Original position dari script awal
+makeFCBtn("BtnRollL","L",UDim2.new(1,-118,0.5,-84),"rollLeft")
+makeFCBtn("BtnRollR","R",UDim2.new(1,-58,0.5,-84),"rollRight")
+makeFCBtn("BtnUp","↑",UDim2.new(1,-118,0.5,-26),"up")
+makeFCBtn("BtnZIn","+",UDim2.new(1,-58,0.5,-26),"zoomIn")
+makeFCBtn("BtnDown","↓",UDim2.new(1,-118,0.5,32),"down")
+makeFCBtn("BtnZOut","-",UDim2.new(1,-58,0.5,32),"zoomOut")
 local function startFreecamCapture()
     fcKeysHeld={}
     table.insert(fcConns,UIS.InputBegan:Connect(function(inp,gp) if gp then return end;fcKeysHeld[inp.KeyCode]=true;if inp.UserInputType==Enum.UserInputType.MouseButton2 then FC._mouseRot=true;UIS.MouseBehavior=Enum.MouseBehavior.LockCurrentPosition end end))
@@ -646,7 +635,7 @@ local hardFlingConn=nil
 secAbi:Toggle({Title="Hard Fling ⚡",Value=false,Callback=function(v) State.HardFling.active=v;State.Move.ncp=v;if v then if not hardFlingConn then hardFlingConn=TrackC(RS.Heartbeat:Connect(function() if not State.HardFling.active then return end;local r=getRoot();if not r then return end;pcall(function() r.AssemblyAngularVelocity=Vector3.new(0,State.HardFling.power,0);r.AssemblyLinearVelocity=Vector3.new(r.AssemblyLinearVelocity.X,100,r.AssemblyLinearVelocity.Z) end);if LP.Character then for _,p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end end end)) end else if hardFlingConn then hardFlingConn:Disconnect();hardFlingConn=nil end end end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 3: NAVIGATION (Smart TP via Toggle Tool - No Double Tap)
+--  TAB 3: NAVIGATION (Smart TP Toggle - Silent No Notifs)
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({Title="Navigation",Icon="crosshair"})
 local secDirTP = T_TP:Section({Title="Direct Teleport",Opened=true})
