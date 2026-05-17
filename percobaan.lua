@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v4.1.4 — Double-Click TP · Mobile Friendly
+  📌 v4.1.5 — Tool Toggle TP · Silent FX · Clean Notif
   🔧 ROBOX Build | Delta Compatible
 ]]
 
@@ -14,9 +14,6 @@ local RS = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local TS = game:GetService("TweenService")
 
--- ══════════════════════════════════════════════════════════════
---  SERVICES
--- ══════════════════════════════════════════════════════════════
 local Players      = game:GetService("Players")
 local UIS          = game:GetService("UserInputService")
 local VirtualUser  = game:GetService("VirtualUser")
@@ -32,927 +29,215 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "4.1.4"
+local CURRENT_VERSION = "4.1.5"
 
--- ══════════════════════════════════════════════════════════════
---  LIGHTING CACHE
--- ══════════════════════════════════════════════════════════════
 local originalLighting = {
-    ClockTime = Lighting.ClockTime,
-    Brightness = Lighting.Brightness,
-    Ambient = Lighting.Ambient,
-    OutdoorAmbient = Lighting.OutdoorAmbient,
-    GlobalShadows = Lighting.GlobalShadows,
-    ExposureCompensation = Lighting.ExposureCompensation,
-    FogEnd = Lighting.FogEnd,
+    ClockTime = Lighting.ClockTime, Brightness = Lighting.Brightness, Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient, GlobalShadows = Lighting.GlobalShadows,
+    ExposureCompensation = Lighting.ExposureCompensation, FogEnd = Lighting.FogEnd,
 }
 
--- ══════════════════════════════════════════════════════════════
---  0. CLEANUP AWAL
--- ══════════════════════════════════════════════════════════════
-if getgenv()._XKID_RUNNING then
-    getgenv()._XKID_RUNNING = false
-    task.wait(0.5)
-end
-
-if getgenv()._XKID_ESP_CACHE then
-    for _, c in pairs(getgenv()._XKID_ESP_CACHE) do
-        pcall(function()
-            if c.texts then c.texts:Remove() end
-            if c.tracer then c.tracer:Remove() end
-            if c.boxLines then for _, l in ipairs(c.boxLines) do l:Remove() end end
-            if c.hl then c.hl:Destroy() end
-        end)
-    end
-end
+-- Cleanup
+if getgenv()._XKID_RUNNING then getgenv()._XKID_RUNNING = false; task.wait(0.5) end
+if getgenv()._XKID_ESP_CACHE then for _, c in pairs(getgenv()._XKID_ESP_CACHE) do pcall(function() if c.texts then c.texts:Remove() end; if c.tracer then c.tracer:Remove() end; if c.boxLines then for _, l in ipairs(c.boxLines) do l:Remove() end end; if c.hl then c.hl:Destroy() end end) end end
 getgenv()._XKID_ESP_CACHE = {}
-
 if getgenv()._XKID_LOADED then
-    pcall(function()
-        for _, v in pairs(CoreGui:GetChildren()) do
-            if v.Name == "WindUI" or v.Name == "XKID_FreecamUI" or v.Name == "XKID_FlyUI" then v:Destroy() end
-        end
-        for _, v in pairs(Lighting:GetChildren()) do
-            if v.Name == "_XKID_FILTER" or v.Name == "_XKID_DOF" then v:Destroy() end
-        end
-        if getgenv()._XKID_CONNS then
-            for _, c in pairs(getgenv()._XKID_CONNS) do pcall(function() c:Disconnect() end) end
-        end
-    end)
-    pcall(function() RS:UnbindFromRenderStep("XKIDFreecam") end)
-    pcall(function() RS:UnbindFromRenderStep("XKIDFly") end)
-    pcall(function() RS:UnbindFromRenderStep("XKIDSpec") end)
-    pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
+    pcall(function() for _, v in pairs(CoreGui:GetChildren()) do if v.Name == "WindUI" or v.Name == "XKID_FreecamUI" or v.Name == "XKID_FlyUI" then v:Destroy() end end
+        for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" or v.Name == "_XKID_DOF" then v:Destroy() end end
+        if getgenv()._XKID_CONNS then for _, c in pairs(getgenv()._XKID_CONNS) do pcall(function() c:Disconnect() end) end end end)
+    pcall(function() RS:UnbindFromRenderStep("XKIDFreecam") end); pcall(function() RS:UnbindFromRenderStep("XKIDFly") end)
+    pcall(function() RS:UnbindFromRenderStep("XKIDSpec") end); pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
     pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
-    pcall(function()
-        for _, gui in pairs(LP.PlayerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") then gui.Enabled = true end
-        end
-    end)
-    for _, p in ipairs(Players:GetPlayers()) do
-        pcall(function()
-            if p.Character then
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
-                for _, desc in ipairs(p.Character:GetDescendants()) do
-                    if desc:IsA("BillboardGui") and desc.Parent then desc.Enabled = true end
-                end
-            end
-            if p.PlayerGui then
-                for _, v in ipairs(p.PlayerGui:GetDescendants()) do
-                    if v:IsA("BillboardGui") then v.Enabled = true end
-                end
-            end
-        end)
-    end
-    task.wait(0.2)
-    collectgarbage("collect")
+    pcall(function() for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") then gui.Enabled = true end end end)
+    for _, p in ipairs(Players:GetPlayers()) do pcall(function() if p.Character then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end; for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") and desc.Parent then desc.Enabled = true end end end; if p.PlayerGui then for _, v in ipairs(p.PlayerGui:GetDescendants()) do if v:IsA("BillboardGui") then v.Enabled = true end end end end) end
+    task.wait(0.2); collectgarbage("collect")
 end
 
-getgenv()._XKID_LOADED = true
-getgenv()._XKID_RUNNING = true
-getgenv()._XKID_CONNS = {}
-local function TrackC(conn)
-    table.insert(getgenv()._XKID_CONNS, conn)
-    return conn
-end
+getgenv()._XKID_LOADED = true; getgenv()._XKID_RUNNING = true; getgenv()._XKID_CONNS = {}
+local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
--- ══════════════════════════════════════════════════════════════
---  LOAD WINDUI BOREAL
--- ══════════════════════════════════════════════════════════════
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/FayintExploit/Windui-boreal/refs/heads/main/WindUI%20boreal"))()
 task.wait(0.2)
 
--- ══════════════════════════════════════════════════════════════
---  STATE MANAGEMENT
--- ══════════════════════════════════════════════════════════════
+-- State
 local State = {
-    Move      = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
-    Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
+    Move = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
+    Fly = { active = false, bv = nil, bg = nil, _keys = {} },
     HardFling = { active = false, power = 10000, mode = "Spin", currentPower = 0, rampUpActive = false },
-    Teleport  = { selectedTarget = "", lastTap = 0 },
-    Security  = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false },
-    Cinema    = { hideUI = false, cachedGuis = {} },
-    Avatar    = { isRefreshing = false },
-    Utility   = { chatLog = false, chatTargets = {}, chatHistory = {} },
-    AutoLike  = { active = false, thread = nil, lastTarget = nil, count = 0, radius = 100, minCD = 2, maxCD = 6, likeBack = false, likedBackPlayers = {}, lastLikeCount = 0 },
+    Security = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false },
+    Cinema = { hideUI = false, cachedGuis = {} },
+    Avatar = { isRefreshing = false },
+    Utility = { chatLog = false, chatTargets = {}, chatHistory = {} },
+    AutoLike = { active = false, thread = nil, lastTarget = nil, count = 0, radius = 100, minCD = 2, maxCD = 6, likeBack = false, likedBackPlayers = {}, lastLikeCount = 0 },
     CustomFilter = { tintR = 255, tintG = 255, tintB = 255, saturation = 0, contrast = 0, brightness = 0, exposure = 0, bloomIntensity = 0, bloomSize = 24, clockTime = 14, dofIntensity = 0, dofDistance = 50 },
-    ESP = {
-        active          = false,
-        cache           = getgenv()._XKID_ESP_CACHE,
-        tracerMode      = "Bottom",
-        maxDrawDistance = 300,
-        highlightMode   = false,
-        boxColor_N      = Color3.fromRGB(0, 255, 150),
-        boxColor_S      = Color3.fromRGB(220, 20, 60),
-        boxColor_G      = Color3.fromRGB(255, 165, 0),
-        tracerColor_N   = Color3.fromRGB(0, 200, 255),
-        tracerColor_S   = Color3.fromRGB(220, 20, 60),
-        tracerColor_G   = Color3.fromRGB(255, 165, 0),
-        nameColor       = Color3.fromRGB(255, 255, 255),
-    },
+    ESP = { active = false, cache = getgenv()._XKID_ESP_CACHE, tracerMode = "Bottom", maxDrawDistance = 300, highlightMode = false, boxColor_N = Color3.fromRGB(0, 255, 150), boxColor_S = Color3.fromRGB(220, 20, 60), boxColor_G = Color3.fromRGB(255, 165, 0), tracerColor_N = Color3.fromRGB(0, 200, 255), tracerColor_S = Color3.fromRGB(220, 20, 60), tracerColor_G = Color3.fromRGB(255, 165, 0), nameColor = Color3.fromRGB(255, 255, 255) },
 }
 
 local colorMap = {
-    ["Merah"] = Color3.fromRGB(255, 0, 0), ["Hijau"] = Color3.fromRGB(0, 255, 0),
-    ["Biru"] = Color3.fromRGB(0, 0, 255), ["Kuning"] = Color3.fromRGB(255, 255, 0),
-    ["Ungu"] = Color3.fromRGB(255, 0, 255), ["Cyan"] = Color3.fromRGB(0, 255, 255),
-    ["Orange"] = Color3.fromRGB(255, 165, 0), ["Pink"] = Color3.fromRGB(255, 105, 180),
-    ["Putih"] = Color3.fromRGB(255, 255, 255), ["Hitam"] = Color3.fromRGB(0, 0, 0),
-    ["Crimson"] = Color3.fromRGB(220, 20, 60),
+    ["Merah"] = Color3.fromRGB(255, 0, 0), ["Hijau"] = Color3.fromRGB(0, 255, 0), ["Biru"] = Color3.fromRGB(0, 0, 255),
+    ["Kuning"] = Color3.fromRGB(255, 255, 0), ["Ungu"] = Color3.fromRGB(255, 0, 255), ["Cyan"] = Color3.fromRGB(0, 255, 255),
+    ["Orange"] = Color3.fromRGB(255, 165, 0), ["Pink"] = Color3.fromRGB(255, 105, 180), ["Putih"] = Color3.fromRGB(255, 255, 255),
+    ["Hitam"] = Color3.fromRGB(0, 0, 0), ["Crimson"] = Color3.fromRGB(220, 20, 60),
 }
 
--- ══════════════════════════════════════════════════════════════
---  HELPER FUNCTIONS
--- ══════════════════════════════════════════════════════════════
-local function getRoot()
-    return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-end
-local function getHum()
-    return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-end
-local function getDisplayNames()
-    local t = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP then table.insert(t, p.DisplayName) end
-    end
-    if #t == 0 then table.insert(t, "N/A") end
-    return t
-end
-local function getDisplayNamesWithSelf()
-    local t = { "[Self]" }
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP then table.insert(t, p.DisplayName) end
-    end
-    if #t == 1 then table.insert(t, "N/A") end
-    return t
-end
-local function findPlayerByDisplay(str)
-    if str == "[Self]" then return LP end
-    for _, p in pairs(Players:GetPlayers()) do
-        if p.DisplayName == str or p.Name == str then return p end
-    end
-    return nil
-end
-local function getCharRoot(char)
-    if not char then return nil end
-    return char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
-end
-local function notify(title, content, dur)
-    pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 }) end)
-end
-local function formatTime(seconds)
-    local m = math.floor(seconds / 60); local s = seconds % 60
-    return string.format("%02d:%02d", m, s)
-end
-local function getConfigList()
-    local list = {}
-    pcall(function()
-        if isfolder and isfolder("XKID_HUB") then
-            for _, file in ipairs(listfiles("XKID_HUB")) do
-                if file:match("%.json$") then
-                    local name = file:match("([^/\\]+)%.json$")
-                    if name then table.insert(list, name) end
-                end
-            end
-        end
-    end)
-    if #list == 0 then table.insert(list, "No config") end
-    return list
-end
-local function isOnGround()
-    local r = getRoot(); if not r then return false end
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = { LP.Character }
-    return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
-end
-local function isTapOnUI(inputPos)
-    local xkidWindow = getgenv()._XKID_INSTANCE
-    if xkidWindow then
-        local p = xkidWindow.AbsolutePosition; local s = xkidWindow.AbsoluteSize
-        if p and s and inputPos.X >= p.X and inputPos.X <= p.X + s.X and inputPos.Y >= p.Y and inputPos.Y <= p.Y + s.Y then return true end
-    end
-    local fcui = getgenv()._XKID_FCUI
-    if fcui and fcui.Enabled then
-        local p = fcui.AbsolutePosition; local s = fcui.AbsoluteSize
-        if p and s and inputPos.X >= p.X and inputPos.X <= p.X + s.X and inputPos.Y >= p.Y and inputPos.Y <= p.Y + s.Y then return true end
-    end
-    return false
-end
+-- Helpers
+local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
+local function getHum() return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
+local function getDisplayNames() local t = {}; for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName) end end; if #t == 0 then table.insert(t, "N/A") end; return t end
+local function getDisplayNamesWithSelf() local t = { "[Self]" }; for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName) end end; if #t == 1 then table.insert(t, "N/A") end; return t end
+local function findPlayerByDisplay(str) if str == "[Self]" then return LP end; for _, p in pairs(Players:GetPlayers()) do if p.DisplayName == str or p.Name == str then return p end end; return nil end
+local function getCharRoot(char) if not char then return nil end; return char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart") end
+local function notify(title, content, dur) pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = dur or 2 }) end) end
+local function formatTime(seconds) local m = math.floor(seconds / 60); local s = seconds % 60; return string.format("%02d:%02d", m, s) end
+local function getConfigList() local list = {}; pcall(function() if isfolder and isfolder("XKID_HUB") then for _, file in ipairs(listfiles("XKID_HUB")) do if file:match("%.json$") then local name = file:match("([^/\\]+)%.json$"); if name then table.insert(list, name) end end end end end); if #list == 0 then table.insert(list, "No config") end; return list end
+local function isOnGround() local r = getRoot(); if not r then return false end; local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude; params.FilterDescendantsInstances = { LP.Character }; return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil end
 
-local START_TIME = os.time()
-local cachedMapName, lastMapCheck = nil, 0
-local sharedFPS, sharedPing = 60, 0
-
+local START_TIME = os.time(); local cachedMapName, lastMapCheck = nil, 0; local sharedFPS, sharedPing = 60, 0
 TrackC(RS.RenderStepped:Connect(function(dt) if dt > 0 then sharedFPS = math.floor(1 / dt) end end))
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        task.wait(0.5)
-        pcall(function() local item = StatsService.Network.ServerStatsItem["Data Ping"]; if item then sharedPing = math.floor(item:GetValue()) end end)
-    end
-end)
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        pcall(function() if tick() - lastMapCheck > 30 or not cachedMapName then cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name; lastMapCheck = tick() end end)
-        task.wait(5)
-    end
-end)
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(function() local item = StatsService.Network.ServerStatsItem["Data Ping"]; if item then sharedPing = math.floor(item:GetValue()) end end) end end)
+task.spawn(function() while getgenv()._XKID_RUNNING do pcall(function() if tick() - lastMapCheck > 30 or not cachedMapName then cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name; lastMapCheck = tick() end end); task.wait(5) end end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
--- ══════════════════════════════════════════════════════════════
---  ANTI AFK PROPER 2026
--- ══════════════════════════════════════════════════════════════
+-- Anti AFK
 local AFKSystem = { active = false, idleConn = nil, debounce = false }
+local function startAFK() if AFKSystem.active then return end; AFKSystem.active = true; State.Security.afkActive = true; AFKSystem.idleConn = TrackC(LP.Idled:Connect(function() if not AFKSystem.active then return end; if AFKSystem.debounce then return end; AFKSystem.debounce = true; pcall(function() local cf = Cam.CFrame; local rx, ry, rz = cf:ToEulerAnglesYXZ(); Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + math.rad(1), rz); task.wait(0.05); Cam.CFrame = cf end); task.wait(30); AFKSystem.debounce = false end)); notify("Anti AFK", "ON", 1.5) end
+local function stopAFK() AFKSystem.active = false; State.Security.afkActive = false; if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect(); AFKSystem.idleConn = nil end; notify("Anti AFK", "OFF", 1.5) end
 
-local function startAFK()
-    if AFKSystem.active then return end
-    AFKSystem.active = true
-    State.Security.afkActive = true
-    
-    AFKSystem.idleConn = TrackC(LP.Idled:Connect(function()
-        if not AFKSystem.active then return end
-        if AFKSystem.debounce then return end
-        AFKSystem.debounce = true
-        
-        pcall(function()
-            local cf = Cam.CFrame
-            local rx, ry, rz = cf:ToEulerAnglesYXZ()
-            Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + math.rad(1), rz)
-            task.wait(0.05)
-            Cam.CFrame = cf
-        end)
-        
-        task.wait(30)
-        AFKSystem.debounce = false
-    end))
-    
-    notify("Anti AFK", "ON", 1.5)
-end
+-- Character Handler
+TrackC(LP.CharacterAdded:Connect(function(char) task.wait(0.5); local hum = char:FindFirstChildOfClass("Humanoid"); if hum then if State.Move.ws ~= 16 then hum.WalkSpeed = State.Move.ws end; if State.Move.jp ~= 50 then hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end end; if State.Security.shiftLock then task.wait(0.2); local hrp = getRoot(); if hrp then if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end; State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp); State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9); State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000 end end end))
 
-local function stopAFK()
-    AFKSystem.active = false
-    State.Security.afkActive = false
-    if AFKSystem.idleConn then
-        AFKSystem.idleConn:Disconnect()
-        AFKSystem.idleConn = nil
-    end
-    notify("Anti AFK", "OFF", 1.5)
-end
+-- Shift Lock
+local function toggleShiftLock(v) State.Security.shiftLock = v; if v then local hrp = getRoot(); if hrp then if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end; State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp); State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9); State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000 end; RS:BindToRenderStep("XKIDShiftLock", Enum.RenderPriority.Camera.Value + 2, function() if not State.Security.shiftLock then return end; local hrp2, gyro = getRoot(), State.Security.shiftLockGyro; if hrp2 and gyro and gyro.Parent == hrp2 then local flatLook = Vector3.new(Cam.CFrame.LookVector.X, 0, Cam.CFrame.LookVector.Z); if flatLook.Magnitude > 0.01 then gyro.CFrame = CFrame.new(hrp2.Position, hrp2.Position + flatLook) end end end); notify("Shift Lock", "ON", 1.5) else RS:UnbindFromRenderStep("XKIDShiftLock"); if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy(); State.Security.shiftLockGyro = nil end; notify("Shift Lock", "OFF", 1.5) end end
+
+-- Refresh Character
+local pendingRefreshCF, pendingRefreshWS, pendingRefreshJP, pendingRefreshZoom = nil, 16, 50, 400
+local function refreshCharacter() if State.Avatar.isRefreshing then return end; local char = LP.Character; local hrp = getRoot(); if not char or not hrp then notify("Error", "Character not found", 2); return end; State.Avatar.isRefreshing = true; pendingRefreshCF = hrp.CFrame; pendingRefreshWS = State.Move.ws; pendingRefreshJP = State.Move.jp; pendingRefreshZoom = LP.CameraMaxZoomDistance; notify("Refresh", "Reloading...", 1.5); pcall(function() char:BreakJoints() end); local waited = 0; repeat task.wait(0.1); waited = waited + 0.1 until not LP.Character or waited > 2; if LP.Character then pcall(function() LP.Character:Destroy() end); task.wait(0.3) end; if not LP.Character then pcall(function() LP:LoadCharacter() end) end; task.delay(12, function() if State.Avatar.isRefreshing then State.Avatar.isRefreshing = false; pendingRefreshCF = nil; notify("Error", "Refresh timeout", 3) end end) end
+TrackC(LP.CharacterAdded:Connect(function(newChar) if not State.Avatar.isRefreshing then return end; if not pendingRefreshCF then return end; task.wait(0.3); local newHrp = newChar:FindFirstChild("HumanoidRootPart") or newChar:WaitForChild("HumanoidRootPart", 8); local newHum = newChar:FindFirstChildOfClass("Humanoid") or newChar:WaitForChild("Humanoid", 8); if newHrp and newHum then repeat task.wait() until newHum.Health > 0 and newHrp:IsDescendantOf(workspace); newHrp.CFrame = pendingRefreshCF + Vector3.new(0, 4, 0); newHrp.AssemblyLinearVelocity = Vector3.zero; newHrp.AssemblyAngularVelocity = Vector3.zero; newHum.WalkSpeed = pendingRefreshWS; newHum.UseJumpPower = true; newHum.JumpPower = pendingRefreshJP; Cam.CameraSubject = newHum; Cam.CameraType = Enum.CameraType.Custom; pcall(function() LP.CameraMaxZoomDistance = pendingRefreshZoom end); notify("Refresh", "Done", 2) end; State.Avatar.isRefreshing = false; pendingRefreshCF = nil end))
 
 -- ══════════════════════════════════════════════════════════════
---  CHARACTER HANDLER
+--  SMART TP — TOOL TOGGLE (KODE LO)
 -- ══════════════════════════════════════════════════════════════
-TrackC(LP.CharacterAdded:Connect(function(char)
-    task.wait(0.5)
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        if State.Move.ws ~= 16 then hum.WalkSpeed = State.Move.ws end
-        if State.Move.jp ~= 50 then hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end
-    end
-    if State.Security.shiftLock then
-        task.wait(0.2)
-        local hrp = getRoot()
-        if hrp then
-            if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end
-            State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp)
-            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
-        end
-    end
-end))
+local Teleport = {
+    clickConn = nil,
+    clickActive = false,
+    toolActive = false,
+    tool = nil
+}
 
--- ══════════════════════════════════════════════════════════════
---  SHIFT LOCK ENGINE
--- ══════════════════════════════════════════════════════════════
-local function toggleShiftLock(v)
-    State.Security.shiftLock = v
-    if v then
-        local hrp = getRoot()
-        if hrp then
-            if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end
-            State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp)
-            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
-        end
-        RS:BindToRenderStep("XKIDShiftLock", Enum.RenderPriority.Camera.Value + 2, function()
-            if not State.Security.shiftLock then return end
-            local hrp2, gyro = getRoot(), State.Security.shiftLockGyro
-            if hrp2 and gyro and gyro.Parent == hrp2 then
-                local flatLook = Vector3.new(Cam.CFrame.LookVector.X, 0, Cam.CFrame.LookVector.Z)
-                if flatLook.Magnitude > 0.01 then gyro.CFrame = CFrame.new(hrp2.Position, hrp2.Position + flatLook) end
-            end
-        end)
-        notify("Shift Lock", "ON", 1.5)
-    else
-        RS:UnbindFromRenderStep("XKIDShiftLock")
-        if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy(); State.Security.shiftLockGyro = nil end
-        notify("Shift Lock", "OFF", 1.5)
-    end
-end
-
--- ══════════════════════════════════════════════════════════════
---  REFRESH CHARACTER
--- ══════════════════════════════════════════════════════════════
-local pendingRefreshCF = nil
-local pendingRefreshWS = 16
-local pendingRefreshJP = 50
-local pendingRefreshZoom = 400
-
-local function refreshCharacter()
-    if State.Avatar.isRefreshing then return end
-    local char = LP.Character; local hrp = getRoot()
-    if not char or not hrp then notify("Error", "Character not found", 2); return end
-    State.Avatar.isRefreshing = true
-    pendingRefreshCF = hrp.CFrame; pendingRefreshWS = State.Move.ws
-    pendingRefreshJP = State.Move.jp; pendingRefreshZoom = LP.CameraMaxZoomDistance
-    notify("Refresh", "Reloading...", 1.5)
-    pcall(function() char:BreakJoints() end)
-    local waited = 0
-    repeat task.wait(0.1); waited = waited + 0.1 until not LP.Character or waited > 2
-    if LP.Character then pcall(function() LP.Character:Destroy() end); task.wait(0.3) end
-    if not LP.Character then pcall(function() LP:LoadCharacter() end) end
-    task.delay(12, function()
-        if State.Avatar.isRefreshing then State.Avatar.isRefreshing = false; pendingRefreshCF = nil
-            notify("Error", "Refresh timeout", 3) end
-    end)
-end
-
-TrackC(LP.CharacterAdded:Connect(function(newChar)
-    if not State.Avatar.isRefreshing then return end
-    if not pendingRefreshCF then return end
-    task.wait(0.3)
-    local newHrp = newChar:FindFirstChild("HumanoidRootPart") or newChar:WaitForChild("HumanoidRootPart", 8)
-    local newHum = newChar:FindFirstChildOfClass("Humanoid") or newChar:WaitForChild("Humanoid", 8)
-    if newHrp and newHum then
-        repeat task.wait() until newHum.Health > 0 and newHrp:IsDescendantOf(workspace)
-        newHrp.CFrame = pendingRefreshCF + Vector3.new(0, 4, 0)
-        newHrp.AssemblyLinearVelocity = Vector3.zero; newHrp.AssemblyAngularVelocity = Vector3.zero
-        newHum.WalkSpeed = pendingRefreshWS; newHum.UseJumpPower = true; newHum.JumpPower = pendingRefreshJP
-        Cam.CameraSubject = newHum; Cam.CameraType = Enum.CameraType.Custom
-        pcall(function() LP.CameraMaxZoomDistance = pendingRefreshZoom end)
-        notify("Refresh", "Done — outfit updated", 2)
-    end
-    State.Avatar.isRefreshing = false; pendingRefreshCF = nil
-end))
-
--- ══════════════════════════════════════════════════════════════
---  DOUBLE-CLICK TP (Always Active — No Toggle)
--- ══════════════════════════════════════════════════════════════
 local function executeTP()
-    local hrp = getRoot(); if not hrp then return end
+    local hrp = getRoot()
+    if not hrp then return end
     local m = LP:GetMouse()
-    if m.Hit then hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0)) end
+    if m.Hit then
+        hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0))
+        hrp.AssemblyLinearVelocity = Vector3.zero
+    end
 end
 
-TrackC(UIS.InputBegan:Connect(function(inp, gp)
-    if gp then return end
-    if inp.UserInputType == Enum.UserInputType.Touch then
-        if isTapOnUI(inp.Position) then return end
-        local now = tick()
-        if State.Teleport.lastTap > 0 and (now - State.Teleport.lastTap) < 0.4 then
-            executeTP()
-            State.Teleport.lastTap = 0
-        else
-            State.Teleport.lastTap = now
-        end
-    elseif inp.UserInputType == Enum.UserInputType.MouseButton1 then
-        if isTapOnUI(Vector2.new(inp.Position.X, inp.Position.Y)) then return end
-        local now = tick()
-        if State.Teleport.lastTap > 0 and (now - State.Teleport.lastTap) < 0.4 then
-            executeTP()
-            State.Teleport.lastTap = 0
-        else
-            State.Teleport.lastTap = now
-        end
+local function toggleSmartTP(v)
+    Teleport.clickActive = v
+    if v then
+        pcall(function()
+            local tool = Instance.new("Tool")
+            tool.Name = "TP Tool"
+            tool.RequiresHandle = false
+            tool.Parent = LP.Backpack
+            Teleport.tool = tool
+            Teleport.toolActive = false
+            tool.Activated:Connect(function()
+                Teleport.toolActive = not Teleport.toolActive
+            end)
+        end)
+        Teleport.clickConn = TrackC(UIS.InputBegan:Connect(function(inp, gp)
+            if gp then return end
+            if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+                if Teleport.toolActive then
+                    executeTP()
+                    Teleport.toolActive = false
+                end
+            end
+        end))
+        notify("Smart TP", "ON — Use tool to toggle", 2)
+    else
+        if Teleport.clickConn then Teleport.clickConn:Disconnect(); Teleport.clickConn = nil end
+        pcall(function() if Teleport.tool then Teleport.tool:Destroy(); Teleport.tool = nil end end)
+        Teleport.toolActive = false
+        notify("Smart TP", "OFF", 1.5)
     end
-end))
-
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        if State.Teleport.lastTap > 0 and (tick() - State.Teleport.lastTap) > 1 then
-            State.Teleport.lastTap = 0
-        end
-        task.wait(0.3)
-    end
-end)
+end
 
 -- ══════════════════════════════════════════════════════════════
---  ESP ENGINE (FULL)
+--  ESP ENGINE
 -- ══════════════════════════════════════════════════════════════
-local function initPlayerCache(player)
-    if State.ESP.cache[player] then return end
-    local cache = { texts = nil, tracer = nil, boxLines = {}, hl = nil, isSuspect = false, isGlitch = false, reason = "" }
-    pcall(function()
-        cache.texts = Drawing.new("Text")
-        if cache.texts then cache.texts.Center = true; cache.texts.Outline = true; cache.texts.Font = 2; cache.texts.Size = 13; cache.texts.ZIndex = 2 end
-        cache.tracer = Drawing.new("Line")
-        if cache.tracer then cache.tracer.Thickness = 1.5; cache.tracer.ZIndex = 1 end
-        for i = 1, 4 do local line = Drawing.new("Line")
-            if line then line.Thickness = 1.5; line.ZIndex = 1; cache.boxLines[i] = line end
-        end
-    end)
-    State.ESP.cache[player] = cache
-end
-
-local function clearPlayerCache(player)
-    local c = State.ESP.cache[player]; if not c then return end
-    pcall(function() if c.texts then c.texts:Remove() end end)
-    pcall(function() if c.tracer then c.tracer:Remove() end end)
-    for _, l in ipairs(c.boxLines) do pcall(function() if l then l:Remove() end end) end
-    pcall(function() if c.hl then c.hl:Destroy() end end)
-    State.ESP.cache[player] = nil
-end
+local function initPlayerCache(player) if State.ESP.cache[player] then return end; local cache = { texts = nil, tracer = nil, boxLines = {}, hl = nil, isSuspect = false, isGlitch = false, reason = "" }; pcall(function() cache.texts = Drawing.new("Text"); if cache.texts then cache.texts.Center = true; cache.texts.Outline = true; cache.texts.Font = 2; cache.texts.Size = 13; cache.texts.ZIndex = 2 end; cache.tracer = Drawing.new("Line"); if cache.tracer then cache.tracer.Thickness = 1.5; cache.tracer.ZIndex = 1 end; for i = 1, 4 do local line = Drawing.new("Line"); if line then line.Thickness = 1.5; line.ZIndex = 1; cache.boxLines[i] = line end end end); State.ESP.cache[player] = cache end
+local function clearPlayerCache(player) local c = State.ESP.cache[player]; if not c then return end; pcall(function() if c.texts then c.texts:Remove() end end); pcall(function() if c.tracer then c.tracer:Remove() end end); for _, l in ipairs(c.boxLines) do pcall(function() if l then l:Remove() end end) end; pcall(function() if c.hl then c.hl:Destroy() end end); State.ESP.cache[player] = nil end
 TrackC(Players.PlayerRemoving:Connect(clearPlayerCache))
-
 local espsortedPlayers = {}
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        if State.ESP.active then
-            local tempSorted = {}
-            local myHrp = getCharRoot(LP.Character)
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= LP and p.Character then
-                    local isSus, isGlitch, reason = false, false, ""
-                    for _, v in pairs(p.Character:GetChildren()) do
-                        if v:IsA("BasePart") and (v.Size.X > 30 or v.Size.Y > 30 or v.Size.Z > 30) then
-                            isSus = true; reason = "Map Blocker"; break
-                        elseif v:IsA("Accessory") then
-                            local h = v:FindFirstChild("Handle")
-                            if h and h:IsA("BasePart") then
-                                if h.Size.Magnitude > 20 then isSus = true; reason = "Huge Hat"; break
-                                elseif h.Size.Magnitude > 10 or (h.Transparency < 0.1 and h.Material == Enum.Material.Neon) then
-                                    isGlitch = true; reason = "Glitch Acc" end
-                            end
-                        end
-                    end
-                    if not isSus and not isGlitch then
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        if hum then
-                            local bws, bhs = hum:FindFirstChild("BodyWidthScale"), hum:FindFirstChild("BodyHeightScale")
-                            if (bws and bws.Value > 2.0) or (bhs and bhs.Value > 2.0) then isSus = true; reason = "Glitch Avatar" end
-                        end
-                    end
-                    initPlayerCache(p)
-                    if State.ESP.cache[p] then
-                        State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason
-                    end
-                    if myHrp then
-                        local hrp = getCharRoot(p.Character)
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        if hrp and hum and hum.Health > 0 then
-                            local dist = (hrp.Position - myHrp.Position).Magnitude
-                            if dist <= State.ESP.maxDrawDistance then
-                                table.insert(tempSorted, { p = p, hrp = hrp, dist = dist, char = p.Character })
-                            end
-                        end
-                    end
-                end
-            end
-            table.sort(tempSorted, function(a, b) return a.dist < b.dist end)
-            espsortedPlayers = tempSorted
-        end
-        task.wait(0.5)
-    end
-end)
+task.spawn(function() while getgenv()._XKID_RUNNING do if State.ESP.active then local tempSorted = {}; local myHrp = getCharRoot(LP.Character); for _, p in pairs(Players:GetPlayers()) do if p ~= LP and p.Character then local isSus, isGlitch, reason = false, false, ""; for _, v in pairs(p.Character:GetChildren()) do if v:IsA("BasePart") and (v.Size.X > 30 or v.Size.Y > 30 or v.Size.Z > 30) then isSus = true; reason = "Map Blocker"; break elseif v:IsA("Accessory") then local h = v:FindFirstChild("Handle"); if h and h:IsA("BasePart") then if h.Size.Magnitude > 20 then isSus = true; reason = "Huge Hat"; break elseif h.Size.Magnitude > 10 or (h.Transparency < 0.1 and h.Material == Enum.Material.Neon) then isGlitch = true; reason = "Glitch Acc" end end end end; if not isSus and not isGlitch then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum then local bws, bhs = hum:FindFirstChild("BodyWidthScale"), hum:FindFirstChild("BodyHeightScale"); if (bws and bws.Value > 2.0) or (bhs and bhs.Value > 2.0) then isSus = true; reason = "Glitch Avatar" end end end; initPlayerCache(p); if State.ESP.cache[p] then State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason end; if myHrp then local hrp = getCharRoot(p.Character); local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hrp and hum and hum.Health > 0 then local dist = (hrp.Position - myHrp.Position).Magnitude; if dist <= State.ESP.maxDrawDistance then table.insert(tempSorted, { p = p, hrp = hrp, dist = dist, char = p.Character }) end end end end end; table.sort(tempSorted, function(a, b) return a.dist < b.dist end); espsortedPlayers = tempSorted end; task.wait(0.5) end end)
+TrackC(RS.RenderStepped:Connect(function() if not State.ESP.active then return end; local myHrp = getCharRoot(LP.Character); if not myHrp then return end; local vp = Cam.ViewportSize; local center = Vector2.new(vp.X / 2, vp.Y / 2); for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end) end; local hlCount = 0; for _, data in ipairs(espsortedPlayers) do local player, char, hrp, dist = data.p, data.char, data.hrp, data.dist; local c = State.ESP.cache[player]; if not c then continue end; local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position); if not onScreen then continue end; local isSus, isGlitch = c.isSuspect, c.isGlitch; local useHl = isSus or isGlitch or State.ESP.highlightMode; local txt = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist)); if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason end; local cColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor); local tColor = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); local bColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N); pcall(function() if c.texts then c.texts.Text = txt; c.texts.Color = cColor; c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true end; if State.ESP.tracerMode ~= "OFF" and c.tracer then local origin = Vector2.new(vp.X / 2, vp.Y); if State.ESP.tracerMode == "Center" then origin = center elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end; c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y); c.tracer.Color = tColor; c.tracer.Visible = true end end); if useHl and hlCount < 30 then hlCount = hlCount + 1; pcall(function() local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0)); local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0)); if topOn and botOn and #c.boxLines == 4 then local bh = math.abs(top.Y - bot.Y); local bw = bh * 0.6; c.boxLines[1].From = Vector2.new(rootPos.X - bw/2, top.Y); c.boxLines[1].To = Vector2.new(rootPos.X + bw/2, top.Y); c.boxLines[2].From = Vector2.new(rootPos.X + bw/2, top.Y); c.boxLines[2].To = Vector2.new(rootPos.X + bw/2, bot.Y); c.boxLines[3].From = Vector2.new(rootPos.X + bw/2, bot.Y); c.boxLines[3].To = Vector2.new(rootPos.X - bw/2, bot.Y); c.boxLines[4].From = Vector2.new(rootPos.X - bw/2, bot.Y); c.boxLines[4].To = Vector2.new(rootPos.X - bw/2, top.Y); for i = 1, 4 do c.boxLines[i].Color = bColor; c.boxLines[i].Visible = true end end end); pcall(function() if not c.hl or c.hl.Parent ~= char then if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end; if c.hl then c.hl.FillColor = bColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true end end) end end end))
 
-TrackC(RS.RenderStepped:Connect(function()
-    if not State.ESP.active then return end
-    local myHrp = getCharRoot(LP.Character); if not myHrp then return end
-    local vp = Cam.ViewportSize; local center = Vector2.new(vp.X / 2, vp.Y / 2)
-    for _, c in pairs(State.ESP.cache) do
-        pcall(function()
-            if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end
-            for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end
-            if c.hl then c.hl.Enabled = false end
-        end)
-    end
-    local hlCount = 0
-    for _, data in ipairs(espsortedPlayers) do
-        local player, char, hrp, dist = data.p, data.char, data.hrp, data.dist
-        local c = State.ESP.cache[player]; if not c then continue end
-        local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
-        if not onScreen then continue end
-        local isSus, isGlitch = c.isSuspect, c.isGlitch
-        local useHl = isSus or isGlitch or State.ESP.highlightMode
-        local txt = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
-        if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason end
-        local cColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor)
-        local tColor = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N)
-        local bColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N)
-        pcall(function()
-            if c.texts then c.texts.Text = txt; c.texts.Color = cColor; c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true end
-            if State.ESP.tracerMode ~= "OFF" and c.tracer then
-                local origin = Vector2.new(vp.X / 2, vp.Y)
-                if State.ESP.tracerMode == "Center" then origin = center
-                elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end
-                c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y); c.tracer.Color = tColor; c.tracer.Visible = true
-            end
-        end)
-        if useHl and hlCount < 30 then
-            hlCount = hlCount + 1
-            pcall(function()
-                local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0))
-                local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0))
-                if topOn and botOn and #c.boxLines == 4 then
-                    local bh = math.abs(top.Y - bot.Y); local bw = bh * 0.6
-                    c.boxLines[1].From = Vector2.new(rootPos.X - bw/2, top.Y); c.boxLines[1].To = Vector2.new(rootPos.X + bw/2, top.Y)
-                    c.boxLines[2].From = Vector2.new(rootPos.X + bw/2, top.Y); c.boxLines[2].To = Vector2.new(rootPos.X + bw/2, bot.Y)
-                    c.boxLines[3].From = Vector2.new(rootPos.X + bw/2, bot.Y); c.boxLines[3].To = Vector2.new(rootPos.X - bw/2, bot.Y)
-                    c.boxLines[4].From = Vector2.new(rootPos.X - bw/2, bot.Y); c.boxLines[4].To = Vector2.new(rootPos.X - bw/2, top.Y)
-                    for i = 1, 4 do c.boxLines[i].Color = bColor; c.boxLines[i].Visible = true end
-                end
-            end)
-            pcall(function()
-                if not c.hl or c.hl.Parent ~= char then if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end
-                if c.hl then c.hl.FillColor = bColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true end
-            end)
-        end
-    end
-end))
+-- Fly Engine
+local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}; local flyVel = Vector3.zero
+local function startFlyCapture() local keysHeld = {}; table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp) if gp then return end; local k = inp.KeyCode; if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then keysHeld[k] = true end end)); table.insert(flyConns, UIS.InputEnded:Connect(function(inp) keysHeld[inp.KeyCode] = nil end)); table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp) if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp.Position.X <= Cam.ViewportSize.X / 2 then if not flyMoveTouch then flyMoveTouch = inp; flyMoveSt = inp.Position end end end)); table.insert(flyConns, UIS.TouchMoved:Connect(function(inp) if inp == flyMoveTouch and flyMoveSt then local dx, dy = inp.Position.X - flyMoveSt.X, inp.Position.Y - flyMoveSt.Y; flyJoy = Vector2.new(math.abs(dx)>25 and math.clamp((dx-math.sign(dx)*25)/80,-1,1) or 0, math.abs(dy)>20 and math.clamp((dy-math.sign(dy)*20)/80,-1,1) or 0) end end)); table.insert(flyConns, UIS.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp == flyMoveTouch then flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero end end)); State.Fly._keys = keysHeld end
+local function stopFlyCapture() for _, c in ipairs(flyConns) do c:Disconnect() end; flyConns = {}; flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero; State.Fly._keys = {} end
+local function toggleFly(v) if not v then State.Fly.active = false; stopFlyCapture(); RS:UnbindFromRenderStep("XKIDFly"); pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end); pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end); State.Fly.bv = nil; State.Fly.bg = nil; flyVel = Vector3.zero; local hum = getHum(); if hum then hum.PlatformStand = false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end; notify("Fly", "OFF", 1.5); return end; local hrp, hum = getRoot(), getHum(); if not hrp or not hum then return end; State.Fly.active = true; hum.PlatformStand = true; flyVel = Vector3.zero; State.Fly.bv = Instance.new("BodyVelocity", hrp); State.Fly.bv.MaxForce = Vector3.new(9e9,9e9,9e9); State.Fly.bg = Instance.new("BodyGyro", hrp); State.Fly.bg.MaxTorque = Vector3.new(9e9,9e9,9e9); State.Fly.bg.P = 50000; startFlyCapture(); notify("Fly", "ON", 2); RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function() if not State.Fly.active then return end; local r = getRoot(); if not r then return end; local camCF = Cam.CFrame; local spd = State.Move.flyS; local move = Vector3.zero; local keys = State.Fly._keys or {}; if onMobile then move = camCF.LookVector * (-flyJoy.Y) + camCF.RightVector * flyJoy.X else if keys[Enum.KeyCode.W] then move = move + camCF.LookVector end; if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end; if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end; if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end; if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) end; if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) end end; if move.Magnitude > 0 then flyVel = flyVel:Lerp(move.Unit * spd, 0.15) else flyVel = flyVel:Lerp(isOnGround() and Vector3.zero or Vector3.new(0, -0.8, 0), 0.08) end; if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity = flyVel end; if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector) end end) end
 
--- ══════════════════════════════════════════════════════════════
---  FLY ENGINE
--- ══════════════════════════════════════════════════════════════
-local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
-local flyVel = Vector3.zero
-
-local function startFlyCapture()
-    local keysHeld = {}
-    table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
-        if gp then return end; local k = inp.KeyCode
-        if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then keysHeld[k] = true end
-    end))
-    table.insert(flyConns, UIS.InputEnded:Connect(function(inp) keysHeld[inp.KeyCode] = nil end))
-    table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp)
-        if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp.Position.X <= Cam.ViewportSize.X / 2 then if not flyMoveTouch then flyMoveTouch = inp; flyMoveSt = inp.Position end end
-    end))
-    table.insert(flyConns, UIS.TouchMoved:Connect(function(inp)
-        if inp == flyMoveTouch and flyMoveSt then
-            local dx, dy = inp.Position.X - flyMoveSt.X, inp.Position.Y - flyMoveSt.Y
-            flyJoy = Vector2.new(math.abs(dx)>25 and math.clamp((dx-math.sign(dx)*25)/80,-1,1) or 0, math.abs(dy)>20 and math.clamp((dy-math.sign(dy)*20)/80,-1,1) or 0)
-        end
-    end))
-    table.insert(flyConns, UIS.InputEnded:Connect(function(inp)
-        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp == flyMoveTouch then flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero end
-    end))
-    State.Fly._keys = keysHeld
-end
-
-local function stopFlyCapture()
-    for _, c in ipairs(flyConns) do c:Disconnect() end
-    flyConns = {}; flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero; State.Fly._keys = {}
-end
-
-local function toggleFly(v)
-    if not v then
-        State.Fly.active = false; stopFlyCapture(); RS:UnbindFromRenderStep("XKIDFly")
-        pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end)
-        pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end)
-        State.Fly.bv = nil; State.Fly.bg = nil; flyVel = Vector3.zero
-        local hum = getHum()
-        if hum then hum.PlatformStand = false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end
-        notify("Fly", "OFF", 1.5)
-        return
-    end
-    local hrp, hum = getRoot(), getHum(); if not hrp or not hum then return end
-    State.Fly.active = true; hum.PlatformStand = true; flyVel = Vector3.zero
-    State.Fly.bv = Instance.new("BodyVelocity", hrp); State.Fly.bv.MaxForce = Vector3.new(9e9,9e9,9e9)
-    State.Fly.bg = Instance.new("BodyGyro", hrp); State.Fly.bg.MaxTorque = Vector3.new(9e9,9e9,9e9); State.Fly.bg.P = 50000
-    startFlyCapture(); notify("Fly", "ON", 2)
-    RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function()
-        if not State.Fly.active then return end; local r = getRoot(); if not r then return end
-        local camCF = Cam.CFrame; local spd = State.Move.flyS; local move = Vector3.zero; local keys = State.Fly._keys or {}
-        if onMobile then move = camCF.LookVector * (-flyJoy.Y) + camCF.RightVector * flyJoy.X
-        else
-            if keys[Enum.KeyCode.W] then move = move + camCF.LookVector end
-            if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end
-            if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end
-            if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end
-            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) end
-            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) end
-        end
-        if move.Magnitude > 0 then flyVel = flyVel:Lerp(move.Unit * spd, 0.15)
-        else flyVel = flyVel:Lerp(isOnGround() and Vector3.zero or Vector3.new(0, -0.8, 0), 0.08) end
-        if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity = flyVel end
-        if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector) end
-    end)
-end
-
--- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE
--- ══════════════════════════════════════════════════════════════
+-- Freecam Engine
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70, lockGyro = nil, lockPos = nil }
 local I_CamVel, I_YawVel, I_PitchVel, I_RollVel, heightVelocity = Vector3.zero, 0, 0, 0, 0
 local fcMoveTouch, fcMoveSt, fcJoy, fcRotTouch, fcRotLast, fcKeysHeld, fcConns = nil, nil, Vector2.zero, nil, nil, {}, {}
 local FC_UI_Btns = { up = false, down = false, rollLeft = false, rollRight = false, zoomIn = false, zoomOut = false }
-
 local FCUI = Instance.new("ScreenGui"); FCUI.Name = "XKID_FreecamUI"; FCUI.ResetOnSpawn = false; FCUI.ZIndexBehavior = Enum.ZIndexBehavior.Global; FCUI.Enabled = false; FCUI.Parent = CoreGui; getgenv()._XKID_FCUI = FCUI
-
-local function makeFCBtn(name, txt, pos, actionKey)
-    local b = Instance.new("TextButton", FCUI); b.Name = name; b.Size = UDim2.new(0, 52, 0, 52); b.Position = pos
-    b.BackgroundColor3 = Color3.fromRGB(15, 15, 15); b.BackgroundTransparency = 0.4
-    b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 22; b.Font = Enum.Font.GothamBold; b.AutoButtonColor = false
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10)
-    local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(220, 20, 60); uis.Thickness = 2; uis.Transparency = 0.3
-    local indicator = Instance.new("Frame", b); indicator.Name = "Indicator"; indicator.Size = UDim2.new(0, 8, 0, 8); indicator.Position = UDim2.new(0, 5, 0, 5); indicator.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
-    local function press(down) FC_UI_Btns[actionKey] = down; b.BackgroundTransparency = down and 0.05 or 0.4; indicator.BackgroundColor3 = down and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(60, 60, 60) end
-    b.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then press(true) end end)
-    b.InputEnded:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then press(false) end end)
-    b.MouseLeave:Connect(function() press(false) end)
-end
-
+local function makeFCBtn(name, txt, pos, actionKey) local b = Instance.new("TextButton", FCUI); b.Name = name; b.Size = UDim2.new(0, 52, 0, 52); b.Position = pos; b.BackgroundColor3 = Color3.fromRGB(15, 15, 15); b.BackgroundTransparency = 0.4; b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 22; b.Font = Enum.Font.GothamBold; b.AutoButtonColor = false; Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10); local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(220, 20, 60); uis.Thickness = 2; uis.Transparency = 0.3; local indicator = Instance.new("Frame", b); indicator.Name = "Indicator"; indicator.Size = UDim2.new(0, 8, 0, 8); indicator.Position = UDim2.new(0, 5, 0, 5); indicator.BackgroundColor3 = Color3.fromRGB(60, 60, 60); Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0); local function press(down) FC_UI_Btns[actionKey] = down; b.BackgroundTransparency = down and 0.05 or 0.4; indicator.BackgroundColor3 = down and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(60, 60, 60) end; b.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then press(true) end end); b.InputEnded:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then press(false) end end); b.MouseLeave:Connect(function() press(false) end) end
 makeFCBtn("BtnRollL","L",UDim2.new(1,-118,0.5,-84),"rollLeft"); makeFCBtn("BtnRollR","R",UDim2.new(1,-58,0.5,-84),"rollRight")
 makeFCBtn("BtnUp","↑",UDim2.new(1,-118,0.5,-26),"up"); makeFCBtn("BtnZIn","+",UDim2.new(1,-58,0.5,-26),"zoomIn")
 makeFCBtn("BtnDown","↓",UDim2.new(1,-118,0.5,32),"down"); makeFCBtn("BtnZOut","-",UDim2.new(1,-58,0.5,32),"zoomOut")
-
-local function startFreecamCapture()
-    fcKeysHeld = {}
-    table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp) if gp then return end; fcKeysHeld[inp.KeyCode] = true
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then FC._mouseRot = true; UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition end end))
-    table.insert(fcConns, UIS.InputEnded:Connect(function(inp) fcKeysHeld[inp.KeyCode] = false
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then FC._mouseRot = false; UIS.MouseBehavior = Enum.MouseBehavior.Default end end))
-    table.insert(fcConns, UIS.InputChanged:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseMovement and FC._mouseRot then
-            I_YawVel = I_YawVel - inp.Delta.X * FC.sens * 120; I_PitchVel = I_PitchVel - inp.Delta.Y * FC.sens * 120 end end))
-    table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp) if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp.Position.X > Cam.ViewportSize.X / 2 then if not fcRotTouch then fcRotTouch = inp; fcRotLast = inp.Position end
-        else if not fcMoveTouch then fcMoveTouch = inp; fcMoveSt = inp.Position; fcJoy = Vector2.zero end end end))
-    table.insert(fcConns, UIS.TouchMoved:Connect(function(inp)
-        if inp == fcRotTouch and fcRotLast then local dx, dy = inp.Position.X - fcRotLast.X, inp.Position.Y - fcRotLast.Y; fcRotLast = inp.Position
-            I_YawVel = I_YawVel - dx * FC.sens * 80; I_PitchVel = I_PitchVel - dy * FC.sens * 80 end
-        if inp == fcMoveTouch and fcMoveSt then local dx, dy = inp.Position.X - fcMoveSt.X, inp.Position.Y - fcMoveSt.Y
-            local function ad(v,d,m) if math.abs(v)<d then return 0 end; return math.clamp((v-math.sign(v)*d)/(m-d),-1,1) end
-            fcJoy = Vector2.new(ad(dx,15,70), ad(dy,15,70)) end end))
-    table.insert(fcConns, UIS.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if inp == fcRotTouch then fcRotTouch = nil; fcRotLast = nil end
-        if inp == fcMoveTouch then fcMoveTouch = nil; fcMoveSt = nil; fcJoy = Vector2.zero end end))
-end
+local function startFreecamCapture() fcKeysHeld = {}; table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp) if gp then return end; fcKeysHeld[inp.KeyCode] = true; if inp.UserInputType == Enum.UserInputType.MouseButton2 then FC._mouseRot = true; UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition end end)); table.insert(fcConns, UIS.InputEnded:Connect(function(inp) fcKeysHeld[inp.KeyCode] = false; if inp.UserInputType == Enum.UserInputType.MouseButton2 then FC._mouseRot = false; UIS.MouseBehavior = Enum.MouseBehavior.Default end end)); table.insert(fcConns, UIS.InputChanged:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.MouseMovement and FC._mouseRot then I_YawVel = I_YawVel - inp.Delta.X * FC.sens * 120; I_PitchVel = I_PitchVel - inp.Delta.Y * FC.sens * 120 end end)); table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp) if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp.Position.X > Cam.ViewportSize.X / 2 then if not fcRotTouch then fcRotTouch = inp; fcRotLast = inp.Position end else if not fcMoveTouch then fcMoveTouch = inp; fcMoveSt = inp.Position; fcJoy = Vector2.zero end end end)); table.insert(fcConns, UIS.TouchMoved:Connect(function(inp) if inp == fcRotTouch and fcRotLast then local dx, dy = inp.Position.X - fcRotLast.X, inp.Position.Y - fcRotLast.Y; fcRotLast = inp.Position; I_YawVel = I_YawVel - dx * FC.sens * 80; I_PitchVel = I_PitchVel - dy * FC.sens * 80 end; if inp == fcMoveTouch and fcMoveSt then local dx, dy = inp.Position.X - fcMoveSt.X, inp.Position.Y - fcMoveSt.Y; local function ad(v,d,m) if math.abs(v)<d then return 0 end; return math.clamp((v-math.sign(v)*d)/(m-d),-1,1) end; fcJoy = Vector2.new(ad(dx,15,70), ad(dy,15,70)) end end)); table.insert(fcConns, UIS.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp == fcRotTouch then fcRotTouch = nil; fcRotLast = nil end; if inp == fcMoveTouch then fcMoveTouch = nil; fcMoveSt = nil; fcJoy = Vector2.zero end end)) end
 local function stopFreecamCapture() for _, c in ipairs(fcConns) do c:Disconnect() end; fcConns = {}; fcKeysHeld = {}; FC._mouseRot = false; UIS.MouseBehavior = Enum.MouseBehavior.Default end
-
-local function startFreecamLoop()
-    RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt)
-        if not FC.active then return end; Cam.CameraType = Enum.CameraType.Scriptable; local safeDt = math.clamp(dt, 0.001, 0.05)
-        I_YawVel = I_YawVel * math.max(0, 1 - safeDt * 14); I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14)
-        FC.yawDeg = FC.yawDeg + I_YawVel * safeDt; FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80)
-        local rollTarget = 0; if FC_UI_Btns.rollLeft then rollTarget = -100 elseif FC_UI_Btns.rollRight then rollTarget = 100 end
-        I_RollVel = I_RollVel + (rollTarget - I_RollVel) * math.clamp(safeDt * 5, 0, 1); FC.rollDeg = math.clamp(FC.rollDeg + I_RollVel * safeDt, -100, 100)
-        local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
-        local joyX, joyY = fcJoy.X, fcJoy.Y
-        if not onMobile then if fcKeysHeld[Enum.KeyCode.W] then joyY = joyY - 1 end; if fcKeysHeld[Enum.KeyCode.S] then joyY = joyY + 1 end; if fcKeysHeld[Enum.KeyCode.D] then joyX = joyX + 1 end; if fcKeysHeld[Enum.KeyCode.A] then joyX = joyX - 1 end end
-        local rawMove = Vector2.new(joyX, joyY); if rawMove.Magnitude > 1 then rawMove = rawMove.Unit end
-        I_CamVel = I_CamVel:Lerp((camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X) * (FC.speed * 60), math.clamp(safeDt * 3.5, 0, 1))
-        local heightTarget = 0; if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then heightTarget = FC.speed * 60 end; if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end
-        if heightTarget == 0 then heightVelocity = heightVelocity * math.max(0, 1 - safeDt * 10) else heightVelocity = heightVelocity + (heightTarget - heightVelocity) * math.clamp(safeDt * 3, 0, 1) end
-        if FC_UI_Btns.zoomIn then Cam.FieldOfView = math.clamp(Cam.FieldOfView - 1.2, 10, 120) end
-        if FC_UI_Btns.zoomOut then Cam.FieldOfView = math.clamp(Cam.FieldOfView + 1.2, 10, 120) end
-        FC.pos = FC.pos + (I_CamVel + Vector3.new(0, heightVelocity, 0)) * safeDt
-        Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0) * CFrame.Angles(0, 0, math.rad(FC.rollDeg))
-        local hrp, hum = getRoot(), getHum(); if hrp and not hrp.Anchored then hrp.Anchored = true end
-        if hum then hum:ChangeState(Enum.HumanoidStateType.Physics); hum.WalkSpeed = 0; hum.JumpPower = 0 end
-    end)
-end
+local function startFreecamLoop() RS:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt) if not FC.active then return end; Cam.CameraType = Enum.CameraType.Scriptable; local safeDt = math.clamp(dt, 0.001, 0.05); I_YawVel = I_YawVel * math.max(0, 1 - safeDt * 14); I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14); FC.yawDeg = FC.yawDeg + I_YawVel * safeDt; FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80); local rollTarget = 0; if FC_UI_Btns.rollLeft then rollTarget = -100 elseif FC_UI_Btns.rollRight then rollTarget = 100 end; I_RollVel = I_RollVel + (rollTarget - I_RollVel) * math.clamp(safeDt * 5, 0, 1); FC.rollDeg = math.clamp(FC.rollDeg + I_RollVel * safeDt, -100, 100); local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0); local joyX, joyY = fcJoy.X, fcJoy.Y; if not onMobile then if fcKeysHeld[Enum.KeyCode.W] then joyY = joyY - 1 end; if fcKeysHeld[Enum.KeyCode.S] then joyY = joyY + 1 end; if fcKeysHeld[Enum.KeyCode.D] then joyX = joyX + 1 end; if fcKeysHeld[Enum.KeyCode.A] then joyX = joyX - 1 end end; local rawMove = Vector2.new(joyX, joyY); if rawMove.Magnitude > 1 then rawMove = rawMove.Unit end; I_CamVel = I_CamVel:Lerp((camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X) * (FC.speed * 60), math.clamp(safeDt * 3.5, 0, 1)); local heightTarget = 0; if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then heightTarget = FC.speed * 60 end; if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end; if heightTarget == 0 then heightVelocity = heightVelocity * math.max(0, 1 - safeDt * 10) else heightVelocity = heightVelocity + (heightTarget - heightVelocity) * math.clamp(safeDt * 3, 0, 1) end; if FC_UI_Btns.zoomIn then Cam.FieldOfView = math.clamp(Cam.FieldOfView - 1.2, 10, 120) end; if FC_UI_Btns.zoomOut then Cam.FieldOfView = math.clamp(Cam.FieldOfView + 1.2, 10, 120) end; FC.pos = FC.pos + (I_CamVel + Vector3.new(0, heightVelocity, 0)) * safeDt; Cam.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0) * CFrame.Angles(0, 0, math.rad(FC.rollDeg)); local hrp, hum = getRoot(), getHum(); if hrp and not hrp.Anchored then hrp.Anchored = true end; if hum then hum:ChangeState(Enum.HumanoidStateType.Physics); hum.WalkSpeed = 0; hum.JumpPower = 0 end end) end
 local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
+local function fullCleanupFreecam() stopFreecamLoop(); stopFreecamCapture(); pcall(function() if FC.lockGyro then FC.lockGyro:Destroy() end end); pcall(function() if FC.lockPos then FC.lockPos:Destroy() end end); local hrp = getRoot(); if hrp then hrp.Anchored = false; if FC.savedCF then hrp.CFrame = FC.savedCF end end; local hum = getHum(); if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end; Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end end
 
-local function fullCleanupFreecam()
-    stopFreecamLoop(); stopFreecamCapture()
-    pcall(function() if FC.lockGyro then FC.lockGyro:Destroy() end end); pcall(function() if FC.lockPos then FC.lockPos:Destroy() end end)
-    local hrp = getRoot(); if hrp then hrp.Anchored = false; if FC.savedCF then hrp.CFrame = FC.savedCF end end
-    local hum = getHum(); if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end
-    Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov
-    if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end
-    for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end
-end
-
--- ══════════════════════════════════════════════════════════════
---  SPECTATE ENGINE
--- ══════════════════════════════════════════════════════════════
+-- Spectate Engine
 local Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, fpYaw = 0, fpPitch = 0, isSelf = false }
 local specTM, specPinch, specPinchD, specPan, specConns = nil, {}, nil, Vector2.zero, {}
-local function startSpecCapture()
-    table.insert(specConns, UIS.InputBegan:Connect(function(inp, gp) if gp or not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end; table.insert(specPinch, inp); specTM = #specPinch == 1 and inp or nil end))
-    table.insert(specConns, UIS.InputChanged:Connect(function(inp) if not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end; if #specPinch == 1 and inp == specTM then specPan = specPan + Vector2.new(inp.Delta.X, inp.Delta.Y) elseif #specPinch >= 2 then local d = (specPinch[1].Position - specPinch[2].Position).Magnitude; if specPinchD then local diff = d - specPinchD; Cam.FieldOfView = math.clamp(Cam.FieldOfView - diff * 0.15, 10, 120); if Spec.mode == "third" then Spec.dist = math.clamp(Spec.dist - diff * 0.03, 3, 30) end end; specPinchD = d end end))
-    table.insert(specConns, UIS.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; for i, v in ipairs(specPinch) do if v == inp then table.remove(specPinch, i); break end end; specPinchD = nil; specTM = #specPinch == 1 and specPinch[1] or nil end))
-end
+local function startSpecCapture() table.insert(specConns, UIS.InputBegan:Connect(function(inp, gp) if gp or not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end; table.insert(specPinch, inp); specTM = #specPinch == 1 and inp or nil end)); table.insert(specConns, UIS.InputChanged:Connect(function(inp) if not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end; if #specPinch == 1 and inp == specTM then specPan = specPan + Vector2.new(inp.Delta.X, inp.Delta.Y) elseif #specPinch >= 2 then local d = (specPinch[1].Position - specPinch[2].Position).Magnitude; if specPinchD then local diff = d - specPinchD; Cam.FieldOfView = math.clamp(Cam.FieldOfView - diff * 0.15, 10, 120); if Spec.mode == "third" then Spec.dist = math.clamp(Spec.dist - diff * 0.03, 3, 30) end end; specPinchD = d end end)); table.insert(specConns, UIS.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; for i, v in ipairs(specPinch) do if v == inp then table.remove(specPinch, i); break end end; specPinchD = nil; specTM = #specPinch == 1 and specPinch[1] or nil end)) end
 local function stopSpecCapture() for _, c in ipairs(specConns) do c:Disconnect() end; specConns = {}; specTM = nil; specPinch = {}; specPinchD = nil; specPan = Vector2.zero end
-local function startSpecLoop()
-    RS:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value + 1, function()
-        if not Spec.active then return end
-        pcall(function()
-            local targetChar = nil; local targetHrp = nil
-            if Spec.isSelf then targetChar = LP.Character; targetHrp = getCharRoot(targetChar)
-            else
-                if not Spec.target or not Spec.target.Character then Spec.active = false; stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov; return end
-                targetChar = Spec.target.Character; targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-            end
-            if not targetHrp then if not Spec.isSelf then Spec.active = false; stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov end; return end
-            Cam.CameraType = Enum.CameraType.Scriptable; local pan, sens = specPan, 0.3; specPan = Vector2.zero
-            if Spec.mode == "third" then Spec.orbitYaw = Spec.orbitYaw + pan.X * sens; Spec.orbitPitch = math.clamp(Spec.orbitPitch + pan.Y * sens, -75, 75)
-                Cam.CFrame = CFrame.new((CFrame.new(targetHrp.Position) * CFrame.Angles(0, math.rad(-Spec.orbitYaw), 0) * CFrame.Angles(math.rad(-Spec.orbitPitch), 0, 0) * CFrame.new(0, 0, Spec.dist)).Position, targetHrp.Position + Vector3.new(0, 1, 0))
-            else local head = targetChar:FindFirstChild("Head"); local origin = head and head.Position or targetHrp.Position + Vector3.new(0, 1.5, 0)
-                Spec.fpYaw = Spec.fpYaw - pan.X * sens; Spec.fpPitch = math.clamp(Spec.fpPitch - pan.Y * sens, -85, 85)
-                Cam.CFrame = CFrame.new(origin) * CFrame.Angles(0, math.rad(Spec.fpYaw), 0) * CFrame.Angles(math.rad(Spec.fpPitch), 0, 0) end
-        end)
-    end)
-end
+local function startSpecLoop() RS:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value + 1, function() if not Spec.active then return end; pcall(function() local targetChar = nil; local targetHrp = nil; if Spec.isSelf then targetChar = LP.Character; targetHrp = getCharRoot(targetChar) else if not Spec.target or not Spec.target.Character then Spec.active = false; stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov; return end; targetChar = Spec.target.Character; targetHrp = targetChar:FindFirstChild("HumanoidRootPart") end; if not targetHrp then if not Spec.isSelf then Spec.active = false; stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov end; return end; Cam.CameraType = Enum.CameraType.Scriptable; local pan, sens = specPan, 0.3; specPan = Vector2.zero; if Spec.mode == "third" then Spec.orbitYaw = Spec.orbitYaw + pan.X * sens; Spec.orbitPitch = math.clamp(Spec.orbitPitch + pan.Y * sens, -75, 75); Cam.CFrame = CFrame.new((CFrame.new(targetHrp.Position) * CFrame.Angles(0, math.rad(-Spec.orbitYaw), 0) * CFrame.Angles(math.rad(-Spec.orbitPitch), 0, 0) * CFrame.new(0, 0, Spec.dist)).Position, targetHrp.Position + Vector3.new(0, 1, 0)) else local head = targetChar:FindFirstChild("Head"); local origin = head and head.Position or targetHrp.Position + Vector3.new(0, 1.5, 0); Spec.fpYaw = Spec.fpYaw - pan.X * sens; Spec.fpPitch = math.clamp(Spec.fpPitch - pan.Y * sens, -85, 85); Cam.CFrame = CFrame.new(origin) * CFrame.Angles(0, math.rad(Spec.fpYaw), 0) * CFrame.Angles(math.rad(Spec.fpPitch), 0, 0) end end) end) end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 
--- ══════════════════════════════════════════════════════════════
---  AUTO LIKE ENGINE
--- ══════════════════════════════════════════════════════════════
-local function getLikeRemotes()
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    if not remotes then return nil, nil end
-    return remotes:FindFirstChild("GetLikeDataRemote"), remotes:FindFirstChild("LikePlayerEvent")
-end
+-- Auto Like
+local function getLikeRemotes() local remotes = ReplicatedStorage:FindFirstChild("Remotes"); if not remotes then return nil, nil end; return remotes:FindFirstChild("GetLikeDataRemote"), remotes:FindFirstChild("LikePlayerEvent") end
+local function getMyLikeCount() local getLike, _ = getLikeRemotes(); if not getLike then return nil end; local success, result = pcall(function() return getLike:InvokeServer() end); if success and result and type(result) == "table" and result.likes then return tonumber(result.likes) or 0 end; return nil end
+local function likeRandomPlayer() local _, likePlayer = getLikeRemotes(); if not likePlayer then return false, "Remote not found" end; local myRoot = getRoot(); local targets = {}; for _, p in ipairs(Players:GetPlayers()) do if p ~= LP then if State.AutoLike.radius > 0 and myRoot then local theirRoot = p.Character and p.Character:FindFirstChild("HumanoidRootPart"); if theirRoot then local dist = (theirRoot.Position - myRoot.Position).Magnitude; if dist <= State.AutoLike.radius then table.insert(targets, p) end end else table.insert(targets, p) end end end; if #targets == 0 then return false, "No players in range" end; local target; if #targets == 1 then target = targets[1] else repeat target = targets[math.random(1, #targets)] until target ~= State.AutoLike.lastTarget or #targets <= 1 end; State.AutoLike.lastTarget = target; local success = pcall(function() likePlayer:FireServer(target) end); if success then State.AutoLike.count = State.AutoLike.count + 1; return true, target.DisplayName end; return false, "Failed" end
+local function checkLikeBack() if not State.AutoLike.likeBack then return end; local currentCount = getMyLikeCount(); if not currentCount then return end; if State.AutoLike.lastLikeCount == 0 then State.AutoLike.lastLikeCount = currentCount; return end; if currentCount > State.AutoLike.lastLikeCount then local _, likePlayer = getLikeRemotes(); if not likePlayer then return end; for _, p in ipairs(Players:GetPlayers()) do if p ~= LP and not State.AutoLike.likedBackPlayers[p.UserId] then pcall(function() likePlayer:FireServer(p); State.AutoLike.likedBackPlayers[p.UserId] = true; State.AutoLike.count = State.AutoLike.count + 1; notify("Like Back", p.DisplayName, 1.5) end); break end end end; State.AutoLike.lastLikeCount = currentCount end
+local function startAutoLike() if State.AutoLike.active then return end; State.AutoLike.active = true; local count = getMyLikeCount(); if count then State.AutoLike.lastLikeCount = count end; State.AutoLike.thread = task.spawn(function() while State.AutoLike.active and getgenv()._XKID_RUNNING do checkLikeBack(); local ok, result = likeRandomPlayer(); if ok then notify("Auto Like", result .. " | Total: " .. State.AutoLike.count, 1.5) end; local cd = math.random(State.AutoLike.minCD * 10, State.AutoLike.maxCD * 10) / 10; task.wait(cd) end; State.AutoLike.thread = nil end); notify("Auto Like", "ON", 2) end
+local function stopAutoLike() State.AutoLike.active = false; if State.AutoLike.thread then task.cancel(State.AutoLike.thread); State.AutoLike.thread = nil end; notify("Auto Like", "OFF", 1.5) end
 
-local function getMyLikeCount()
-    local getLike, _ = getLikeRemotes()
-    if not getLike then return nil end
-    local success, result = pcall(function() return getLike:InvokeServer() end)
-    if success and result and type(result) == "table" and result.likes then
-        return tonumber(result.likes) or 0
-    end
-    return nil
-end
+-- Hard Fling
+local hardFlingConn, hardFlingRampConn, hardFlingBAV = nil, nil, nil
+local function startHardFling() if State.HardFling.active then return end; State.HardFling.active = true; State.Move.ncp = true; State.HardFling.currentPower = 0; State.HardFling.rampUpActive = true; local hrp = getRoot(); if hrp then hardFlingBAV = Instance.new("BodyAngularVelocity", hrp); hardFlingBAV.MaxTorque = Vector3.new(9e9, 9e9, 9e9); hardFlingBAV.P = 100000 end; local rampDuration = 2; local rampStart = tick(); hardFlingRampConn = TrackC(RS.Heartbeat:Connect(function() if not State.HardFling.rampUpActive then return end; local elapsed = tick() - rampStart; local t = math.clamp(elapsed / rampDuration, 0, 1); State.HardFling.currentPower = State.HardFling.power * t; if t >= 1 then State.HardFling.currentPower = State.HardFling.power; State.HardFling.rampUpActive = false end end)); hardFlingConn = TrackC(RS.Heartbeat:Connect(function() if not State.HardFling.active then return end; local r = getRoot(); if not r then return end; if State.HardFling.mode == "Spin" then if hardFlingBAV and hardFlingBAV.Parent then hardFlingBAV.AngularVelocity = Vector3.new(0, State.HardFling.currentPower, 0) end elseif State.HardFling.mode == "Shake" then if hardFlingBAV and hardFlingBAV.Parent then local shakeX = (math.random() - 0.5) * State.HardFling.currentPower * 0.5; local shakeY = (math.random() - 0.5) * State.HardFling.currentPower * 0.3; local shakeZ = (math.random() - 0.5) * State.HardFling.currentPower * 0.5; hardFlingBAV.AngularVelocity = Vector3.new(shakeX, shakeY, shakeZ) end end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)); notify("Hard Fling", "ON — " .. State.HardFling.mode, 2) end
+local function stopHardFling() State.HardFling.active = false; State.HardFling.rampUpActive = false; State.HardFling.currentPower = 0; if hardFlingConn then hardFlingConn:Disconnect(); hardFlingConn = nil end; if hardFlingRampConn then hardFlingRampConn:Disconnect(); hardFlingRampConn = nil end; if hardFlingBAV then hardFlingBAV:Destroy(); hardFlingBAV = nil end; local r = getRoot(); if r then pcall(function() r.AssemblyAngularVelocity = Vector3.zero; r.AssemblyLinearVelocity = Vector3.zero end) end; notify("Hard Fling", "OFF", 1.5) end
 
-local function likeRandomPlayer()
-    local _, likePlayer = getLikeRemotes()
-    if not likePlayer then return false, "Remote not found" end
-    local myRoot = getRoot(); local targets = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LP then
-            if State.AutoLike.radius > 0 and myRoot then
-                local theirRoot = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-                if theirRoot then local dist = (theirRoot.Position - myRoot.Position).Magnitude
-                    if dist <= State.AutoLike.radius then table.insert(targets, p) end end
-            else table.insert(targets, p) end
-        end
-    end
-    if #targets == 0 then return false, "No players in range" end
-    local target
-    if #targets == 1 then target = targets[1]
-    else repeat target = targets[math.random(1, #targets)] until target ~= State.AutoLike.lastTarget or #targets <= 1 end
-    State.AutoLike.lastTarget = target
-    local success = pcall(function() likePlayer:FireServer(target) end)
-    if success then State.AutoLike.count = State.AutoLike.count + 1; return true, target.DisplayName end
-    return false, "Failed"
-end
-
-local function checkLikeBack()
-    if not State.AutoLike.likeBack then return end
-    local currentCount = getMyLikeCount(); if not currentCount then return end
-    if State.AutoLike.lastLikeCount == 0 then State.AutoLike.lastLikeCount = currentCount; return end
-    if currentCount > State.AutoLike.lastLikeCount then
-        local _, likePlayer = getLikeRemotes(); if not likePlayer then return end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LP and not State.AutoLike.likedBackPlayers[p.UserId] then
-                pcall(function() likePlayer:FireServer(p); State.AutoLike.likedBackPlayers[p.UserId] = true; State.AutoLike.count = State.AutoLike.count + 1
-                    notify("Like Back", p.DisplayName, 1.5) end)
-                break
-            end
-        end
-    end
-    State.AutoLike.lastLikeCount = currentCount
-end
-
-local function startAutoLike()
-    if State.AutoLike.active then return end
-    State.AutoLike.active = true
-    local count = getMyLikeCount(); if count then State.AutoLike.lastLikeCount = count end
-    State.AutoLike.thread = task.spawn(function()
-        while State.AutoLike.active and getgenv()._XKID_RUNNING do
-            checkLikeBack()
-            local ok, result = likeRandomPlayer()
-            if ok then notify("Auto Like", result .. " | Total: " .. State.AutoLike.count, 1.5) end
-            local cd = math.random(State.AutoLike.minCD * 10, State.AutoLike.maxCD * 10) / 10
-            task.wait(cd)
-        end
-        State.AutoLike.thread = nil
-    end)
-    notify("Auto Like", "ON", 2)
-end
-
-local function stopAutoLike()
-    State.AutoLike.active = false
-    if State.AutoLike.thread then task.cancel(State.AutoLike.thread); State.AutoLike.thread = nil end
-    notify("Auto Like", "OFF", 1.5)
-end
-
--- ══════════════════════════════════════════════════════════════
---  HARD FLING SAFE
--- ══════════════════════════════════════════════════════════════
-local hardFlingConn = nil; local hardFlingRampConn = nil; local hardFlingBAV = nil
-
-local function startHardFling()
-    if State.HardFling.active then return end
-    State.HardFling.active = true; State.Move.ncp = true; State.HardFling.currentPower = 0; State.HardFling.rampUpActive = true
-    local hrp = getRoot()
-    if hrp then hardFlingBAV = Instance.new("BodyAngularVelocity", hrp); hardFlingBAV.MaxTorque = Vector3.new(9e9, 9e9, 9e9); hardFlingBAV.P = 100000 end
-    local rampDuration = 2; local rampStart = tick()
-    hardFlingRampConn = TrackC(RS.Heartbeat:Connect(function()
-        if not State.HardFling.rampUpActive then return end
-        local elapsed = tick() - rampStart; local t = math.clamp(elapsed / rampDuration, 0, 1)
-        State.HardFling.currentPower = State.HardFling.power * t
-        if t >= 1 then State.HardFling.currentPower = State.HardFling.power; State.HardFling.rampUpActive = false end
-    end))
-    hardFlingConn = TrackC(RS.Heartbeat:Connect(function()
-        if not State.HardFling.active then return end; local r = getRoot(); if not r then return end
-        if State.HardFling.mode == "Spin" then if hardFlingBAV and hardFlingBAV.Parent then hardFlingBAV.AngularVelocity = Vector3.new(0, State.HardFling.currentPower, 0) end
-        elseif State.HardFling.mode == "Shake" then if hardFlingBAV and hardFlingBAV.Parent then
-            local shakeX = (math.random() - 0.5) * State.HardFling.currentPower * 0.5; local shakeY = (math.random() - 0.5) * State.HardFling.currentPower * 0.3; local shakeZ = (math.random() - 0.5) * State.HardFling.currentPower * 0.5
-            hardFlingBAV.AngularVelocity = Vector3.new(shakeX, shakeY, shakeZ) end end
-        if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
-    end))
-    notify("Hard Fling", "ON — " .. State.HardFling.mode, 2)
-end
-
-local function stopHardFling()
-    State.HardFling.active = false; State.HardFling.rampUpActive = false; State.HardFling.currentPower = 0
-    if hardFlingConn then hardFlingConn:Disconnect(); hardFlingConn = nil end
-    if hardFlingRampConn then hardFlingRampConn:Disconnect(); hardFlingRampConn = nil end
-    if hardFlingBAV then hardFlingBAV:Destroy(); hardFlingBAV = nil end
-    local r = getRoot(); if r then pcall(function() r.AssemblyAngularVelocity = Vector3.zero; r.AssemblyLinearVelocity = Vector3.zero end) end
-    notify("Hard Fling", "OFF", 1.5)
-end
-
--- ══════════════════════════════════════════════════════════════
---  FILTER FUNCTIONS
--- ══════════════════════════════════════════════════════════════
-local function resetFilterOnly()
-    for _, v in pairs(Lighting:GetChildren()) do
-        if v.Name == "_XKID_FILTER" or v.Name == "_XKID_DOF" then v:Destroy() end
-    end
-end
-
-local function applyCustomFilter()
-    resetFilterOnly()
-    local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"
-    cc.TintColor = Color3.fromRGB(State.CustomFilter.tintR, State.CustomFilter.tintG, State.CustomFilter.tintB)
-    cc.Saturation = State.CustomFilter.saturation; cc.Contrast = State.CustomFilter.contrast; cc.Brightness = State.CustomFilter.brightness
-    Lighting.ExposureCompensation = State.CustomFilter.exposure
-    local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"
-    bloom.Intensity = State.CustomFilter.bloomIntensity; bloom.Size = State.CustomFilter.bloomSize
-    Lighting.ClockTime = State.CustomFilter.clockTime
-    if State.CustomFilter.dofIntensity > 0 then
-        local dof = Instance.new("DepthOfFieldEffect", Lighting); dof.Name = "_XKID_DOF"
-        dof.FarIntensity = State.CustomFilter.dofIntensity; dof.FocusDistance = State.CustomFilter.dofDistance
-    end
-end
-
-local function applyFilter(filter)
-    resetFilterOnly()
-    Lighting.ClockTime = originalLighting.ClockTime; Lighting.Brightness = originalLighting.Brightness
-    Lighting.Ambient = originalLighting.Ambient; Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
-    Lighting.GlobalShadows = originalLighting.GlobalShadows; Lighting.ExposureCompensation = originalLighting.ExposureCompensation
-    
-    if filter == "Default" then
-        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255
-        State.CustomFilter.saturation = 0; State.CustomFilter.contrast = 0; State.CustomFilter.brightness = 0
-        State.CustomFilter.exposure = 0; State.CustomFilter.bloomIntensity = 0; State.CustomFilter.bloomSize = 24
-        State.CustomFilter.clockTime = 14; State.CustomFilter.dofIntensity = 0; State.CustomFilter.dofDistance = 50
-        notify("Visuals", "Default", 1.5)
-        return
-    end
-    
-    if filter == "Custom" then applyCustomFilter(); notify("Visuals", "Custom FX", 1.5); return end
-    
-    local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"
-    local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"; bloom.Intensity = 0; bloom.Size = 24
-    
-    if filter == "Mendung HD" then cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15; bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7
-        State.CustomFilter.tintR=180; State.CustomFilter.tintG=185; State.CustomFilter.tintB=200; State.CustomFilter.saturation=-0.3; State.CustomFilter.contrast=0.1; State.CustomFilter.brightness=-0.15; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.05; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=10
-    elseif filter == "Cool Blue HD" then cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2
-        State.CustomFilter.tintR=180; State.CustomFilter.tintG=200; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.15; State.CustomFilter.brightness=0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.2; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=12
-    elseif filter == "Soft Fade HD" then cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3
-        State.CustomFilter.tintR=255; State.CustomFilter.tintG=240; State.CustomFilter.tintB=235; State.CustomFilter.saturation=-0.1; State.CustomFilter.contrast=-0.05; State.CustomFilter.brightness=0.1; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.4; State.CustomFilter.bloomSize=35; State.CustomFilter.clockTime=15
-    elseif filter == "Adaptif Langit HD" then cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05; bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5
-        State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.15; State.CustomFilter.contrast=0.2; State.CustomFilter.brightness=0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.15; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=13
-    elseif filter == "Edgy HD" then cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1; bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8
-        State.CustomFilter.tintR=200; State.CustomFilter.tintG=195; State.CustomFilter.tintB=210; State.CustomFilter.saturation=-0.5; State.CustomFilter.contrast=0.4; State.CustomFilter.brightness=-0.1; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.3; State.CustomFilter.bloomSize=20; State.CustomFilter.clockTime=8
-    elseif filter == "Full Bright HD" then cc:Destroy(); bloom:Destroy(); Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12; Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-        State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0; State.CustomFilter.contrast=0; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=12
-    elseif filter == "Soft Pastel HD" then cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05; bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
-        State.CustomFilter.tintR=255; State.CustomFilter.tintG=240; State.CustomFilter.tintB=245; State.CustomFilter.saturation=-0.05; State.CustomFilter.contrast=0.05; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.3; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=8
-    elseif filter == "Cinematic Soft" then cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 17
-        State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.15; State.CustomFilter.brightness=0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.2; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=17
-    elseif filter == "Ultra HD" then cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
-        State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.2; State.CustomFilter.contrast=0.3; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.2; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=14
-    elseif filter == "Realistic" then cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
-        State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.2; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.15; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=15
-    elseif filter == "Night HD" then cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1
-        State.CustomFilter.tintR=200; State.CustomFilter.tintG=200; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.2; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.15; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=1
-    elseif filter == "Senja" then cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05; bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5
-        State.CustomFilter.tintR=255; State.CustomFilter.tintG=180; State.CustomFilter.tintB=120; State.CustomFilter.saturation=0.2; State.CustomFilter.contrast=0.1; State.CustomFilter.brightness=0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.5; State.CustomFilter.bloomSize=40; State.CustomFilter.clockTime=17.5
-    elseif filter == "Cinematic Film" then cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05; bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16
-        State.CustomFilter.tintR=200; State.CustomFilter.tintG=210; State.CustomFilter.tintB=230; State.CustomFilter.saturation=-0.15; State.CustomFilter.contrast=0.25; State.CustomFilter.brightness=-0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.15; State.CustomFilter.bloomSize=20; State.CustomFilter.clockTime=16
-    elseif filter == "Golden Hour" then cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5
-        State.CustomFilter.tintR=255; State.CustomFilter.tintG=200; State.CustomFilter.tintB=100; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.15; State.CustomFilter.brightness=0.1; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.4; State.CustomFilter.bloomSize=35; State.CustomFilter.clockTime=17.5
-    elseif filter == "Moody Blue" then cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1; bloom.Intensity = 0.1; Lighting.ClockTime = 2
-        State.CustomFilter.tintR=150; State.CustomFilter.tintG=170; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.05; State.CustomFilter.contrast=0.2; State.CustomFilter.brightness=-0.1; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.1; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=2
+-- Filter
+local function resetFilterOnly() for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" or v.Name == "_XKID_DOF" then v:Destroy() end end end
+local function applyCustomFilter() resetFilterOnly(); local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.TintColor = Color3.fromRGB(State.CustomFilter.tintR, State.CustomFilter.tintG, State.CustomFilter.tintB); cc.Saturation = State.CustomFilter.saturation; cc.Contrast = State.CustomFilter.contrast; cc.Brightness = State.CustomFilter.brightness; Lighting.ExposureCompensation = State.CustomFilter.exposure; local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"; bloom.Intensity = State.CustomFilter.bloomIntensity; bloom.Size = State.CustomFilter.bloomSize; Lighting.ClockTime = State.CustomFilter.clockTime; if State.CustomFilter.dofIntensity > 0 then local dof = Instance.new("DepthOfFieldEffect", Lighting); dof.Name = "_XKID_DOF"; dof.FarIntensity = State.CustomFilter.dofIntensity; dof.FocusDistance = State.CustomFilter.dofDistance end end
+local function applyFilter(filter) resetFilterOnly(); Lighting.ClockTime = originalLighting.ClockTime; Lighting.Brightness = originalLighting.Brightness; Lighting.Ambient = originalLighting.Ambient; Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient; Lighting.GlobalShadows = originalLighting.GlobalShadows; Lighting.ExposureCompensation = originalLighting.ExposureCompensation; if filter == "Default" then State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0; State.CustomFilter.contrast = 0; State.CustomFilter.brightness = 0; State.CustomFilter.exposure = 0; State.CustomFilter.bloomIntensity = 0; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 14; State.CustomFilter.dofIntensity = 0; State.CustomFilter.dofDistance = 50; notify("Visuals", "Default", 1.5); return end; if filter == "Custom" then applyCustomFilter(); notify("Visuals", "Custom FX", 1.5); return end; local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"; bloom.Intensity = 0; bloom.Size = 24
+    if filter == "Mendung HD" then cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15; bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7; State.CustomFilter.tintR=180; State.CustomFilter.tintG=185; State.CustomFilter.tintB=200; State.CustomFilter.saturation=-0.3; State.CustomFilter.contrast=0.1; State.CustomFilter.brightness=-0.15; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.05; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=10
+    elseif filter == "Cool Blue HD" then cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2; State.CustomFilter.tintR=180; State.CustomFilter.tintG=200; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.15; State.CustomFilter.brightness=0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.2; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=12
+    elseif filter == "Soft Fade HD" then cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3; State.CustomFilter.tintR=255; State.CustomFilter.tintG=240; State.CustomFilter.tintB=235; State.CustomFilter.saturation=-0.1; State.CustomFilter.contrast=-0.05; State.CustomFilter.brightness=0.1; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.4; State.CustomFilter.bloomSize=35; State.CustomFilter.clockTime=15
+    elseif filter == "Adaptif Langit HD" then cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05; bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5; State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.15; State.CustomFilter.contrast=0.2; State.CustomFilter.brightness=0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.15; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=13
+    elseif filter == "Edgy HD" then cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1; bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8; State.CustomFilter.tintR=200; State.CustomFilter.tintG=195; State.CustomFilter.tintB=210; State.CustomFilter.saturation=-0.5; State.CustomFilter.contrast=0.4; State.CustomFilter.brightness=-0.1; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.3; State.CustomFilter.bloomSize=20; State.CustomFilter.clockTime=8
+    elseif filter == "Full Bright HD" then cc:Destroy(); bloom:Destroy(); Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12; Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255); State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0; State.CustomFilter.contrast=0; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=12
+    elseif filter == "Soft Pastel HD" then cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05; bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8; State.CustomFilter.tintR=255; State.CustomFilter.tintG=240; State.CustomFilter.tintB=245; State.CustomFilter.saturation=-0.05; State.CustomFilter.contrast=0.05; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.3; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=8
+    elseif filter == "Cinematic Soft" then cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 17; State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.15; State.CustomFilter.brightness=0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.2; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=17
+    elseif filter == "Ultra HD" then cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2; State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.2; State.CustomFilter.contrast=0.3; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.2; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=14
+    elseif filter == "Realistic" then cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15; State.CustomFilter.tintR=255; State.CustomFilter.tintG=255; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.2; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.15; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=15
+    elseif filter == "Night HD" then cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1; State.CustomFilter.tintR=200; State.CustomFilter.tintG=200; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.2; State.CustomFilter.brightness=0; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.15; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=1
+    elseif filter == "Senja" then cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05; bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5; State.CustomFilter.tintR=255; State.CustomFilter.tintG=180; State.CustomFilter.tintB=120; State.CustomFilter.saturation=0.2; State.CustomFilter.contrast=0.1; State.CustomFilter.brightness=0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.5; State.CustomFilter.bloomSize=40; State.CustomFilter.clockTime=17.5
+    elseif filter == "Cinematic Film" then cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05; bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16; State.CustomFilter.tintR=200; State.CustomFilter.tintG=210; State.CustomFilter.tintB=230; State.CustomFilter.saturation=-0.15; State.CustomFilter.contrast=0.25; State.CustomFilter.brightness=-0.05; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.15; State.CustomFilter.bloomSize=20; State.CustomFilter.clockTime=16
+    elseif filter == "Golden Hour" then cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5; State.CustomFilter.tintR=255; State.CustomFilter.tintG=200; State.CustomFilter.tintB=100; State.CustomFilter.saturation=0.1; State.CustomFilter.contrast=0.15; State.CustomFilter.brightness=0.1; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.4; State.CustomFilter.bloomSize=35; State.CustomFilter.clockTime=17.5
+    elseif filter == "Moody Blue" then cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1; bloom.Intensity = 0.1; Lighting.ClockTime = 2; State.CustomFilter.tintR=150; State.CustomFilter.tintG=170; State.CustomFilter.tintB=255; State.CustomFilter.saturation=0.05; State.CustomFilter.contrast=0.2; State.CustomFilter.brightness=-0.1; State.CustomFilter.exposure=0; State.CustomFilter.bloomIntensity=0.1; State.CustomFilter.bloomSize=24; State.CustomFilter.clockTime=2
     end
     notify("Visuals", filter, 2)
 end
@@ -976,9 +261,7 @@ Window:SideBarLabel({ Title = "Quick Actions", Icon = "zap" })
 Window:SideBarButton({ Title = "Refresh 🔄", Icon = "refresh-cw", Variant = "Secondary", Callback = function() refreshCharacter() end })
 Window:SideBarDivider({})
 
--- ══════════════════════════════════════════════════════════════
---  TAB 1: DASHBOARD
--- ══════════════════════════════════════════════════════════════
+-- TAB 1: Dashboard
 local T_HOME = Window:Tab({ Title = "Dashboard", Icon = "layout-dashboard", ShowTabTitle = true, Border = true })
 local secSysAccess = T_HOME:Section({ Title = "System Access", Opened = true, Box = true })
 secSysAccess:Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
@@ -989,9 +272,7 @@ local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading...
 local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
 task.spawn(function() task.wait(2); local function lerpColor(c1, c2, t) return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t) end; local function toHex(c) return string.format("#%02X%02X%02X", c.R * 255, c.G * 255, c.B * 255) end; local function makeBarA(val, maxVal, len, mode) local fill = math.clamp(math.floor((val / maxVal) * len), 0, len); local res = ""; for i = 1, len do if i <= fill then local t = (i - 1) / math.max(1, len - 1); local col = mode == "FPS" and lerpColor(Color3.fromRGB(0,255,255), Color3.fromRGB(0,100,255), t) or (t < 0.5 and lerpColor(Color3.fromRGB(0,255,0), Color3.fromRGB(255,255,0), t*2) or lerpColor(Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,0), (t-0.5)*2)); res = res .. '<font color="' .. toHex(col) .. '">▰</font>' else res = res .. '<font color="#444444">▱</font>' end end; return res end; while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(function() if srvLabel and cachedMapName then local pCount, mCount = #Players:GetPlayers(), Players.MaxPlayers; local uptime = formatTime(os.difftime(os.time(), START_TIME)); local job = game.JobId ~= "" and game.JobId:sub(1, 8) .. "..." or "N/A"; srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s", cachedMapName, job, pCount, mCount, uptime)) end end); pcall(function() if netLabel then local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999); local fpsBar = makeBarA(fps, 120, 14, "FPS"); local pingBar = makeBarA(ping, 200, 14, "PING"); netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping)) end end) end end)
 
--- ══════════════════════════════════════════════════════════════
---  TAB 2: CHARACTER
--- ══════════════════════════════════════════════════════════════
+-- TAB 2: Character
 local T_AV = Window:Tab({ Title = "Character", Icon = "fingerprint", ShowTabTitle = true, Border = true })
 local secStateCtrl = T_AV:Section({ Title = "State Control", Opened = true, Box = true })
 secStateCtrl:Button({ Title = "Refresh Character 🔄", Desc = "Reload character like /re — no gamepass", Icon = "refresh-cw", Callback = function() refreshCharacter() end })
@@ -1009,12 +290,10 @@ secFling:Toggle({ Title = "Hard Fling", Value = false, Type = "Toggle", Icon = "
 secFling:Dropdown({ Title = "Fling Mode", Values = { "Spin", "Shake" }, Value = "Spin", SearchBarEnabled = false, Callback = function(v) State.HardFling.mode = v; notify("Fling Mode", v, 1.5) end })
 secFling:Slider({ Title = "Fling Power", Step = 500, Value = { Min = 1000, Max = 50000, Default = 10000 }, IsTooltip = true, Callback = function(v) State.HardFling.power = v end })
 
--- ══════════════════════════════════════════════════════════════
---  TAB 3: TELEPORT
--- ══════════════════════════════════════════════════════════════
+-- TAB 3: Teleport
 local T_TP = Window:Tab({ Title = "Teleport", Icon = "crosshair", ShowTabTitle = true, Border = true })
 local secDirTP = T_TP:Section({ Title = "Direct Teleport", Opened = true, Box = true })
-secDirTP:Paragraph({ Title = "Double-Click TP", Desc = "Double-tap/click anywhere to teleport. Always active!" })
+secDirTP:Toggle({ Title = "Smart TP", Desc = "Equip tool → tap to toggle mode → tap to TP", Value = false, Type = "Toggle", Icon = "pointer", Callback = toggleSmartTP })
 local secTP = T_TP:Section({ Title = "Target Teleport", Opened = true, Box = true })
 local tpTarget = ""
 secTP:Input({ Title = "Search Player", Placeholder = "Type name...", Icon = "search", Callback = function(v) tpTarget = v end })
@@ -1028,9 +307,7 @@ for i = 1, 3 do local idx = i
     secLoc:Button({ Title = "📍 Load Slot " .. idx, Icon = "map-pin", Callback = function() if not SavedLocs[idx] then notify("Slot " .. idx, "Empty", 1.5); return end; local r = getRoot(); if not r then return end; r.CFrame = SavedLocs[idx]; notify("Slot " .. idx, "Loaded", 1.5) end })
 end
 
--- ══════════════════════════════════════════════════════════════
---  TAB 4: SPECTATOR
--- ══════════════════════════════════════════════════════════════
+-- TAB 4: Spectator
 local T_CAM = Window:Tab({ Title = "Spectator", Icon = "focus", ShowTabTitle = true, Border = true })
 local secZoom = T_CAM:Section({ Title = "Zoom Override", Opened = true, Box = true })
 secZoom:Toggle({ Title = "Max Zoom Out", Value = false, Type = "Toggle", Icon = "zoom-out", Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Zoom", v and "Max" or "Default", 1.5) end })
@@ -1041,9 +318,7 @@ secSP:Toggle({ Title = "Enable Spectate", Value = false, Type = "Toggle", Icon =
 secSP:Toggle({ Title = "First Person View", Value = false, Type = "Checkbox", Icon = "view", Callback = function(v) Spec.mode = v and "first" or "third"; notify("Spectator", v and "First Person" or "Third Person", 1.5) end })
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
--- ══════════════════════════════════════════════════════════════
---  TAB 5: CINEMATIC
--- ══════════════════════════════════════════════════════════════
+-- TAB 5: Cinematic
 local T_FREE = Window:Tab({ Title = "Cinematic", Icon = "video", ShowTabTitle = true, Border = true })
 local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true, Box = true })
 secFC:Toggle({ Title = "Enable Freecam", Value = false, Type = "Toggle", Icon = "camera", Callback = function(v) FC.active = v; if v then local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry); local hrp = getRoot(); if hrp then FC.savedCF = hrp.CFrame; pcall(function() if FC.lockGyro then FC.lockGyro:Destroy() end end); pcall(function() if FC.lockPos then FC.lockPos:Destroy() end end); FC.lockGyro = Instance.new("BodyGyro", hrp); FC.lockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9); FC.lockPos = Instance.new("BodyPosition", hrp); FC.lockPos.MaxForce = Vector3.new(9e9, 9e9, 9e9); hrp.Anchored = true end; FC.origFov = Cam.FieldOfView; startFreecamCapture(); startFreecamLoop(); if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end; notify("Freecam", "ON", 2) else fullCleanupFreecam(); notify("Freecam", "OFF", 1.5) end end })
@@ -1052,9 +327,7 @@ secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.
 local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true, Box = true })
 secCine:Toggle({ Title = "Hide All UI", Value = false, Type = "Toggle", Icon = "monitor-off", Callback = function(v) if v then State.Cinema.hideUI = true; State.Cinema.cachedGuis = {}; for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end) else State.Cinema.hideUI = false; for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end) end; notify("Cinematic", v and "UI Hidden" or "UI Shown", 1.5) end })
 
--- ══════════════════════════════════════════════════════════════
---  TAB 6: VISUALS
--- ══════════════════════════════════════════════════════════════
+-- TAB 6: Visuals
 local T_WO = Window:Tab({ Title = "Visuals", Icon = "layers", ShowTabTitle = true, Border = true })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true, Box = true })
 local filterValues = { "Default", "Custom", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue" }
@@ -1079,9 +352,7 @@ local gfxMap = { [1] = "Level01", [2] = "Level03", [3] = "Level05", [4] = "Level
 secGfx:Slider({ Title = "Quality Level", Step = 1, Value = { Min = 1, Max = 10, Default = 1 }, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end; notify("Graphics", gfxMap[v], 1.5) end })
 secGfx:Dropdown({ Title = "FPS Cap", Values = { "30", "60", "120", "144", "240", "Unlimited" }, Value = "60", SearchBarEnabled = false, Callback = function(v) if v == "Unlimited" then pcall(function() setfpscap(9999) end) else pcall(function() setfpscap(tonumber(v)) end) end; notify("Graphics", v .. " FPS", 1.5) end })
 
--- ══════════════════════════════════════════════════════════════
---  TAB 7: ESP
--- ══════════════════════════════════════════════════════════════
+-- TAB 7: ESP
 local T_ESP = Window:Tab({ Title = "ESP", Icon = "cpu", ShowTabTitle = true, Border = true })
 local secESP = T_ESP:Section({ Title = "Detection System", Opened = true, Box = true })
 secESP:Toggle({ Title = "Enable Radar", Value = false, Type = "Toggle", Icon = "radar", Callback = function(v) State.ESP.active = v; if not v and State.ESP.cache then for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end) end end; notify("ESP", v and "ON" or "OFF", 1.5) end })
@@ -1093,9 +364,7 @@ secESPColor:Dropdown({ Title = "Normal Color", Values = { "Hijau", "Merah", "Bir
 secESPColor:Dropdown({ Title = "Suspect Color", Values = { "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam", "Crimson" }, Value = "Crimson", SearchBarEnabled = false, Callback = function(v) if colorMap[v] then State.ESP.tracerColor_S = colorMap[v]; State.ESP.boxColor_S = colorMap[v] end; notify("ESP", "Suspect: " .. v, 1.5) end })
 secESPColor:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam" }, Value = "Orange", SearchBarEnabled = false, Callback = function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v]; State.ESP.boxColor_G = colorMap[v] end; notify("ESP", "Glitch: " .. v, 1.5) end })
 
--- ══════════════════════════════════════════════════════════════
---  TAB 8: LOGGER
--- ══════════════════════════════════════════════════════════════
+-- TAB 8: Logger
 local T_UTIL = Window:Tab({ Title = "Logger", Icon = "terminal", ShowTabTitle = true, Border = true })
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true, Box = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Type = "Toggle", Icon = "file-text", Callback = function(v) State.Utility.chatLog = v; if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end; notify("Logger", v and "ON" or "OFF", 1.5) end })
@@ -1108,9 +377,7 @@ secChat:Button({ Title = "Clear Log", Icon = "trash-2", Callback = function() St
 task.spawn(function() local function onChat(senderName, message) if not State.Utility.chatLog then return end; if #State.Utility.chatTargets == 0 then return end; local cleanSender = senderName:lower():match("^%s*(.-)%s*$"); for _, target in ipairs(State.Utility.chatTargets) do local cleanTarget = target:lower():match("^%s*(.-)%s*$"); if cleanSender == cleanTarget then local entry = string.format("[%s] %s: %s", os.date("%H:%M:%S"), senderName, message); table.insert(State.Utility.chatHistory, entry); if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end; notify("Chat", senderName .. ": " .. message, 2); break end end end; if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then pcall(function() TrackC(TextChatService.MessageReceived:Connect(function(msg) if msg.TextSource then onChat(msg.TextSource.Name, msg.Text) end end)) end) end; local function connectLegacyChat(player) pcall(function() TrackC(player.Chatted:Connect(function(msg) onChat(player.DisplayName, msg) end)) end) end; for _, p in ipairs(Players:GetPlayers()) do if p ~= LP then connectLegacyChat(p) end end; TrackC(Players.PlayerAdded:Connect(function(p) if p ~= LP then connectLegacyChat(p) end end)) end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); if chatLogPanel and State.Utility.chatLog then pcall(function() local t = table.concat(State.Utility.chatHistory, "\n"); if #t > 2000 then t = t:sub(-2000) end; if #t == 0 then t = "Belum ada chat..." end; chatLogPanel:SetDesc(t) end) end end end)
 
--- ══════════════════════════════════════════════════════════════
---  TAB 9: PROTECTION
--- ══════════════════════════════════════════════════════════════
+-- TAB 9: Protection
 local T_SEC = Window:Tab({ Title = "Protection", Icon = "shield-alert", ShowTabTitle = true, Border = true })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true, Box = true })
 secProt:Toggle({ Title = "Anti AFK", Value = false, Type = "Toggle", Icon = "clock", Callback = function(v) if v then startAFK() else stopAFK() end end })
@@ -1124,9 +391,7 @@ secPerf:Toggle({ Title = "FPS Boost", Value = false, Type = "Toggle", Icon = "za
 local secCamLock = T_SEC:Section({ Title = "Camera Lock", Opened = true, Box = true })
 secCamLock:Toggle({ Title = "Force Shift Lock", Value = false, Type = "Toggle", Icon = "lock", Callback = function(v) toggleShiftLock(v) end })
 
--- ══════════════════════════════════════════════════════════════
---  TAB 10: SETTINGS
--- ══════════════════════════════════════════════════════════════
+-- TAB 10: Settings
 local T_SET = Window:Tab({ Title = "Settings", Icon = "settings", ShowTabTitle = true, Border = true })
 local secCfg = T_SET:Section({ Title = "File Management", Opened = true, Box = true })
 local cfgName = "XKID_Config"; local currentConfig = "No config"
@@ -1144,10 +409,8 @@ secAutoLike:Slider({ Title = "Max Cooldown", Desc = "Current: " .. State.AutoLik
 local autoLikeInfo = secAutoLike:Paragraph({ Title = "Info", Desc = "Total likes sent: 0" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(function() autoLikeInfo:SetDesc("Total likes sent: " .. State.AutoLike.count) end) end end)
 
--- ══════════════════════════════════════════════════════════════
---  STARTUP
--- ══════════════════════════════════════════════════════════════
+-- Startup
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
-notify("System", "XKID v" .. CURRENT_VERSION .. " Ready — Double-Click TP", 3)
-print("✅ XKID v" .. CURRENT_VERSION .. " - Double-Click TP · Mobile Friendly · Delta Ready")
+notify("System", "XKID v" .. CURRENT_VERSION .. " Ready", 3)
+print("✅ XKID v" .. CURRENT_VERSION .. " - Tool Toggle TP · Silent FX · Clean Notif · Delta Ready")
