@@ -7,6 +7,7 @@
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
   📌 v2.0.9
+  🔧 RExMaster Patch: Mobile Polish + NoClip Reconnect + IJ Leak Fix
 ]]
 
 local RS = game:GetService("RunService")
@@ -58,7 +59,7 @@ local TextChatService = game:GetService("TextChatService")
 local StarterGui = game:GetService("StarterGui")
 local LP = Players.LocalPlayer
 local Cam = workspace.CurrentCamera
-local onMobile = not UIS.KeyboardEnabled
+local onMobile = not (UIS.KeyboardEnabled or false) or (UIS.TouchEnabled and true or false)
 local CURRENT_VERSION = "2.0.9"
 
 -- ══════════════════════════════════════════════════════════════
@@ -156,14 +157,71 @@ local function stopAntiAFK()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  CHARACTER HANDLER
+--  CHARACTER HANDLER (PATCHED: IJ Reconnect + NoClip Reconnect)
 -- ══════════════════════════════════════════════════════════════
+local noclipConn = nil
+local function enableNoclipLoop()
+    if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
+    noclipConn = TrackC(RS.Heartbeat:Connect(function()
+        if not State.Move.ncp then return end
+        if LP.Character then
+            for _, p in pairs(LP.Character:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = false end
+            end
+        end
+    end))
+end
+
 TrackC(LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then if State.Move.ws ~= 16 then hum.WalkSpeed = State.Move.ws end; if State.Move.jp ~= 50 then hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end end
-    if State.Security.shiftLock then task.wait(0.2); local hrp = getRoot(); if hrp then if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end; State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp); State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9,9e9,9e9); State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000 end end
-    if State.Cinema.hideNamePlayer then task.wait(0.3); for _, p in ipairs(Players:GetPlayers()) do if p == LP then continue end; if p.Character then local hum2 = p.Character:FindFirstChildOfClass("Humanoid"); if hum2 then hum2.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end; for _, desc in ipairs(p.Character:GetDescendants()) do if desc:IsA("BillboardGui") and desc.Parent then desc.Enabled = false end end end; if p.PlayerGui then for _, v in ipairs(p.PlayerGui:GetDescendants()) do if v:IsA("BillboardGui") then v.Enabled = false end end end end end
+    if hum then
+        if State.Move.ws ~= 16 then hum.WalkSpeed = State.Move.ws end
+        if State.Move.jp ~= 50 then hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end
+    end
+    -- Reconnect Infinite Jump kalau toggle masih ON
+    if State.Move.infJ then
+        if State.Move._infJConn then
+            State.Move._infJConn:Disconnect()
+            State.Move._infJConn = nil
+        end
+        State.Move._infJConn = TrackC(UIS.JumpRequest:Connect(function()
+            if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end
+        end))
+    end
+    -- Re-enable NoClip loop kalau toggle masih ON
+    if State.Move.ncp then
+        enableNoclipLoop()
+    end
+    if State.Security.shiftLock then
+        task.wait(0.2)
+        local hrp = getRoot()
+        if hrp then
+            if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end
+            State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp)
+            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9,9e9,9e9)
+            State.Security.shiftLockGyro.P = 50000
+            State.Security.shiftLockGyro.D = 1000
+        end
+    end
+    if State.Cinema.hideNamePlayer then
+        task.wait(0.3)
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p == LP then continue end
+            if p.Character then
+                local hum2 = p.Character:FindFirstChildOfClass("Humanoid")
+                if hum2 then hum2.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
+                for _, desc in ipairs(p.Character:GetDescendants()) do
+                    if desc:IsA("BillboardGui") and desc.Parent then desc.Enabled = false end
+                end
+            end
+            if p.PlayerGui then
+                for _, v in ipairs(p.PlayerGui:GetDescendants()) do
+                    if v:IsA("BillboardGui") then v.Enabled = false end
+                end
+            end
+        end
+    end
 end))
 
 -- ══════════════════════════════════════════════════════════════
@@ -171,8 +229,31 @@ end))
 -- ══════════════════════════════════════════════════════════════
 local function toggleShiftLock(v)
     State.Security.shiftLock = v
-    if v then local hrp = getRoot(); if hrp then if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end; State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp); State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9,9e9,9e9); State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000 end; RS:BindToRenderStep("XKIDShiftLock", Enum.RenderPriority.Camera.Value+2, function() if not State.Security.shiftLock then return end; local hrp2, gyro = getRoot(), State.Security.shiftLockGyro; if hrp2 and gyro and gyro.Parent == hrp2 then local flatLook = Vector3.new(Cam.CFrame.LookVector.X, 0, Cam.CFrame.LookVector.Z); if flatLook.Magnitude > 0.01 then gyro.CFrame = CFrame.new(hrp2.Position, hrp2.Position + flatLook) end end end); notify("System", "Shift Lock enabled", 2)
-    else RS:UnbindFromRenderStep("XKIDShiftLock"); if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy(); State.Security.shiftLockGyro = nil end; notify("System", "Shift Lock disabled", 2) end
+    if v then
+        local hrp = getRoot()
+        if hrp then
+            if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end
+            State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp)
+            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9,9e9,9e9)
+            State.Security.shiftLockGyro.P = 50000
+            State.Security.shiftLockGyro.D = 1000
+        end
+        RS:BindToRenderStep("XKIDShiftLock", Enum.RenderPriority.Camera.Value+2, function()
+            if not State.Security.shiftLock then return end
+            local hrp2, gyro = getRoot(), State.Security.shiftLockGyro
+            if hrp2 and gyro and gyro.Parent == hrp2 then
+                local flatLook = Vector3.new(Cam.CFrame.LookVector.X, 0, Cam.CFrame.LookVector.Z)
+                if flatLook.Magnitude > 0.01 then
+                    gyro.CFrame = CFrame.new(hrp2.Position, hrp2.Position + flatLook)
+                end
+            end
+        end)
+        notify("System", "Shift Lock enabled", 2)
+    else
+        RS:UnbindFromRenderStep("XKIDShiftLock")
+        if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy(); State.Security.shiftLockGyro = nil end
+        notify("System", "Shift Lock disabled", 2)
+    end
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -180,19 +261,63 @@ end
 -- ══════════════════════════════════════════════════════════════
 local function fastRespawn()
     if State.Avatar.isRefreshing then return end
-    local char, hrp = LP.Character, getRoot(); if not char or not hrp then notify("Error", "Character not found", 2); return end
-    State.Avatar.isRefreshing = true; notify("System", "Fast Respawn executed", 1.5)
-    local savedCF, prevRespawn = hrp.CFrame, LP.RespawnLocation; LP.RespawnLocation = nil
-    task.spawn(function() local done = false; local conn; conn = LP.CharacterAdded:Connect(function(newChar) if done then return end; done = true; conn:Disconnect(); local newHrp = newChar:FindFirstChild("HumanoidRootPart"); if newHrp then newHrp.CFrame = savedCF + Vector3.new(0,3.5,0); newHrp.AssemblyLinearVelocity = Vector3.zero end; local newHum = newChar:WaitForChild("Humanoid",5); newHrp = newChar:WaitForChild("HumanoidRootPart",5); task.wait(0.1); if newHrp and newHum then local t0 = tick(); local hold = RS.Heartbeat:Connect(function() if tick()-t0 > 0.5 then hold:Disconnect(); return end; if newHrp and newHrp.Parent then newHrp.CFrame = savedCF+Vector3.new(0,3.5,0); newHrp.AssemblyLinearVelocity = Vector3.zero end end); Cam.CameraSubject = newHum; Cam.CameraType = Enum.CameraType.Custom; if State.Move.ws ~= 16 then newHum.WalkSpeed = State.Move.ws end; if State.Move.jp ~= 50 then newHum.UseJumpPower = true; newHum.JumpPower = State.Move.jp end; notify("System", "Respawn success", 2) end; LP.RespawnLocation = prevRespawn; State.Avatar.isRefreshing = false end); char:BreakJoints(); task.delay(8, function() if not done then conn:Disconnect(); LP.RespawnLocation = prevRespawn; State.Avatar.isRefreshing = false; Cam.CameraType = Enum.CameraType.Custom end end) end)
+    local char, hrp = LP.Character, getRoot()
+    if not char or not hrp then notify("Error", "Character not found", 2); return end
+    State.Avatar.isRefreshing = true
+    notify("System", "Fast Respawn executed", 1.5)
+    local savedCF, prevRespawn = hrp.CFrame, LP.RespawnLocation
+    LP.RespawnLocation = nil
+    task.spawn(function()
+        local done = false
+        local conn
+        conn = LP.CharacterAdded:Connect(function(newChar)
+            if done then return end
+            done = true
+            conn:Disconnect()
+            local newHrp = newChar:FindFirstChild("HumanoidRootPart")
+            if newHrp then
+                newHrp.CFrame = savedCF + Vector3.new(0,3.5,0)
+                newHrp.AssemblyLinearVelocity = Vector3.zero
+            end
+            local newHum = newChar:WaitForChild("Humanoid",5)
+            newHrp = newChar:WaitForChild("HumanoidRootPart",5)
+            task.wait(0.1)
+            if newHrp and newHum then
+                local t0 = tick()
+                local hold = RS.Heartbeat:Connect(function()
+                    if tick()-t0 > 0.5 then hold:Disconnect(); return end
+                    if newHrp and newHrp.Parent then
+                        newHrp.CFrame = savedCF+Vector3.new(0,3.5,0)
+                        newHrp.AssemblyLinearVelocity = Vector3.zero
+                    end
+                end)
+                Cam.CameraSubject = newHum
+                Cam.CameraType = Enum.CameraType.Custom
+                if State.Move.ws ~= 16 then newHum.WalkSpeed = State.Move.ws end
+                if State.Move.jp ~= 50 then newHum.UseJumpPower = true; newHum.JumpPower = State.Move.jp end
+                notify("System", "Respawn success", 2)
+            end
+            LP.RespawnLocation = prevRespawn
+            State.Avatar.isRefreshing = false
+        end)
+        char:BreakJoints()
+        task.delay(8, function()
+            if not done then
+                conn:Disconnect()
+                LP.RespawnLocation = prevRespawn
+                State.Avatar.isRefreshing = false
+                Cam.CameraType = Enum.CameraType.Custom
+            end
+        end)
+    end)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SMART CLICK TP (INVENTORY TOOL)
+--  SMART CLICK TP (INVENTORY TOOL) - PATCHED: Double Tap 0.55s
 -- ══════════════════════════════════════════════════════════════
 local function toggleSmartTP(v)
     State.Teleport.clickActive = v
     if v then
-        -- Buat tool di inventory
         pcall(function()
             local tool = Instance.new("Tool")
             tool.Name = "XKID Smart TP"
@@ -204,7 +329,16 @@ local function toggleSmartTP(v)
                 if m.Hit then getRoot().CFrame = CFrame.new(m.Hit.Position + Vector3.new(0,3.5,0)); getRoot().AssemblyLinearVelocity = Vector3.zero; notify("Teleport", "TP Executed", 1) end
             end)
         end)
-        State.Teleport.clickConn = TrackC(UIS.InputBegan:Connect(function(inp, gp) if gp then return end; if inp.UserInputType == Enum.UserInputType.Touch then if tick() - State.Teleport.lastTap < 0.4 then local m = LP:GetMouse(); if m.Hit then getRoot().CFrame = CFrame.new(m.Hit.Position+Vector3.new(0,3.5,0)); getRoot().AssemblyLinearVelocity = Vector3.zero; notify("Teleport", "TP Executed", 1) end end; State.Teleport.lastTap = tick() end end))
+        State.Teleport.clickConn = TrackC(UIS.InputBegan:Connect(function(inp, gp)
+            if gp then return end
+            if inp.UserInputType == Enum.UserInputType.Touch then
+                if tick() - State.Teleport.lastTap < 0.55 then
+                    local m = LP:GetMouse()
+                    if m.Hit then getRoot().CFrame = CFrame.new(m.Hit.Position+Vector3.new(0,3.5,0)); getRoot().AssemblyLinearVelocity = Vector3.zero; notify("Teleport", "TP Executed", 1) end
+                end
+                State.Teleport.lastTap = tick()
+            end
+        end))
         notify("Teleport", "Smart TP: Double Tap or use tool", 2)
     else
         if State.Teleport.clickConn then State.Teleport.clickConn:Disconnect(); State.Teleport.clickConn = nil end
@@ -224,29 +358,190 @@ task.spawn(function() while getgenv()._XKID_RUNNING do if State.ESP.active then 
 TrackC(RS.RenderStepped:Connect(function() if not State.ESP.active then return end; local myHrp=getCharRoot(LP.Character); if not myHrp then return end; local vp=Cam.ViewportSize; local center=Vector2.new(vp.X/2,vp.Y/2); for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible=false end; if c.tracer then c.tracer.Visible=false end; for _, l in ipairs(c.boxLines) do if l then l.Visible=false end end; if c.hl then c.hl.Enabled=false end end) end; local hlCount=0; for _, data in ipairs(espsortedPlayers) do local player,char,hrp,dist=data.p,data.char,data.hrp,data.dist; local c=State.ESP.cache[player]; if not c then continue end; local rootPos,onScreen=Cam:WorldToViewportPoint(hrp.Position); if not onScreen then continue end; local isSus,isGlitch=c.isSuspect,c.isGlitch; local useHl=isSus or isGlitch or State.ESP.highlightMode; local txt=string.format("%s\n[%dm]",player.DisplayName,math.floor(dist)); if isSus or isGlitch then txt=txt.."\n⚠ "..c.reason end; local cColor=isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor); local tColor=isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); local bColor=isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N); pcall(function() if c.texts then c.texts.Text=txt; c.texts.Color=cColor; c.texts.Position=Vector2.new(rootPos.X,rootPos.Y-45); c.texts.Visible=true end; if State.ESP.tracerMode~="OFF" and c.tracer then local origin=Vector2.new(vp.X/2,vp.Y); if State.ESP.tracerMode=="Center" then origin=center elseif State.ESP.tracerMode=="Mouse" then local m=UIS:GetMouseLocation(); origin=Vector2.new(m.X,m.Y) end; c.tracer.From=origin; c.tracer.To=Vector2.new(rootPos.X,rootPos.Y); c.tracer.Color=tColor; c.tracer.Visible=true end end); if useHl and hlCount<30 then hlCount=hlCount+1; pcall(function() local top,topOn=Cam:WorldToViewportPoint(hrp.Position+Vector3.new(0,3,0)); local bot,botOn=Cam:WorldToViewportPoint(hrp.Position-Vector3.new(0,3.5,0)); if topOn and botOn and #c.boxLines==4 then local bh=math.abs(top.Y-bot.Y); local bw=bh*0.6; c.boxLines[1].From=Vector2.new(rootPos.X-bw/2,top.Y); c.boxLines[1].To=Vector2.new(rootPos.X+bw/2,top.Y); c.boxLines[2].From=Vector2.new(rootPos.X+bw/2,top.Y); c.boxLines[2].To=Vector2.new(rootPos.X+bw/2,bot.Y); c.boxLines[3].From=Vector2.new(rootPos.X+bw/2,bot.Y); c.boxLines[3].To=Vector2.new(rootPos.X-bw/2,bot.Y); c.boxLines[4].From=Vector2.new(rootPos.X-bw/2,bot.Y); c.boxLines[4].To=Vector2.new(rootPos.X-bw/2,top.Y); for i=1,4 do c.boxLines[i].Color=bColor; c.boxLines[i].Visible=true end end end); pcall(function() if not c.hl or c.hl.Parent~=char then if c.hl then c.hl:Destroy() end; c.hl=Instance.new("Highlight",char); c.hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop end; if c.hl then c.hl.FillColor=bColor; c.hl.OutlineColor=Color3.new(1,1,1); c.hl.Enabled=true end end) end end end))
 
 -- ══════════════════════════════════════════════════════════════
---  FLY ENGINE
+--  FLY ENGINE (PATCHED: Mobile Deadzone 15/12)
 -- ══════════════════════════════════════════════════════════════
 local flyMoveTouch,flyMoveSt,flyJoy,flyConns=nil,nil,Vector2.zero,{}
 local flyVel=Vector3.zero
-local function startFlyCapture() local keysHeld={}; table.insert(flyConns,UIS.InputBegan:Connect(function(inp,gp) if gp then return end; local k=inp.KeyCode; if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then keysHeld[k]=true end end)); table.insert(flyConns,UIS.InputEnded:Connect(function(inp) keysHeld[inp.KeyCode]=nil end)); table.insert(flyConns,UIS.InputBegan:Connect(function(inp,gp) if gp or inp.UserInputType~=Enum.UserInputType.Touch then return end; if inp.Position.X<=Cam.ViewportSize.X/2 then if not flyMoveTouch then flyMoveTouch=inp; flyMoveSt=inp.Position end end end)); table.insert(flyConns,UIS.TouchMoved:Connect(function(inp) if inp==flyMoveTouch and flyMoveSt then local dx,dy=inp.Position.X-flyMoveSt.X,inp.Position.Y-flyMoveSt.Y; flyJoy=Vector2.new(math.abs(dx)>25 and math.clamp((dx-math.sign(dx)*25)/80,-1,1) or 0, math.abs(dy)>20 and math.clamp((dy-math.sign(dy)*20)/80,-1,1) or 0) end end)); table.insert(flyConns,UIS.InputEnded:Connect(function(inp) if inp.UserInputType~=Enum.UserInputType.Touch then return end; if inp==flyMoveTouch then flyMoveTouch=nil; flyMoveSt=nil; flyJoy=Vector2.zero end end)); State.Fly._keys=keysHeld end
+local function startFlyCapture()
+    local keysHeld={}
+    table.insert(flyConns,UIS.InputBegan:Connect(function(inp,gp)
+        if gp then return end
+        local k=inp.KeyCode
+        if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then
+            keysHeld[k]=true
+        end    end))
+    table.insert(flyConns,UIS.InputEnded:Connect(function(inp)
+        keysHeld[inp.KeyCode]=nil
+    end))
+    table.insert(flyConns,UIS.InputBegan:Connect(function(inp,gp)
+        if gp or inp.UserInputType~=Enum.UserInputType.Touch then return end
+        if inp.Position.X<=Cam.ViewportSize.X/2 then
+            if not flyMoveTouch then flyMoveTouch=inp; flyMoveSt=inp.Position end
+        end
+    end))
+    table.insert(flyConns,UIS.TouchMoved:Connect(function(inp)
+        if inp==flyMoveTouch and flyMoveSt then
+            local dx,dy=inp.Position.X-flyMoveSt.X,inp.Position.Y-flyMoveSt.Y
+            flyJoy=Vector2.new(math.abs(dx)>15 and math.clamp((dx-math.sign(dx)*15)/80,-1,1) or 0, math.abs(dy)>12 and math.clamp((dy-math.sign(dy)*12)/80,-1,1) or 0)
+        end
+    end))
+    table.insert(flyConns,UIS.InputEnded:Connect(function(inp)
+        if inp.UserInputType~=Enum.UserInputType.Touch then return end
+        if inp==flyMoveTouch then flyMoveTouch=nil; flyMoveSt=nil; flyJoy=Vector2.zero end
+    end))
+    State.Fly._keys=keysHeld
+end
 local function stopFlyCapture() for _, c in ipairs(flyConns) do c:Disconnect() end; flyConns={}; flyMoveTouch=nil; flyMoveSt=nil; flyJoy=Vector2.zero; State.Fly._keys={} end
-local function toggleFly(v) if not v then State.Fly.active=false; stopFlyCapture(); RS:UnbindFromRenderStep("XKIDFly"); pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end); pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end); State.Fly.bv=nil; State.Fly.bg=nil; flyVel=Vector3.zero; local hum=getHum(); if hum then hum.PlatformStand=false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed=State.Move.ws; hum.UseJumpPower=true; hum.JumpPower=State.Move.jp end; notify("Movement","Fly disabled",2); return end; local hrp,hum=getRoot(),getHum(); if not hrp or not hum then return end; State.Fly.active=true; hum.PlatformStand=true; flyVel=Vector3.zero; State.Fly.bv=Instance.new("BodyVelocity",hrp); State.Fly.bv.MaxForce=Vector3.new(9e9,9e9,9e9); State.Fly.bv.Velocity=Vector3.zero; State.Fly.bg=Instance.new("BodyGyro",hrp); State.Fly.bg.MaxTorque=Vector3.new(9e9,9e9,9e9); State.Fly.bg.P=50000; startFlyCapture(); RS:BindToRenderStep("XKIDFly",Enum.RenderPriority.Camera.Value+1,function() if not State.Fly.active then return end; local r=getRoot(); if not r then return end; local camCF=Cam.CFrame; local spd=State.Move.flyS; local move=Vector3.zero; local keys=State.Fly._keys or {}; if onMobile then move=camCF.LookVector*(-flyJoy.Y)+camCF.RightVector*flyJoy.X else if keys[Enum.KeyCode.W] then move=move+camCF.LookVector end; if keys[Enum.KeyCode.S] then move=move-camCF.LookVector end; if keys[Enum.KeyCode.D] then move=move+camCF.RightVector end; if keys[Enum.KeyCode.A] then move=move-camCF.RightVector end; if keys[Enum.KeyCode.E] then move=move+Vector3.new(0,1,0) end; if keys[Enum.KeyCode.Q] then move=move-Vector3.new(0,1,0) end end; local targetVel; if move.Magnitude>0 then targetVel=move.Unit*spd; flyVel=flyVel:Lerp(targetVel,0.15) else if isOnGround() then flyVel=flyVel:Lerp(Vector3.zero,0.1) else flyVel=flyVel:Lerp(Vector3.new(0,-0.8,0),0.08) end end; if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity=flyVel end; if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame=CFrame.new(r.Position,r.Position+camCF.LookVector) end end); notify("Movement","Fly enabled",2) end
+local function toggleFly(v)
+    if not v then
+        State.Fly.active=false; stopFlyCapture(); RS:UnbindFromRenderStep("XKIDFly")
+        pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end)
+        pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end)
+        State.Fly.bv=nil; State.Fly.bg=nil; flyVel=Vector3.zero
+        local hum=getHum()
+        if hum then hum.PlatformStand=false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed=State.Move.ws; hum.UseJumpPower=true; hum.JumpPower=State.Move.jp end
+        notify("Movement","Fly disabled",2)
+        return
+    end
+    local hrp,hum=getRoot(),getHum()
+    if not hrp or not hum then return end
+    State.Fly.active=true; hum.PlatformStand=true; flyVel=Vector3.zero
+    State.Fly.bv=Instance.new("BodyVelocity",hrp); State.Fly.bv.MaxForce=Vector3.new(9e9,9e9,9e9); State.Fly.bv.Velocity=Vector3.zero
+    State.Fly.bg=Instance.new("BodyGyro",hrp); State.Fly.bg.MaxTorque=Vector3.new(9e9,9e9,9e9); State.Fly.bg.P=50000
+    startFlyCapture()
+    RS:BindToRenderStep("XKIDFly",Enum.RenderPriority.Camera.Value+1,function()
+        if not State.Fly.active then return end
+        local r=getRoot(); if not r then return end
+        local camCF=Cam.CFrame; local spd=State.Move.flyS; local move=Vector3.zero
+        local keys=State.Fly._keys or {}
+        if onMobile then
+            if flyJoy.Magnitude < 0.1 then
+                -- fallback: kalau joystick idle, cek keyboard juga (hybrid support)
+                if keys[Enum.KeyCode.W] then move=move+camCF.LookVector end
+                if keys[Enum.KeyCode.S] then move=move-camCF.LookVector end
+                if keys[Enum.KeyCode.D] then move=move+camCF.RightVector end
+                if keys[Enum.KeyCode.A] then move=move-camCF.RightVector end
+                if keys[Enum.KeyCode.E] then move=move+Vector3.new(0,1,0) end
+                if keys[Enum.KeyCode.Q] then move=move-Vector3.new(0,1,0) end
+            else
+                move=camCF.LookVector*(-flyJoy.Y)+camCF.RightVector*flyJoy.X
+            end
+        else
+            if keys[Enum.KeyCode.W] then move=move+camCF.LookVector end
+            if keys[Enum.KeyCode.S] then move=move-camCF.LookVector end
+            if keys[Enum.KeyCode.D] then move=move+camCF.RightVector end
+            if keys[Enum.KeyCode.A] then move=move-camCF.RightVector end
+            if keys[Enum.KeyCode.E] then move=move+Vector3.new(0,1,0) end
+            if keys[Enum.KeyCode.Q] then move=move-Vector3.new(0,1,0) end
+        end
+        local targetVel
+        if move.Magnitude>0 then targetVel=move.Unit*spd; flyVel=flyVel:Lerp(targetVel,0.15)
+        else if isOnGround() then flyVel=flyVel:Lerp(Vector3.zero,0.1) else flyVel=flyVel:Lerp(Vector3.new(0,-0.8,0),0.08) end end
+        if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity=flyVel end
+        if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame=CFrame.new(r.Position,r.Position+camCF.LookVector) end
+    end)
+    notify("Movement","Fly enabled",2)
+end
 
 -- ══════════════════════════════════════════════════════════════
---  FREECAM ENGINE
+--  FREECAM ENGINE (PATCHED: Mobile Deadzone 10)
 -- ══════════════════════════════════════════════════════════════
 local FC={active=false,pos=Vector3.zero,pitchDeg=0,yawDeg=0,rollDeg=0,speed=3,sens=0.25,savedCF=nil,origFov=70,lockGyro=nil,lockPos=nil}
 local I_CamVel=Vector3.zero;local I_YawVel=0;local I_PitchVel=0;local I_RollVel=0;local heightVelocity=0
 local fcMoveTouch,fcMoveSt,fcJoy=nil,nil,Vector2.zero;local fcRotTouch,fcRotLast=nil,nil;local fcKeysHeld,fcConns={},{}
 local FC_UI_Btns={up=false,down=false,rollLeft=false,rollRight=false,zoomIn=false,zoomOut=false}
 local FCUI=Instance.new("ScreenGui");FCUI.Name="XKID_FreecamUI";FCUI.ResetOnSpawn=false;FCUI.ZIndexBehavior=Enum.ZIndexBehavior.Global;FCUI.Enabled=false;FCUI.Parent=CoreGui;getgenv()._XKID_FCUI=FCUI
-local function makeFCBtn(name,txt,pos,actionKey) local b=Instance.new("TextButton",FCUI);b.Name=name;b.Size=UDim2.new(0,52,0,52);b.Position=pos;b.BackgroundColor3=Color3.fromRGB(15,15,15);b.BackgroundTransparency=0.4;b.Text=txt;b.TextColor3=Color3.fromRGB(255,255,255);b.TextSize=22;b.Font=Enum.Font.GothamBold;b.AutoButtonColor=false;Instance.new("UICorner",b).CornerRadius=UDim.new(0,10);local uis=Instance.new("UIStroke",b);uis.Color=Color3.fromRGB(220,20,60);uis.Thickness=2;uis.Transparency=0.3;local indicator=Instance.new("Frame",b);indicator.Name="Indicator";indicator.Size=UDim2.new(0,8,0,8);indicator.Position=UDim2.new(0,5,0,5);indicator.BackgroundColor3=Color3.fromRGB(60,60,60);Instance.new("UICorner",indicator).CornerRadius=UDim.new(1,0);local function press(down) FC_UI_Btns[actionKey]=down;b.BackgroundTransparency=down and 0.05 or 0.4;indicator.BackgroundColor3=down and Color3.fromRGB(255,60,60) or Color3.fromRGB(60,60,60) end;b.InputBegan:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.Touch or inp.UserInputType==Enum.UserInputType.MouseButton1 then press(true) end end);b.InputEnded:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.Touch or inp.UserInputType==Enum.UserInputType.MouseButton1 then press(false) end end);b.MouseLeave:Connect(function() press(false) end);return b end
-makeFCBtn("BtnRollL","L",UDim2.new(1,-118,0.5,-84),"rollLeft");makeFCBtn("BtnRollR","R",UDim2.new(1,-58,0.5,-84),"rollRight");makeFCBtn("BtnUp","↑",UDim2.new(1,-118,0.5,-26),"up");makeFCBtn("BtnZIn","+",UDim2.new(1,-58,0.5,-26),"zoomIn");makeFCBtn("BtnDown","↓",UDim2.new(1,-118,0.5,32),"down");makeFCBtn("BtnZOut","-",UDim2.new(1,-58,0.5,32),"zoomOut")
-local function startFreecamCapture() fcKeysHeld={};table.insert(fcConns,UIS.InputBegan:Connect(function(inp,gp) if gp then return end;fcKeysHeld[inp.KeyCode]=true;if inp.UserInputType==Enum.UserInputType.MouseButton2 then FC._mouseRot=true;UIS.MouseBehavior=Enum.MouseBehavior.LockCurrentPosition end end));table.insert(fcConns,UIS.InputEnded:Connect(function(inp) fcKeysHeld[inp.KeyCode]=false;if inp.UserInputType==Enum.UserInputType.MouseButton2 then FC._mouseRot=false;UIS.MouseBehavior=Enum.MouseBehavior.Default end end));table.insert(fcConns,UIS.InputChanged:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseMovement and FC._mouseRot then I_YawVel=I_YawVel-inp.Delta.X*FC.sens*120;I_PitchVel=I_PitchVel-inp.Delta.Y*FC.sens*120 end end));table.insert(fcConns,UIS.InputBegan:Connect(function(inp,gp) if gp or inp.UserInputType~=Enum.UserInputType.Touch then return end;if inp.Position.X>Cam.ViewportSize.X/2 then if not fcRotTouch then fcRotTouch=inp;fcRotLast=inp.Position end else if not fcMoveTouch then fcMoveTouch=inp;fcMoveSt=inp.Position;fcJoy=Vector2.zero end end end));table.insert(fcConns,UIS.TouchMoved:Connect(function(inp) if inp==fcRotTouch and fcRotLast then local dx,dy=inp.Position.X-fcRotLast.X,inp.Position.Y-fcRotLast.Y;fcRotLast=inp.Position;I_YawVel=I_YawVel-dx*FC.sens*80;I_PitchVel=I_PitchVel-dy*FC.sens*80 end;if inp==fcMoveTouch and fcMoveSt then local dx,dy=inp.Position.X-fcMoveSt.X,inp.Position.Y-fcMoveSt.Y;local function ad(v,d,m) if math.abs(v)<d then return 0 end;return math.clamp((v-math.sign(v)*d)/(m-d),-1,1) end;fcJoy=Vector2.new(ad(dx,15,70),ad(dy,15,70)) end end));table.insert(fcConns,UIS.InputEnded:Connect(function(inp) if inp.UserInputType~=Enum.UserInputType.Touch then return end;if inp==fcRotTouch then fcRotTouch=nil;fcRotLast=nil end;if inp==fcMoveTouch then fcMoveTouch=nil;fcMoveSt=nil;fcJoy=Vector2.zero end end)) end
+local function makeFCBtn(name,txt,pos,actionKey)
+    local b=Instance.new("TextButton",FCUI);b.Name=name;b.Size=UDim2.new(0,52,0,52);b.Position=pos;b.BackgroundColor3=Color3.fromRGB(15,15,15);b.BackgroundTransparency=0.4;b.Text=txt;b.TextColor3=Color3.fromRGB(255,255,255);b.TextSize=22;b.Font=Enum.Font.GothamBold;b.AutoButtonColor=false
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,10)
+    local uis=Instance.new("UIStroke",b);uis.Color=Color3.fromRGB(220,20,60);uis.Thickness=2;uis.Transparency=0.3
+    local indicator=Instance.new("Frame",b);indicator.Name="Indicator";indicator.Size=UDim2.new(0,8,0,8);indicator.Position=UDim2.new(0,5,0,5);indicator.BackgroundColor3=Color3.fromRGB(60,60,60)
+    Instance.new("UICorner",indicator).CornerRadius=UDim.new(1,0)
+    local function press(down) FC_UI_Btns[actionKey]=down;b.BackgroundTransparency=down and 0.05 or 0.4;indicator.BackgroundColor3=down and Color3.fromRGB(255,60,60) or Color3.fromRGB(60,60,60) end
+    b.InputBegan:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.Touch or inp.UserInputType==Enum.UserInputType.MouseButton1 then press(true) end end)
+    b.InputEnded:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.Touch or inp.UserInputType==Enum.UserInputType.MouseButton1 then press(false) end end)
+    b.MouseLeave:Connect(function() press(false) end)
+    return b
+end
+makeFCBtn("BtnRollL","L",UDim2.new(1,-118,1,-120),"rollLeft")
+makeFCBtn("BtnRollR","R",UDim2.new(1,-58,1,-120),"rollRight")
+makeFCBtn("BtnUp","↑",UDim2.new(1,-118,1,-62),"up")
+makeFCBtn("BtnZIn","+",UDim2.new(1,-58,1,-62),"zoomIn")
+makeFCBtn("BtnDown","↓",UDim2.new(1,-118,1,-4),"down")
+makeFCBtn("BtnZOut","-",UDim2.new(1,-58,1,-4),"zoomOut")
+local function startFreecamCapture()
+    fcKeysHeld={}
+    table.insert(fcConns,UIS.InputBegan:Connect(function(inp,gp) if gp then return end;fcKeysHeld[inp.KeyCode]=true;if inp.UserInputType==Enum.UserInputType.MouseButton2 then FC._mouseRot=true;UIS.MouseBehavior=Enum.MouseBehavior.LockCurrentPosition end end))
+    table.insert(fcConns,UIS.InputEnded:Connect(function(inp) fcKeysHeld[inp.KeyCode]=false;if inp.UserInputType==Enum.UserInputType.MouseButton2 then FC._mouseRot=false;UIS.MouseBehavior=Enum.MouseBehavior.Default end end))
+    table.insert(fcConns,UIS.InputChanged:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseMovement and FC._mouseRot then I_YawVel=I_YawVel-inp.Delta.X*FC.sens*120;I_PitchVel=I_PitchVel-inp.Delta.Y*FC.sens*120 end end))
+    table.insert(fcConns,UIS.InputBegan:Connect(function(inp,gp) if gp or inp.UserInputType~=Enum.UserInputType.Touch then return end;if inp.Position.X>Cam.ViewportSize.X/2 then if not fcRotTouch then fcRotTouch=inp;fcRotLast=inp.Position end else if not fcMoveTouch then fcMoveTouch=inp;fcMoveSt=inp.Position;fcJoy=Vector2.zero end end end))
+    table.insert(fcConns,UIS.TouchMoved:Connect(function(inp)
+        if inp==fcRotTouch and fcRotLast then local dx,dy=inp.Position.X-fcRotLast.X,inp.Position.Y-fcRotLast.Y;fcRotLast=inp.Position;I_YawVel=I_YawVel-dx*FC.sens*80;I_PitchVel=I_PitchVel-dy*FC.sens*80 end
+        if inp==fcMoveTouch and fcMoveSt then local dx,dy=inp.Position.X-fcMoveSt.X,inp.Position.Y-fcMoveSt.Y;local function ad(v,d,m) if math.abs(v)<d then return 0 end;return math.clamp((v-math.sign(v)*d)/(m-d),-1,1) end;fcJoy=Vector2.new(ad(dx,10,70),ad(dy,10,70)) end
+    end))
+    table.insert(fcConns,UIS.InputEnded:Connect(function(inp) if inp.UserInputType~=Enum.UserInputType.Touch then return end;if inp==fcRotTouch then fcRotTouch=nil;fcRotLast=nil end;if inp==fcMoveTouch then fcMoveTouch=nil;fcMoveSt=nil;fcJoy=Vector2.zero end end))
+end
 local function stopFreecamCapture() for _,c in ipairs(fcConns) do c:Disconnect() end;fcConns={};fcMoveTouch=nil;fcMoveSt=nil;fcJoy=Vector2.zero;fcRotTouch=nil;fcRotLast=nil;fcKeysHeld={};FC._mouseRot=false;UIS.MouseBehavior=Enum.MouseBehavior.Default;I_CamVel=Vector3.zero;I_YawVel=0;I_PitchVel=0;I_RollVel=0;heightVelocity=0;FC.rollDeg=0;for k in pairs(FC_UI_Btns) do FC_UI_Btns[k]=false end end
-local function startFreecamLoop() RS:BindToRenderStep("XKIDFreecam",Enum.RenderPriority.Camera.Value+1,function(dt) if not FC.active then return end;Cam.CameraType=Enum.CameraType.Scriptable;local safeDt=math.clamp(dt,0.001,0.05);I_YawVel=I_YawVel*math.max(0,1-safeDt*14);I_PitchVel=I_PitchVel*math.max(0,1-safeDt*14);FC.yawDeg=FC.yawDeg+I_YawVel*safeDt;FC.pitchDeg=math.clamp(FC.pitchDeg+I_PitchVel*safeDt,-80,80);local rollTarget=0;if FC_UI_Btns.rollLeft then rollTarget=-100 elseif FC_UI_Btns.rollRight then rollTarget=100 end;I_RollVel=I_RollVel+(rollTarget-I_RollVel)*math.clamp(safeDt*5,0,1);FC.rollDeg=math.clamp(FC.rollDeg+I_RollVel*safeDt,-100,100);if rollTarget==0 and math.abs(FC.rollDeg)<1 and math.abs(I_RollVel)<1 then FC.rollDeg=0;I_RollVel=0 end;local camCF=CFrame.new(FC.pos)*CFrame.Angles(0,math.rad(FC.yawDeg),0)*CFrame.Angles(math.rad(FC.pitchDeg),0,0);local joyX,joyY=fcJoy.X,fcJoy.Y;if not onMobile then if fcKeysHeld[Enum.KeyCode.W] then joyY=joyY-1 end;if fcKeysHeld[Enum.KeyCode.S] then joyY=joyY+1 end;if fcKeysHeld[Enum.KeyCode.D] then joyX=joyX+1 end;if fcKeysHeld[Enum.KeyCode.A] then joyX=joyX-1 end end;local rawMove=Vector2.new(joyX,joyY);if rawMove.Magnitude>1 then rawMove=rawMove.Unit end;I_CamVel=I_CamVel:Lerp((camCF.LookVector*(-rawMove.Y)+camCF.RightVector*rawMove.X)*(FC.speed*60),math.clamp(safeDt*3.5,0,1));local heightTarget=0;if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then heightTarget=FC.speed*60 end;if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget=-FC.speed*60 end;if heightTarget==0 then heightVelocity=heightVelocity*math.max(0,1-safeDt*10);if math.abs(heightVelocity)<0.5 then heightVelocity=0 end else heightVelocity=heightVelocity+(heightTarget-heightVelocity)*math.clamp(safeDt*3,0,1) end;if FC_UI_Btns.zoomIn then Cam.FieldOfView=math.clamp(Cam.FieldOfView-1.2,10,120) end;if FC_UI_Btns.zoomOut then Cam.FieldOfView=math.clamp(Cam.FieldOfView+1.2,10,120) end;FC.pos=FC.pos+(I_CamVel+Vector3.new(0,heightVelocity,0))*safeDt;Cam.CFrame=CFrame.new(FC.pos)*CFrame.Angles(0,math.rad(FC.yawDeg),0)*CFrame.Angles(math.rad(FC.pitchDeg),0,0)*CFrame.Angles(0,0,math.rad(FC.rollDeg));local hrp,hum=getRoot(),getHum();if hrp and not hrp.Anchored then hrp.Anchored=true end;if hum then hum:ChangeState(Enum.HumanoidStateType.Physics);hum.WalkSpeed=0;hum.JumpPower=0 end end) end
+local function startFreecamLoop()
+    RS:BindToRenderStep("XKIDFreecam",Enum.RenderPriority.Camera.Value+1,function(dt)
+        if not FC.active then return end
+        Cam.CameraType=Enum.CameraType.Scriptable
+        local safeDt=math.clamp(dt,0.001,0.05)
+        I_YawVel=I_YawVel*math.max(0,1-safeDt*14);I_PitchVel=I_PitchVel*math.max(0,1-safeDt*14)
+        FC.yawDeg=FC.yawDeg+I_YawVel*safeDt;FC.pitchDeg=math.clamp(FC.pitchDeg+I_PitchVel*safeDt,-80,80)
+        local rollTarget=0
+        if FC_UI_Btns.rollLeft then rollTarget=-100 elseif FC_UI_Btns.rollRight then rollTarget=100 end
+        I_RollVel=I_RollVel+(rollTarget-I_RollVel)*math.clamp(safeDt*5,0,1)
+        FC.rollDeg=math.clamp(FC.rollDeg+I_RollVel*safeDt,-100,100)
+        if rollTarget==0 and math.abs(FC.rollDeg)<1 and math.abs(I_RollVel)<1 then FC.rollDeg=0;I_RollVel=0 end
+        local camCF=CFrame.new(FC.pos)*CFrame.Angles(0,math.rad(FC.yawDeg),0)*CFrame.Angles(math.rad(FC.pitchDeg),0,0)
+        local joyX,joyY=fcJoy.X,fcJoy.Y
+        if not onMobile then
+            if fcKeysHeld[Enum.KeyCode.W] then joyY=joyY-1 end
+            if fcKeysHeld[Enum.KeyCode.S] then joyY=joyY+1 end
+            if fcKeysHeld[Enum.KeyCode.D] then joyX=joyX+1 end
+            if fcKeysHeld[Enum.KeyCode.A] then joyX=joyX-1 end
+        else
+            -- hybrid support: kalau joystick idle cek keyboard
+            if fcJoy.Magnitude < 0.1 then
+                if fcKeysHeld[Enum.KeyCode.W] then joyY=joyY-1 end
+                if fcKeysHeld[Enum.KeyCode.S] then joyY=joyY+1 end
+                if fcKeysHeld[Enum.KeyCode.D] then joyX=joyX+1 end
+                if fcKeysHeld[Enum.KeyCode.A] then joyX=joyX-1 end
+            end
+        end
+        local rawMove=Vector2.new(joyX,joyY)
+        if rawMove.Magnitude>1 then rawMove=rawMove.Unit end
+        I_CamVel=I_CamVel:Lerp((camCF.LookVector*(-rawMove.Y)+camCF.RightVector*rawMove.X)*(FC.speed*60),math.clamp(safeDt*3.5,0,1))
+        local heightTarget=0
+        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then heightTarget=FC.speed*60 end
+        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget=-FC.speed*60 end
+        if heightTarget==0 then heightVelocity=heightVelocity*math.max(0,1-safeDt*10);if math.abs(heightVelocity)<0.5 then heightVelocity=0 end
+        else heightVelocity=heightVelocity+(heightTarget-heightVelocity)*math.clamp(safeDt*3,0,1) end
+        if FC_UI_Btns.zoomIn then Cam.FieldOfView=math.clamp(Cam.FieldOfView-1.2,10,120) end
+        if FC_UI_Btns.zoomOut then Cam.FieldOfView=math.clamp(Cam.FieldOfView+1.2,10,120) end
+        FC.pos=FC.pos+(I_CamVel+Vector3.new(0,heightVelocity,0))*safeDt
+        Cam.CFrame=CFrame.new(FC.pos)*CFrame.Angles(0,math.rad(FC.yawDeg),0)*CFrame.Angles(math.rad(FC.pitchDeg),0,0)*CFrame.Angles(0,0,math.rad(FC.rollDeg))
+        local hrp,hum=getRoot(),getHum()
+        if hrp and not hrp.Anchored then hrp.Anchored=true end
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Physics);hum.WalkSpeed=0;hum.JumpPower=0 end
+    end)
+end
 local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
-local function fullCleanupFreecam() stopFreecamLoop();stopFreecamCapture();FC.rollDeg=0;pcall(function() if FC.lockGyro and FC.lockGyro.Parent then FC.lockGyro:Destroy() end;FC.lockGyro=nil end);pcall(function() if FC.lockPos and FC.lockPos.Parent then FC.lockPos:Destroy() end;FC.lockPos=nil end);local hrp=getRoot();if hrp then hrp.Anchored=false;hrp.AssemblyLinearVelocity=Vector3.zero;hrp.AssemblyAngularVelocity=Vector3.zero;if FC.savedCF then hrp.CFrame=FC.savedCF;FC.savedCF=nil end end;local hum=getHum();if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp);hum.PlatformStand=false;hum.WalkSpeed=State.Move.ws;hum.UseJumpPower=true;hum.JumpPower=State.Move.jp end;Cam.CameraType=Enum.CameraType.Custom;Cam.CameraSubject=getHum() or (getRoot() and getRoot());Cam.FieldOfView=FC.origFov;if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled=false end;for k in pairs(FC_UI_Btns) do FC_UI_Btns[k]=false end;task.wait(0.1);pcall(function() for _,v in pairs(getRoot() and getRoot():GetChildren() or {}) do if v:IsA("BodyGyro") or v:IsA("BodyPosition") or v:IsA("BodyVelocity") then v:Destroy() end end end) end
+local function fullCleanupFreecam()
+    stopFreecamLoop();stopFreecamCapture();FC.rollDeg=0
+    pcall(function() if FC.lockGyro and FC.lockGyro.Parent then FC.lockGyro:Destroy() end;FC.lockGyro=nil end)
+    pcall(function() if FC.lockPos and FC.lockPos.Parent then FC.lockPos:Destroy() end;FC.lockPos=nil end)
+    local hrp=getRoot()
+    if hrp then hrp.Anchored=false;hrp.AssemblyLinearVelocity=Vector3.zero;hrp.AssemblyAngularVelocity=Vector3.zero;if FC.savedCF then hrp.CFrame=FC.savedCF;FC.savedCF=nil end end
+    local hum=getHum()
+    if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp);hum.PlatformStand=false;hum.WalkSpeed=State.Move.ws;hum.UseJumpPower=true;hum.JumpPower=State.Move.jp end
+    Cam.CameraType=Enum.CameraType.Custom;Cam.CameraSubject=getHum() or (getRoot() and getRoot());Cam.FieldOfView=FC.origFov
+    if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled=false end
+    for k in pairs(FC_UI_Btns) do FC_UI_Btns[k]=false end
+    task.wait(0.1)
+    pcall(function() for _,v in pairs(getRoot() and getRoot():GetChildren() or {}) do if v:IsA("BodyGyro") or v:IsA("BodyPosition") or v:IsA("BodyVelocity") then v:Destroy() end end end)
+end
 
 -- ══════════════════════════════════════════════════════════════
 --  SPECTATE ENGINE
@@ -283,7 +578,7 @@ task.wait(0.3)
 task.spawn(function() local hue=0;while getgenv()._XKID_RUNNING do hue=(hue+0.005)%1;local seq=ColorSequence.new(Color3.fromHSV(hue,1,1),Color3.fromHSV((hue+0.5)%1,1,1));pcall(function() local wind=CoreGui:FindFirstChild("WindUI");if not wind then return end;local openBtn=wind:FindFirstChild("OpenButton",true);if not openBtn then return end;local stroke=openBtn:FindFirstChildOfClass("UIStroke");if stroke then local grad=stroke:FindFirstChildOfClass("UIGradient");if not grad then grad=Instance.new("UIGradient",stroke) end;grad.Color=seq;grad.Rotation=(grad.Rotation+5)%360 end;local bgGrad=openBtn:FindFirstChildOfClass("UIGradient");if bgGrad then bgGrad.Color=seq;bgGrad.Rotation=(bgGrad.Rotation+2)%360 end end);task.wait(0.03) end end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: SYSTEM HUB (Credits dihapus)
+--  TAB 1: SYSTEM HUB
 -- ══════════════════════════════════════════════════════════════
 local T_HOME = Window:Tab({Title="System Hub",Icon="layout-dashboard"})
 local secSysAccess = T_HOME:Section({Title="System Access",Opened=true})
@@ -298,7 +593,7 @@ local securityLabel = secSecHome:Paragraph({Title="Diagnostics",Desc="Protected"
 task.spawn(function() task.wait(2);local function lerpColor(c1,c2,t) return Color3.new(c1.R+(c2.R-c1.R)*t,c1.G+(c2.G-c1.G)*t,c1.B+(c2.B-c1.B)*t) end;local function toHex(c) return string.format("#%02X%02X%02X",c.R*255,c.G*255,c.B*255) end;local function makeBarA(val,maxVal,len,mode) local fill=math.clamp(math.floor((val/maxVal)*len),0,len);local res="";for i=1,len do if i<=fill then local t=(i-1)/math.max(1,len-1);local col=mode=="FPS" and lerpColor(Color3.fromRGB(0,255,255),Color3.fromRGB(0,100,255),t) or (t<0.5 and lerpColor(Color3.fromRGB(0,255,0),Color3.fromRGB(255,255,0),t*2) or lerpColor(Color3.fromRGB(255,255,0),Color3.fromRGB(255,0,0),(t-0.5)*2));res=res..'<font color="'..toHex(col)..'">▰</font>' else res=res..'<font color="#444444">▱</font>' end end;return res end;while getgenv()._XKID_RUNNING do task.wait(0.5);pcall(function() if srvLabel and cachedMapName then local pCount,mCount=#Players:GetPlayers(),Players.MaxPlayers;local uptime=formatTime(os.difftime(os.time(),START_TIME));local job=game.JobId~="" and game.JobId:sub(1,8).."..." or "N/A";srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s",cachedMapName,job,pCount,mCount,uptime)) end end);pcall(function() if netLabel then local fps,ping=math.clamp(sharedFPS,0,300),math.clamp(sharedPing,0,9999);local fpsBar=makeBarA(fps,120,20,"FPS");local pingBar=makeBarA(9999-ping,9999,20,"PING");netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>",fpsBar,fps,pingBar,ping)) end end);pcall(function() if securityLabel then local afk=State.Security.afkActive and "🟢 ULTRA SAFE" or "🔴 OFFLINE";local sl=State.Security.shiftLock and "🟢 LOCKED" or "🔴 UNLOCKED";local lag=State.Security.antiLag and "🟢 ACTIVE" or "🔴 INACTIVE";securityLabel:SetDesc(string.format("[ ⏰ ] <font face='RobotoMono'>AFK Protocol :</font> %s\n[ 🔒 ] <font face='RobotoMono'>Shift Lock   :</font> %s\n[ ⚡ ] <font face='RobotoMono'>Frame Boost  :</font> %s",afk,sl,lag)) end end) end end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 2: PLAYER CORE (Refresh Character dihapus, Hard Fling)
+--  TAB 2: PLAYER CORE
 -- ══════════════════════════════════════════════════════════════
 local T_AV = Window:Tab({Title="Player Core",Icon="fingerprint"})
 local secStateCtrl = T_AV:Section({Title="State Control",Opened=true})
@@ -306,17 +601,34 @@ secStateCtrl:Button({Title="Fast Respawn 💀",Desc="Respawn on death point",Cal
 local secMov = T_AV:Section({Title="Movement",Opened=true})
 secMov:Slider({Title="Walk Speed",Step=1,Value={Min=16,Max=500,Default=16},Callback=function(v) State.Move.ws=v;if getHum() then getHum().WalkSpeed=v end end})
 secMov:Slider({Title="Jump Power",Step=1,Value={Min=50,Max=500,Default=50},Callback=function(v) State.Move.jp=v;local h=getHum();if h then h.UseJumpPower=true;h.JumpPower=v end end})
-secMov:Toggle({Title="Infinite Jump",Value=false,Callback=function(v) if v then State.Move.infJ=TrackC(UIS.JumpRequest:Connect(function() if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end end)) else if State.Move.infJ then State.Move.infJ:Disconnect();State.Move.infJ=nil end end end})
+secMov:Toggle({Title="Infinite Jump",Value=false,Callback=function(v)
+    if v then
+        State.Move.infJ = true
+        if State.Move._infJConn then State.Move._infJConn:Disconnect() end
+        State.Move._infJConn = TrackC(UIS.JumpRequest:Connect(function()
+            if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end
+        end))
+    else
+        State.Move.infJ = false
+        if State.Move._infJConn then State.Move._infJConn:Disconnect(); State.Move._infJConn = nil end
+    end
+end})
 local secAbi = T_AV:Section({Title="Abilities",Opened=true})
 secAbi:Toggle({Title="Fly ✈️",Value=false,Callback=function(v) toggleFly(v) end})
 secAbi:Slider({Title="Fly Speed",Step=1,Value={Min=10,Max=300,Default=60},Callback=function(v) State.Move.flyS=v end})
-local noclipConn=nil
-secAbi:Toggle({Title="NoClip",Value=false,Callback=function(v) State.Move.ncp=v;if v then if not noclipConn then noclipConn=TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end;if LP.Character then for _,p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end end end)) end else if noclipConn then noclipConn:Disconnect();noclipConn=nil end end end})
+secAbi:Toggle({Title="NoClip",Value=false,Callback=function(v)
+    State.Move.ncp=v
+    if v then
+        enableNoclipLoop()
+    else
+        if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
+    end
+end})
 local hardFlingConn=nil
 secAbi:Toggle({Title="Hard Fling ⚡",Value=false,Callback=function(v) State.HardFling.active=v;State.Move.ncp=v;if v then if not hardFlingConn then hardFlingConn=TrackC(RS.Heartbeat:Connect(function() if not State.HardFling.active then return end;local r=getRoot();if not r then return end;pcall(function() r.AssemblyAngularVelocity=Vector3.new(0,State.HardFling.power,0);r.AssemblyLinearVelocity=Vector3.new(r.AssemblyLinearVelocity.X,100,r.AssemblyLinearVelocity.Z) end);if LP.Character then for _,p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end end end)) end else if hardFlingConn then hardFlingConn:Disconnect();hardFlingConn=nil end end end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 3: NAVIGATION (Smart TP di inventory)
+--  TAB 3: NAVIGATION
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({Title="Navigation",Icon="crosshair"})
 local secDirTP = T_TP:Section({Title="Direct Teleport",Opened=true})
@@ -356,7 +668,7 @@ secFC:Slider({Title="Camera Speed",Step=0.5,Value={Min=1,Max=20,Default=3},Callb
 secFC:Slider({Title="Sensitivity",Step=0.05,Value={Min=0.1,Max=1.0,Default=0.25},Callback=function(v) FC.sens=v end})
 
 -- ══════════════════════════════════════════════════════════════
---  CINEMATIC MODE (Nametag & Bubble jadi 1 toggle)
+--  CINEMATIC MODE
 -- ══════════════════════════════════════════════════════════════
 local secCine=T_FREE:Section({Title="Cinematic Mode",Opened=true})
 secCine:Toggle({Title="Hide All UI",Value=false,Callback=function(v) if v then State.Cinema.hideUI=true;State.Cinema.cachedGuis={};for _,gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis,gui);gui.Enabled=false end end;pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All,false) end);notify("Cinematic","UI Hidden",2) else State.Cinema.hideUI=false;for _,gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled=true end end;State.Cinema.cachedGuis={};pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All,true) end);notify("Cinematic","UI Restored",2) end end})
@@ -397,7 +709,7 @@ secESPColor:Dropdown({Title="Suspect Color",Values={"Merah","Hijau","Biru","Kuni
 secESPColor:Dropdown({Title="Glitch Acc Color",Values={"Orange","Merah","Hijau","Biru","Kuning","Ungu","Cyan","Pink","Putih","Hitam"},Value="Orange",Callback=function(v) if colorMap[v] then State.ESP.tracerColor_G=colorMap[v];State.ESP.boxColor_G=colorMap[v] end end})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY (Copy JobID dihapus)
+--  TAB 8: UTILITY
 -- ══════════════════════════════════════════════════════════════
 local T_UTIL=Window:Tab({Title="Utility",Icon="terminal"})
 local secChat=T_UTIL:Section({Title="Chat Logger",Opened=true})
@@ -405,7 +717,7 @@ secChat:Toggle({Title="Enable Logger",Value=false,Callback=function(v) State.Uti
 secChat:Toggle({Title="Silent Mode",Value=false,Callback=function(v) State.Utility.chatSilent=v end})
 chatTargetLabel=secChat:Paragraph({Title="Targets",Desc="None"})
 chatTargetDrop=secChat:Dropdown({Title="Select Targets",Multi=true,Values=getDisplayNames(),Callback=function(selected) State.Utility.chatTargets={};if selected and typeof(selected)=="table" then for _,name in ipairs(selected) do table.insert(State.Utility.chatTargets,tostring(name)) end end;if #State.Utility.chatTargets>0 then pcall(function() chatTargetLabel:SetDesc("Tracking: "..table.concat(State.Utility.chatTargets,", ")) end) else pcall(function() chatTargetLabel:SetDesc("None") end) end end})
-secChat:Button({Title="Clear Targets",Callback=function() State.Utility.chatTargets={};pcall(function() chatTargetLabel:SetDesc("None") end);pcall(function() chatTargetDrop:Refresh({},true);task.wait(0.1);chatTargetDrop:Refresh(getDisplayNames(),true) end);notify("Chat","Targets cleared",2) end})
+secChat:Button({Title="Clear Targets",Callback=function() State.Utility.chatTargets={};pcall(function() chatTargetLabel:SetDesc("None") end);pcall(function() chatTargetDrop:Refresh(getDisplayNames(),true) end);notify("Chat","Targets cleared",2) end})
 secChat:Button({Title="🔄 Refresh List",Callback=function() pcall(function() chatTargetDrop:Refresh(getDisplayNames(),true) end) end})
 chatLogPanel=secChat:Paragraph({Title="Console",Desc="Belum ada chat..."})
 secChat:Button({Title="Clear Log",Callback=function() State.Utility.chatHistory={};pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end);notify("Utility","Log cleared",2) end})
