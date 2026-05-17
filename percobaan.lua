@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v4.1.3 — Double-Tap TP · Tool Toggle · Minimal Notif
+  📌 v4.1.4 — Double-Click TP · Mobile Friendly
   🔧 ROBOX Build | Delta Compatible
 ]]
 
@@ -32,7 +32,7 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "4.1.3"
+local CURRENT_VERSION = "4.1.4"
 
 -- ══════════════════════════════════════════════════════════════
 --  LIGHTING CACHE
@@ -130,7 +130,7 @@ local State = {
     Move      = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
     Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
     HardFling = { active = false, power = 10000, mode = "Spin", currentPower = 0, rampUpActive = false },
-    Teleport  = { selectedTarget = "", tpConn = nil, tpHotkeyConn = nil, tpActive = false, lastTap = 0 },
+    Teleport  = { selectedTarget = "", lastTap = 0 },
     Security  = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false },
     Cinema    = { hideUI = false, cachedGuis = {} },
     Avatar    = { isRefreshing = false },
@@ -228,9 +228,15 @@ local function isOnGround()
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
 local function isTapOnUI(inputPos)
-    local guiObjects = CoreGui:GetGuiObjectsAtPosition(inputPos.X, inputPos.Y)
-    for _, obj in ipairs(guiObjects) do
-        if obj and obj:IsA("GuiObject") then return true end
+    local xkidWindow = getgenv()._XKID_INSTANCE
+    if xkidWindow then
+        local p = xkidWindow.AbsolutePosition; local s = xkidWindow.AbsoluteSize
+        if p and s and inputPos.X >= p.X and inputPos.X <= p.X + s.X and inputPos.Y >= p.Y and inputPos.Y <= p.Y + s.Y then return true end
+    end
+    local fcui = getgenv()._XKID_FCUI
+    if fcui and fcui.Enabled then
+        local p = fcui.AbsolutePosition; local s = fcui.AbsoluteSize
+        if p and s and inputPos.X >= p.X and inputPos.X <= p.X + s.X and inputPos.Y >= p.Y and inputPos.Y <= p.Y + s.Y then return true end
     end
     return false
 end
@@ -255,7 +261,7 @@ end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
 -- ══════════════════════════════════════════════════════════════
---  ANTI AFK
+--  ANTI AFK PROPER 2026
 -- ══════════════════════════════════════════════════════════════
 local AFKSystem = { active = false, idleConn = nil, debounce = false }
 
@@ -263,23 +269,34 @@ local function startAFK()
     if AFKSystem.active then return end
     AFKSystem.active = true
     State.Security.afkActive = true
+    
     AFKSystem.idleConn = TrackC(LP.Idled:Connect(function()
         if not AFKSystem.active then return end
         if AFKSystem.debounce then return end
         AFKSystem.debounce = true
+        
         pcall(function()
-            local cf = Cam.CFrame; local rx, ry, rz = cf:ToEulerAnglesYXZ()
+            local cf = Cam.CFrame
+            local rx, ry, rz = cf:ToEulerAnglesYXZ()
             Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + math.rad(1), rz)
-            task.wait(0.05); Cam.CFrame = cf
+            task.wait(0.05)
+            Cam.CFrame = cf
         end)
-        task.wait(30); AFKSystem.debounce = false
+        
+        task.wait(30)
+        AFKSystem.debounce = false
     end))
+    
     notify("Anti AFK", "ON", 1.5)
 end
 
 local function stopAFK()
-    AFKSystem.active = false; State.Security.afkActive = false
-    if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect(); AFKSystem.idleConn = nil end
+    AFKSystem.active = false
+    State.Security.afkActive = false
+    if AFKSystem.idleConn then
+        AFKSystem.idleConn:Disconnect()
+        AFKSystem.idleConn = nil
+    end
     notify("Anti AFK", "OFF", 1.5)
 end
 
@@ -380,55 +397,48 @@ TrackC(LP.CharacterAdded:Connect(function(newChar)
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  SMART TP — Tool Toggle + Double-Tap (less responsive)
+--  DOUBLE-CLICK TP (Always Active — No Toggle)
 -- ══════════════════════════════════════════════════════════════
 local function executeTP()
     local hrp = getRoot(); if not hrp then return end
     local m = LP:GetMouse()
-    if m.Hit then
-        hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0))
-    end
+    if m.Hit then hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0)) end
 end
 
-local function toggleSmartTP(v)
-    State.Teleport.tpActive = v
-    if v then
-        if onMobile then
-            -- Double-tap: less responsive (0.5s window)
-            State.Teleport.tpConn = TrackC(UIS.InputBegan:Connect(function(inp, gp)
-                if gp then return end
-                if inp.UserInputType == Enum.UserInputType.Touch then
-                    if isTapOnUI(inp.Position) then return end
-                    local now = tick()
-                    if now - State.Teleport.lastTap < 0.5 then
-                        executeTP()
-                        State.Teleport.lastTap = 0
-                    else
-                        State.Teleport.lastTap = now
-                    end
-                end
-            end))
-            notify("Smart TP", "ON — Double-tap to TP", 2)
+TrackC(UIS.InputBegan:Connect(function(inp, gp)
+    if gp then return end
+    if inp.UserInputType == Enum.UserInputType.Touch then
+        if isTapOnUI(inp.Position) then return end
+        local now = tick()
+        if State.Teleport.lastTap > 0 and (now - State.Teleport.lastTap) < 0.4 then
+            executeTP()
+            State.Teleport.lastTap = 0
         else
-            -- Desktop: T key
-            State.Teleport.tpHotkeyConn = TrackC(UIS.InputBegan:Connect(function(inp, gp)
-                if gp then return end
-                if inp.KeyCode == Enum.KeyCode.T and not isTapOnUI(UIS:GetMouseLocation()) then
-                    executeTP()
-                end
-            end))
-            notify("Smart TP", "ON — Press T to TP", 2)
+            State.Teleport.lastTap = now
         end
-    else
-        if State.Teleport.tpConn then State.Teleport.tpConn:Disconnect(); State.Teleport.tpConn = nil end
-        if State.Teleport.tpHotkeyConn then State.Teleport.tpHotkeyConn:Disconnect(); State.Teleport.tpHotkeyConn = nil end
-        State.Teleport.lastTap = 0
-        notify("Smart TP", "OFF", 1.5)
+    elseif inp.UserInputType == Enum.UserInputType.MouseButton1 then
+        if isTapOnUI(Vector2.new(inp.Position.X, inp.Position.Y)) then return end
+        local now = tick()
+        if State.Teleport.lastTap > 0 and (now - State.Teleport.lastTap) < 0.4 then
+            executeTP()
+            State.Teleport.lastTap = 0
+        else
+            State.Teleport.lastTap = now
+        end
     end
-end
+end))
+
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        if State.Teleport.lastTap > 0 and (tick() - State.Teleport.lastTap) > 1 then
+            State.Teleport.lastTap = 0
+        end
+        task.wait(0.3)
+    end
+end)
 
 -- ══════════════════════════════════════════════════════════════
---  ESP ENGINE
+--  ESP ENGINE (FULL)
 -- ══════════════════════════════════════════════════════════════
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -751,7 +761,7 @@ end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 
 -- ══════════════════════════════════════════════════════════════
---  AUTO LIKE ENGINE (with Like Back)
+--  AUTO LIKE ENGINE
 -- ══════════════════════════════════════════════════════════════
 local function getLikeRemotes()
     local remotes = ReplicatedStorage:FindFirstChild("Remotes")
@@ -962,7 +972,6 @@ local Window = WindUI:CreateWindow({
 })
 getgenv()._XKID_INSTANCE = Window
 Window:Tag({ Title = "v" .. CURRENT_VERSION, Color = Color3.fromRGB(220, 20, 60), Icon = "badge-check" })
-
 Window:SideBarLabel({ Title = "Quick Actions", Icon = "zap" })
 Window:SideBarButton({ Title = "Refresh 🔄", Icon = "refresh-cw", Variant = "Secondary", Callback = function() refreshCharacter() end })
 Window:SideBarDivider({})
@@ -978,26 +987,7 @@ secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", 
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true, Box = true })
 local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
 local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
-local secSecHome = T_HOME:Section({ Title = "Security Check", Opened = true, Box = true })
-local securityLabel = secSecHome:Paragraph({ Title = "Diagnostics", Desc = "Protected" })
-
-task.spawn(function()
-    task.wait(2)
-    local function lerpColor(c1, c2, t) return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t) end
-    local function toHex(c) return string.format("#%02X%02X%02X", c.R * 255, c.G * 255, c.B * 255) end
-    local function makeBarA(val, maxVal, len, mode)
-        local fill = math.clamp(math.floor((val / maxVal) * len), 0, len); local res = ""
-        for i = 1, len do if i <= fill then local t = (i - 1) / math.max(1, len - 1)
-            local col = mode == "FPS" and lerpColor(Color3.fromRGB(0,255,255), Color3.fromRGB(0,100,255), t) or (t < 0.5 and lerpColor(Color3.fromRGB(0,255,0), Color3.fromRGB(255,255,0), t*2) or lerpColor(Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,0), (t-0.5)*2))
-            res = res .. '<font color="' .. toHex(col) .. '">▰</font>' else res = res .. '<font color="#444444">▱</font>' end end
-        return res
-    end
-    while getgenv()._XKID_RUNNING do
-        task.wait(0.5)
-        pcall(function() if srvLabel and cachedMapName then local pCount, mCount = #Players:GetPlayers(), Players.MaxPlayers; local uptime = formatTime(os.difftime(os.time(), START_TIME)); local job = game.JobId ~= "" and game.JobId:sub(1, 8) .. "..." or "N/A"; srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s", cachedMapName, job, pCount, mCount, uptime)) end end)
-        pcall(function() if netLabel then local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999); local fpsBar = makeBarA(fps, 120, 14, "FPS"); local pingBar = makeBarA(ping, 200, 14, "PING"); netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping)) end end)
-    end
-end)
+task.spawn(function() task.wait(2); local function lerpColor(c1, c2, t) return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t) end; local function toHex(c) return string.format("#%02X%02X%02X", c.R * 255, c.G * 255, c.B * 255) end; local function makeBarA(val, maxVal, len, mode) local fill = math.clamp(math.floor((val / maxVal) * len), 0, len); local res = ""; for i = 1, len do if i <= fill then local t = (i - 1) / math.max(1, len - 1); local col = mode == "FPS" and lerpColor(Color3.fromRGB(0,255,255), Color3.fromRGB(0,100,255), t) or (t < 0.5 and lerpColor(Color3.fromRGB(0,255,0), Color3.fromRGB(255,255,0), t*2) or lerpColor(Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,0), (t-0.5)*2)); res = res .. '<font color="' .. toHex(col) .. '">▰</font>' else res = res .. '<font color="#444444">▱</font>' end end; return res end; while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(function() if srvLabel and cachedMapName then local pCount, mCount = #Players:GetPlayers(), Players.MaxPlayers; local uptime = formatTime(os.difftime(os.time(), START_TIME)); local job = game.JobId ~= "" and game.JobId:sub(1, 8) .. "..." or "N/A"; srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s", cachedMapName, job, pCount, mCount, uptime)) end end); pcall(function() if netLabel then local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999); local fpsBar = makeBarA(fps, 120, 14, "FPS"); local pingBar = makeBarA(ping, 200, 14, "PING"); netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping)) end end) end end)
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 2: CHARACTER
@@ -1006,25 +996,25 @@ local T_AV = Window:Tab({ Title = "Character", Icon = "fingerprint", ShowTabTitl
 local secStateCtrl = T_AV:Section({ Title = "State Control", Opened = true, Box = true })
 secStateCtrl:Button({ Title = "Refresh Character 🔄", Desc = "Reload character like /re — no gamepass", Icon = "refresh-cw", Callback = function() refreshCharacter() end })
 local secMov = T_AV:Section({ Title = "Movement", Opened = true, Box = true })
-secMov:Slider({ Title = "Walk Speed", Desc = "Current: " .. tostring(State.Move.ws), Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, IsTooltip = true, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
-secMov:Slider({ Title = "Jump Power", Desc = "Current: " .. tostring(State.Move.jp), Step = 1, Value = { Min = 50, Max = 500, Default = 50 }, IsTooltip = true, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end end })
+secMov:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, IsTooltip = true, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
+secMov:Slider({ Title = "Jump Power", Step = 1, Value = { Min = 50, Max = 500, Default = 50 }, IsTooltip = true, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end end })
 secMov:Toggle({ Title = "Infinite Jump", Value = false, Type = "Toggle", Icon = "arrow-big-up", Callback = function(v) if v then State.Move.infJ = TrackC(UIS.JumpRequest:Connect(function() if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end end)) else if State.Move.infJ then State.Move.infJ:Disconnect(); State.Move.infJ = nil end end; notify("Infinite Jump", v and "ON" or "OFF", 1.5) end })
 local secAbi = T_AV:Section({ Title = "Abilities", Opened = true, Box = true })
 secAbi:Toggle({ Title = "Fly", Value = false, Type = "Toggle", Icon = "bird", Callback = function(v) toggleFly(v) end })
-secAbi:Slider({ Title = "Fly Speed", Desc = "Current: " .. tostring(State.Move.flyS), Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, IsTooltip = true, Callback = function(v) State.Move.flyS = v end })
+secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, IsTooltip = true, Callback = function(v) State.Move.flyS = v end })
 local noclipConn = nil
 secAbi:Toggle({ Title = "NoClip", Value = false, Type = "Toggle", Icon = "ghost", Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end end; notify("NoClip", v and "ON" or "OFF", 1.5) end })
 local secFling = T_AV:Section({ Title = "Hard Fling (Safe)", Opened = true, Box = true })
 secFling:Toggle({ Title = "Hard Fling", Value = false, Type = "Toggle", Icon = "zap", Callback = function(v) if v then startHardFling() else stopHardFling() end end })
 secFling:Dropdown({ Title = "Fling Mode", Values = { "Spin", "Shake" }, Value = "Spin", SearchBarEnabled = false, Callback = function(v) State.HardFling.mode = v; notify("Fling Mode", v, 1.5) end })
-secFling:Slider({ Title = "Fling Power", Desc = "Current: " .. tostring(State.HardFling.power), Step = 500, Value = { Min = 1000, Max = 50000, Default = 10000 }, IsTooltip = true, Callback = function(v) State.HardFling.power = v end })
+secFling:Slider({ Title = "Fling Power", Step = 500, Value = { Min = 1000, Max = 50000, Default = 10000 }, IsTooltip = true, Callback = function(v) State.HardFling.power = v end })
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 3: TELEPORT
 -- ══════════════════════════════════════════════════════════════
 local T_TP = Window:Tab({ Title = "Teleport", Icon = "crosshair", ShowTabTitle = true, Border = true })
 local secDirTP = T_TP:Section({ Title = "Direct Teleport", Opened = true, Box = true })
-secDirTP:Toggle({ Title = "Smart Double-Tap TP", Desc = "Mobile: Double-tap | PC: Press T", Value = false, Type = "Toggle", Icon = "pointer", Callback = toggleSmartTP })
+secDirTP:Paragraph({ Title = "Double-Click TP", Desc = "Double-tap/click anywhere to teleport. Always active!" })
 local secTP = T_TP:Section({ Title = "Target Teleport", Opened = true, Box = true })
 local tpTarget = ""
 secTP:Input({ Title = "Search Player", Placeholder = "Type name...", Icon = "search", Callback = function(v) tpTarget = v end })
@@ -1045,15 +1035,7 @@ local T_CAM = Window:Tab({ Title = "Spectator", Icon = "focus", ShowTabTitle = t
 local secZoom = T_CAM:Section({ Title = "Zoom Override", Opened = true, Box = true })
 secZoom:Toggle({ Title = "Max Zoom Out", Value = false, Type = "Toggle", Icon = "zoom-out", Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Zoom", v and "Max" or "Default", 1.5) end })
 local secSP = T_CAM:Section({ Title = "Spectator Mode", Opened = true, Box = true })
-local specDropdown = secSP:Dropdown({ Title = "Select Target", Values = getDisplayNamesWithSelf(), SearchBarEnabled = false, Callback = function(v) 
-    local str = tostring(v)
-    if str == "[Self]" then Spec.target = LP; Spec.isSelf = true; Spec.orbitYaw = 0; Spec.orbitPitch = 20; Spec.fpYaw = 0; notify("Spectator", "Self", 1.5)
-    else local p = findPlayerByDisplay(str)
-        if p then Spec.target = p; Spec.isSelf = false
-            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ(); Spec.orbitYaw = math.deg(ry); Spec.orbitPitch = 20; Spec.fpYaw = math.deg(ry) end
-            notify("Spectator", p.DisplayName, 1.5) end
-    end
-end })
+local specDropdown = secSP:Dropdown({ Title = "Select Target", Values = getDisplayNamesWithSelf(), SearchBarEnabled = false, Callback = function(v) local str = tostring(v); if str == "[Self]" then Spec.target = LP; Spec.isSelf = true; Spec.orbitYaw = 0; Spec.orbitPitch = 20; Spec.fpYaw = 0; notify("Spectator", "Self", 1.5) else local p = findPlayerByDisplay(str); if p then Spec.target = p; Spec.isSelf = false; if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ(); Spec.orbitYaw = math.deg(ry); Spec.orbitPitch = 20; Spec.fpYaw = math.deg(ry) end; notify("Spectator", p.DisplayName, 1.5) end end end })
 secSP:Button({ Title = "Refresh Target List", Icon = "refresh-cw", Callback = function() pcall(function() specDropdown:Refresh(getDisplayNamesWithSelf(), true) end); notify("Spectator", "List refreshed", 1.5) end })
 secSP:Toggle({ Title = "Enable Spectate", Value = false, Type = "Toggle", Icon = "eye", Callback = function(v) Spec.active = v; if v then if not Spec.target or not Spec.target.Character then if Spec.isSelf and LP.Character then else Spec.active = false; notify("Error", "No target", 2); return end end; Spec.origFov = Cam.FieldOfView; startSpecCapture(); startSpecLoop(); notify("Spectator", "ON", 2) else stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov; notify("Spectator", "OFF", 1.5) end end })
 secSP:Toggle({ Title = "First Person View", Value = false, Type = "Checkbox", Icon = "view", Callback = function(v) Spec.mode = v and "first" or "third"; notify("Spectator", v and "First Person" or "Third Person", 1.5) end })
@@ -1077,7 +1059,6 @@ local T_WO = Window:Tab({ Title = "Visuals", Icon = "layers", ShowTabTitle = tru
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true, Box = true })
 local filterValues = { "Default", "Custom", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue" }
 secFilter:Dropdown({ Title = "Select Filter", Values = filterValues, Value = "Default", SearchBarEnabled = false, Callback = function(v) applyFilter(v) end })
-
 local secCustom = T_WO:Section({ Title = "Custom FX", Opened = true, Box = true })
 secCustom:Slider({ Title = "Tint Red", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintR = v; applyCustomFilter() end })
 secCustom:Slider({ Title = "Tint Green", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintG = v; applyCustomFilter() end })
@@ -1089,18 +1070,10 @@ secCustom:Slider({ Title = "Exposure", Step = 0.1, Value = { Min = -5, Max = 5, 
 secCustom:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = { Min = 0, Max = 5, Default = 0 }, Callback = function(v) State.CustomFilter.bloomIntensity = v; applyCustomFilter() end })
 secCustom:Slider({ Title = "Bloom Size", Step = 1, Value = { Min = 0, Max = 100, Default = 24 }, Callback = function(v) State.CustomFilter.bloomSize = v; applyCustomFilter() end })
 secCustom:Slider({ Title = "ClockTime", Step = 0.5, Value = { Min = 0, Max = 24, Default = 14 }, Callback = function(v) State.CustomFilter.clockTime = v; applyCustomFilter() end })
-secCustom:Button({ Title = "Reset Custom FX", Icon = "rotate-ccw", Callback = function()
-    State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255
-    State.CustomFilter.saturation = 0; State.CustomFilter.contrast = 0; State.CustomFilter.brightness = 0
-    State.CustomFilter.exposure = 0; State.CustomFilter.bloomIntensity = 0; State.CustomFilter.bloomSize = 24
-    State.CustomFilter.clockTime = 14; State.CustomFilter.dofIntensity = 0; State.CustomFilter.dofDistance = 50
-    applyCustomFilter(); notify("Visuals", "FX Reset", 2)
-end})
-
+secCustom:Button({ Title = "Reset Custom FX", Icon = "rotate-ccw", Callback = function() State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0; State.CustomFilter.contrast = 0; State.CustomFilter.brightness = 0; State.CustomFilter.exposure = 0; State.CustomFilter.bloomIntensity = 0; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 14; State.CustomFilter.dofIntensity = 0; State.CustomFilter.dofDistance = 50; applyCustomFilter(); notify("Visuals", "FX Reset", 2) end })
 local secDOF = T_WO:Section({ Title = "Depth of Field", Opened = true, Box = true })
 secDOF:Slider({ Title = "Blur Intensity", Step = 0.1, Value = { Min = 0, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.dofIntensity = v; applyCustomFilter() end })
 secDOF:Slider({ Title = "Focus Distance", Step = 5, Value = { Min = 1, Max = 500, Default = 50 }, Callback = function(v) State.CustomFilter.dofDistance = v; applyCustomFilter() end })
-
 local secGfx = T_WO:Section({ Title = "Graphics", Opened = false, Box = true })
 local gfxMap = { [1] = "Level01", [2] = "Level03", [3] = "Level05", [4] = "Level07", [5] = "Level09", [6] = "Level11", [7] = "Level13", [8] = "Level15", [9] = "Level17", [10] = "Level21" }
 secGfx:Slider({ Title = "Quality Level", Step = 1, Value = { Min = 1, Max = 10, Default = 1 }, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end; notify("Graphics", gfxMap[v], 1.5) end })
@@ -1127,49 +1100,13 @@ local T_UTIL = Window:Tab({ Title = "Logger", Icon = "terminal", ShowTabTitle = 
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true, Box = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Type = "Toggle", Icon = "file-text", Callback = function(v) State.Utility.chatLog = v; if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end; notify("Logger", v and "ON" or "OFF", 1.5) end })
 chatTargetLabel = secChat:Paragraph({ Title = "Targets", Desc = "None" })
-chatTargetDrop = secChat:Dropdown({ Title = "Select Targets", Multi = true, AllowNone = true, Values = getDisplayNames(), SearchBarEnabled = false, Callback = function(selected)
-    State.Utility.chatTargets = {}
-    if selected and typeof(selected) == "table" then for _, name in ipairs(selected) do table.insert(State.Utility.chatTargets, tostring(name)) end end
-    if #State.Utility.chatTargets > 0 then pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end)
-    else pcall(function() chatTargetLabel:SetDesc("None") end) end
-end })
+chatTargetDrop = secChat:Dropdown({ Title = "Select Targets", Multi = true, AllowNone = true, Values = getDisplayNames(), SearchBarEnabled = false, Callback = function(selected) State.Utility.chatTargets = {}; if selected and typeof(selected) == "table" then for _, name in ipairs(selected) do table.insert(State.Utility.chatTargets, tostring(name)) end end; if #State.Utility.chatTargets > 0 then pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end) else pcall(function() chatTargetLabel:SetDesc("None") end) end end })
 secChat:Button({ Title = "Clear Targets", Icon = "x", Callback = function() State.Utility.chatTargets = {}; pcall(function() chatTargetLabel:SetDesc("None") end); pcall(function() chatTargetDrop:SetValues({}); task.wait(0.05); chatTargetDrop:SetValues(getDisplayNames()) end); notify("Logger", "Targets cleared", 1.5) end })
 secChat:Button({ Title = "Refresh List", Icon = "refresh-cw", Callback = function() pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end); notify("Logger", "List refreshed", 1.5) end })
 chatLogPanel = secChat:Paragraph({ Title = "Console", Desc = "Belum ada chat..." })
 secChat:Button({ Title = "Clear Log", Icon = "trash-2", Callback = function() State.Utility.chatHistory = {}; pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end); notify("Logger", "Log cleared", 1.5) end })
-
-task.spawn(function()
-    local function onChat(senderName, message)
-        if not State.Utility.chatLog then return end
-        if #State.Utility.chatTargets == 0 then return end
-        local cleanSender = senderName:lower():match("^%s*(.-)%s*$")
-        for _, target in ipairs(State.Utility.chatTargets) do
-            local cleanTarget = target:lower():match("^%s*(.-)%s*$")
-            if cleanSender == cleanTarget then
-                local entry = string.format("[%s] %s: %s", os.date("%H:%M:%S"), senderName, message)
-                table.insert(State.Utility.chatHistory, entry)
-                if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end
-                notify("Chat", senderName .. ": " .. message, 2)
-                break
-            end
-        end
-    end
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        pcall(function() TrackC(TextChatService.MessageReceived:Connect(function(msg) if msg.TextSource then onChat(msg.TextSource.Name, msg.Text) end end)) end)
-    end
-    local function connectLegacyChat(player) pcall(function() TrackC(player.Chatted:Connect(function(msg) onChat(player.DisplayName, msg) end)) end) end
-    for _, p in ipairs(Players:GetPlayers()) do if p ~= LP then connectLegacyChat(p) end end
-    TrackC(Players.PlayerAdded:Connect(function(p) if p ~= LP then connectLegacyChat(p) end end))
-end)
-
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        task.wait(0.5)
-        if chatLogPanel and State.Utility.chatLog then
-            pcall(function() local t = table.concat(State.Utility.chatHistory, "\n"); if #t > 2000 then t = t:sub(-2000) end; if #t == 0 then t = "Belum ada chat..." end; chatLogPanel:SetDesc(t) end)
-        end
-    end
-end)
+task.spawn(function() local function onChat(senderName, message) if not State.Utility.chatLog then return end; if #State.Utility.chatTargets == 0 then return end; local cleanSender = senderName:lower():match("^%s*(.-)%s*$"); for _, target in ipairs(State.Utility.chatTargets) do local cleanTarget = target:lower():match("^%s*(.-)%s*$"); if cleanSender == cleanTarget then local entry = string.format("[%s] %s: %s", os.date("%H:%M:%S"), senderName, message); table.insert(State.Utility.chatHistory, entry); if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end; notify("Chat", senderName .. ": " .. message, 2); break end end end; if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then pcall(function() TrackC(TextChatService.MessageReceived:Connect(function(msg) if msg.TextSource then onChat(msg.TextSource.Name, msg.Text) end end)) end) end; local function connectLegacyChat(player) pcall(function() TrackC(player.Chatted:Connect(function(msg) onChat(player.DisplayName, msg) end)) end) end; for _, p in ipairs(Players:GetPlayers()) do if p ~= LP then connectLegacyChat(p) end end; TrackC(Players.PlayerAdded:Connect(function(p) if p ~= LP then connectLegacyChat(p) end end)) end)
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); if chatLogPanel and State.Utility.chatLog then pcall(function() local t = table.concat(State.Utility.chatHistory, "\n"); if #t > 2000 then t = t:sub(-2000) end; if #t == 0 then t = "Belum ada chat..." end; chatLogPanel:SetDesc(t) end) end end end)
 
 -- ══════════════════════════════════════════════════════════════
 --  TAB 9: PROTECTION
@@ -1183,13 +1120,7 @@ secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Icon = "
 secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Icon = "shuffle", Callback = function() pcall(function() local req = (syn and syn.request) or (http and http.request) or http_request or request; if not req then notify("Error", "HTTP not supported", 2); return end; local res = req({ Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100", Method = "GET" }); if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body); if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); notify("Server", "Hopping...", 2); return end end end end end) end })
 local secPerf = T_SEC:Section({ Title = "Performance Tweaks", Opened = true, Box = true })
 local advCache = { level = nil, shadows = true, brightness = 5, clockTime = 14, fogEnd = 100000, mats = {}, texs = {} }
-secPerf:Toggle({ Title = "FPS Boost", Value = false, Type = "Toggle", Icon = "zap", Callback = function(v)
-    State.Security.antiLag = v
-    if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end); advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness; advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd; pcall(function() settings().Rendering.QualityLevel = 1 end); Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000
-        for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end end; notify("Performance", "FPS Boost ON", 2)
-    else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end); Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness; Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd
-        for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end; for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end; advCache.mats = {}; advCache.texs = {}; notify("Performance", "Graphics restored", 2) end
-end})
+secPerf:Toggle({ Title = "FPS Boost", Value = false, Type = "Toggle", Icon = "zap", Callback = function(v) State.Security.antiLag = v; if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end); advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness; advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd; pcall(function() settings().Rendering.QualityLevel = 1 end); Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000; for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end end; notify("Performance", "FPS Boost ON", 2) else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end); Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness; Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd; for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end; for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end; advCache.mats = {}; advCache.texs = {}; notify("Performance", "Graphics restored", 2) end end })
 local secCamLock = T_SEC:Section({ Title = "Camera Lock", Opened = true, Box = true })
 secCamLock:Toggle({ Title = "Force Shift Lock", Value = false, Type = "Toggle", Icon = "lock", Callback = function(v) toggleShiftLock(v) end })
 
@@ -1204,10 +1135,6 @@ secCfg:Button({ Title = "Save Config", Icon = "save", Callback = function() pcal
 local configDrop = secCfg:Dropdown({ Title = "Load Config", Values = getConfigList(), SearchBarEnabled = false, Callback = function(selected) currentConfig = selected; if selected == "No config" then return end; pcall(function() if isfile and readfile and isfile("XKID_HUB/" .. selected .. ".json") then local data = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if data then if data.Move then State.Move.ws = data.Move.ws or 16; State.Move.jp = data.Move.jp or 50; State.Move.flyS = data.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if data.ESP then State.ESP.tracerMode = data.ESP.tracerMode or "Bottom"; State.ESP.maxDrawDistance = data.ESP.maxDrawDistance or 300; State.ESP.highlightMode = data.ESP.highlightMode or false end; if data.Security and data.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(data.Security.shiftLock) end; if data.AutoLike then State.AutoLike.radius = data.AutoLike.radius or 100; State.AutoLike.minCD = data.AutoLike.minCD or 2; State.AutoLike.maxCD = data.AutoLike.maxCD or 6; State.AutoLike.likeBack = data.AutoLike.likeBack or false end; if data.HardFling then State.HardFling.power = data.HardFling.power or 5000; State.HardFling.mode = data.HardFling.mode or "Spin" end; if data.CustomFilter then for k, v in pairs(data.CustomFilter) do State.CustomFilter[k] = v end; applyCustomFilter() end; notify("Config", "Loaded: " .. selected, 2) end end end) end })
 secCfg:Button({ Title = "Delete Config", Icon = "trash-2", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json"); pcall(function() configDrop:Refresh(getConfigList(), true) end); currentConfig = "No config"; notify("Config", "Deleted", 2) end end) end end })
 secCfg:Button({ Title = "Refresh Files", Icon = "refresh-cw", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end); notify("Config", "Files refreshed", 1.5) end })
-
--- ══════════════════════════════════════════════════════════════
---  AUTO LIKE SECTION
--- ══════════════════════════════════════════════════════════════
 local secAutoLike = T_SET:Section({ Title = "Auto Like (Smart)", Opened = true, Box = true })
 secAutoLike:Toggle({ Title = "Auto Like", Value = false, Type = "Toggle", Icon = "heart", Callback = function(v) if v then startAutoLike() else stopAutoLike() end end })
 secAutoLike:Toggle({ Title = "Like Back", Desc = "Auto-like players who liked you", Value = false, Type = "Toggle", Icon = "heart-handshake", Callback = function(v) State.AutoLike.likeBack = v; notify("Like Back", v and "ON" or "OFF", 1.5) end })
@@ -1222,5 +1149,5 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(funct
 -- ══════════════════════════════════════════════════════════════
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
-notify("System", "XKID v" .. CURRENT_VERSION .. " Ready", 3)
-print("✅ XKID v" .. CURRENT_VERSION .. " - Double-Tap TP · Minimal Notif · Delta Ready")
+notify("System", "XKID v" .. CURRENT_VERSION .. " Ready — Double-Click TP", 3)
+print("✅ XKID v" .. CURRENT_VERSION .. " - Double-Click TP · Mobile Friendly · Delta Ready")
