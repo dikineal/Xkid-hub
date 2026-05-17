@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v4.1.0 — Self-Spectate · Safe Fling · Like Back · Custom Filter · Inventory TP
+  📌 v4.1.1 — Self-Spec · Safe Fling · Like Back · Custom FX · Inv TP
   🔧 ROBOX Build | Delta Compatible
 ]]
 
@@ -32,7 +32,7 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "4.1.0"
+local CURRENT_VERSION = "4.1.1"
 
 -- ══════════════════════════════════════════════════════════════
 --  LIGHTING CACHE
@@ -129,13 +129,13 @@ task.wait(0.2)
 local State = {
     Move      = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
     Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
-    HardFling = { active = false, power = 5000, mode = "Spin", currentPower = 0, rampUpActive = false },
+    HardFling = { active = false, power = 10000, mode = "Spin", currentPower = 0, rampUpActive = false },
     Teleport  = { selectedTarget = "", clickConn = nil, clickActive = false, lastTap = 0, invTPActive = false },
     Security  = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false },
     Cinema    = { hideUI = false, hideNamePlayer = false, cachedGuis = {} },
     Avatar    = { isRefreshing = false },
     Utility   = { chatLog = false, chatTargets = {}, chatHistory = {} },
-    AutoLike  = { active = false, thread = nil, lastTarget = nil, count = 0, radius = 100, minCD = 2, maxCD = 6, likeBack = false, likedBackPlayers = {}, lastLikeCount = 0 },
+    AutoLike  = { active = false, thread = nil, lastTarget = nil, count = 0, radius = 100, minCD = 2, maxCD = 6, likeBack = false, likedBackPlayers = {}, lastLikeCount = 0, notifThreshold = 5, notifCounter = 0 },
     CustomFilter = { tintR = 255, tintG = 255, tintB = 255, saturation = 0, contrast = 0, brightness = 0, bloomIntensity = 0, bloomSize = 24, clockTime = 14, dofIntensity = 0, dofDistance = 50 },
     ESP = {
         active          = false,
@@ -227,20 +227,16 @@ local function isOnGround()
     params.FilterDescendantsInstances = { LP.Character }
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
-local function isBackpackOpen()
-    -- Cek PlayerGui
-    local backpack = LP.PlayerGui:FindFirstChild("Backpack")
-    if backpack and backpack:IsA("ScreenGui") and backpack.Enabled then
-        return true
-    end
-    -- Cek CoreGui
-    pcall(function()
-        for _, v in pairs(CoreGui:GetChildren()) do
-            if v.Name == "Backpack" and v:IsA("ScreenGui") and v.Enabled then
-                return true
-            end
+local function isAnyMenuOpen()
+    for _, gui in pairs(LP.PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "WindUI" then
+            -- Check if it's not our own UIs
+            local ourUIs = {"XKID_FreecamUI", "XKID_InvTP"}
+            local isOurs = false
+            for _, n in ipairs(ourUIs) do if gui.Name == n then isOurs = true break end end
+            if not isOurs then return true end
         end
-    end)
+    end
     return false
 end
 
@@ -289,8 +285,6 @@ local function startAFK()
         task.wait(30)
         AFKSystem.debounce = false
     end))
-    
-    notify("Anti AFK", "Ready — will prevent idle kick", 2)
 end
 
 local function stopAFK()
@@ -300,7 +294,6 @@ local function stopAFK()
         AFKSystem.idleConn:Disconnect()
         AFKSystem.idleConn = nil
     end
-    notify("Anti AFK", "Disabled", 2)
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -361,10 +354,7 @@ local pendingRefreshJP = 50
 local pendingRefreshZoom = 400
 
 local function refreshCharacter()
-    if State.Avatar.isRefreshing then
-        notify("Refresh", "Already refreshing — wait...", 2)
-        return
-    end
+    if State.Avatar.isRefreshing then return end
     
     local char = LP.Character
     local hrp = getRoot()
@@ -381,11 +371,7 @@ local function refreshCharacter()
     pendingRefreshJP = State.Move.jp
     pendingRefreshZoom = LP.CameraMaxZoomDistance
     
-    notify("Refresh", "Reloading character...", 1.5)
-    
-    pcall(function()
-        char:BreakJoints()
-    end)
+    pcall(function() char:BreakJoints() end)
     
     local waited = 0
     repeat
@@ -411,7 +397,6 @@ local function refreshCharacter()
     end)
 end
 
--- CharacterAdded listener buat restore posisi setelah refresh
 TrackC(LP.CharacterAdded:Connect(function(newChar)
     if not State.Avatar.isRefreshing then return end
     if not pendingRefreshCF then return end
@@ -440,8 +425,6 @@ TrackC(LP.CharacterAdded:Connect(function(newChar)
         Cam.CameraSubject = newHum
         Cam.CameraType = Enum.CameraType.Custom
         pcall(function() LP.CameraMaxZoomDistance = pendingRefreshZoom end)
-        
-        notify("Refresh", "Character reloaded — outfit updated", 2)
     end
     
     State.Avatar.isRefreshing = false
@@ -449,31 +432,33 @@ TrackC(LP.CharacterAdded:Connect(function(newChar)
 end))
 
 -- ══════════════════════════════════════════════════════════════
---  INVENTORY TP FLOATING BUTTON
+--  INVENTORY TP FLOATING BUTTON (ScreenGui)
 -- ══════════════════════════════════════════════════════════════
-local InvTPButton = Instance.new("ScreenGui")
-InvTPButton.Name = "XKID_InvTP"
-InvTPButton.ResetOnSpawn = false
-InvTPButton.ZIndexBehavior = Enum.ZIndexBehavior.Global
-InvTPButton.Enabled = false
-InvTPButton.Parent = CoreGui
+local InvTPGui = Instance.new("ScreenGui")
+InvTPGui.Name = "XKID_InvTP"
+InvTPGui.ResetOnSpawn = false
+InvTPGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+InvTPGui.Enabled = false
+InvTPGui.Parent = CoreGui
 
-local InvTPBtn = Instance.new("TextButton", InvTPButton)
+local InvTPBtn = Instance.new("TextButton", InvTPGui)
 InvTPBtn.Name = "TPBtn"
-InvTPBtn.Size = UDim2.new(0, 56, 0, 56)
-InvTPBtn.Position = UDim2.new(1, -70, 1, -140)
+InvTPBtn.Size = UDim2.new(0, 44, 0, 44)
+InvTPBtn.Position = UDim2.new(1, -58, 1, -130)
 InvTPBtn.BackgroundColor3 = Color3.fromRGB(220, 20, 60)
-InvTPBtn.BackgroundTransparency = 0.25
-InvTPBtn.Text = "📍\nTP"
+InvTPBtn.BackgroundTransparency = 0.2
+InvTPBtn.Text = "📍"
 InvTPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-InvTPBtn.TextSize = 14
+InvTPBtn.TextSize = 20
 InvTPBtn.Font = Enum.Font.GothamBold
 InvTPBtn.AutoButtonColor = false
-Instance.new("UICorner", InvTPBtn).CornerRadius = UDim.new(0, 14)
+InvTPBtn.ZIndex = 999
+Instance.new("UICorner", InvTPBtn).CornerRadius = UDim.new(0, 12)
 local invStroke = Instance.new("UIStroke", InvTPBtn)
 invStroke.Color = Color3.fromRGB(255, 255, 255)
 invStroke.Thickness = 1.5
-invStroke.Transparency = 0.4
+invStroke.Transparency = 0.3
+invStroke.ZIndex = 999
 
 InvTPBtn.MouseButton1Click:Connect(function()
     local m = LP:GetMouse()
@@ -481,7 +466,6 @@ InvTPBtn.MouseButton1Click:Connect(function()
         local hrp = getRoot()
         if hrp then
             hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0))
-            notify("Inv TP", "Teleported!", 1)
         end
     end
 end)
@@ -493,27 +477,25 @@ InvTPBtn.InputBegan:Connect(function(inp)
             local hrp = getRoot()
             if hrp then
                 hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0))
-                notify("Inv TP", "Teleported!", 1)
             end
         end
     end
 end)
 
--- Monitor inventory state
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         if State.Teleport.clickActive then
-            local open = isBackpackOpen()
+            local open = isAnyMenuOpen()
             if open and not State.Teleport.invTPActive then
                 State.Teleport.invTPActive = true
-                InvTPButton.Enabled = true
+                InvTPGui.Enabled = true
             elseif not open and State.Teleport.invTPActive then
                 State.Teleport.invTPActive = false
-                InvTPButton.Enabled = false
+                InvTPGui.Enabled = false
             end
         else
-            if InvTPButton.Enabled then
-                InvTPButton.Enabled = false
+            if InvTPGui.Enabled then
+                InvTPGui.Enabled = false
                 State.Teleport.invTPActive = false
             end
         end
@@ -742,12 +724,10 @@ local function toggleSmartTP(v)
                 State.Teleport.lastTap = tick()
             end
         end))
-        notify("Smart TP", "ON — Ctrl+Click / Double-Tap to TP", 2)
     else
         if State.Teleport.clickConn then State.Teleport.clickConn:Disconnect(); State.Teleport.clickConn = nil end
-        InvTPButton.Enabled = false
+        InvTPGui.Enabled = false
         State.Teleport.invTPActive = false
-        notify("Smart TP", "OFF", 1.5)
     end
 end
 
@@ -869,8 +849,10 @@ local function startSpecLoop()
             end
             
             if not targetHrp then
-                Spec.active = false; stopSpecLoop(); stopSpecCapture()
-                Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov
+                if not Spec.isSelf then
+                    Spec.active = false; stopSpecLoop(); stopSpecCapture()
+                    Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov
+                end
                 return
             end
             
@@ -893,7 +875,7 @@ end
 local function stopSpecLoop() RS:UnbindFromRenderStep("XKIDSpec") end
 
 -- ══════════════════════════════════════════════════════════════
---  AUTO LIKE ENGINE (with Like Back)
+--  AUTO LIKE ENGINE (with Like Back + Notif Threshold)
 -- ══════════════════════════════════════════════════════════════
 local function getLikeRemotes()
     local remotes = ReplicatedStorage:FindFirstChild("Remotes")
@@ -949,6 +931,7 @@ local function likeRandomPlayer()
     local success = pcall(function() likePlayer:FireServer(target) end)
     if success then
         State.AutoLike.count = State.AutoLike.count + 1
+        State.AutoLike.notifCounter = State.AutoLike.notifCounter + 1
         return true, target.DisplayName
     end
     return false, "Failed"
@@ -966,7 +949,6 @@ local function checkLikeBack()
     end
     
     if currentCount > State.AutoLike.lastLikeCount then
-        -- Someone liked us! Find who and like back
         local _, likePlayer = getLikeRemotes()
         if not likePlayer then return end
         
@@ -976,9 +958,8 @@ local function checkLikeBack()
                     likePlayer:FireServer(p)
                     State.AutoLike.likedBackPlayers[p.UserId] = true
                     State.AutoLike.count = State.AutoLike.count + 1
-                    notify("Like Back", "Liked back: " .. p.DisplayName, 1.5)
                 end)
-                break -- Like back one at a time
+                break
             end
         end
     end
@@ -990,19 +971,18 @@ local function startAutoLike()
     if State.AutoLike.active then return end
     State.AutoLike.active = true
     
-    -- Init like count
     local count = getMyLikeCount()
     if count then State.AutoLike.lastLikeCount = count end
     
     State.AutoLike.thread = task.spawn(function()
         while State.AutoLike.active and getgenv()._XKID_RUNNING do
-            -- Like back check dulu
             checkLikeBack()
             
-            -- Then like random
             local ok, result = likeRandomPlayer()
-            if ok then
+            -- Notif only every N likes
+            if ok and State.AutoLike.notifCounter >= State.AutoLike.notifThreshold then
                 notify("Auto Like", "Liked " .. result .. " | Total: " .. State.AutoLike.count, 1.5)
+                State.AutoLike.notifCounter = 0
             end
             
             local cd = math.random(State.AutoLike.minCD * 10, State.AutoLike.maxCD * 10) / 10
@@ -1021,10 +1001,11 @@ local function stopAutoLike()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  HARD FLING SAFE (Spin + Shake)
+--  HARD FLING SAFE (Spin + Shake) — BodyAngularVelocity
 -- ══════════════════════════════════════════════════════════════
 local hardFlingConn = nil
 local hardFlingRampConn = nil
+local hardFlingBAV = nil
 
 local function startHardFling()
     if State.HardFling.active then return end
@@ -1033,7 +1014,13 @@ local function startHardFling()
     State.HardFling.currentPower = 0
     State.HardFling.rampUpActive = true
     
-    -- Ramp-up over 2 seconds
+    local hrp = getRoot()
+    if hrp then
+        hardFlingBAV = Instance.new("BodyAngularVelocity", hrp)
+        hardFlingBAV.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        hardFlingBAV.P = 100000
+    end
+    
     local rampDuration = 2
     local rampStart = tick()
     hardFlingRampConn = TrackC(RS.Heartbeat:Connect(function()
@@ -1048,7 +1035,6 @@ local function startHardFling()
         end
     end))
     
-    -- Main fling loop
     hardFlingConn = TrackC(RS.Heartbeat:Connect(function()
         if not State.HardFling.active then return end
         
@@ -1056,26 +1042,24 @@ local function startHardFling()
         if not r then return end
         
         if State.HardFling.mode == "Spin" then
-            pcall(function()
-                r.AssemblyAngularVelocity = Vector3.new(0, State.HardFling.currentPower, 0)
-            end)
+            if hardFlingBAV and hardFlingBAV.Parent then
+                hardFlingBAV.AngularVelocity = Vector3.new(0, State.HardFling.currentPower, 0)
+            end
         elseif State.HardFling.mode == "Shake" then
-            pcall(function()
-                local shakeX = (math.random() - 0.5) * State.HardFling.currentPower * 0.3
-                local shakeZ = (math.random() - 0.5) * State.HardFling.currentPower * 0.3
-                r.AssemblyLinearVelocity = Vector3.new(shakeX, 0, shakeZ)
-            end)
+            if hardFlingBAV and hardFlingBAV.Parent then
+                local shakeX = (math.random() - 0.5) * State.HardFling.currentPower * 0.5
+                local shakeY = (math.random() - 0.5) * State.HardFling.currentPower * 0.3
+                local shakeZ = (math.random() - 0.5) * State.HardFling.currentPower * 0.5
+                hardFlingBAV.AngularVelocity = Vector3.new(shakeX, shakeY, shakeZ)
+            end
         end
         
-        -- NoClip during fling
         if LP.Character then
             for _, p in pairs(LP.Character:GetDescendants()) do
                 if p:IsA("BasePart") then p.CanCollide = false end
             end
         end
     end))
-    
-    notify("Hard Fling", "ON — " .. State.HardFling.mode .. " mode (Safe)", 2)
 end
 
 local function stopHardFling()
@@ -1083,14 +1067,9 @@ local function stopHardFling()
     State.HardFling.rampUpActive = false
     State.HardFling.currentPower = 0
     
-    if hardFlingConn then
-        hardFlingConn:Disconnect()
-        hardFlingConn = nil
-    end
-    if hardFlingRampConn then
-        hardFlingRampConn:Disconnect()
-        hardFlingRampConn = nil
-    end
+    if hardFlingConn then hardFlingConn:Disconnect(); hardFlingConn = nil end
+    if hardFlingRampConn then hardFlingRampConn:Disconnect(); hardFlingRampConn = nil end
+    if hardFlingBAV then hardFlingBAV:Destroy(); hardFlingBAV = nil end
     
     local r = getRoot()
     if r then
@@ -1099,48 +1078,15 @@ local function stopHardFling()
             r.AssemblyLinearVelocity = Vector3.zero
         end)
     end
-    
-    notify("Hard Fling", "OFF", 1.5)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  FILTER FUNCTIONS (16 PRESETS + CUSTOM + DEPTH OF FIELD)
+--  FILTER FUNCTIONS
 -- ══════════════════════════════════════════════════════════════
 local function resetFilterOnly()
     for _, v in pairs(Lighting:GetChildren()) do
-        if v.Name == "_XKID_FILTER" then v:Destroy() end
+        if v.Name == "_XKID_FILTER" or v.Name == "_XKID_DOF" then v:Destroy() end
     end
-end
-
-local function applyFilter(filter)
-    resetFilterOnly()
-    Lighting.ClockTime = originalLighting.ClockTime; Lighting.Brightness = originalLighting.Brightness
-    Lighting.Ambient = originalLighting.Ambient; Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
-    Lighting.GlobalShadows = originalLighting.GlobalShadows
-    if filter == "Default" then notify("Filter", "Reset to game default", 2); return end
-    if filter == "Custom" then
-        applyCustomFilter()
-        return
-    end
-    local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"
-    local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"; bloom.Intensity = 0; bloom.Size = 24
-    if filter == "Mendung HD" then cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15; bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7
-    elseif filter == "Cool Blue HD" then cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2
-    elseif filter == "Soft Fade HD" then cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3
-    elseif filter == "Adaptif Langit HD" then cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05; bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5
-    elseif filter == "Edgy HD" then cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1; bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8
-    elseif filter == "Full Bright HD" then cc:Destroy(); bloom:Destroy(); Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12; Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-    elseif filter == "Soft Pastel HD" then cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05; bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
-    elseif filter == "Cinematic Soft" then cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 17
-    elseif filter == "Ultra HD" then cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
-    elseif filter == "Realistic" then cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
-    elseif filter == "Night HD" then cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1
-    elseif filter == "Senja" then cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05; bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5
-    elseif filter == "Cinematic Film" then cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05; bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16
-    elseif filter == "Golden Hour" then cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5
-    elseif filter == "Moody Blue" then cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1; bloom.Intensity = 0.1; Lighting.ClockTime = 2
-    end
-    notify("Filter", filter .. " applied", 2)
 end
 
 local function applyCustomFilter()
@@ -1159,19 +1105,67 @@ local function applyCustomFilter()
     
     Lighting.ClockTime = State.CustomFilter.clockTime
     
-    -- Depth of Field
     if State.CustomFilter.dofIntensity > 0 then
         local dof = Instance.new("DepthOfFieldEffect", Lighting)
         dof.Name = "_XKID_DOF"
         dof.FarIntensity = State.CustomFilter.dofIntensity
         dof.FocusDistance = State.CustomFilter.dofDistance
-    else
-        for _, v in pairs(Lighting:GetChildren()) do
-            if v.Name == "_XKID_DOF" then v:Destroy() end
-        end
+    end
+end
+
+local function applyFilter(filter)
+    resetFilterOnly()
+    Lighting.ClockTime = originalLighting.ClockTime; Lighting.Brightness = originalLighting.Brightness
+    Lighting.Ambient = originalLighting.Ambient; Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+    Lighting.GlobalShadows = originalLighting.GlobalShadows
+    
+    if filter == "Default" then
+        -- Reset custom filter state to default
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255
+        State.CustomFilter.saturation = 0; State.CustomFilter.contrast = 0; State.CustomFilter.brightness = 0
+        State.CustomFilter.bloomIntensity = 0; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 14
+        State.CustomFilter.dofIntensity = 0; State.CustomFilter.dofDistance = 50
+        return
     end
     
-    notify("Filter", "Custom filter applied", 2)
+    if filter == "Custom" then
+        applyCustomFilter()
+        return
+    end
+    
+    local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"
+    local bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER"; bloom.Intensity = 0; bloom.Size = 24
+    if filter == "Mendung HD" then cc.TintColor = Color3.fromRGB(180, 185, 200); cc.Saturation = -0.3; cc.Contrast = 0.1; cc.Brightness = -0.15; bloom.Intensity = 0.05; Lighting.ClockTime = 10; Lighting.Brightness = 0.7
+        State.CustomFilter.tintR = 180; State.CustomFilter.tintG = 185; State.CustomFilter.tintB = 200; State.CustomFilter.saturation = -0.3; State.CustomFilter.contrast = 0.1; State.CustomFilter.brightness = -0.15; State.CustomFilter.bloomIntensity = 0.05; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 10
+    elseif filter == "Cool Blue HD" then cc.TintColor = Color3.fromRGB(180, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 12; Lighting.Brightness = 1.2
+        State.CustomFilter.tintR = 180; State.CustomFilter.tintG = 200; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0.1; State.CustomFilter.contrast = 0.15; State.CustomFilter.brightness = 0.05; State.CustomFilter.bloomIntensity = 0.2; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 12
+    elseif filter == "Soft Fade HD" then cc.TintColor = Color3.fromRGB(255, 240, 235); cc.Saturation = -0.1; cc.Contrast = -0.05; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 15; Lighting.Brightness = 1.3
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 240; State.CustomFilter.tintB = 235; State.CustomFilter.saturation = -0.1; State.CustomFilter.contrast = -0.05; State.CustomFilter.brightness = 0.1; State.CustomFilter.bloomIntensity = 0.4; State.CustomFilter.bloomSize = 35; State.CustomFilter.clockTime = 15
+    elseif filter == "Adaptif Langit HD" then cc.Saturation = 0.15; cc.Contrast = 0.2; cc.Brightness = 0.05; bloom.Intensity = 0.15; Lighting.ClockTime = 13; Lighting.Brightness = 1.5
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0.15; State.CustomFilter.contrast = 0.2; State.CustomFilter.brightness = 0.05; State.CustomFilter.bloomIntensity = 0.15; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 13
+    elseif filter == "Edgy HD" then cc.TintColor = Color3.fromRGB(200, 195, 210); cc.Saturation = -0.5; cc.Contrast = 0.4; cc.Brightness = -0.1; bloom.Intensity = 0.3; bloom.Size = 20; Lighting.ClockTime = 8; Lighting.Brightness = 0.8
+        State.CustomFilter.tintR = 200; State.CustomFilter.tintG = 195; State.CustomFilter.tintB = 210; State.CustomFilter.saturation = -0.5; State.CustomFilter.contrast = 0.4; State.CustomFilter.brightness = -0.1; State.CustomFilter.bloomIntensity = 0.3; State.CustomFilter.bloomSize = 20; State.CustomFilter.clockTime = 8
+    elseif filter == "Full Bright HD" then cc:Destroy(); bloom:Destroy(); Lighting.GlobalShadows = false; Lighting.Brightness = 3; Lighting.ClockTime = 12; Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0; State.CustomFilter.contrast = 0; State.CustomFilter.brightness = 0; State.CustomFilter.bloomIntensity = 0; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 12
+    elseif filter == "Soft Pastel HD" then cc.TintColor = Color3.fromRGB(255, 240, 245); cc.Saturation = -0.05; cc.Contrast = 0.05; bloom.Intensity = 0.3; bloom.Size = 24; Lighting.ClockTime = 8
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 240; State.CustomFilter.tintB = 245; State.CustomFilter.saturation = -0.05; State.CustomFilter.contrast = 0.05; State.CustomFilter.brightness = 0; State.CustomFilter.bloomIntensity = 0.3; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 8
+    elseif filter == "Cinematic Soft" then cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.05; bloom.Intensity = 0.2; Lighting.ClockTime = 17
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0.1; State.CustomFilter.contrast = 0.15; State.CustomFilter.brightness = 0.05; State.CustomFilter.bloomIntensity = 0.2; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 17
+    elseif filter == "Ultra HD" then cc.Saturation = 0.2; cc.Contrast = 0.3; bloom.Intensity = 0.2
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0.2; State.CustomFilter.contrast = 0.3; State.CustomFilter.brightness = 0; State.CustomFilter.bloomIntensity = 0.2; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 14
+    elseif filter == "Realistic" then cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 15
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0.1; State.CustomFilter.contrast = 0.2; State.CustomFilter.brightness = 0; State.CustomFilter.bloomIntensity = 0.15; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 15
+    elseif filter == "Night HD" then cc.TintColor = Color3.fromRGB(200, 200, 255); cc.Saturation = 0.1; cc.Contrast = 0.2; bloom.Intensity = 0.15; Lighting.ClockTime = 1
+        State.CustomFilter.tintR = 200; State.CustomFilter.tintG = 200; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0.1; State.CustomFilter.contrast = 0.2; State.CustomFilter.brightness = 0; State.CustomFilter.bloomIntensity = 0.15; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 1
+    elseif filter == "Senja" then cc.TintColor = Color3.fromRGB(255, 180, 120); cc.Saturation = 0.2; cc.Contrast = 0.1; cc.Brightness = 0.05; bloom.Intensity = 0.5; bloom.Size = 40; Lighting.ClockTime = 17.5
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 180; State.CustomFilter.tintB = 120; State.CustomFilter.saturation = 0.2; State.CustomFilter.contrast = 0.1; State.CustomFilter.brightness = 0.05; State.CustomFilter.bloomIntensity = 0.5; State.CustomFilter.bloomSize = 40; State.CustomFilter.clockTime = 17.5
+    elseif filter == "Cinematic Film" then cc.TintColor = Color3.fromRGB(200, 210, 230); cc.Saturation = -0.15; cc.Contrast = 0.25; cc.Brightness = -0.05; bloom.Intensity = 0.15; bloom.Size = 20; Lighting.ClockTime = 16
+        State.CustomFilter.tintR = 200; State.CustomFilter.tintG = 210; State.CustomFilter.tintB = 230; State.CustomFilter.saturation = -0.15; State.CustomFilter.contrast = 0.25; State.CustomFilter.brightness = -0.05; State.CustomFilter.bloomIntensity = 0.15; State.CustomFilter.bloomSize = 20; State.CustomFilter.clockTime = 16
+    elseif filter == "Golden Hour" then cc.TintColor = Color3.fromRGB(255, 200, 100); cc.Saturation = 0.1; cc.Contrast = 0.15; cc.Brightness = 0.1; bloom.Intensity = 0.4; bloom.Size = 35; Lighting.ClockTime = 17.5
+        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 200; State.CustomFilter.tintB = 100; State.CustomFilter.saturation = 0.1; State.CustomFilter.contrast = 0.15; State.CustomFilter.brightness = 0.1; State.CustomFilter.bloomIntensity = 0.4; State.CustomFilter.bloomSize = 35; State.CustomFilter.clockTime = 17.5
+    elseif filter == "Moody Blue" then cc.TintColor = Color3.fromRGB(150, 170, 255); cc.Saturation = 0.05; cc.Contrast = 0.2; cc.Brightness = -0.1; bloom.Intensity = 0.1; Lighting.ClockTime = 2
+        State.CustomFilter.tintR = 150; State.CustomFilter.tintG = 170; State.CustomFilter.tintB = 255; State.CustomFilter.saturation = 0.05; State.CustomFilter.contrast = 0.2; State.CustomFilter.brightness = -0.1; State.CustomFilter.bloomIntensity = 0.1; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 2
+    end
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -1195,13 +1189,13 @@ Window:SideBarButton({ Title = "Refresh 🔄", Icon = "refresh-cw", Variant = "S
 Window:SideBarDivider({})
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 1: SYSTEM HUB
+--  TAB 1: DASHBOARD
 -- ══════════════════════════════════════════════════════════════
-local T_HOME = Window:Tab({ Title = "System Hub", Icon = "layout-dashboard", ShowTabTitle = true, Border = true })
+local T_HOME = Window:Tab({ Title = "Dashboard", Icon = "layout-dashboard", ShowTabTitle = true, Border = true })
 local secSysAccess = T_HOME:Section({ Title = "System Access", Opened = true, Box = true })
 secSysAccess:Paragraph({ Title = "Identity Data", Desc = "\"Talk is cheap. Show me the code. 💻\"\n\n[ 👤 ] <font face='RobotoMono'>Operator :</font> @WTF.XKID\n[ 📱 ] <font face='RobotoMono'>TikTok   :</font> @wtf.xkid\n[ 💬 ] <font face='RobotoMono'>Discord  :</font> @4Sharken" })
 local secDiscord = T_HOME:Section({ Title = "Discord", Opened = true, Box = true })
-secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Icon = "copy", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link disalin", 2) end })
+secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Icon = "copy", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end) end })
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true, Box = true })
 local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
 local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
@@ -1228,9 +1222,9 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 2: PLAYER CORE
+--  TAB 2: CHARACTER
 -- ══════════════════════════════════════════════════════════════
-local T_AV = Window:Tab({ Title = "Player Core", Icon = "fingerprint", ShowTabTitle = true, Border = true })
+local T_AV = Window:Tab({ Title = "Character", Icon = "fingerprint", ShowTabTitle = true, Border = true })
 local secStateCtrl = T_AV:Section({ Title = "State Control", Opened = true, Box = true })
 secStateCtrl:Button({ Title = "Refresh Character 🔄", Desc = "Reload character like /re — no gamepass", Icon = "refresh-cw", Callback = function() refreshCharacter() end })
 local secMov = T_AV:Section({ Title = "Movement", Opened = true, Box = true })
@@ -1243,24 +1237,23 @@ secAbi:Slider({ Title = "Fly Speed", Desc = "Current: " .. tostring(State.Move.f
 local noclipConn = nil
 secAbi:Toggle({ Title = "NoClip", Value = false, Type = "Toggle", Icon = "ghost", Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end end end })
 
--- Hard Fling Safe
 local secFling = T_AV:Section({ Title = "Hard Fling (Safe)", Opened = true, Box = true })
 secFling:Toggle({ Title = "Hard Fling", Value = false, Type = "Toggle", Icon = "zap", Callback = function(v)
     if v then startHardFling() else stopHardFling() end
 end})
-secFling:Dropdown({ Title = "Fling Mode", Values = { "Spin", "Shake" }, Value = "Spin", SearchBarEnabled = false, Callback = function(v) State.HardFling.mode = v; notify("Fling", "Mode: " .. v, 1) end })
-secFling:Slider({ Title = "Fling Power", Desc = "Current: " .. tostring(State.HardFling.power), Step = 500, Value = { Min = 1000, Max = 50000, Default = 5000 }, IsTooltip = true, Callback = function(v) State.HardFling.power = v end })
+secFling:Dropdown({ Title = "Fling Mode", Values = { "Spin", "Shake" }, Value = "Spin", SearchBarEnabled = false, Callback = function(v) State.HardFling.mode = v end })
+secFling:Slider({ Title = "Fling Power", Desc = "Current: " .. tostring(State.HardFling.power), Step = 500, Value = { Min = 1000, Max = 50000, Default = 10000 }, IsTooltip = true, Callback = function(v) State.HardFling.power = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 3: NAVIGATION
+--  TAB 3: TELEPORT
 -- ══════════════════════════════════════════════════════════════
-local T_TP = Window:Tab({ Title = "Navigation", Icon = "crosshair", ShowTabTitle = true, Border = true })
+local T_TP = Window:Tab({ Title = "Teleport", Icon = "crosshair", ShowTabTitle = true, Border = true })
 local secDirTP = T_TP:Section({ Title = "Direct Teleport", Opened = true, Box = true })
 secDirTP:Toggle({ Title = "Smart Touch/Click TP", Desc = "Includes inventory floating TP button", Value = false, Type = "Toggle", Icon = "pointer", Callback = toggleSmartTP })
 local secTP = T_TP:Section({ Title = "Target Teleport", Opened = true, Box = true })
 local tpTarget = ""
 secTP:Input({ Title = "Search Player", Placeholder = "Type name...", Icon = "search", Callback = function(v) tpTarget = v end })
-secTP:Button({ Title = "Execute TP", Desc = "Teleport to target", Icon = "navigation", Callback = function() pcall(function() if tpTarget == "" then notify("Teleport", "Input target!", 2); return end; local target = nil; for _, p in pairs(Players:GetPlayers()) do if p ~= LP and (string.find(string.lower(p.Name), string.lower(tpTarget)) or string.find(string.lower(p.DisplayName), string.lower(tpTarget))) then target = p; break end end; if not target or not target.Parent or not target.Character then notify("Teleport", "Invalid Target", 2); return end; local tHrp = getCharRoot(target.Character); local myHrp = getRoot(); if not tHrp or not myHrp then return end; myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3) + Vector3.new(0, 2, 0); notify("Teleport", "Teleported to " .. target.DisplayName, 2) end) end })
+secTP:Button({ Title = "Execute TP", Desc = "Teleport to target", Icon = "navigation", Callback = function() pcall(function() if tpTarget == "" then notify("Teleport", "Input target!", 2); return end; local target = nil; for _, p in pairs(Players:GetPlayers()) do if p ~= LP and (string.find(string.lower(p.Name), string.lower(tpTarget)) or string.find(string.lower(p.DisplayName), string.lower(tpTarget))) then target = p; break end end; if not target or not target.Parent or not target.Character then notify("Teleport", "Invalid Target", 2); return end; local tHrp = getCharRoot(target.Character); local myHrp = getRoot(); if not tHrp or not myHrp then return end; myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3) + Vector3.new(0, 2, 0) end) end })
 local tpDropdown = secTP:Dropdown({ Title = "Player List", Values = getDisplayNames(), SearchBarEnabled = false, Callback = function(v) tpTarget = tostring(v) end })
 secTP:Button({ Title = "Refresh List", Icon = "refresh-cw", Callback = function() pcall(function() tpDropdown:Refresh(getDisplayNames(), true) end) end })
 local secLoc = T_TP:Section({ Title = "Coordinates Cache", Opened = true, Box = true })
@@ -1271,9 +1264,9 @@ for i = 1, 3 do local idx = i
 end
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 4: VISION
+--  TAB 4: SPECTATOR
 -- ══════════════════════════════════════════════════════════════
-local T_CAM = Window:Tab({ Title = "Vision", Icon = "focus", ShowTabTitle = true, Border = true })
+local T_CAM = Window:Tab({ Title = "Spectator", Icon = "focus", ShowTabTitle = true, Border = true })
 local secZoom = T_CAM:Section({ Title = "Zoom Override", Opened = true, Box = true })
 secZoom:Toggle({ Title = "Max Zoom Out", Value = false, Type = "Toggle", Icon = "zoom-out", Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end) end })
 local secSP = T_CAM:Section({ Title = "Spectator Mode", Opened = true, Box = true })
@@ -1301,19 +1294,15 @@ local specDropdown = secSP:Dropdown({ Title = "Select Target", Values = getDispl
 end })
 secSP:Button({ Title = "Refresh Target List", Icon = "refresh-cw", Callback = function() pcall(function() specDropdown:Refresh(getDisplayNamesWithSelf(), true) end) end })
 secSP:Toggle({ Title = "Enable Spectate", Value = false, Type = "Toggle", Icon = "eye", Callback = function(v) Spec.active = v; if v then if not Spec.target or not Spec.target.Character then
-    if Spec.isSelf and LP.Character then
-        -- Self-spectate allowed
-    else
-        Spec.active = false; return
-    end
+    if Spec.isSelf and LP.Character then else Spec.active = false; return end
 end; Spec.origFov = Cam.FieldOfView; startSpecCapture(); startSpecLoop() else stopSpecLoop(); stopSpecCapture(); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = Spec.origFov end end })
 secSP:Toggle({ Title = "First Person View", Value = false, Type = "Checkbox", Icon = "view", Callback = function(v) Spec.mode = v and "first" or "third" end })
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 5: FREECAM
+--  TAB 5: CINEMATIC
 -- ══════════════════════════════════════════════════════════════
-local T_FREE = Window:Tab({ Title = "Freecam", Icon = "video", ShowTabTitle = true, Border = true })
+local T_FREE = Window:Tab({ Title = "Cinematic", Icon = "video", ShowTabTitle = true, Border = true })
 local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true, Box = true })
 secFC:Toggle({ Title = "Enable Freecam", Value = false, Type = "Toggle", Icon = "camera", Callback = function(v) FC.active = v; if v then local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry); local hrp = getRoot(); if hrp then FC.savedCF = hrp.CFrame; pcall(function() if FC.lockGyro then FC.lockGyro:Destroy() end end); pcall(function() if FC.lockPos then FC.lockPos:Destroy() end end); FC.lockGyro = Instance.new("BodyGyro", hrp); FC.lockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9); FC.lockPos = Instance.new("BodyPosition", hrp); FC.lockPos.MaxForce = Vector3.new(9e9, 9e9, 9e9); hrp.Anchored = true end; FC.origFov = Cam.FieldOfView; startFreecamCapture(); startFreecamLoop(); if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end else fullCleanupFreecam() end end })
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
@@ -1322,31 +1311,37 @@ local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true, Box = 
 secCine:Toggle({ Title = "Hide All UI", Value = false, Type = "Toggle", Icon = "monitor-off", Callback = function(v) if v then State.Cinema.hideUI = true; State.Cinema.cachedGuis = {}; for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end) else State.Cinema.hideUI = false; for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end) end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 6: FILTER
+--  TAB 6: VISUALS
 -- ══════════════════════════════════════════════════════════════
-local T_WO = Window:Tab({ Title = "Filter", Icon = "layers", ShowTabTitle = true, Border = true })
+local T_WO = Window:Tab({ Title = "Visuals", Icon = "layers", ShowTabTitle = true, Border = true })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true, Box = true })
 local filterValues = { "Default", "Custom", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue" }
 secFilter:Dropdown({ Title = "Select Filter", Values = filterValues, Value = "Default", SearchBarEnabled = false, Callback = function(v) applyFilter(v) end })
 
--- Custom Filter Creator
-local secCustom = T_WO:Section({ Title = "🎨 Custom Filter Creator", Opened = true, Box = true })
-secCustom:Slider({ Title = "Tint Red", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintR = v end })
-secCustom:Slider({ Title = "Tint Green", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintG = v end })
-secCustom:Slider({ Title = "Tint Blue", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintB = v end })
-secCustom:Slider({ Title = "Saturation", Desc = "Current: " .. tostring(State.CustomFilter.saturation), Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, IsTooltip = true, Callback = function(v) State.CustomFilter.saturation = v end })
-secCustom:Slider({ Title = "Contrast", Desc = "Current: " .. tostring(State.CustomFilter.contrast), Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, IsTooltip = true, Callback = function(v) State.CustomFilter.contrast = v end })
-secCustom:Slider({ Title = "Brightness", Desc = "Current: " .. tostring(State.CustomFilter.brightness), Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, IsTooltip = true, Callback = function(v) State.CustomFilter.brightness = v end })
-secCustom:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = { Min = 0, Max = 5, Default = 0 }, Callback = function(v) State.CustomFilter.bloomIntensity = v end })
-secCustom:Slider({ Title = "Bloom Size", Step = 1, Value = { Min = 0, Max = 100, Default = 24 }, Callback = function(v) State.CustomFilter.bloomSize = v end })
-secCustom:Slider({ Title = "ClockTime", Desc = "Current: " .. tostring(State.CustomFilter.clockTime), Step = 0.5, Value = { Min = 0, Max = 24, Default = 14 }, IsTooltip = true, Callback = function(v) State.CustomFilter.clockTime = v end })
-secCustom:Button({ Title = "Apply Custom Filter", Icon = "palette", Callback = function() applyCustomFilter() end })
+-- Custom Filter Creator (real-time, no notif)
+local secCustom = T_WO:Section({ Title = "Custom FX", Opened = true, Box = true })
+secCustom:Slider({ Title = "Tint Red", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintR = v; applyCustomFilter() end })
+secCustom:Slider({ Title = "Tint Green", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintG = v; applyCustomFilter() end })
+secCustom:Slider({ Title = "Tint Blue", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintB = v; applyCustomFilter() end })
+secCustom:Slider({ Title = "Saturation", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.saturation = v; applyCustomFilter() end })
+secCustom:Slider({ Title = "Contrast", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.contrast = v; applyCustomFilter() end })
+secCustom:Slider({ Title = "Brightness", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.brightness = v; applyCustomFilter() end })
+secCustom:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = { Min = 0, Max = 5, Default = 0 }, Callback = function(v) State.CustomFilter.bloomIntensity = v; applyCustomFilter() end })
+secCustom:Slider({ Title = "Bloom Size", Step = 1, Value = { Min = 0, Max = 100, Default = 24 }, Callback = function(v) State.CustomFilter.bloomSize = v; applyCustomFilter() end })
+secCustom:Slider({ Title = "ClockTime", Step = 0.5, Value = { Min = 0, Max = 24, Default = 14 }, Callback = function(v) State.CustomFilter.clockTime = v; applyCustomFilter() end })
+secCustom:Button({ Title = "Reset Custom FX", Icon = "rotate-ccw", Callback = function()
+    State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255
+    State.CustomFilter.saturation = 0; State.CustomFilter.contrast = 0; State.CustomFilter.brightness = 0    State.CustomFilter.bloomIntensity = 0; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 14
+    State.CustomFilter.dofIntensity = 0; State.CustomFilter.dofDistance = 50
+    applyCustomFilter()
+end })
 
 -- Depth of Field
-local secDOF = T_WO:Section({ Title = "🔍 Depth of Field", Opened = true, Box = true })
-secDOF:Slider({ Title = "Blur Intensity", Desc = "Current: " .. tostring(State.CustomFilter.dofIntensity), Step = 0.1, Value = { Min = 0, Max = 1, Default = 0 }, IsTooltip = true, Callback = function(v) State.CustomFilter.dofIntensity = v; applyCustomFilter() end })
-secDOF:Slider({ Title = "Focus Distance", Desc = "Current: " .. tostring(State.CustomFilter.dofDistance), Step = 5, Value = { Min = 1, Max = 500, Default = 50 }, IsTooltip = true, Callback = function(v) State.CustomFilter.dofDistance = v; applyCustomFilter() end })
+local secDOF = T_WO:Section({ Title = "Depth of Field", Opened = true, Box = true })
+secDOF:Slider({ Title = "Blur Intensity", Step = 0.1, Value = { Min = 0, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.dofIntensity = v; applyCustomFilter() end })
+secDOF:Slider({ Title = "Focus Distance", Step = 5, Value = { Min = 1, Max = 500, Default = 50 }, Callback = function(v) State.CustomFilter.dofDistance = v; applyCustomFilter() end })
 
+-- Atmosphere (manual override)
 local secAtmos = T_WO:Section({ Title = "Atmosphere", Opened = false, Box = true })
 local bloomActive = false
 secAtmos:Toggle({ Title = "Bloom ON/OFF", Value = false, Type = "Toggle", Icon = "sparkles", Callback = function(v) bloomActive = v; if v then local bloom = nil; for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") and e.Name == "_XKID_FILTER" then bloom = e; break end end; if not bloom then bloom = Instance.new("BloomEffect", Lighting); bloom.Name = "_XKID_FILTER" end; bloom.Intensity = 0.5 else for _, e in pairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") then e:Destroy() end end end end })
@@ -1362,9 +1357,9 @@ secGfx:Slider({ Title = "Quality Level", Step = 1, Value = { Min = 1, Max = 10, 
 secGfx:Dropdown({ Title = "FPS Cap", Values = { "30", "60", "120", "144", "240", "Unlimited" }, Value = "60", SearchBarEnabled = false, Callback = function(v) if v == "Unlimited" then pcall(function() setfpscap(9999) end) else pcall(function() setfpscap(tonumber(v)) end) end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 7: RADAR
+--  TAB 7: ESP
 -- ══════════════════════════════════════════════════════════════
-local T_ESP = Window:Tab({ Title = "Radar", Icon = "cpu", ShowTabTitle = true, Border = true })
+local T_ESP = Window:Tab({ Title = "ESP", Icon = "cpu", ShowTabTitle = true, Border = true })
 local secESP = T_ESP:Section({ Title = "Detection System", Opened = true, Box = true })
 secESP:Toggle({ Title = "Enable Radar", Value = false, Type = "Toggle", Icon = "radar", Callback = function(v) State.ESP.active = v; if not v and State.ESP.cache then for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end) end end end })
 secESP:Dropdown({ Title = "Tracer Origin", Values = { "Bottom", "Center", "Mouse", "OFF" }, Value = "Bottom", SearchBarEnabled = false, Callback = function(v) State.ESP.tracerMode = v end })
@@ -1376,14 +1371,13 @@ secESPColor:Dropdown({ Title = "Suspect Color", Values = { "Merah", "Hijau", "Bi
 secESPColor:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam" }, Value = "Orange", SearchBarEnabled = false, Callback = function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v]; State.ESP.boxColor_G = colorMap[v] end end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 8: UTILITY (CHAT LOGGER)
+--  TAB 8: LOGGER
 -- ══════════════════════════════════════════════════════════════
-local T_UTIL = Window:Tab({ Title = "Utility", Icon = "terminal", ShowTabTitle = true, Border = true })
+local T_UTIL = Window:Tab({ Title = "Logger", Icon = "terminal", ShowTabTitle = true, Border = true })
 local secChat = T_UTIL:Section({ Title = "Chat Logger", Opened = true, Box = true })
 secChat:Toggle({ Title = "Enable Logger", Value = false, Type = "Toggle", Icon = "file-text", Callback = function(v)
     State.Utility.chatLog = v
     if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end
-    notify("Utility", v and "Logger ON" or "Logger OFF", 2)
 end})
 chatTargetLabel = secChat:Paragraph({ Title = "Targets", Desc = "None" })
 chatTargetDrop = secChat:Dropdown({ Title = "Select Targets", Multi = true, AllowNone = true, Values = getDisplayNames(), SearchBarEnabled = false, Callback = function(selected)
@@ -1407,20 +1401,17 @@ secChat:Button({ Title = "Clear Targets", Icon = "x", Callback = function()
         task.wait(0.05)
         chatTargetDrop:SetValues(getDisplayNames())
     end)
-    notify("Chat", "Targets cleared", 2)
 end})
 secChat:Button({ Title = "Refresh List", Icon = "refresh-cw", Callback = function()
     pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end)
-    notify("Chat", "List refreshed", 2)
 end})
 chatLogPanel = secChat:Paragraph({ Title = "Console", Desc = "Belum ada chat..." })
 secChat:Button({ Title = "Clear Log", Icon = "trash-2", Callback = function()
     State.Utility.chatHistory = {}
     pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end)
-    notify("Utility", "Log cleared", 2)
 end})
 
--- Chat Logger Event Listener
+-- Chat Logger Event Listener (NO NOTIFICATIONS)
 task.spawn(function()
     local function onChat(senderName, message)
         if not State.Utility.chatLog then return end
@@ -1432,7 +1423,6 @@ task.spawn(function()
                 local entry = string.format("[%s] %s: %s", os.date("%H:%M:%S"), senderName, message)
                 table.insert(State.Utility.chatHistory, entry)
                 if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end
-                notify("Chat", senderName .. ": " .. message, 2)
                 break
             end
         end
@@ -1457,7 +1447,6 @@ task.spawn(function()
     TrackC(Players.PlayerAdded:Connect(function(p) if p ~= LP then connectLegacyChat(p) end end))
 end)
 
--- Console Updater
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.5)
@@ -1473,12 +1462,12 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 9: SECURITY
+--  TAB 9: PROTECTION
 -- ══════════════════════════════════════════════════════════════
-local T_SEC = Window:Tab({ Title = "Security", Icon = "shield-alert", ShowTabTitle = true, Border = true })
+local T_SEC = Window:Tab({ Title = "Protection", Icon = "shield-alert", ShowTabTitle = true, Border = true })
 local secProt = T_SEC:Section({ Title = "Protection Protocols", Opened = true, Box = true })
 secProt:Toggle({ Title = "Anti AFK", Value = false, Type = "Toggle", Icon = "clock", Callback = function(v) if v then startAFK() else stopAFK() end end })
-secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Icon = "wrench", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Security", "Stuck fix applied", 2) end })
+secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Icon = "wrench", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end end })
 local secSrv = T_SEC:Section({ Title = "Server Control", Opened = true, Box = true })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Icon = "log-in", Callback = function() pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) end })
 secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Icon = "shuffle", Callback = function() pcall(function() local req = (syn and syn.request) or (http and http.request) or http_request or request; if not req then return end; local res = req({ Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100", Method = "GET" }); if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body); if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TPService:TeleportToPlaceInstance(game.PlaceId, v.id, LP); return end end end end end) end })
@@ -1498,7 +1487,6 @@ secPerf:Toggle({ Title = "FPS Boost", Value = false, Type = "Toggle", Icon = "za
                 advCache.texs[obj] = obj.Enabled; obj.Enabled = false
             end
         end
-        notify("Performance", "FPS Boost activated", 2)
     else
         pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end)
         Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness
@@ -1506,21 +1494,20 @@ secPerf:Toggle({ Title = "FPS Boost", Value = false, Type = "Toggle", Icon = "za
         for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end
         for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end
         advCache.mats = {}; advCache.texs = {}
-        notify("Performance", "Graphics restored", 2)
     end
 end})
 local secCamLock = T_SEC:Section({ Title = "Camera Lock", Opened = true, Box = true })
 secCamLock:Toggle({ Title = "Force Shift Lock", Value = false, Type = "Toggle", Icon = "lock", Callback = function(v) toggleShiftLock(v) end })
 
 -- ══════════════════════════════════════════════════════════════
---  TAB 10: CONFIG
+--  TAB 10: SETTINGS
 -- ══════════════════════════════════════════════════════════════
-local T_SET = Window:Tab({ Title = "Config", Icon = "settings", ShowTabTitle = true, Border = true })
+local T_SET = Window:Tab({ Title = "Settings", Icon = "settings", ShowTabTitle = true, Border = true })
 local secCfg = T_SET:Section({ Title = "File Management", Opened = true, Box = true })
 local cfgName = "XKID_Config"; local currentConfig = "No config"
 secCfg:Input({ Title = "Config Name", Value = "XKID_Config", Callback = function(v) cfgName = v end })
 secCfg:Button({ Title = "Save Config", Icon = "save", Callback = function() pcall(function() if makefolder and writefile then if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local data = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS }, ESP = { tracerMode = State.ESP.tracerMode, maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD, likeBack = State.AutoLike.likeBack }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime, dofIntensity = State.CustomFilter.dofIntensity, dofDistance = State.CustomFilter.dofDistance } }; writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(data)) end end) end })
-local configDrop = secCfg:Dropdown({ Title = "Load Config", Values = getConfigList(), SearchBarEnabled = false, Callback = function(selected) currentConfig = selected; if selected == "No config" then return end; pcall(function() if isfile and readfile and isfile("XKID_HUB/" .. selected .. ".json") then local data = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if data then if data.Move then State.Move.ws = data.Move.ws or 16; State.Move.jp = data.Move.jp or 50; State.Move.flyS = data.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if data.ESP then State.ESP.tracerMode = data.ESP.tracerMode or "Bottom"; State.ESP.maxDrawDistance = data.ESP.maxDrawDistance or 300; State.ESP.highlightMode = data.ESP.highlightMode or false end; if data.Security and data.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(data.Security.shiftLock) end; if data.AutoLike then State.AutoLike.radius = data.AutoLike.radius or 100; State.AutoLike.minCD = data.AutoLike.minCD or 2; State.AutoLike.maxCD = data.AutoLike.maxCD or 6; State.AutoLike.likeBack = data.AutoLike.likeBack or false end; if data.HardFling then State.HardFling.power = data.HardFling.power or 5000; State.HardFling.mode = data.HardFling.mode or "Spin" end; if data.CustomFilter then for k, v in pairs(data.CustomFilter) do State.CustomFilter[k] = v end end end end end) end })
+local configDrop = secCfg:Dropdown({ Title = "Load Config", Values = getConfigList(), SearchBarEnabled = false, Callback = function(selected) currentConfig = selected; if selected == "No config" then return end; pcall(function() if isfile and readfile and isfile("XKID_HUB/" .. selected .. ".json") then local data = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if data then if data.Move then State.Move.ws = data.Move.ws or 16; State.Move.jp = data.Move.jp or 50; State.Move.flyS = data.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if data.ESP then State.ESP.tracerMode = data.ESP.tracerMode or "Bottom"; State.ESP.maxDrawDistance = data.ESP.maxDrawDistance or 300; State.ESP.highlightMode = data.ESP.highlightMode or false end; if data.Security and data.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(data.Security.shiftLock) end; if data.AutoLike then State.AutoLike.radius = data.AutoLike.radius or 100; State.AutoLike.minCD = data.AutoLike.minCD or 2; State.AutoLike.maxCD = data.AutoLike.maxCD or 6; State.AutoLike.likeBack = data.AutoLike.likeBack or false end; if data.HardFling then State.HardFling.power = data.HardFling.power or 5000; State.HardFling.mode = data.HardFling.mode or "Spin" end; if data.CustomFilter then for k, v in pairs(data.CustomFilter) do State.CustomFilter[k] = v end; applyCustomFilter() end end end end) end })
 secCfg:Button({ Title = "Delete Config", Icon = "trash-2", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json"); pcall(function() configDrop:Refresh(getConfigList(), true) end); currentConfig = "No config" end end) end end })
 secCfg:Button({ Title = "Refresh Files", Icon = "refresh-cw", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end) end })
 
@@ -1529,7 +1516,7 @@ secCfg:Button({ Title = "Refresh Files", Icon = "refresh-cw", Callback = functio
 -- ══════════════════════════════════════════════════════════════
 local secAutoLike = T_SET:Section({ Title = "Auto Like (Smart)", Opened = true, Box = true })
 secAutoLike:Toggle({ Title = "Auto Like", Value = false, Type = "Toggle", Icon = "heart", Callback = function(v) if v then startAutoLike() else stopAutoLike() end end })
-secAutoLike:Toggle({ Title = "Like Back 🔄", Desc = "Auto-like players who liked you", Value = false, Type = "Toggle", Icon = "heart-handshake", Callback = function(v) State.AutoLike.likeBack = v; if v then notify("Like Back", "ON — will like back", 1.5) end end })
+secAutoLike:Toggle({ Title = "Like Back", Desc = "Auto-like players who liked you", Value = false, Type = "Toggle", Icon = "heart-handshake", Callback = function(v) State.AutoLike.likeBack = v end })
 secAutoLike:Slider({ Title = "Like Radius", Desc = "Current: " .. State.AutoLike.radius .. " studs (0 = all)", Step = 10, Value = { Min = 0, Max = 500, Default = 100 }, IsTooltip = true, Callback = function(v) State.AutoLike.radius = v end })
 secAutoLike:Slider({ Title = "Min Cooldown", Desc = "Current: " .. State.AutoLike.minCD .. "s", Step = 0.5, Value = { Min = 0.5, Max = 10, Default = 2 }, IsTooltip = true, Callback = function(v) State.AutoLike.minCD = v end })
 secAutoLike:Slider({ Title = "Max Cooldown", Desc = "Current: " .. State.AutoLike.maxCD .. "s", Step = 0.5, Value = { Min = 1, Max = 15, Default = 6 }, IsTooltip = true, Callback = function(v) State.AutoLike.maxCD = v end })
@@ -1541,5 +1528,5 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(funct
 -- ══════════════════════════════════════════════════════════════
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
-notify("System", "XKID v" .. CURRENT_VERSION .. " Ready — Self-Spec | Safe Fling | Like Back", 3)
-print("✅ XKID v" .. CURRENT_VERSION .. " - Self-Spectate | Safe Fling | Like Back | Custom Filter | Inv TP | Delta Ready")
+notify("System", "XKID v" .. CURRENT_VERSION .. " Ready", 3)
+print("✅ XKID v" .. CURRENT_VERSION .. " - Self-Spec | Safe Fling | Like Back | Custom FX | Inv TP | Delta Ready")
