@@ -6,7 +6,7 @@
   💎 Dibuat oleh @WTF.XKID
   📱 Tiktok: @wtf.xkid
   💬 Discord: @4Sharken
-  📌 v4.1.6 — Clean Startup · Tool Toggle TP · Silent FX
+  📌 v4.1.7 — Freecam Fix · Default Graphics · Clean Startup
   🔧 ROBOX Build | Delta Compatible
 ]]
 
@@ -29,9 +29,8 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "4.1.6"
+local CURRENT_VERSION = "4.1.7"
 
--- Startup Guard — cegah notif spam pas UI init
 getgenv()._XKID_UI_LOADING = true
 
 local originalLighting = {
@@ -120,33 +119,12 @@ local pendingRefreshCF, pendingRefreshWS, pendingRefreshJP, pendingRefreshZoom =
 local function refreshCharacter() if State.Avatar.isRefreshing then return end; local char = LP.Character; local hrp = getRoot(); if not char or not hrp then notify("Error", "Character not found", 2); return end; State.Avatar.isRefreshing = true; pendingRefreshCF = hrp.CFrame; pendingRefreshWS = State.Move.ws; pendingRefreshJP = State.Move.jp; pendingRefreshZoom = LP.CameraMaxZoomDistance; notify("Refresh", "Reloading...", 1.5); pcall(function() char:BreakJoints() end); local waited = 0; repeat task.wait(0.1); waited = waited + 0.1 until not LP.Character or waited > 2; if LP.Character then pcall(function() LP.Character:Destroy() end); task.wait(0.3) end; if not LP.Character then pcall(function() LP:LoadCharacter() end) end; task.delay(12, function() if State.Avatar.isRefreshing then State.Avatar.isRefreshing = false; pendingRefreshCF = nil; notify("Error", "Refresh timeout", 3) end end) end
 TrackC(LP.CharacterAdded:Connect(function(newChar) if not State.Avatar.isRefreshing then return end; if not pendingRefreshCF then return end; task.wait(0.3); local newHrp = newChar:FindFirstChild("HumanoidRootPart") or newChar:WaitForChild("HumanoidRootPart", 8); local newHum = newChar:FindFirstChildOfClass("Humanoid") or newChar:WaitForChild("Humanoid", 8); if newHrp and newHum then repeat task.wait() until newHum.Health > 0 and newHrp:IsDescendantOf(workspace); newHrp.CFrame = pendingRefreshCF + Vector3.new(0, 4, 0); newHrp.AssemblyLinearVelocity = Vector3.zero; newHrp.AssemblyAngularVelocity = Vector3.zero; newHum.WalkSpeed = pendingRefreshWS; newHum.UseJumpPower = true; newHum.JumpPower = pendingRefreshJP; Cam.CameraSubject = newHum; Cam.CameraType = Enum.CameraType.Custom; pcall(function() LP.CameraMaxZoomDistance = pendingRefreshZoom end); notify("Refresh", "Done", 2) end; State.Avatar.isRefreshing = false; pendingRefreshCF = nil end))
 
--- ══════════════════════════════════════════════════════════════
---  SMART TP — TOOL TOGGLE (KODE LO)
--- ══════════════════════════════════════════════════════════════
+-- Smart TP
 local Teleport = { clickConn = nil, clickActive = false, toolActive = false, tool = nil }
+local function executeTP() local hrp = getRoot(); if not hrp then return end; local m = LP:GetMouse(); if m.Hit then hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0)); hrp.AssemblyLinearVelocity = Vector3.zero end end
+local function toggleSmartTP(v) Teleport.clickActive = v; if v then pcall(function() local tool = Instance.new("Tool"); tool.Name = "TP Tool"; tool.RequiresHandle = false; tool.Parent = LP.Backpack; Teleport.tool = tool; Teleport.toolActive = false; tool.Activated:Connect(function() Teleport.toolActive = not Teleport.toolActive end) end); Teleport.clickConn = TrackC(UIS.InputBegan:Connect(function(inp, gp) if gp then return end; if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then if Teleport.toolActive then executeTP(); Teleport.toolActive = false end end end)); notify("Smart TP", "ON — Use tool to toggle", 2) else if Teleport.clickConn then Teleport.clickConn:Disconnect(); Teleport.clickConn = nil end; pcall(function() if Teleport.tool then Teleport.tool:Destroy(); Teleport.tool = nil end end); Teleport.toolActive = false; notify("Smart TP", "OFF", 1.5) end end
 
-local function executeTP()
-    local hrp = getRoot(); if not hrp then return end
-    local m = LP:GetMouse()
-    if m.Hit then hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0)); hrp.AssemblyLinearVelocity = Vector3.zero end
-end
-
-local function toggleSmartTP(v)
-    Teleport.clickActive = v
-    if v then
-        pcall(function() local tool = Instance.new("Tool"); tool.Name = "TP Tool"; tool.RequiresHandle = false; tool.Parent = LP.Backpack; Teleport.tool = tool; Teleport.toolActive = false; tool.Activated:Connect(function() Teleport.toolActive = not Teleport.toolActive end) end)
-        Teleport.clickConn = TrackC(UIS.InputBegan:Connect(function(inp, gp) if gp then return end; if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then if Teleport.toolActive then executeTP(); Teleport.toolActive = false end end end))
-        notify("Smart TP", "ON — Use tool to toggle", 2)
-    else
-        if Teleport.clickConn then Teleport.clickConn:Disconnect(); Teleport.clickConn = nil end
-        pcall(function() if Teleport.tool then Teleport.tool:Destroy(); Teleport.tool = nil end end); Teleport.toolActive = false
-        notify("Smart TP", "OFF", 1.5)
-    end
-end
-
--- ══════════════════════════════════════════════════════════════
---  ESP ENGINE
--- ══════════════════════════════════════════════════════════════
+-- ESP
 local function initPlayerCache(player) if State.ESP.cache[player] then return end; local cache = { texts = nil, tracer = nil, boxLines = {}, hl = nil, isSuspect = false, isGlitch = false, reason = "" }; pcall(function() cache.texts = Drawing.new("Text"); if cache.texts then cache.texts.Center = true; cache.texts.Outline = true; cache.texts.Font = 2; cache.texts.Size = 13; cache.texts.ZIndex = 2 end; cache.tracer = Drawing.new("Line"); if cache.tracer then cache.tracer.Thickness = 1.5; cache.tracer.ZIndex = 1 end; for i = 1, 4 do local line = Drawing.new("Line"); if line then line.Thickness = 1.5; line.ZIndex = 1; cache.boxLines[i] = line end end end); State.ESP.cache[player] = cache end
 local function clearPlayerCache(player) local c = State.ESP.cache[player]; if not c then return end; pcall(function() if c.texts then c.texts:Remove() end end); pcall(function() if c.tracer then c.tracer:Remove() end end); for _, l in ipairs(c.boxLines) do pcall(function() if l then l:Remove() end end) end; pcall(function() if c.hl then c.hl:Destroy() end end); State.ESP.cache[player] = nil end
 TrackC(Players.PlayerRemoving:Connect(clearPlayerCache))
@@ -154,13 +132,13 @@ local espsortedPlayers = {}
 task.spawn(function() while getgenv()._XKID_RUNNING do if State.ESP.active then local tempSorted = {}; local myHrp = getCharRoot(LP.Character); for _, p in pairs(Players:GetPlayers()) do if p ~= LP and p.Character then local isSus, isGlitch, reason = false, false, ""; for _, v in pairs(p.Character:GetChildren()) do if v:IsA("BasePart") and (v.Size.X > 30 or v.Size.Y > 30 or v.Size.Z > 30) then isSus = true; reason = "Map Blocker"; break elseif v:IsA("Accessory") then local h = v:FindFirstChild("Handle"); if h and h:IsA("BasePart") then if h.Size.Magnitude > 20 then isSus = true; reason = "Huge Hat"; break elseif h.Size.Magnitude > 10 or (h.Transparency < 0.1 and h.Material == Enum.Material.Neon) then isGlitch = true; reason = "Glitch Acc" end end end end; if not isSus and not isGlitch then local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hum then local bws, bhs = hum:FindFirstChild("BodyWidthScale"), hum:FindFirstChild("BodyHeightScale"); if (bws and bws.Value > 2.0) or (bhs and bhs.Value > 2.0) then isSus = true; reason = "Glitch Avatar" end end end; initPlayerCache(p); if State.ESP.cache[p] then State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason end; if myHrp then local hrp = getCharRoot(p.Character); local hum = p.Character:FindFirstChildOfClass("Humanoid"); if hrp and hum and hum.Health > 0 then local dist = (hrp.Position - myHrp.Position).Magnitude; if dist <= State.ESP.maxDrawDistance then table.insert(tempSorted, { p = p, hrp = hrp, dist = dist, char = p.Character }) end end end end end; table.sort(tempSorted, function(a, b) return a.dist < b.dist end); espsortedPlayers = tempSorted end; task.wait(0.5) end end)
 TrackC(RS.RenderStepped:Connect(function() if not State.ESP.active then return end; local myHrp = getCharRoot(LP.Character); if not myHrp then return end; local vp = Cam.ViewportSize; local center = Vector2.new(vp.X / 2, vp.Y / 2); for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end) end; local hlCount = 0; for _, data in ipairs(espsortedPlayers) do local player, char, hrp, dist = data.p, data.char, data.hrp, data.dist; local c = State.ESP.cache[player]; if not c then continue end; local rootPos, onScreen = Cam:WorldToViewportPoint(hrp.Position); if not onScreen then continue end; local isSus, isGlitch = c.isSuspect, c.isGlitch; local useHl = isSus or isGlitch or State.ESP.highlightMode; local txt = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist)); if isSus or isGlitch then txt = txt .. "\n⚠ " .. c.reason end; local cColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.nameColor); local tColor = isSus and State.ESP.tracerColor_S or (isGlitch and State.ESP.tracerColor_G or State.ESP.tracerColor_N); local bColor = isSus and State.ESP.boxColor_S or (isGlitch and State.ESP.boxColor_G or State.ESP.boxColor_N); pcall(function() if c.texts then c.texts.Text = txt; c.texts.Color = cColor; c.texts.Position = Vector2.new(rootPos.X, rootPos.Y - 45); c.texts.Visible = true end; if State.ESP.tracerMode ~= "OFF" and c.tracer then local origin = Vector2.new(vp.X / 2, vp.Y); if State.ESP.tracerMode == "Center" then origin = center elseif State.ESP.tracerMode == "Mouse" then local m = UIS:GetMouseLocation(); origin = Vector2.new(m.X, m.Y) end; c.tracer.From = origin; c.tracer.To = Vector2.new(rootPos.X, rootPos.Y); c.tracer.Color = tColor; c.tracer.Visible = true end end); if useHl and hlCount < 30 then hlCount = hlCount + 1; pcall(function() local top, topOn = Cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0)); local bot, botOn = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3.5, 0)); if topOn and botOn and #c.boxLines == 4 then local bh = math.abs(top.Y - bot.Y); local bw = bh * 0.6; c.boxLines[1].From = Vector2.new(rootPos.X - bw/2, top.Y); c.boxLines[1].To = Vector2.new(rootPos.X + bw/2, top.Y); c.boxLines[2].From = Vector2.new(rootPos.X + bw/2, top.Y); c.boxLines[2].To = Vector2.new(rootPos.X + bw/2, bot.Y); c.boxLines[3].From = Vector2.new(rootPos.X + bw/2, bot.Y); c.boxLines[3].To = Vector2.new(rootPos.X - bw/2, bot.Y); c.boxLines[4].From = Vector2.new(rootPos.X - bw/2, bot.Y); c.boxLines[4].To = Vector2.new(rootPos.X - bw/2, top.Y); for i = 1, 4 do c.boxLines[i].Color = bColor; c.boxLines[i].Visible = true end end end); pcall(function() if not c.hl or c.hl.Parent ~= char then if c.hl then c.hl:Destroy() end; c.hl = Instance.new("Highlight", char); c.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end; if c.hl then c.hl.FillColor = bColor; c.hl.OutlineColor = Color3.new(1,1,1); c.hl.Enabled = true end end) end end end))
 
--- Fly Engine
+-- Fly
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}; local flyVel = Vector3.zero
 local function startFlyCapture() local keysHeld = {}; table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp) if gp then return end; local k = inp.KeyCode; if k==Enum.KeyCode.W or k==Enum.KeyCode.A or k==Enum.KeyCode.S or k==Enum.KeyCode.D or k==Enum.KeyCode.E or k==Enum.KeyCode.Q then keysHeld[k] = true end end)); table.insert(flyConns, UIS.InputEnded:Connect(function(inp) keysHeld[inp.KeyCode] = nil end)); table.insert(flyConns, UIS.InputBegan:Connect(function(inp, gp) if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp.Position.X <= Cam.ViewportSize.X / 2 then if not flyMoveTouch then flyMoveTouch = inp; flyMoveSt = inp.Position end end end)); table.insert(flyConns, UIS.TouchMoved:Connect(function(inp) if inp == flyMoveTouch and flyMoveSt then local dx, dy = inp.Position.X - flyMoveSt.X, inp.Position.Y - flyMoveSt.Y; flyJoy = Vector2.new(math.abs(dx)>25 and math.clamp((dx-math.sign(dx)*25)/80,-1,1) or 0, math.abs(dy)>20 and math.clamp((dy-math.sign(dy)*20)/80,-1,1) or 0) end end)); table.insert(flyConns, UIS.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp == flyMoveTouch then flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero end end)); State.Fly._keys = keysHeld end
 local function stopFlyCapture() for _, c in ipairs(flyConns) do c:Disconnect() end; flyConns = {}; flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero; State.Fly._keys = {} end
 local function toggleFly(v) if not v then State.Fly.active = false; stopFlyCapture(); RS:UnbindFromRenderStep("XKIDFly"); pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end); pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end); State.Fly.bv = nil; State.Fly.bg = nil; flyVel = Vector3.zero; local hum = getHum(); if hum then hum.PlatformStand = false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end; notify("Fly", "OFF", 1.5); return end; local hrp, hum = getRoot(), getHum(); if not hrp or not hum then return end; State.Fly.active = true; hum.PlatformStand = true; flyVel = Vector3.zero; State.Fly.bv = Instance.new("BodyVelocity", hrp); State.Fly.bv.MaxForce = Vector3.new(9e9,9e9,9e9); State.Fly.bg = Instance.new("BodyGyro", hrp); State.Fly.bg.MaxTorque = Vector3.new(9e9,9e9,9e9); State.Fly.bg.P = 50000; startFlyCapture(); notify("Fly", "ON", 2); RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function() if not State.Fly.active then return end; local r = getRoot(); if not r then return end; local camCF = Cam.CFrame; local spd = State.Move.flyS; local move = Vector3.zero; local keys = State.Fly._keys or {}; if onMobile then move = camCF.LookVector * (-flyJoy.Y) + camCF.RightVector * flyJoy.X else if keys[Enum.KeyCode.W] then move = move + camCF.LookVector end; if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end; if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end; if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end; if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) end; if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) end end; if move.Magnitude > 0 then flyVel = flyVel:Lerp(move.Unit * spd, 0.15) else flyVel = flyVel:Lerp(isOnGround() and Vector3.zero or Vector3.new(0, -0.8, 0), 0.08) end; if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity = flyVel end; if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector) end end) end
 
--- Freecam Engine
+-- Freecam Engine (FIXED)
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70, lockGyro = nil, lockPos = nil }
 local I_CamVel, I_YawVel, I_PitchVel, I_RollVel, heightVelocity = Vector3.zero, 0, 0, 0, 0
 local fcMoveTouch, fcMoveSt, fcJoy, fcRotTouch, fcRotLast, fcKeysHeld, fcConns = nil, nil, Vector2.zero, nil, nil, {}, {}
@@ -176,7 +154,7 @@ local function startFreecamLoop() RS:BindToRenderStep("XKIDFreecam", Enum.Render
 local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 local function fullCleanupFreecam() stopFreecamLoop(); stopFreecamCapture(); pcall(function() if FC.lockGyro then FC.lockGyro:Destroy() end end); pcall(function() if FC.lockPos then FC.lockPos:Destroy() end end); local hrp = getRoot(); if hrp then hrp.Anchored = false; if FC.savedCF then hrp.CFrame = FC.savedCF end end; local hum = getHum(); if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end; Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end end
 
--- Spectate Engine
+-- Spectate
 local Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, fpYaw = 0, fpPitch = 0, isSelf = false }
 local specTM, specPinch, specPinchD, specPan, specConns = nil, {}, nil, Vector2.zero, {}
 local function startSpecCapture() table.insert(specConns, UIS.InputBegan:Connect(function(inp, gp) if gp or not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end; table.insert(specPinch, inp); specTM = #specPinch == 1 and inp or nil end)); table.insert(specConns, UIS.InputChanged:Connect(function(inp) if not Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end; if #specPinch == 1 and inp == specTM then specPan = specPan + Vector2.new(inp.Delta.X, inp.Delta.Y) elseif #specPinch >= 2 then local d = (specPinch[1].Position - specPinch[2].Position).Magnitude; if specPinchD then local diff = d - specPinchD; Cam.FieldOfView = math.clamp(Cam.FieldOfView - diff * 0.15, 10, 120); if Spec.mode == "third" then Spec.dist = math.clamp(Spec.dist - diff * 0.03, 3, 30) end end; specPinchD = d end end)); table.insert(specConns, UIS.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; for i, v in ipairs(specPinch) do if v == inp then table.remove(specPinch, i); break end end; specPinchD = nil; specTM = #specPinch == 1 and specPinch[1] or nil end)) end
@@ -295,11 +273,37 @@ secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Defaul
 
 local T_FREE = Window:Tab({ Title = "Cinematic", Icon = "video", ShowTabTitle = true, Border = true })
 local secFC = T_FREE:Section({ Title = "Drone Engine", Opened = true, Box = true })
-secFC:Toggle({ Title = "Enable Freecam", Value = false, Type = "Toggle", Icon = "camera", Callback = function(v) FC.active = v; if v then local cf = Cam.CFrame; FC.pos = cf.Position; local rx, ry = cf:ToEulerAnglesYXZ(); FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry); local hrp = getRoot(); if hrp then FC.savedCF = hrp.CFrame; pcall(function() if FC.lockGyro then FC.lockGyro:Destroy() end end); pcall(function() if FC.lockPos then FC.lockPos:Destroy() end end); FC.lockGyro = Instance.new("BodyGyro", hrp); FC.lockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9); FC.lockPos = Instance.new("BodyPosition", hrp); FC.lockPos.MaxForce = Vector3.new(9e9, 9e9, 9e9); hrp.Anchored = true end; FC.origFov = Cam.FieldOfView; startFreecamCapture(); startFreecamLoop(); if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end; notify("Freecam", "ON", 2) else fullCleanupFreecam(); notify("Freecam", "OFF", 1.5) end end })
+secFC:Toggle({ Title = "Enable Freecam", Value = false, Type = "Toggle", Icon = "camera", Callback = function(v)
+    FC.active = v
+    if v then
+        -- RESET semua variable ke default sebelum start
+        I_CamVel = Vector3.zero; I_YawVel = 0; I_PitchVel = 0; I_RollVel = 0; heightVelocity = 0
+        FC.rollDeg = 0; fcJoy = Vector2.zero
+        local cf = Cam.CFrame; FC.pos = cf.Position
+        local rx, ry, rz = cf:ToEulerAnglesYXZ()
+        FC.pitchDeg = math.deg(rx); FC.yawDeg = math.deg(ry)
+        local hrp = getRoot()
+        if hrp then FC.savedCF = hrp.CFrame
+            pcall(function() if FC.lockGyro then FC.lockGyro:Destroy() end end)
+            pcall(function() if FC.lockPos then FC.lockPos:Destroy() end end)
+            FC.lockGyro = Instance.new("BodyGyro", hrp); FC.lockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            FC.lockPos = Instance.new("BodyPosition", hrp); FC.lockPos.MaxForce = Vector3.new(9e9, 9e9, 9e9); hrp.Anchored = true
+        end
+        FC.origFov = Cam.FieldOfView
+        startFreecamCapture(); startFreecamLoop()
+        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end
+        notify("Freecam", "ON", 2)
+    else
+        fullCleanupFreecam(); notify("Freecam", "OFF", 1.5)
+    end
+end })
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 local secCine = T_FREE:Section({ Title = "Cinematic Mode", Opened = true, Box = true })
-secCine:Toggle({ Title = "Hide All UI", Value = false, Type = "Toggle", Icon = "monitor-off", Callback = function(v) if v then State.Cinema.hideUI = true; State.Cinema.cachedGuis = {}; for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end) else State.Cinema.hideUI = false; for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end) end; notify("Cinematic", v and "UI Hidden" or "UI Shown", 1.5) end })
+secCine:Toggle({ Title = "Hide All UI", Value = false, Type = "Toggle", Icon = "monitor-off", Callback = function(v)
+    if getgenv()._XKID_UI_LOADING then return end
+    if v then State.Cinema.hideUI = true; State.Cinema.cachedGuis = {}; for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end) else State.Cinema.hideUI = false; for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end) end; notify("Cinematic", v and "UI Hidden" or "UI Shown", 1.5)
+end })
 
 local T_WO = Window:Tab({ Title = "Visuals", Icon = "layers", ShowTabTitle = true, Border = true })
 local secFilter = T_WO:Section({ Title = "Presets", Opened = true, Box = true })
@@ -381,12 +385,10 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(funct
 -- ══════════════════════════════════════════════════════════════
 --  STARTUP
 -- ══════════════════════════════════════════════════════════════
-pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 pcall(function() Window:SelectTab(T_HOME) end)
 
--- Lepas guard setelah UI selesai render
 task.delay(1, function()
     getgenv()._XKID_UI_LOADING = false
     notify("System", "XKID AKTIF", 3)
-    print("✅ XKID v" .. CURRENT_VERSION .. " - Clean Startup · Delta Ready")
+    print("✅ XKID v" .. CURRENT_VERSION .. " - Freecam Fix · Default Graphics · Delta Ready")
 end)
