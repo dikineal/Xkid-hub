@@ -1,5 +1,5 @@
 --[[
-    @XKID SCRIPT 👉😜👈
+    @XKID SCRIPT 👉😜👈 v4.2.3
     by @WTF.XKID
     Roblox Build For Mobile
 ]]
@@ -135,7 +135,7 @@ local function startFlyCapture() local keysHeld = {}; table.insert(flyConns, UIS
 local function stopFlyCapture() for _, c in ipairs(flyConns) do c:Disconnect() end; flyConns = {}; flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero; State.Fly._keys = {} end
 local function toggleFly(v) if not v then State.Fly.active = false; stopFlyCapture(); RS:UnbindFromRenderStep("XKIDFly"); pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end); pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end); State.Fly.bv = nil; State.Fly.bg = nil; flyVel = Vector3.zero; local hum = getHum(); if hum then hum.PlatformStand = false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end; notify("Fly", "OFF", 1.5); return end; local hrp, hum = getRoot(), getHum(); if not hrp or not hum then return end; State.Fly.active = true; hum.PlatformStand = true; flyVel = Vector3.zero; State.Fly.bv = Instance.new("BodyVelocity", hrp); State.Fly.bv.MaxForce = Vector3.new(9e9,9e9,9e9); State.Fly.bg = Instance.new("BodyGyro", hrp); State.Fly.bg.MaxTorque = Vector3.new(9e9,9e9,9e9); State.Fly.bg.P = 50000; startFlyCapture(); notify("Fly", "ON", 2); RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function() if not State.Fly.active then return end; local r = getRoot(); if not r then return end; local camCF = Cam.CFrame; local spd = State.Move.flyS; local move = Vector3.zero; local keys = State.Fly._keys or {}; if onMobile then move = camCF.LookVector * (-flyJoy.Y) + camCF.RightVector * flyJoy.X else if keys[Enum.KeyCode.W] then move = move + camCF.LookVector end; if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end; if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end; if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end; if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) end; if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) end end; if move.Magnitude > 0 then flyVel = flyVel:Lerp(move.Unit * spd, 0.15) else flyVel = flyVel:Lerp(isOnGround() and Vector3.zero or Vector3.new(0, -0.8, 0), 0.08) end; if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity = flyVel end; if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector) end end) end
 
--- Freecam
+-- Freecam Standard
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70, savedWalkSpeed = 16, savedJumpPower = 50 }
 local I_CamVel, I_YawVel, I_PitchVel, I_RollVel, heightVelocity = Vector3.zero, 0, 0, 0, 0
 local fcMoveTouch, fcMoveSt, fcJoy, fcRotTouch, fcRotLast, fcKeysHeld, fcConns = nil, nil, Vector2.zero, nil, nil, {}, {}
@@ -234,7 +234,7 @@ end
 --  MAIN WINDOW
 -- ══════════════════════════════════════════════════════════════
 local Window = WindUI:CreateWindow({
-    Title = "💀 XKID v" .. CURRENT_VERSION,
+    Title = "＼(^o^)／ XKID_HUB",
     Author = "@WTF.XKID",
     Folder = "XKIDScript", Icon = "terminal", IconThemed = true,
     Theme = "Midnight", Size = UDim2.fromOffset(480, 420), Transparent = false, Acrylic = false,
@@ -242,19 +242,22 @@ local Window = WindUI:CreateWindow({
     ModernLayout = false, ModernLayoutMergeElements = false,
     User = { Enabled = false },
     Topbar = { Height = 48, ButtonsType = "Default" },
-    OpenButton = { Enabled = true, Title = "👉😜👈 XKID", Icon = "ghost", Position = UDim2.new(0.5, -30, 0, 10), Draggable = true, OnlyMobile = false, Scale = 0.75 },
+    OpenButton = { Enabled = true, Title = "WTF.XKID", Icon = "cloud", Position = UDim2.new(0.5, -30, 0, 60), Draggable = true, OnlyMobile = false, Scale = 0.75 },
     Watermark = { Enabled = false },
 })
 getgenv()._XKID_INSTANCE = Window
-Window:Tag({ Title = "v" .. CURRENT_VERSION, Color = Color3.fromRGB(220, 20, 60), Icon = "badge-check" })
-Window:SideBarLabel({ Title = "Quick Actions", Icon = "zap" })
+Window:Tag({ Title = "v4.2.3 ✅", Color = Color3.fromRGB(220, 20, 60), Icon = "badge-check" })
 Window:SideBarButton({ Title = "Refresh 🔄", Icon = "refresh-cw", Variant = "Secondary", Callback = function() refreshCharacter() end })
-Window:SideBarDivider({})
 
 -- TABS
 local T_HOME = Window:Tab({ Title = "Informasi", Icon = "layout-dashboard", ShowTabTitle = true, Border = true })
 
--- Identity Panel (Paragraph)
+-- Live Monitor (PALING ATAS)
+local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true, Box = true })
+local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
+local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
+
+-- Identity (BAWAH LIVE MONITOR)
 local secIdentity = T_HOME:Section({ Title = "Identity", Opened = true, Box = true })
 local identityLabel = secIdentity:Paragraph({ Title = "XKID Engine", Desc = "Loading..." })
 
@@ -266,28 +269,24 @@ end
 
 local execName = getExecutor()
 local isOwner = LP.UserId == OWNER_USER_ID
+local deviceType = onMobile and "📱 Mobile" or "🖥️ PC"
 
 local function updateIdentity()
     local text = string.format(
-        "💀 XKID v%s\n" ..
         "👤 Display : %s\n" ..
         "📅 Age     : %d days\n" ..
         "⚙️ Exec    : %s\n" ..
+        "%s\n" ..
         "👑 Role    : %s",
-        CURRENT_VERSION,
         LP.DisplayName,
         LP.AccountAge,
         execName,
+        deviceType,
         isOwner and "Owner" or "User"
     )
     pcall(function() identityLabel:SetDesc(text) end)
 end
 task.spawn(function() while getgenv()._XKID_RUNNING do updateIdentity(); task.wait(3) end end)
-
--- Live Monitor
-local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true, Box = true })
-local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
-local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
 
 -- Discord
 local secDiscord = T_HOME:Section({ Title = "Discord", Opened = true, Box = true })
@@ -295,7 +294,7 @@ secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", 
 
 task.spawn(function() task.wait(2); local function lerpColor(c1, c2, t) return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t) end; local function toHex(c) return string.format("#%02X%02X%02X", c.R * 255, c.G * 255, c.B * 255) end; local function makeBarA(val, maxVal, len, mode) local fill = math.clamp(math.floor((val / maxVal) * len), 0, len); local res = ""; for i = 1, len do if i <= fill then local t = (i - 1) / math.max(1, len - 1); local col = mode == "FPS" and lerpColor(Color3.fromRGB(0,255,255), Color3.fromRGB(0,100,255), t) or (t < 0.5 and lerpColor(Color3.fromRGB(0,255,0), Color3.fromRGB(255,255,0), t*2) or lerpColor(Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,0), (t-0.5)*2)); res = res .. '<font color="' .. toHex(col) .. '">▰</font>' else res = res .. '<font color="#444444">▱</font>' end end; return res end; while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(function() if srvLabel and cachedMapName then local pCount, mCount = #Players:GetPlayers(), Players.MaxPlayers; local uptime = formatTime(os.difftime(os.time(), START_TIME)); local job = game.JobId ~= "" and game.JobId:sub(1, 8) .. "..." or "N/A"; srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s", cachedMapName, job, pCount, mCount, uptime)) end end); pcall(function() if netLabel then local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999); local fpsBar = makeBarA(fps, 120, 14, "FPS"); local pingBar = makeBarA(ping, 200, 14, "PING"); netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping)) end end) end end)
 
--- Tabs 2-10
+-- Tabs 2-10 (sama)
 local T_AV = Window:Tab({ Title = "Character", Icon = "fingerprint", ShowTabTitle = true, Border = true })
 local secStateCtrl = T_AV:Section({ Title = "State Control", Opened = true, Box = true })
 secStateCtrl:Button({ Title = "Refresh Character 🔄", Desc = "Reload character like /re — no gamepass", Icon = "refresh-cw", Callback = function() refreshCharacter() end })
