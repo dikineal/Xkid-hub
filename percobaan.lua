@@ -1,5 +1,5 @@
 --[[
-    @XKID SCRIPT 👉😜👈 v4.2.3
+    @XKID SCRIPT 👉😜👈 v4.2.4
     by @WTF.XKID
     Roblox Build For Mobile
 ]]
@@ -23,7 +23,7 @@ local LP           = Players.LocalPlayer
 local Cam          = workspace.CurrentCamera
 local onMobile     = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "4.2.3"
+local CURRENT_VERSION = "4.2.4"
 local OWNER_USER_ID = 3507208058
 
 getgenv()._XKID_UI_LOADING = true
@@ -54,7 +54,7 @@ end
 getgenv()._XKID_LOADED = true; getgenv()._XKID_RUNNING = true; getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/FayintExploit/Windui-boreal/refs/heads/main/WindUI%20boreal"))()
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main_example.lua"))()
 task.wait(0.2)
 
 -- State
@@ -135,7 +135,7 @@ local function startFlyCapture() local keysHeld = {}; table.insert(flyConns, UIS
 local function stopFlyCapture() for _, c in ipairs(flyConns) do c:Disconnect() end; flyConns = {}; flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero; State.Fly._keys = {} end
 local function toggleFly(v) if not v then State.Fly.active = false; stopFlyCapture(); RS:UnbindFromRenderStep("XKIDFly"); pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end); pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end); State.Fly.bv = nil; State.Fly.bg = nil; flyVel = Vector3.zero; local hum = getHum(); if hum then hum.PlatformStand = false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp end; notify("Fly", "OFF", 1.5); return end; local hrp, hum = getRoot(), getHum(); if not hrp or not hum then return end; State.Fly.active = true; hum.PlatformStand = true; flyVel = Vector3.zero; State.Fly.bv = Instance.new("BodyVelocity", hrp); State.Fly.bv.MaxForce = Vector3.new(9e9,9e9,9e9); State.Fly.bg = Instance.new("BodyGyro", hrp); State.Fly.bg.MaxTorque = Vector3.new(9e9,9e9,9e9); State.Fly.bg.P = 50000; startFlyCapture(); notify("Fly", "ON", 2); RS:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function() if not State.Fly.active then return end; local r = getRoot(); if not r then return end; local camCF = Cam.CFrame; local spd = State.Move.flyS; local move = Vector3.zero; local keys = State.Fly._keys or {}; if onMobile then move = camCF.LookVector * (-flyJoy.Y) + camCF.RightVector * flyJoy.X else if keys[Enum.KeyCode.W] then move = move + camCF.LookVector end; if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end; if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end; if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end; if keys[Enum.KeyCode.E] then move = move + Vector3.new(0,1,0) end; if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0,1,0) end end; if move.Magnitude > 0 then flyVel = flyVel:Lerp(move.Unit * spd, 0.15) else flyVel = flyVel:Lerp(isOnGround() and Vector3.zero or Vector3.new(0, -0.8, 0), 0.08) end; if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity = flyVel end; if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector) end end) end
 
--- Freecam Standard
+-- Freecam
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70, savedWalkSpeed = 16, savedJumpPower = 50 }
 local I_CamVel, I_YawVel, I_PitchVel, I_RollVel, heightVelocity = Vector3.zero, 0, 0, 0, 0
 local fcMoveTouch, fcMoveSt, fcJoy, fcRotTouch, fcRotLast, fcKeysHeld, fcConns = nil, nil, Vector2.zero, nil, nil, {}, {}
@@ -201,10 +201,14 @@ local function likeRandomPlayer() local _, likePlayer = getLikeRemotes(); if not
 local function startAutoLike() if State.AutoLike.active then return end; State.AutoLike.active = true; State.AutoLike.thread = task.spawn(function() while State.AutoLike.active and getgenv()._XKID_RUNNING do local ok, result = likeRandomPlayer(); if ok then notify("Auto Like", result .. " | Total: " .. State.AutoLike.count, 1.5) end; local cd = math.random(State.AutoLike.minCD * 10, State.AutoLike.maxCD * 10) / 10; task.wait(cd) end; State.AutoLike.thread = nil end); notify("Auto Like", "ON", 2) end
 local function stopAutoLike() State.AutoLike.active = false; if State.AutoLike.thread then task.cancel(State.AutoLike.thread); State.AutoLike.thread = nil end; notify("Auto Like", "OFF", 1.5) end
 
--- Hard Fling
+-- Hard Fling (BUG FIX: CanCollide restore)
 local hardFlingConn, hardFlingRampConn, hardFlingBAV = nil, nil, nil
 local function startHardFling() if State.HardFling.active then return end; State.HardFling.active = true; State.Move.ncp = true; State.HardFling.currentPower = 0; State.HardFling.rampUpActive = true; local hrp = getRoot(); if hrp then hardFlingBAV = Instance.new("BodyAngularVelocity", hrp); hardFlingBAV.MaxTorque = Vector3.new(9e9, 9e9, 9e9); hardFlingBAV.P = 100000 end; local rampDuration = 2; local rampStart = tick(); hardFlingRampConn = TrackC(RS.Heartbeat:Connect(function() if not State.HardFling.rampUpActive then return end; local elapsed = tick() - rampStart; local t = math.clamp(elapsed / rampDuration, 0, 1); State.HardFling.currentPower = State.HardFling.power * t; if t >= 1 then State.HardFling.currentPower = State.HardFling.power; State.HardFling.rampUpActive = false end end)); hardFlingConn = TrackC(RS.Heartbeat:Connect(function() if not State.HardFling.active then return end; local r = getRoot(); if not r then return end; if State.HardFling.mode == "Spin" then if hardFlingBAV and hardFlingBAV.Parent then hardFlingBAV.AngularVelocity = Vector3.new(0, State.HardFling.currentPower, 0) end elseif State.HardFling.mode == "Shake" then if hardFlingBAV and hardFlingBAV.Parent then local shakeX = (math.random() - 0.5) * State.HardFling.currentPower * 0.5; local shakeY = (math.random() - 0.5) * State.HardFling.currentPower * 0.3; local shakeZ = (math.random() - 0.5) * State.HardFling.currentPower * 0.5; hardFlingBAV.AngularVelocity = Vector3.new(shakeX, shakeY, shakeZ) end end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)); notify("Hard Fling", "ON — " .. State.HardFling.mode, 2) end
-local function stopHardFling() State.HardFling.active = false; State.HardFling.rampUpActive = false; State.HardFling.currentPower = 0; if hardFlingConn then hardFlingConn:Disconnect(); hardFlingConn = nil end; if hardFlingRampConn then hardFlingRampConn:Disconnect(); hardFlingRampConn = nil end; if hardFlingBAV then hardFlingBAV:Destroy(); hardFlingBAV = nil end; local r = getRoot(); if r then pcall(function() r.AssemblyAngularVelocity = Vector3.zero; r.AssemblyLinearVelocity = Vector3.zero end) end; notify("Hard Fling", "OFF", 1.5) end
+local function stopHardFling() State.HardFling.active = false; State.HardFling.rampUpActive = false; State.HardFling.currentPower = 0; if hardFlingConn then hardFlingConn:Disconnect(); hardFlingConn = nil end; if hardFlingRampConn then hardFlingRampConn:Disconnect(); hardFlingRampConn = nil end; if hardFlingBAV then hardFlingBAV:Destroy(); hardFlingBAV = nil end; local r = getRoot(); if r then pcall(function() r.AssemblyAngularVelocity = Vector3.zero; r.AssemblyLinearVelocity = Vector3.zero end) end;
+    -- BUG FIX: Restore CanCollide
+    if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end end
+    notify("Hard Fling", "OFF", 1.5)
+end
 
 -- Filter
 local function resetFilterOnly() for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end end
@@ -234,30 +238,30 @@ end
 --  MAIN WINDOW
 -- ══════════════════════════════════════════════════════════════
 local Window = WindUI:CreateWindow({
-    Title = "＼(^o^)／ XKID_HUB",
+    Title = "XKID_HUB",
     Author = "@WTF.XKID",
-    Folder = "XKIDScript", Icon = "terminal", IconThemed = true,
-    Theme = "Midnight", Size = UDim2.fromOffset(480, 420), Transparent = false, Acrylic = false,
+    Folder = "XKIDScript", Icon = "bluetooth", IconThemed = true,
+    Theme = "Crimson", Size = UDim2.fromOffset(480, 420), Transparent = false, Acrylic = false,
     SideBarWidth = 180, ScrollBarEnabled = true, HideSearchBar = true, Resizable = true,
     ModernLayout = false, ModernLayoutMergeElements = false,
     User = { Enabled = false },
     Topbar = { Height = 48, ButtonsType = "Default" },
-    OpenButton = { Enabled = true, Title = "WTF.XKID", Icon = "cloud", Position = UDim2.new(0.5, -30, 0, 60), Draggable = true, OnlyMobile = false, Scale = 0.75 },
+    OpenButton = { Enabled = true, Title = "WTF.XKID", Icon = "wifi", Position = UDim2.new(0.5, -30, 0, 60), Draggable = true, OnlyMobile = false, Scale = 0.75 },
     Watermark = { Enabled = false },
 })
 getgenv()._XKID_INSTANCE = Window
-Window:Tag({ Title = "v4.2.3 ✅", Color = Color3.fromRGB(220, 20, 60), Icon = "badge-check" })
+Window:Tag({ Title = "v4.2.4 ✅", Color = Color3.fromRGB(220, 20, 60), Icon = "badge-check" })
 Window:SideBarButton({ Title = "Refresh 🔄", Icon = "refresh-cw", Variant = "Secondary", Callback = function() refreshCharacter() end })
 
 -- TABS
 local T_HOME = Window:Tab({ Title = "Informasi", Icon = "layout-dashboard", ShowTabTitle = true, Border = true })
 
--- Live Monitor (PALING ATAS)
+-- Live Monitor
 local secStatus = T_HOME:Section({ Title = "Live Monitor", Opened = true, Box = true })
 local srvLabel = secStatus:Paragraph({ Title = "Server Info", Desc = "Loading..." })
 local netLabel = secStatus:Paragraph({ Title = "Performance", Desc = "Loading..." })
 
--- Identity (BAWAH LIVE MONITOR)
+-- Identity
 local secIdentity = T_HOME:Section({ Title = "Identity", Opened = true, Box = true })
 local identityLabel = secIdentity:Paragraph({ Title = "XKID Engine", Desc = "Loading..." })
 
@@ -273,11 +277,11 @@ local deviceType = onMobile and "📱 Mobile" or "🖥️ PC"
 
 local function updateIdentity()
     local text = string.format(
-        "👤 Display : %s\n" ..
-        "📅 Age     : %d days\n" ..
-        "⚙️ Exec    : %s\n" ..
-        "%s\n" ..
-        "👑 Role    : %s",
+        "Display name: %s\n" ..
+        "Account Age: %d days\n" ..
+        "Executor: %s\n" ..
+        "Device: %s\n" ..
+        "Role: %s",
         LP.DisplayName,
         LP.AccountAge,
         execName,
@@ -294,7 +298,7 @@ secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", 
 
 task.spawn(function() task.wait(2); local function lerpColor(c1, c2, t) return Color3.new(c1.R + (c2.R - c1.R) * t, c1.G + (c2.G - c1.G) * t, c1.B + (c2.B - c1.B) * t) end; local function toHex(c) return string.format("#%02X%02X%02X", c.R * 255, c.G * 255, c.B * 255) end; local function makeBarA(val, maxVal, len, mode) local fill = math.clamp(math.floor((val / maxVal) * len), 0, len); local res = ""; for i = 1, len do if i <= fill then local t = (i - 1) / math.max(1, len - 1); local col = mode == "FPS" and lerpColor(Color3.fromRGB(0,255,255), Color3.fromRGB(0,100,255), t) or (t < 0.5 and lerpColor(Color3.fromRGB(0,255,0), Color3.fromRGB(255,255,0), t*2) or lerpColor(Color3.fromRGB(255,255,0), Color3.fromRGB(255,0,0), (t-0.5)*2)); res = res .. '<font color="' .. toHex(col) .. '">▰</font>' else res = res .. '<font color="#444444">▱</font>' end end; return res end; while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(function() if srvLabel and cachedMapName then local pCount, mCount = #Players:GetPlayers(), Players.MaxPlayers; local uptime = formatTime(os.difftime(os.time(), START_TIME)); local job = game.JobId ~= "" and game.JobId:sub(1, 8) .. "..." or "N/A"; srvLabel:SetDesc(string.format("[ 🗺️ ] <font face='RobotoMono'>Grid     :</font> %s\n[ 🆔 ] <font face='RobotoMono'>Node     :</font> %s\n[ 👥 ] <font face='RobotoMono'>Entities :</font> %d / %d\n[ ⏳ ] <font face='RobotoMono'>Session  :</font> %s", cachedMapName, job, pCount, mCount, uptime)) end end); pcall(function() if netLabel then local fps, ping = math.clamp(sharedFPS, 0, 300), math.clamp(sharedPing, 0, 9999); local fpsBar = makeBarA(fps, 120, 14, "FPS"); local pingBar = makeBarA(ping, 200, 14, "PING"); netLabel:SetDesc(string.format("<font face='RobotoMono'><b>FPS  </b></font> %s <font color='#FFFFFF'>%d</font>\n<font face='RobotoMono'><b>PING </b></font> %s <font color='#FFFFFF'>%dms</font>", fpsBar, fps, pingBar, ping)) end end) end end)
 
--- Tabs 2-10 (sama)
+-- Tabs 2-10
 local T_AV = Window:Tab({ Title = "Character", Icon = "fingerprint", ShowTabTitle = true, Border = true })
 local secStateCtrl = T_AV:Section({ Title = "State Control", Opened = true, Box = true })
 secStateCtrl:Button({ Title = "Refresh Character 🔄", Desc = "Reload character like /re — no gamepass", Icon = "refresh-cw", Callback = function() refreshCharacter() end })
@@ -306,7 +310,10 @@ local secAbi = T_AV:Section({ Title = "Abilities", Opened = true, Box = true })
 secAbi:Toggle({ Title = "Fly", Value = false, Type = "Toggle", Icon = "bird", Callback = function(v) toggleFly(v) end })
 secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, IsTooltip = true, Callback = function(v) State.Move.flyS = v end })
 local noclipConn = nil
-secAbi:Toggle({ Title = "NoClip", Value = false, Type = "Toggle", Icon = "ghost", Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end end; notify("NoClip", v and "ON" or "OFF", 1.5) end })
+secAbi:Toggle({ Title = "NoClip", Value = false, Type = "Toggle", Icon = "ghost", Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end;
+    -- BUG FIX: Restore CanCollide pas OFF
+    if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end end end;
+    notify("NoClip", v and "ON" or "OFF", 1.5) end })
 local secFling = T_AV:Section({ Title = "Hard Fling (Safe)", Opened = true, Box = true })
 secFling:Toggle({ Title = "Hard Fling", Value = false, Type = "Toggle", Icon = "zap", Callback = function(v) if v then startHardFling() else stopHardFling() end end })
 secFling:Dropdown({ Title = "Fling Mode", Values = { "Spin", "Shake" }, Value = "Spin", SearchBarEnabled = false, Callback = function(v) State.HardFling.mode = v; notify("Fling Mode", v, 1.5) end })
