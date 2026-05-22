@@ -1,31 +1,21 @@
 ```
 ----------------------------------------------------
--- WINDUI LOADER (Hybrid - Raw + Release Fallback)
+-- WINDUI LOADER
 ----------------------------------------------------
 local WindUI
+
 do
-    local urls = {
-        "https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.client.lua",
-        "https://github.com/Footagesus/WindUI/releases/download/1.6.64-fix/main.lua"
-    }
-    local maxTries = 2
-    for _, url in ipairs(urls) do
-        for i = 1, maxTries do
-            local ok, result = pcall(function()
-                local src = game:HttpGet(url)
-                if #src < 1000 then error("Incomplete download") end
-                return loadstring(src)()
-            end)
-            if ok and result then
-                WindUI = result
-                break
-            end
-            warn("[Sodium] Failed: " .. url .. " (attempt " .. i .. ")")
-            if i < maxTries then task.wait(1.5) end
-        end
-        if WindUI then break end
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet(
+            "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+        ))()
+    end)
+
+    if success then
+        WindUI = result
+    else
+        error("Failed to load WindUI")
     end
-    if not WindUI then error("[Sodium] Failed to load WindUI from all sources") end
 end
 
 ----------------------------------------------------
