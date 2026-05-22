@@ -171,6 +171,10 @@ local function formatTime(seconds)
     local m = math.floor(seconds / 60); local s = seconds % 60
     return string.format("%02d:%02d", m, s)
 end
+local function makeBar(val, maxVal, len)
+    local fill = math.clamp(math.floor((val / maxVal) * len), 0, len)
+    return string.rep("█", fill) .. string.rep("░", len - fill)
+end
 local function getConfigList()
     local list = {}
     pcall(function()
@@ -348,7 +352,7 @@ local function toggleSmartTP(v)
 end
 
 ----------------------------------------------------
--- ESP ENGINE (NO VIEW ANGLE)
+-- ESP ENGINE
 ----------------------------------------------------
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -551,13 +555,14 @@ local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 local function fullCleanupFreecam() stopFreecamLoop(); stopFreecamCapture(); local hum = getHum(); if hum then hum.WalkSpeed = FC.savedWalkSpeed; hum.UseJumpPower = true; hum.JumpPower = FC.savedJumpPower end; Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end; FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end end
 
 ----------------------------------------------------
--- SELF-SPEC (UI KECIL + TRANSPARAN + DRAG + PINCH)
+-- SELF-SPEC (UI + TOUCH GESTURE MOBILE-ONLY)
 ----------------------------------------------------
 local SS = State.SelfSpec
 local ssHeightVel = 0
 local SS_UI_Btns = { up = false, down = false, left = false, right = false, zoomIn = false, zoomOut = false, rollL = false, rollR = false }
 local SS_UI_Hidden = false
 local ssButtons = {}
+local ssTouches = {}
 local ssDragActive = false
 local ssDragStart = Vector2.zero
 local ssDragYaw = 0
@@ -565,6 +570,10 @@ local ssDragPitch = 0
 local ssPinchDist = 0
 local ssPinchRadius = 8
 local SSUI = Instance.new("ScreenGui"); SSUI.Name = "XKID_SelfSpecUI"; SSUI.ResetOnSpawn = false; SSUI.ZIndexBehavior = Enum.ZIndexBehavior.Global; SSUI.Enabled = false; SSUI.Parent = CoreGui
+local function isOnButtonArea(pos)
+    local vp = Cam.ViewportSize
+    return pos.X > vp.X - 170 and pos.Y > vp.Y - 180
+end
 local function makeSSBtn(name, txt, pos, actionKey)
     local b = Instance.new("TextButton", SSUI); b.Name = name; b.Size = UDim2.new(0, 40, 0, 40); b.Position = pos; b.BackgroundColor3 = Color3.fromRGB(15, 15, 15); b.BackgroundTransparency = 0.7; b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 16; b.Font = Enum.Font.GothamBold; b.AutoButtonColor = false
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8); local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(100, 200, 255); uis.Thickness = 1.5; uis.Transparency = 0.5; local indicator = Instance.new("Frame", b); indicator.Name = "Indicator"; indicator.Size = UDim2.new(0, 5, 0, 5); indicator.Position = UDim2.new(0, 3, 0, 3); indicator.BackgroundColor3 = Color3.fromRGB(60, 60, 60); Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
@@ -583,65 +592,40 @@ local function toggleSSEye() SS_UI_Hidden = not SS_UI_Hidden; ssEyeBtn.Text = SS
 ssEyeBtn.MouseButton1Click:Connect(toggleSSEye); ssEyeBtn.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch then toggleSSEye() end end)
 local function startSelfSpecLoop() SS.yaw = 0; SS.pitch = 20; RS:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function(dt) if not SS.active then return end; local char = LP.Character; local hrp = getCharRoot(char); if not hrp then return end; local safeDt = math.clamp(dt, 0.001, 0.05); Cam.CameraType = Enum.CameraType.Scriptable; local rotX = 0; local heightTarget = 0; if SS_UI_Btns.left then rotX = -1 elseif SS_UI_Btns.right then rotX = 1 end; if SS_UI_Btns.up then heightTarget = SS.speed * 5 elseif SS_UI_Btns.down then heightTarget = -SS.speed * 5 end; if SS_UI_Btns.rollL then SS.roll = (SS.roll or 0) - safeDt * 50 elseif SS_UI_Btns.rollR then SS.roll = (SS.roll or 0) + safeDt * 50 end; if SS_UI_Btns.zoomIn then SS.fov = math.clamp((SS.fov or 70) - safeDt * 30, 10, 120) end; if SS_UI_Btns.zoomOut then SS.fov = math.clamp((SS.fov or 70) + safeDt * 30, 10, 120) end; if SS.mode == "Orbit" then SS.yaw = SS.yaw + safeDt * 30 * SS.speed; elseif SS.mode == "Vertical Orbit" then SS.pitch = 20 + math.sin(tick() * SS.speed) * 40; elseif SS.mode == "Figure 8" then SS.yaw = math.sin(tick() * SS.speed * 0.7) * 90; SS.pitch = 20 + math.sin(tick() * SS.speed) * 30; elseif SS.mode == "Static" then SS.yaw = SS.yaw + rotX * safeDt * 60; SS.pitch = math.clamp(SS.pitch, -70, 70); elseif SS.mode == "Slow Drift" then SS.yaw = SS.yaw + safeDt * 10 * SS.speed end; if heightTarget == 0 then ssHeightVel = ssHeightVel * math.max(0, 1 - safeDt * 5) else ssHeightVel = ssHeightVel + (heightTarget - ssHeightVel) * math.clamp(safeDt * 3, 0, 1) end; SS.height = (SS.height or 3) + ssHeightVel * safeDt; Cam.FieldOfView = SS.fov or 70; local targetPos = hrp.Position + Vector3.new(0, SS.height or 3, 0); local orbitCF = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(SS.yaw), 0) * CFrame.Angles(math.rad(SS.pitch), 0, 0) * CFrame.new(0, 0, SS.radius); Cam.CFrame = orbitCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0)) end) end
 local function stopSelfSpecLoop() RS:UnbindFromRenderStep("XKIDSelfSpec"); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = SS.origFov; if SSUI then SSUI.Enabled = false end; for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end; SS.roll = 0; SS_UI_Hidden = false; ssEyeBtn.Text = "👁"; for _, b in ipairs(ssButtons) do b.Visible = true end end
--- Drag + Pinch
-local ssDragConnInput, ssDragConnMove, ssDragConnEnd
-local function startSelfSpecDrag()
-    if ssDragConnInput then return end
-    ssDragConnInput = TrackC(UIS.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.UserInputType == Enum.UserInputType.Touch then
-            local touches = UIS:GetTouches()
-            if #touches >= 2 then
-                local t1, t2 = touches[1], touches[2]
-                ssPinchDist = (Vector2.new(t1.Position.X, t1.Position.Y) - Vector2.new(t2.Position.X, t2.Position.Y)).Magnitude
-                ssPinchRadius = SS.radius
-                return
-            end
-            -- Check if tap is on a button
-            local btn = SSUI:GetGuiObjectAtPosition(inp.Position.X, inp.Position.Y)
-            if btn and btn:IsA("TextButton") then return end
-            ssDragActive = true; ssDragStart = inp.Position; ssDragYaw = SS.yaw; ssDragPitch = SS.pitch
-        elseif inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            ssDragActive = true; local m = UIS:GetMouseLocation(); ssDragStart = Vector2.new(m.X, m.Y); ssDragYaw = SS.yaw; ssDragPitch = SS.pitch
-        end
-    end))
-    ssDragConnMove = TrackC(UIS.InputChanged:Connect(function(inp)
-        if not SS.active then return end
-        -- Pinch
-        if inp.UserInputType == Enum.UserInputType.Touch then
-            local touches = UIS:GetTouches()
-            if #touches >= 2 and ssPinchDist > 0 then
-                local t1, t2 = touches[1], touches[2]
-                local dist = (Vector2.new(t1.Position.X, t1.Position.Y) - Vector2.new(t2.Position.X, t2.Position.Y)).Magnitude
-                SS.radius = math.clamp(ssPinchRadius * (ssPinchDist / math.max(dist, 1)), 3, 30)
-            elseif ssDragActive and #touches == 1 then
-                local pos = touches[1].Position
-                local dx = pos.X - ssDragStart.X; local dy = pos.Y - ssDragStart.Y
-                SS.yaw = ssDragYaw - dx * 0.3; SS.pitch = math.clamp(ssDragPitch + dy * 0.3, -75, 75)
-            end
-        elseif inp.UserInputType == Enum.UserInputType.MouseMovement and ssDragActive then
-            local pos = Vector2.new(inp.Position.X, inp.Position.Y)
-            local dx = pos.X - ssDragStart.X; local dy = pos.Y - ssDragStart.Y
-            SS.yaw = ssDragYaw - dx * 0.3; SS.pitch = math.clamp(ssDragPitch + dy * 0.3, -75, 75)
-        end
-    end))
-    ssDragConnEnd = TrackC(UIS.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.Touch then
-            local touches = UIS:GetTouches()
-            if #touches < 2 then ssDragActive = false; ssPinchDist = 0 end
-        elseif inp.UserInputType == Enum.UserInputType.MouseButton2 then ssDragActive = false
-        end
-    end))
-end
-local function stopSelfSpecDrag()
-    if ssDragConnInput then ssDragConnInput:Disconnect(); ssDragConnInput = nil end
-    if ssDragConnMove then ssDragConnMove:Disconnect(); ssDragConnMove = nil end
-    if ssDragConnEnd then ssDragConnEnd:Disconnect(); ssDragConnEnd = nil end
-    ssDragActive = false
-end
+-- Mobile gesture handling
+TrackC(UIS.InputBegan:Connect(function(inp, gp)
+    if gp or not SS.active then return end
+    if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+    if isOnButtonArea(inp.Position) then return end
+    table.insert(ssTouches, inp)
+    if #ssTouches == 1 then
+        ssDragActive = true; ssDragStart = inp.Position; ssDragYaw = SS.yaw; ssDragPitch = SS.pitch
+    elseif #ssTouches == 2 then
+        local p1 = ssTouches[1].Position; local p2 = ssTouches[2].Position
+        ssPinchDist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
+        ssPinchRadius = SS.radius; ssDragActive = false
+    end
+end))
+TrackC(UIS.InputChanged:Connect(function(inp)
+    if not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end
+    if #ssTouches == 1 and ssDragActive then
+        local dx = inp.Position.X - ssDragStart.X; local dy = inp.Position.Y - ssDragStart.Y
+        SS.yaw = ssDragYaw - dx * 0.3; SS.pitch = math.clamp(ssDragPitch + dy * 0.3, -75, 75)
+    elseif #ssTouches == 2 then
+        local p1 = ssTouches[1].Position; local p2 = ssTouches[2].Position
+        local dist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
+        if ssPinchDist > 0 then SS.radius = math.clamp(ssPinchRadius * (ssPinchDist / math.max(dist, 1)), 3, 30) end
+    end
+end))
+TrackC(UIS.InputEnded:Connect(function(inp)
+    if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+    for i, t in ipairs(ssTouches) do if t == inp then table.remove(ssTouches, i); break end end
+    if #ssTouches < 2 then ssPinchDist = 0 end
+    if #ssTouches == 0 then ssDragActive = false end
+end))
 local function toggleSelfSpec(v)
-    if v then if FC.active then fullCleanupFreecam() end; SS.active = true; SS.origFov = Cam.FieldOfView; SS.fov = Cam.FieldOfView; SS.yaw = 0; SS.pitch = 20; SS.roll = 0; if SSUI then SSUI.Enabled = true end; startSelfSpecLoop(); startSelfSpecDrag(); notify("Self-Spectate", "ON — " .. SS.mode, 2)
-    else SS.active = false; stopSelfSpecLoop(); stopSelfSpecDrag(); notify("Self-Spectate", "OFF", 1.5) end
+    if v then if FC.active then fullCleanupFreecam() end; SS.active = true; SS.origFov = Cam.FieldOfView; SS.fov = Cam.FieldOfView; SS.yaw = 0; SS.pitch = 20; SS.roll = 0; if SSUI then SSUI.Enabled = true end; startSelfSpecLoop(); notify("Self-Spectate", "ON — " .. SS.mode, 2)
+    else SS.active = false; stopSelfSpecLoop(); notify("Self-Spectate", "OFF", 1.5) end
 end
 
 ----------------------------------------------------
@@ -703,7 +687,7 @@ local Window = WindUI:CreateWindow({
     Icon = "bluetooth",
     Author = "v" .. CURRENT_VERSION,
     Folder = "XKIDHub",
-    Size = UDim2.fromOffset(420, 380),
+    Size = UDim2.fromOffset(360, 320),
     Transparent = true,
     Theme = "Crimson",
     SideBarWidth = 160,
@@ -771,10 +755,10 @@ local execName = getExecutor()
 local jobId = game.JobId ~= "" and game.JobId:sub(1, 8) .. "..." or "N/A"
 
 local infoParagraph = TabInfo:Paragraph({ 
-    Title = "💀 XKID v" .. CURRENT_VERSION .. " | FPS: -- | Ping: -- | Uptime: --:--", 
-    Desc = "👤 " .. LP.DisplayName .. " | 📱 " .. (onMobile and "Mobile" or "PC") .. " | ⚡ " .. execName .. "\n🎮 " .. (cachedMapName or "Loading...") .. " | 🆔 " .. jobId .. "\n🕐 Uptime: " .. formatTime(os.difftime(os.time(), START_TIME)) .. " | 👥 " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers .. " Players\n─────────────────────────"
+    Title = "💀 " .. LP.DisplayName .. " v" .. CURRENT_VERSION .. "\n⚡ " .. makeBar(sharedFPS, 120, 10) .. " " .. sharedFPS .. " FPS\n📡 " .. makeBar(math.max(1, 200 - sharedPing), 200, 10) .. " " .. sharedPing .. "ms\n🕐 " .. makeBar(os.difftime(os.time(), START_TIME) % 3600, 3600, 10) .. " " .. formatTime(os.difftime(os.time(), START_TIME)),
+    Desc = "👤 " .. LP.DisplayName .. "\n📱 " .. (onMobile and "Mobile" or "PC") .. " | 🚀 " .. execName .. "\n\n🎮 " .. (cachedMapName or "Loading...") .. "\n👥 " .. makeBar(#Players:GetPlayers(), Players.MaxPlayers, 10) .. " " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers .. " Players\n\n🌐 discord.gg/bzumc2u96"
 })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); pcall(function() infoParagraph:SetTitle("💀 XKID v" .. CURRENT_VERSION .. " | FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms | Uptime: " .. formatTime(os.difftime(os.time(), START_TIME))) end) end end)
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); pcall(function() infoParagraph:SetTitle("💀 " .. LP.DisplayName .. " v" .. CURRENT_VERSION .. "\n⚡ " .. makeBar(sharedFPS, 120, 10) .. " " .. sharedFPS .. " FPS\n📡 " .. makeBar(math.max(1, 200 - sharedPing), 200, 10) .. " " .. sharedPing .. "ms\n🕐 " .. makeBar(os.difftime(os.time(), START_TIME) % 3600, 3600, 10) .. " " .. formatTime(os.difftime(os.time(), START_TIME))) end) end end)
 
 local secDiscord = TabInfo:Section({ Title = "🔗 Discord" })
 secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link copied", 2) end })
@@ -784,17 +768,20 @@ secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", 
 ----------------------------------------------------
 TabChar:Button({ Title = "Refresh Character 🔄", Desc = "Reload character like /re — no gamepass", Callback = function() refreshCharacter() end })
 local secMov = TabChar:Section({ Title = "Movement" })
-secMov:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
-secMov:Slider({ Title = "Jump Power", Step = 1, Value = { Min = 50, Max = 500, Default = 50 }, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end end })
+local hMov = secMov:HStack({ Columns = 2 })
+hMov:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
+hMov:Slider({ Title = "Jump Power", Step = 1, Value = { Min = 50, Max = 500, Default = 50 }, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end end })
 secMov:Toggle({ Title = "Infinite Jump", Default = false, Callback = function(v) if v then State.Move.infJ = TrackC(UIS.JumpRequest:Connect(function() if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end end)) else if State.Move.infJ then State.Move.infJ:Disconnect(); State.Move.infJ = nil end end; notify("Infinite Jump", v and "ON" or "OFF", 1.5) end })
 local secAbi = TabChar:Section({ Title = "Abilities" })
-secAbi:Toggle({ Title = "Fly", Default = false, Callback = function(v) toggleFly(v) end })
-secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = v end })
+local hAbi = secAbi:HStack({ Columns = 2 })
+hAbi:Toggle({ Title = "Fly", Default = false, Callback = function(v) toggleFly(v) end })
+hAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = v end })
 local noclipConn = nil
 secAbi:Toggle({ Title = "NoClip", Default = false, Callback = function(v) State.Move.ncp = v; if v then if not noclipConn then noclipConn = TrackC(RS.Heartbeat:Connect(function() if not State.Move.ncp then return end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end)) end else if noclipConn then noclipConn:Disconnect(); noclipConn = nil end; if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end end end; notify("NoClip", v and "ON" or "OFF", 1.5) end })
 local secFling = TabChar:Section({ Title = "Hard Fling (Safe)" })
-secFling:Toggle({ Title = "Hard Fling", Default = false, Callback = function(v) if v then startHardFling() else stopHardFling() end end })
-secFling:Dropdown({ Title = "Fling Mode", Values = { "Spin", "Shake" }, Default = "Spin", Callback = function(v) State.HardFling.mode = v; notify("Fling Mode", v, 1.5) end })
+local hFling = secFling:HStack({ Columns = 2 })
+hFling:Toggle({ Title = "Hard Fling", Default = false, Callback = function(v) if v then startHardFling() else stopHardFling() end end })
+hFling:Dropdown({ Title = "Mode", Values = { "Spin", "Shake" }, Default = "Spin", Callback = function(v) State.HardFling.mode = v; notify("Fling Mode", v, 1.5) end })
 secFling:Slider({ Title = "Fling Power", Step = 500, Value = { Min = 1000, Max = 50000, Default = 10000 }, Callback = function(v) State.HardFling.power = v end })
 
 ----------------------------------------------------
@@ -831,7 +818,7 @@ secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Defaul
 -- TAB: CINEMATIC
 ----------------------------------------------------
 local secSelfSpec = TabCine:Section({ Title = "🎥 Self-Spectate" })
-secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "Orbit + Drag + Pinch", Default = false, Callback = function(v) toggleSelfSpec(v) end })
+secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "Buttons + Drag + Pinch", Default = false, Callback = function(v) toggleSelfSpec(v) end })
 secSelfSpec:Dropdown({ Title = "Preset Mode", Values = { "Static", "Orbit", "Vertical Orbit", "Figure 8", "Slow Drift" }, Default = "Static", Callback = function(v) SS.mode = v; notify("Self-Spec", v, 1.5) end })
 secSelfSpec:Slider({ Title = "Radius", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) SS.radius = v end })
 secSelfSpec:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20, Default = 3 }, Callback = function(v) SS.height = v end })
@@ -849,9 +836,10 @@ secCine:Toggle({ Title = "Hide All UI", Default = false, Callback = function(v) 
 local secPresets = TabVis:Section({ Title = "Presets" })
 secPresets:Dropdown({ Title = "Select Filter", Values = { "Default", "Custom", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue" }, Default = "Default", Callback = function(v) applyFilter(v) end })
 local secFX = TabVis:Section({ Title = "Custom FX" })
-secFX:Slider({ Title = "Tint Red", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintR = v; applyCustomFilter() end })
-secFX:Slider({ Title = "Tint Green", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintG = v; applyCustomFilter() end })
-secFX:Slider({ Title = "Tint Blue", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintB = v; applyCustomFilter() end })
+local hTint = secFX:HStack({ Columns = 3 })
+hTint:Slider({ Title = "R", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintR = v; applyCustomFilter() end })
+hTint:Slider({ Title = "G", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintG = v; applyCustomFilter() end })
+hTint:Slider({ Title = "B", Step = 1, Value = { Min = 0, Max = 255, Default = 255 }, Callback = function(v) State.CustomFilter.tintB = v; applyCustomFilter() end })
 secFX:Slider({ Title = "Saturation", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.saturation = v; applyCustomFilter() end })
 secFX:Slider({ Title = "Contrast", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.contrast = v; applyCustomFilter() end })
 secFX:Slider({ Title = "Brightness", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.brightness = v; applyCustomFilter() end })
@@ -920,17 +908,34 @@ secTheme:Dropdown({
     Callback = function(v) WindUI:SetTheme(v) end 
 })
 local secCustomTheme = TabSet:Section({ Title = "🎨 Custom Theme" })
-secCustomTheme:Colorpicker({
+secCustomTheme:Dropdown({
     Title = "Primary Color",
-    Default = Color3.fromRGB(220, 20, 60),
-    Callback = function(color)
-        WindUI:AddTheme({
-            Primary = color,
-            Toggle = color,
-            Slider = color,
-            Checkbox = color,
-        })
+    Values = { "Crimson", "Blue", "Green", "Purple", "Orange", "Pink", "Gold" },
+    Default = "Crimson",
+    Callback = function(v)
+        local themeColors = {
+            Crimson = Color3.fromRGB(220, 20, 60), Blue = Color3.fromRGB(0, 145, 255), Green = Color3.fromRGB(0, 255, 100),
+            Purple = Color3.fromRGB(150, 0, 255), Orange = Color3.fromRGB(255, 150, 0), Pink = Color3.fromRGB(255, 100, 180),
+            Gold = Color3.fromRGB(255, 215, 0),
+        }
+        local c = themeColors[v]
+        WindUI:AddTheme({ Primary = c, Toggle = c, Slider = c, Checkbox = c })
         WindUI:SetTheme("Custom")
+    end
+})
+local secFont = TabSet:Section({ Title = "🔤 Font" })
+secFont:Dropdown({
+    Title = "UI Font",
+    Values = { "Default", "Michroma", "Orbitron", "Rajdhani", "Montserrat", "Poppins", "Nunito", "FredokaOne", "Audiowide", "Exo2", "SpaceGrotesk" },
+    Default = "Poppins",
+    Callback = function(v)
+        local fontMap = {
+            Default = "rbxassetid://12187368625", Michroma = "rbxassetid://12187365364", Orbitron = "rbxassetid://12187370747",
+            Rajdhani = "rbxassetid://12187376155", Montserrat = "rbxassetid://12187369328", Poppins = "rbxassetid://12187371840",
+            Nunito = "rbxassetid://12187369991", FredokaOne = "rbxassetid://12187367452", Audiowide = "rbxassetid://12187364234",
+            Exo2 = "rbxassetid://12187366818", SpaceGrotesk = "rbxassetid://12187377902",
+        }
+        pcall(function() WindUI:SetFont(fontMap[v]) end)
     end
 })
 local secFile = TabSet:Section({ Title = "File Management" })
@@ -942,11 +947,25 @@ secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig
 secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end); notify("Config", "Files refreshed", 1.5) end })
 local secLike = TabSet:Section({ Title = "Auto Like (Smart)" })
 secLike:Toggle({ Title = "Auto Like", Default = false, Callback = function(v) if v then startAutoLike() else stopAutoLike() end end })
+local hLikeCD = secLike:HStack({ Columns = 2 })
+hLikeCD:Slider({ Title = "Min Cooldown", Step = 0.5, Value = { Min = 0.5, Max = 10, Default = 2 }, Callback = function(v) State.AutoLike.minCD = v end })
+hLikeCD:Slider({ Title = "Max Cooldown", Step = 0.5, Value = { Min = 1, Max = 15, Default = 6 }, Callback = function(v) State.AutoLike.maxCD = v end })
 secLike:Slider({ Title = "Like Radius", Desc = "0 = all", Step = 10, Value = { Min = 0, Max = 500, Default = 100 }, Callback = function(v) State.AutoLike.radius = v end })
-secLike:Slider({ Title = "Min Cooldown", Step = 0.5, Value = { Min = 0.5, Max = 10, Default = 2 }, Callback = function(v) State.AutoLike.minCD = v end })
-secLike:Slider({ Title = "Max Cooldown", Step = 0.5, Value = { Min = 1, Max = 15, Default = 6 }, Callback = function(v) State.AutoLike.maxCD = v end })
 local autoLikeInfo = secLike:Paragraph({ Title = "Info", Desc = "Total likes sent: 0" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(function() autoLikeInfo:SetDesc("Total likes sent: " .. State.AutoLike.count) end) end end)
+
+----------------------------------------------------
+-- AUTO-EXPAND ALL SECTIONS
+----------------------------------------------------
+task.delay(0.5, function()
+    pcall(function()
+        for _, tab in pairs(Window.Tabs) do
+            for _, section in ipairs(tab.Sections) do
+                if section.Expand then section:Expand() end
+            end
+        end
+    end)
+end)
 
 ----------------------------------------------------
 -- STARTUP
