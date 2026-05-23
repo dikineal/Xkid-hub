@@ -1,35 +1,21 @@
---[[
-    @XKID SCRIPT v4.4.0 FINAL
-    by @WTF.XKID
-    Roblox Build For Mobile
-    WindUI Footagesus Release
-    Font: Sedgwick Ave Display (rbxassetid://12187376357) + Fallback Enum.Font.Sedgwick
-    Changelog v4.4.0:
-    - Self-Spectate system rebuilt from scratch (clean gesture separation)
-    - UI overlay: draggable, resizable, button zone separated from gesture zone
-    - All gesture conflicts resolved (disconnect other systems on enable)
-    - Notification: direct pcall + retry + original icons
-    - Tab Spectator: UNCHANGED
-]]
+-- @XKID SCRIPT v4.5.0
+-- by @WTF.XKID
+-- Roblox Build For Mobile
+-- WindUI Footagesus Release
 
 repeat task.wait() until game:IsLoaded()
+print("1. Game loaded")
 
-----------------------------------------------------
--- WINDUI LOADER
-----------------------------------------------------
 local WindUI
 do
+    print("2. Loading WindUI...")
     local success, result = pcall(function()
-        return loadstring(game:HttpGet(
-            "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
-        ))()
+        return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
     end)
-    if success then WindUI = result else error("Failed to load WindUI") end
+    if success then WindUI = result else print("GAGAL WINDUI:", result); return end
 end
+print("3. WindUI loaded")
 
-----------------------------------------------------
--- SERVICES
-----------------------------------------------------
 local RS               = game:GetService("RunService")
 local HttpService       = game:GetService("HttpService")
 local TS                = game:GetService("TweenService")
@@ -46,10 +32,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LP                = Players.LocalPlayer
 local Cam               = workspace.CurrentCamera
 local onMobile          = not UIS.KeyboardEnabled
+print("4. Services loaded:", LP.Name)
 
-local CURRENT_VERSION = "4.4.0"
-local OWNER_USER_ID   = 3507208058
-
+local CURRENT_VERSION = "4.5.0"
 getgenv()._XKID_UI_LOADING = true
 
 local originalLighting = {
@@ -57,10 +42,9 @@ local originalLighting = {
     OutdoorAmbient = Lighting.OutdoorAmbient, GlobalShadows = Lighting.GlobalShadows,
     ExposureCompensation = Lighting.ExposureCompensation, FogEnd = Lighting.FogEnd,
 }
+print("5. Lighting saved")
 
-----------------------------------------------------
--- CLEANUP
-----------------------------------------------------
+print("6. Cleanup...")
 if getgenv()._XKID_RUNNING then getgenv()._XKID_RUNNING = false; task.wait(0.5) end
 if getgenv()._XKID_ESP_CACHE then
     for _, c in pairs(getgenv()._XKID_ESP_CACHE) do
@@ -90,26 +74,8 @@ if getgenv()._XKID_LOADED then
     pcall(function() RS:UnbindFromRenderStep("XKIDSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDSelfSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
-    pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
-    pcall(function() for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") then gui.Enabled = true end end end)
-    for _, p in ipairs(Players:GetPlayers()) do
-        pcall(function()
-            if p.Character then
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
-                for _, desc in ipairs(p.Character:GetDescendants()) do
-                    if desc:IsA("BillboardGui") and desc.Parent then desc.Enabled = true end
-                end
-            end
-            if p.PlayerGui then
-                for _, v in ipairs(p.PlayerGui:GetDescendants()) do
-                    if v:IsA("BillboardGui") then v.Enabled = true end
-                end
-            end
-        end)
-    end
-    task.wait(0.2); collectgarbage("collect")
 end
+print("7. Cleanup done")
 
 getgenv()._XKID_LOADED  = true
 getgenv()._XKID_RUNNING = true
@@ -120,34 +86,14 @@ local function TrackC(conn)
     return conn
 end
 
-----------------------------------------------------
--- NOTIFICATION SYSTEM (Direct Pcall + Original Icons)
-----------------------------------------------------
 local function notify(title, content, dur, icon)
     local ok = pcall(function()
-        WindUI:Notify({
-            Title = title,
-            Content = content,
-            Duration = dur or 2,
-            Icon = icon or "bell"
-        })
+        WindUI:Notify({ Title = title, Content = content, Duration = dur or 2, Icon = icon or "bell" })
     end)
-    if not ok then
-        task.wait(0.03)
-        pcall(function()
-            WindUI:Notify({
-                Title = title,
-                Content = content,
-                Duration = dur or 2,
-                Icon = icon or "bell"
-            })
-        end)
-    end
+    if not ok then task.wait(0.03); pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = dur or 2, Icon = icon or "bell" }) end) end
 end
+print("8. Notify ready")
 
-----------------------------------------------------
--- STATE MANAGEMENT
-----------------------------------------------------
 local State = {
     Move      = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
     Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
@@ -161,6 +107,7 @@ local State = {
     SelfSpec  = { active = false, mode = "Third Person", dist = 8, height = 3, orbitYaw = 0, orbitPitch = 20, fpYaw = 0, fpPitch = 0, fov = 70, origFov = 70, roll = 0, radius = 8, speed = 1 },
     ESP       = { active = false, cache = getgenv()._XKID_ESP_CACHE, tracerMode = "Bottom", maxDrawDistance = 300, highlightMode = false, boxColor_N = Color3.fromRGB(0, 255, 150), boxColor_S = Color3.fromRGB(220, 20, 60), boxColor_G = Color3.fromRGB(255, 165, 0), tracerColor_N = Color3.fromRGB(0, 200, 255), tracerColor_S = Color3.fromRGB(220, 20, 60), tracerColor_G = Color3.fromRGB(255, 165, 0), nameColor = Color3.fromRGB(255, 255, 255) },
 }
+print("9. State ready")
 
 local colorMap = {
     ["Merah"] = Color3.fromRGB(255, 0, 0), ["Hijau"] = Color3.fromRGB(0, 255, 0), ["Biru"] = Color3.fromRGB(0, 0, 255),
@@ -169,9 +116,6 @@ local colorMap = {
     ["Hitam"] = Color3.fromRGB(0, 0, 0), ["Crimson"] = Color3.fromRGB(220, 20, 60),
 }
 
-----------------------------------------------------
--- HELPERS
-----------------------------------------------------
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
 local function getHum()  return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
 local function getDisplayNames()
@@ -237,6 +181,8 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(fun
 task.spawn(function() while getgenv()._XKID_RUNNING do pcall(function() if tick() - lastMapCheck > 30 or not cachedMapName then cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name; lastMapCheck = tick() end end); task.wait(5) end end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
+print("10. Helpers + loops ready")
+
 ----------------------------------------------------
 -- ANTI AFK
 ----------------------------------------------------
@@ -264,7 +210,7 @@ local function stopAFK()
 end
 
 ----------------------------------------------------
--- CHARACTER HANDLER + SHIFT LOCK
+-- SHIFT LOCK
 ----------------------------------------------------
 TrackC(LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
@@ -380,7 +326,7 @@ local function toggleSmartTP(v)
 end
 
 ----------------------------------------------------
--- ESP ENGINE (unchanged)
+-- ESP ENGINE
 ----------------------------------------------------
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -503,7 +449,7 @@ TrackC(RS.RenderStepped:Connect(function()
 end))
 
 ----------------------------------------------------
--- FLY ENGINE (unchanged)
+-- FLY ENGINE
 ----------------------------------------------------
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
 local flyVel = Vector3.zero
@@ -552,7 +498,7 @@ local function toggleFly(v)
 end
 
 ----------------------------------------------------
--- FREECAM (unchanged)
+-- FREECAM
 ----------------------------------------------------
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, savedCF = nil, origFov = 70, savedWalkSpeed = 16, savedJumpPower = 50 }
 local I_CamVel, I_YawVel, I_PitchVel, I_RollVel, heightVelocity = Vector3.zero, 0, 0, 0, 0
@@ -583,7 +529,7 @@ local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 local function fullCleanupFreecam() stopFreecamLoop(); stopFreecamCapture(); local hum = getHum(); if hum then hum.WalkSpeed = FC.savedWalkSpeed; hum.UseJumpPower = true; hum.JumpPower = FC.savedJumpPower end; Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end; FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end end
 
 ----------------------------------------------------
--- SELF-SPECTATE v4.4.0 - REBUILT FROM SCRATCH
+-- SELF-SPECTATE
 ----------------------------------------------------
 local SS = State.SelfSpec
 local ssHeightVel = 0
@@ -596,13 +542,9 @@ local ssDragYaw = 0
 local ssDragPitch = 0
 local ssPinchDist = 0
 local ssPinchRadius = 8
-local isDraggingUI = false
-local uiDragStart = Vector2.zero
-local uiDragStartPos = nil
 local SSUI = nil
 local ssUIScale = 1.0
 
--- Create fresh UI
 local function getSSUI()
     if not SSUI or not SSUI.Parent then
         local gui = Instance.new("ScreenGui")
@@ -616,118 +558,66 @@ local function getSSUI()
     return SSUI
 end
 
-local function isInSSButtonZone(pos)
-    if SS_UI_Hidden then return false end
-    for _, btn in ipairs(ssButtons) do
-        if btn and btn.Visible and btn.AbsolutePosition and btn.AbsoluteSize then
-            local x1 = btn.AbsolutePosition.X
-            local y1 = btn.AbsolutePosition.Y
-            local x2 = x1 + btn.AbsoluteSize.X
-            local y2 = y1 + btn.AbsoluteSize.Y
-            if pos.X >= x1 and pos.X <= x2 and pos.Y >= y1 and pos.Y <= y2 then
-                return true
-            end
-        end
-    end
-    return false
-end
+local BTN_SIZE = 32
 
-local function resetAllSSButtonIndicators()
-    for _, b in ipairs(ssButtons) do
-        if b then
-            b.BackgroundTransparency = 0.7
-            local ind = b:FindFirstChild("Indicator")
-            if ind then ind.BackgroundColor3 = Color3.fromRGB(60, 60, 60) end
-        end
-    end
-end
-
-local function updateSSUIScale()
-    for _, b in ipairs(ssButtons) do
-        if b then
-            b.Size = UDim2.new(0, 40 * ssUIScale, 0, 40 * ssUIScale)
-            b.TextSize = 16 * ssUIScale
-        end
-    end
-    if _G.ssEyeBtn and _G.ssEyeBtn.Parent then
-        _G.ssEyeBtn.Size = UDim2.new(0, 40 * ssUIScale, 0, 40 * ssUIScale)
-        _G.ssEyeBtn.TextSize = 16 * ssUIScale
-    end
-end
-
-local function makeSSBtn(name, txt, pos, actionKey)
+local function makeSSBtn(name, txt, xOff, yOff, actionKey)
     local ui = getSSUI()
     local b = Instance.new("TextButton", ui)
     b.Name = name
-    b.Size = UDim2.new(0, 40, 0, 40)
-    b.Position = pos
+    b.Size = UDim2.new(0, BTN_SIZE, 0, BTN_SIZE)
+    b.Position = UDim2.new(0, xOff, 0, yOff)
     b.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    b.BackgroundTransparency = 0.7
+    b.BackgroundTransparency = 0.75
     b.Text = txt
     b.TextColor3 = Color3.fromRGB(255, 255, 255)
-    b.TextSize = 16
+    b.TextSize = 13
     b.Font = Enum.Font.GothamBold
     b.AutoButtonColor = false
     b.ZIndex = 10
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
     local stroke = Instance.new("UIStroke", b)
     stroke.Color = Color3.fromRGB(100, 200, 255)
-    stroke.Thickness = 1.5
-    stroke.Transparency = 0.5
-    local ind = Instance.new("Frame", b)
-    ind.Name = "Indicator"
-    ind.Size = UDim2.new(0, 5, 0, 5)
-    ind.Position = UDim2.new(0, 3, 0, 3)
-    ind.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    Instance.new("UICorner", ind).CornerRadius = UDim.new(1, 0)
-    
+    stroke.Thickness = 1
+    stroke.Transparency = 0.6
     b.InputBegan:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
             SS_UI_Btns[actionKey] = true
             b.BackgroundTransparency = 0.3
-            ind.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
         end
     end)
     b.InputEnded:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
             SS_UI_Btns[actionKey] = false
-            b.BackgroundTransparency = 0.7
-            ind.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            b.BackgroundTransparency = 0.75
         end
     end)
+    b.MouseLeave:Connect(function() SS_UI_Btns[actionKey] = false; b.BackgroundTransparency = 0.75 end)
     table.insert(ssButtons, b)
     return b
 end
 
--- Create buttons
-makeSSBtn("BtnUp",    "↑", UDim2.new(1, -104, 0.5, -100), "up")
-makeSSBtn("BtnDown",  "↓", UDim2.new(1, -104, 0.5,  -20), "down")
-makeSSBtn("BtnLeft",  "←", UDim2.new(1, -152, 0.5,  -60), "left")
-makeSSBtn("BtnRight", "→", UDim2.new(1,  -56, 0.5,  -60), "right")
-makeSSBtn("BtnZIn",   "+", UDim2.new(1, -152, 0.5,  -20), "zoomIn")
-makeSSBtn("BtnZOut",  "-", UDim2.new(1,  -56, 0.5,  -20), "zoomOut")
-makeSSBtn("BtnRollL", "L", UDim2.new(1, -152, 0.5, -100), "rollL")
-makeSSBtn("BtnRollR", "R", UDim2.new(1,  -56, 0.5, -100), "rollR")
+makeSSBtn("BtnRollL", "L", 5,  5,  "rollL")
+makeSSBtn("BtnUp",    "↑", 42, 5,  "up")
+makeSSBtn("BtnRollR", "R", 79, 5,  "rollR")
+makeSSBtn("BtnLeft",  "←", 5,  42, "left")
+makeSSBtn("BtnRight", "→", 79, 42, "right")
+makeSSBtn("BtnZIn",   "+", 5,  79, "zoomIn")
+makeSSBtn("BtnDown",  "↓", 42, 79, "down")
+makeSSBtn("BtnZOut",  "-", 79, 79, "zoomOut")
 
--- Eye button (hide/show + drag handle)
 local ssEyeBtn = Instance.new("TextButton", getSSUI())
 ssEyeBtn.Name = "BtnEye"
-ssEyeBtn.Size = UDim2.new(0, 40, 0, 40)
-ssEyeBtn.Position = UDim2.new(1, -104, 0.5, -60)
+ssEyeBtn.Size = UDim2.new(0, BTN_SIZE, 0, BTN_SIZE)
+ssEyeBtn.Position = UDim2.new(0, 42, 0, 42)
 ssEyeBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 ssEyeBtn.BackgroundTransparency = 0.8
 ssEyeBtn.Text = "👁"
 ssEyeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ssEyeBtn.TextSize = 16
+ssEyeBtn.TextSize = 14
 ssEyeBtn.Font = Enum.Font.GothamBold
 ssEyeBtn.AutoButtonColor = false
 ssEyeBtn.ZIndex = 20
-Instance.new("UICorner", ssEyeBtn).CornerRadius = UDim.new(0, 8)
-local eyeStroke = Instance.new("UIStroke", ssEyeBtn)
-eyeStroke.Color = Color3.fromRGB(100, 200, 255)
-eyeStroke.Thickness = 1.5
-eyeStroke.Transparency = 0.5
-_G.ssEyeBtn = ssEyeBtn
+Instance.new("UICorner", ssEyeBtn).CornerRadius = UDim.new(0, 6)
 
 local function toggleSSEye()
     SS_UI_Hidden = not SS_UI_Hidden
@@ -735,42 +625,51 @@ local function toggleSSEye()
     for _, b in ipairs(ssButtons) do if b then b.Visible = not SS_UI_Hidden end end
 end
 ssEyeBtn.MouseButton1Click:Connect(toggleSSEye)
-ssEyeBtn.InputBegan:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.Touch then toggleSSEye() end
-end)
 
--- Self-Spec Render Loop
+local function isInButtonZone(pos)
+    if SS_UI_Hidden then return false end
+    if pos.X < 120 and pos.Y < 120 then
+        for _, btn in ipairs(ssButtons) do
+            if btn and btn.Visible and btn.AbsolutePosition then
+                local x1, y1 = btn.AbsolutePosition.X, btn.AbsolutePosition.Y
+                local x2, y2 = x1 + btn.AbsoluteSize.X, y1 + btn.AbsoluteSize.Y
+                if pos.X >= x1 and pos.X <= x2 and pos.Y >= y1 and pos.Y <= y2 then return true end
+            end
+        end
+        if ssEyeBtn and ssEyeBtn.Visible and ssEyeBtn.AbsolutePosition then
+            local x1, y1 = ssEyeBtn.AbsolutePosition.X, ssEyeBtn.AbsolutePosition.Y
+            local x2, y2 = x1 + ssEyeBtn.AbsoluteSize.X, y1 + ssEyeBtn.AbsoluteSize.Y
+            if pos.X >= x1 and pos.X <= x2 and pos.Y >= y1 and pos.Y <= y2 then return true end
+        end
+    end
+    return false
+end
+
+local function updateSSUIScale()
+    for _, b in ipairs(ssButtons) do
+        if b then b.Size = UDim2.new(0, BTN_SIZE * ssUIScale, 0, BTN_SIZE * ssUIScale); b.TextSize = 13 * ssUIScale end
+    end
+    if ssEyeBtn then ssEyeBtn.Size = UDim2.new(0, BTN_SIZE * ssUIScale, 0, BTN_SIZE * ssUIScale); ssEyeBtn.TextSize = 14 * ssUIScale end
+end
+
 local function startSelfSpecLoop()
     RS:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not SS.active then return end
-        local char = LP.Character
-        local hrp = getCharRoot(char)
+        local char = LP.Character; local hrp = getCharRoot(char)
         if not hrp then return end
         local safeDt = math.clamp(dt, 0.001, 0.05)
         Cam.CameraType = Enum.CameraType.Scriptable
-        
-        -- UI button inputs
         if SS_UI_Btns.rollL then SS.roll = (SS.roll or 0) - safeDt * 50 end
         if SS_UI_Btns.rollR then SS.roll = (SS.roll or 0) + safeDt * 50 end
         if SS_UI_Btns.zoomIn then SS.fov = math.clamp((SS.fov or 70) - safeDt * 30, 10, 120) end
         if SS_UI_Btns.zoomOut then SS.fov = math.clamp((SS.fov or 70) + safeDt * 30, 10, 120) end
-        
         local heightTarget = 0
-        if SS_UI_Btns.up then heightTarget = SS.speed * 5
-        elseif SS_UI_Btns.down then heightTarget = -SS.speed * 5 end
-        
-        if heightTarget == 0 then
-            ssHeightVel = ssHeightVel * math.max(0, 1 - safeDt * 5)
-        else
-            ssHeightVel = ssHeightVel + (heightTarget - ssHeightVel) * math.clamp(safeDt * 3, 0, 1)
-        end
+        if SS_UI_Btns.up then heightTarget = SS.speed * 5 elseif SS_UI_Btns.down then heightTarget = -SS.speed * 5 end
+        if heightTarget == 0 then ssHeightVel = ssHeightVel * math.max(0, 1 - safeDt * 5) else ssHeightVel = ssHeightVel + (heightTarget - ssHeightVel) * math.clamp(safeDt * 3, 0, 1) end
         SS.height = (SS.height or 3) + ssHeightVel * safeDt
-        
         SS._smoothRadius = SS._smoothRadius or SS.radius
         SS._smoothRadius = SS._smoothRadius + (SS.radius - SS._smoothRadius) * math.clamp(safeDt * 8, 0, 1)
-        
         Cam.FieldOfView = SS.fov or 70
-        
         if SS.mode == "First Person" then
             local head = char:FindFirstChild("Head")
             local origin = head and head.Position or (hrp.Position + Vector3.new(0, 1.5, 0))
@@ -785,29 +684,22 @@ end
 
 local function stopSelfSpecLoop()
     RS:UnbindFromRenderStep("XKIDSelfSpec")
-    Cam.CameraType = Enum.CameraType.Custom
-    Cam.FieldOfView = SS.origFov
-    SS.active = false
-    SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.roll = 0
+    Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = SS.origFov
+    SS.active = false; SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.roll = 0
     SS.radius = 8; SS.height = 3; SS.fov = SS.origFov; SS._smoothRadius = 8
-    ssHeightVel = 0; ssDragActive = false; ssPinchDist = 0; isDraggingUI = false
-    local ui = getSSUI()
-    if ui then ui.Enabled = false end
+    ssHeightVel = 0; ssDragActive = false; ssPinchDist = 0
+    if getSSUI() then getSSUI().Enabled = false end
     for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end
-    resetAllSSButtonIndicators()
     SS_UI_Hidden = false
     if ssEyeBtn then ssEyeBtn.Text = "👁" end
     for _, b in ipairs(ssButtons) do if b then b.Visible = true end end
 end
 
--- Gesture handlers (clean - only active when SS.active)
 TrackC(UIS.InputBegan:Connect(function(inp, gp)
     if not SS.active then return end
     if gp then return end
-    
-    -- Mouse right-click: orbit (PC)
     if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-        if isInSSButtonZone(Vector2.new(inp.Position.X, inp.Position.Y)) then return end
+        if isInButtonZone(Vector2.new(inp.Position.X, inp.Position.Y)) then return end
         ssDragActive = true
         ssDragStart = Vector2.new(inp.Position.X, inp.Position.Y)
         ssDragYaw = (SS.mode == "First Person") and SS.fpYaw or SS.orbitYaw
@@ -815,11 +707,8 @@ TrackC(UIS.InputBegan:Connect(function(inp, gp)
         UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
         return
     end
-    
-    -- Touch
     if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-    if isInSSButtonZone(inp.Position) then return end  -- Buttons handle themselves
-    
+    if isInButtonZone(inp.Position) then return end
     local touches = UIS:GetTouches()
     if #touches == 1 then
         ssDragActive = true
@@ -836,27 +725,20 @@ end))
 
 TrackC(UIS.InputChanged:Connect(function(inp)
     if not SS.active then return end
-    
-    -- Mouse movement
     if inp.UserInputType == Enum.UserInputType.MouseMovement and ssDragActive then
         local newYaw = ssDragYaw - inp.Delta.X * 0.3
         local newPitch = math.clamp(ssDragPitch + inp.Delta.Y * 0.3, -75, 75)
-        if SS.mode == "First Person" then SS.fpYaw = newYaw; SS.fpPitch = newPitch
-        else SS.orbitYaw = newYaw; SS.orbitPitch = newPitch end
+        if SS.mode == "First Person" then SS.fpYaw = newYaw; SS.fpPitch = newPitch else SS.orbitYaw = newYaw; SS.orbitPitch = newPitch end
         return
     end
-    
     if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-    
     local touches = UIS:GetTouches()
     if #touches == 1 and ssDragActive then
         local pos = touches[1].Position
-        local dx = pos.X - ssDragStart.X
-        local dy = pos.Y - ssDragStart.Y
+        local dx = pos.X - ssDragStart.X; local dy = pos.Y - ssDragStart.Y
         local newYaw = ssDragYaw + dx * 0.3
         local newPitch = math.clamp(ssDragPitch - dy * 0.3, -75, 75)
-        if SS.mode == "First Person" then SS.fpYaw = newYaw; SS.fpPitch = newPitch
-        else SS.orbitYaw = newYaw; SS.orbitPitch = newPitch end
+        if SS.mode == "First Person" then SS.fpYaw = newYaw; SS.fpPitch = newPitch else SS.orbitYaw = newYaw; SS.orbitPitch = newPitch end
     elseif #touches == 2 then
         local p1, p2 = touches[1].Position, touches[2].Position
         local dist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
@@ -864,20 +746,13 @@ TrackC(UIS.InputChanged:Connect(function(inp)
             SS.radius = math.clamp(ssPinchRadius * (ssPinchDist / math.max(dist, 1)), 3, 30)
             if SS.mode == "First Person" then SS.fov = math.clamp(70 + (8 - SS.radius) * 5, 10, 120) end
         end
-        ssPinchDist = dist
-        ssPinchRadius = SS.radius
+        ssPinchDist = dist; ssPinchRadius = SS.radius
     end
 end))
 
 TrackC(UIS.InputEnded:Connect(function(inp)
     if not SS.active then return end
-    
-    if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-        ssDragActive = false
-        UIS.MouseBehavior = Enum.MouseBehavior.Default
-        return
-    end
-    
+    if inp.UserInputType == Enum.UserInputType.MouseButton2 then ssDragActive = false; UIS.MouseBehavior = Enum.MouseBehavior.Default; return end
     if inp.UserInputType ~= Enum.UserInputType.Touch then return end
     local touches = UIS:GetTouches()
     if #touches == 0 then ssDragActive = false; ssPinchDist = 0
@@ -891,38 +766,28 @@ end))
 
 local function toggleSelfSpec(v)
     if v then
-        -- Disconnect all other gesture systems
         if FC.active then fullCleanupFreecam() end
         if State.Fly.active then stopFlyCapture() end
         if Spec and Spec.active then stopSpecCapture() end
         if Teleport.clickConn then Teleport.clickConn:Disconnect(); Teleport.clickConn = nil end
-        
-        SS.active = true
-        SS.origFov = Cam.FieldOfView; SS.fov = Cam.FieldOfView
+        SS.active = true; SS.origFov = Cam.FieldOfView; SS.fov = Cam.FieldOfView
         SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.roll = 0
-        SS.radius = SS.radius or 8; SS.height = SS.height or 3
-        SS._smoothRadius = SS.radius
+        SS.radius = SS.radius or 8; SS.height = SS.height or 3; SS._smoothRadius = SS.radius
         ssHeightVel = 0; ssDragActive = false; ssPinchDist = 0
-        
-        local ui = getSSUI()
-        if ui then ui.Enabled = true end
+        getSSUI().Enabled = true
         for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end
-        resetAllSSButtonIndicators()
-        SS_UI_Hidden = false
-        if ssEyeBtn then ssEyeBtn.Text = "👁" end
+        SS_UI_Hidden = false; ssEyeBtn.Text = "👁"
         for _, b in ipairs(ssButtons) do if b then b.Visible = true end end
-        
         startSelfSpecLoop()
         notify("Self-Spectate", "ON — " .. (SS.mode or "Third Person"), 2, "camera")
     else
-        SS.active = false
-        stopSelfSpecLoop()
+        SS.active = false; stopSelfSpecLoop()
         notify("Self-Spectate", "OFF", 1.5, "camera")
     end
 end
 
 ----------------------------------------------------
--- SPECTATE (TAB SPECTATOR - UNCHANGED)
+-- SPECTATE
 ----------------------------------------------------
 local Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, fpYaw = 0, fpPitch = 0, isSelf = false }
 local specTM, specPinch, specPinchD, specPan, specConns = nil, {}, nil, Vector2.zero, {}
@@ -972,6 +837,8 @@ local function applyFilter(filter) resetFilterOnly(); resetDOFOnly(); Lighting.C
     notify("Visuals", filter, 2, "palette")
 end
 
+print("11. All systems ready, creating Window...")
+
 ----------------------------------------------------
 -- MAIN WINDOW
 ----------------------------------------------------
@@ -988,58 +855,34 @@ local Window = WindUI:CreateWindow({
     Topbar = { Height = 40, ButtonsType = "Default" },
 })
 
-----------------------------------------------------
--- FONT: Sedgwick (asset ID + fallback)
-----------------------------------------------------
-local fontOk = pcall(function() WindUI:SetFont("rbxassetid://12187376357") end)
-if not fontOk then pcall(function() WindUI:SetFont(Enum.Font.Sedgwick) end) end
+print("12. Window created")
+
+pcall(function() WindUI:SetFont("rbxassetid://12187376357") end)
 pcall(function() WindUI:SetNotificationLower(true) end)
 
-----------------------------------------------------
--- USER PROFILE
-----------------------------------------------------
-pcall(function()
-    Window.User:SetDisplayName(LP.DisplayName)
-    Window.User:SetUsername("@" .. LP.Name)
-end)
+pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
 
-----------------------------------------------------
--- OPEN BUTTON
-----------------------------------------------------
 Window:EditOpenButton({
-    Title = "WTF.XKID",
-    Icon = "wifi",
-    CornerRadius = UDim.new(1, 0),
-    StrokeThickness = 2,
-    StrokeColor = Color3.fromRGB(255, 70, 120),
-    Enabled = true,
-    Draggable = true,
-    Scale = 0.72,
+    Title = "WTF.XKID", Icon = "wifi", CornerRadius = UDim.new(1, 0),
+    StrokeThickness = 2, StrokeColor = Color3.fromRGB(255, 70, 120),
+    Enabled = true, Draggable = true, Scale = 0.72,
 })
 
-----------------------------------------------------
--- TAG
-----------------------------------------------------
-local FpsTag = Window:Tag({ 
-    Title = "FPS: -- | Ping: --", 
-    Color = Color3.fromRGB(255, 215, 0),
-    Icon = "github"
-})
+local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255, 215, 0), Icon = "github" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
-----------------------------------------------------
--- TABS
-----------------------------------------------------
-local TabInfo    = Window:Tab({ Title = "Informasi", Icon = "activity" })
-local TabChar    = Window:Tab({ Title = "Character", Icon = "fingerprint" })
-local TabTP      = Window:Tab({ Title = "Teleport", Icon = "map-pin-x-inside" })
-local TabSpec    = Window:Tab({ Title = "Spectator", Icon = "cctv" })
-local TabCine    = Window:Tab({ Title = "Cinematic", Icon = "aperture" })
-local TabVis     = Window:Tab({ Title = "Visuals", Icon = "moon-star" })
-local TabESP     = Window:Tab({ Title = "ESP", Icon = "scan-search" })
-local TabLog     = Window:Tab({ Title = "Logger", Icon = "square-terminal" })
-local TabProt    = Window:Tab({ Title = "Protection", Icon = "shield-half" })
-local TabSet     = Window:Tab({ Title = "Settings", Icon = "panels-top-left" })
+local TabInfo = Window:Tab({ Title = "Informasi", Icon = "activity" })
+local TabChar = Window:Tab({ Title = "Character", Icon = "fingerprint" })
+local TabTP   = Window:Tab({ Title = "Teleport", Icon = "map-pin-x-inside" })
+local TabSpec = Window:Tab({ Title = "Spectator", Icon = "cctv" })
+local TabCine = Window:Tab({ Title = "Cinematic", Icon = "aperture" })
+local TabVis  = Window:Tab({ Title = "Visuals", Icon = "moon-star" })
+local TabESP  = Window:Tab({ Title = "ESP", Icon = "scan-search" })
+local TabLog  = Window:Tab({ Title = "Logger", Icon = "square-terminal" })
+local TabProt = Window:Tab({ Title = "Protection", Icon = "shield-half" })
+local TabSet  = Window:Tab({ Title = "Settings", Icon = "panels-top-left" })
+
+print("13. Tabs created")
 
 ----------------------------------------------------
 -- TAB: INFORMASI
@@ -1051,8 +894,7 @@ local infoParagraph = TabInfo:Paragraph({
     Desc = "👤 " .. LP.DisplayName .. "\n📱 " .. (onMobile and "Mobile" or "PC") .. " | 🚀 " .. execName .. "\n\n🎮 " .. (cachedMapName or "Loading...") .. "\n👥 " .. makeBar(#Players:GetPlayers(), Players.MaxPlayers, 10) .. " " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers .. " Players\n\n🌐 discord.gg/bzumc2u96"
 })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); pcall(function() infoParagraph:SetTitle("💀 " .. LP.DisplayName .. " v" .. CURRENT_VERSION .. "\n⚡ " .. makeBar(sharedFPS, 120, 10) .. " " .. sharedFPS .. " FPS\n📡 " .. makeBar(math.max(1, 200 - sharedPing), 200, 10) .. " " .. sharedPing .. "ms\n🕐 " .. makeBar(os.difftime(os.time(), START_TIME) % 3600, 3600, 10) .. " " .. formatTime(os.difftime(os.time(), START_TIME))) end) end end)
-local secDiscord = TabInfo:Section({ Title = "🔗 Discord", Icon = "message-circle", Box = true })
-secDiscord:Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link copied", 2, "copy") end })
+TabInfo:Section({ Title = "🔗 Discord", Icon = "message-circle", Box = true }):Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end); notify("System", "Link copied", 2, "copy") end })
 
 ----------------------------------------------------
 -- TAB: CHARACTER
@@ -1093,7 +935,7 @@ for i = 1, 3 do
 end
 
 ----------------------------------------------------
--- TAB: SPECTATOR (UNCHANGED)
+-- TAB: SPECTATOR
 ----------------------------------------------------
 local secZoom = TabSpec:Section({ Title = "Zoom Override", Icon = "zoom-in", Box = true })
 secZoom:Toggle({ Title = "Max Zoom Out", Default = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Zoom", v and "Max" or "Default", 1.5, "zoom-in") end })
@@ -1105,10 +947,10 @@ secSP:Toggle({ Title = "First Person View", Default = false, Callback = function
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
 ----------------------------------------------------
--- TAB: CINEMATIC (Self-Spectate Lock)
+-- TAB: CINEMATIC
 ----------------------------------------------------
-local secSelfSpec = TabCine:Section({ Title = "🎥 Self-Spectate Lock", Icon = "camera", Box = true })
-secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "1-finger orbit | 2-finger pinch zoom | Mouse right-drag", Default = false, Callback = function(v) toggleSelfSpec(v) end })
+local secSelfSpec = TabCine:Section({ Title = "🎥 Self-Spectate", Icon = "camera", Box = true })
+secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "1-finger orbit | 2-finger zoom | Mouse right-drag", Default = false, Callback = function(v) toggleSelfSpec(v) end })
 secSelfSpec:Dropdown({ Title = "Camera Mode", Values = { "Third Person", "First Person" }, Default = "Third Person", Callback = function(v) SS.mode = v; notify("Self-Spec", "Mode: " .. v, 1.5, "camera") end })
 secSelfSpec:Slider({ Title = "Distance / Radius", Step = 0.5, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) SS.radius = v; SS.dist = v end })
 secSelfSpec:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20, Default = 3 }, Callback = function(v) SS.height = v end })
@@ -1207,8 +1049,10 @@ secLike:Slider({ Title = "Max Cooldown", Step = 0.5, Value = { Min = 1, Max = 15
 local autoLikeInfo = secLike:Paragraph({ Title = "Info", Desc = "Total likes sent: 0" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(function() autoLikeInfo:SetDesc("Total likes sent: " .. State.AutoLike.count) end) end end)
 
+print("14. All tabs built")
+
 ----------------------------------------------------
--- AUTO-EXPAND ALL SECTIONS
+-- AUTO-EXPAND + STARTUP
 ----------------------------------------------------
 task.delay(0.5, function()
     pcall(function()
@@ -1220,9 +1064,6 @@ task.delay(0.5, function()
     end)
 end)
 
-----------------------------------------------------
--- STARTUP
-----------------------------------------------------
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
 pcall(function() setfpscap(9999) end)
 
@@ -1230,5 +1071,5 @@ task.spawn(function()
     task.wait(2)
     getgenv()._XKID_UI_LOADING = false
     notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
-    print("✅ XKID v" .. CURRENT_VERSION .. " - Self-Spec v4.4.0 Rebuilt - Ready")
+    print("✅ XKID v" .. CURRENT_VERSION .. " - Ready")
 end)
