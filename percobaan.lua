@@ -1,8 +1,11 @@
 --[[
-    @XKID SCRIPT 👉😜👈 v4.2.7
+    @XKID SCRIPT 👉😜👈 v4.2.8
     by @WTF.XKID
     Roblox Build For Mobile
     WindUI Footagesus Release
+    Changelog:
+    - Fixed notification system (queue + retry)
+    - Fixed self-spectate (UI overlay, gestures, PC mouse, state reset)
 ]]
 
 repeat task.wait() until game:IsLoaded()
@@ -40,7 +43,7 @@ local LP                = Players.LocalPlayer
 local Cam               = workspace.CurrentCamera
 local onMobile          = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "4.2.7"
+local CURRENT_VERSION = "4.2.8"
 local OWNER_USER_ID   = 3507208058
 
 getgenv()._XKID_UI_LOADING = true
@@ -114,6 +117,49 @@ local function TrackC(conn)
 end
 
 ----------------------------------------------------
+-- NOTIFICATION SYSTEM (FIXED - Queue + Retry)
+----------------------------------------------------
+local _notifyQueue = {}
+local _windUINotifyReady = false
+local _notifyProcessing = false
+
+local function processNotifyQueue()
+    if _notifyProcessing then return end
+    _notifyProcessing = true
+    
+    while #_notifyQueue > 0 do
+        local n = table.remove(_notifyQueue, 1)
+        local ok, err = pcall(function()
+            WindUI:Notify({
+                Title = n.title,
+                Content = n.content,
+                Duration = n.dur or 2,
+                Icon = n.icon or "check-circle"
+            })
+        end)
+        if not ok then
+            warn("[XKID Notify] Failed:", err)
+        end
+        task.wait(0.15)
+    end
+    
+    _notifyProcessing = false
+end
+
+local function notify(title, content, dur, icon)
+    table.insert(_notifyQueue, {
+        title = title,
+        content = content,
+        dur = dur,
+        icon = icon
+    })
+    
+    if _windUINotifyReady and not _notifyProcessing then
+        task.spawn(processNotifyQueue)
+    end
+end
+
+----------------------------------------------------
 -- STATE MANAGEMENT
 ----------------------------------------------------
 local State = {
@@ -126,7 +172,7 @@ local State = {
     Utility   = { chatLog = false, chatTargets = {}, chatHistory = {} },
     AutoLike  = { active = false, thread = nil, lastTarget = nil, count = 0, radius = 100, minCD = 2, maxCD = 6 },
     CustomFilter = { tintR = 255, tintG = 255, tintB = 255, saturation = 0, contrast = 0, brightness = 0, exposure = 0, bloomIntensity = 0, bloomSize = 24, clockTime = 14, dofIntensity = 0, dofDistance = 50 },
-    SelfSpec  = { active = false, mode = "Static", radius = 8, height = 3, yaw = 0, pitch = 20, speed = 1, fov = 70, origFov = 70, roll = 0 },
+    SelfSpec  = { active = false, mode = "Static", radius = 8, height = 3, yaw = 0, pitch = 20, speed = 1, fov = 70, origFov = 70, roll = 0, targetPlayer = nil, isSelf = true },
     ESP       = { active = false, cache = getgenv()._XKID_ESP_CACHE, tracerMode = "Bottom", maxDrawDistance = 300, highlightMode = false, boxColor_N = Color3.fromRGB(0, 255, 150), boxColor_S = Color3.fromRGB(220, 20, 60), boxColor_G = Color3.fromRGB(255, 165, 0), tracerColor_N = Color3.fromRGB(0, 200, 255), tracerColor_S = Color3.fromRGB(220, 20, 60), tracerColor_G = Color3.fromRGB(255, 165, 0), nameColor = Color3.fromRGB(255, 255, 255) },
 }
 
@@ -162,10 +208,6 @@ end
 local function getCharRoot(char)
     if not char then return nil end
     return char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
-end
-local function notify(title, content, dur, icon)
-    if getgenv()._XKID_UI_LOADING then return end
-    pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = dur or 2, Icon = icon or "check-circle" }) end)
 end
 local function formatTime(seconds)
     local m = math.floor(seconds / 60); local s = seconds % 60
@@ -555,7 +597,7 @@ local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 local function fullCleanupFreecam() stopFreecamLoop(); stopFreecamCapture(); local hum = getHum(); if hum then hum.WalkSpeed = FC.savedWalkSpeed; hum.UseJumpPower = true; hum.JumpPower = FC.savedJumpPower end; Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end; FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end end
 
 ----------------------------------------------------
--- SELF-SPEC (UI + TOUCH GESTURE MOBILE-ONLY, FIXED)
+-- SELF-SPECTATE (FIXED - Complete Rewrite)
 ----------------------------------------------------
 local SS = State.SelfSpec
 local ssHeightVel = 0
@@ -568,35 +610,271 @@ local ssDragYaw = 0
 local ssDragPitch = 0
 local ssPinchDist = 0
 local ssPinchRadius = 8
-local SSUI = Instance.new("ScreenGui"); SSUI.Name = "XKID_SelfSpecUI"; SSUI.ResetOnSpawn = false; SSUI.ZIndexBehavior = Enum.ZIndexBehavior.Global; SSUI.Enabled = false; SSUI.Parent = CoreGui
-local function isOnButtonArea(pos)
-    local vp = Cam.ViewportSize
-    return pos.X > vp.X - 170 and pos.Y > vp.Y - 180
-end
-local function makeSSBtn(name, txt, pos, actionKey)
-    local b = Instance.new("TextButton", SSUI); b.Name = name; b.Size = UDim2.new(0, 40, 0, 40); b.Position = pos; b.BackgroundColor3 = Color3.fromRGB(15, 15, 15); b.BackgroundTransparency = 0.7; b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 16; b.Font = Enum.Font.GothamBold; b.AutoButtonColor = false
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8); local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(100, 200, 255); uis.Thickness = 1.5; uis.Transparency = 0.5; local indicator = Instance.new("Frame", b); indicator.Name = "Indicator"; indicator.Size = UDim2.new(0, 5, 0, 5); indicator.Position = UDim2.new(0, 3, 0, 3); indicator.BackgroundColor3 = Color3.fromRGB(60, 60, 60); Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
-    local function press(down) SS_UI_Btns[actionKey] = down; b.BackgroundTransparency = down and 0.3 or 0.7; indicator.BackgroundColor3 = down and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(60, 60, 60) end
-    b.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then press(true) end end)
-    b.InputEnded:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then press(false) end end)
-    b.MouseLeave:Connect(function() press(false) end)
-    table.insert(ssButtons, b); return b
-end
-makeSSBtn("BtnLeft","←",UDim2.new(1,-152,0.5,-60),"left"); makeSSBtn("BtnRight","→",UDim2.new(1,-56,0.5,-60),"right")
-makeSSBtn("BtnUp","↑",UDim2.new(1,-104,0.5,-100),"up"); makeSSBtn("BtnDown","↓",UDim2.new(1,-104,0.5,-20),"down")
-makeSSBtn("BtnZIn","+",UDim2.new(1,-152,0.5,-20),"zoomIn"); makeSSBtn("BtnZOut","-",UDim2.new(1,-56,0.5,-20),"zoomOut")
-makeSSBtn("BtnRollL","L",UDim2.new(1,-152,0.5,-100),"rollL"); makeSSBtn("BtnRollR","R",UDim2.new(1,-56,0.5,-100),"rollR")
-local ssEyeBtn = Instance.new("TextButton", SSUI); ssEyeBtn.Name = "BtnEye"; ssEyeBtn.Size = UDim2.new(0, 40, 0, 40); ssEyeBtn.Position = UDim2.new(1,-104,0.5,-60); ssEyeBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15); ssEyeBtn.BackgroundTransparency = 0.8; ssEyeBtn.Text = "👁"; ssEyeBtn.TextColor3 = Color3.fromRGB(255, 255, 255); ssEyeBtn.TextSize = 16; ssEyeBtn.Font = Enum.Font.GothamBold; ssEyeBtn.AutoButtonColor = false; Instance.new("UICorner", ssEyeBtn).CornerRadius = UDim.new(0, 8); local ssEyeStroke = Instance.new("UIStroke", ssEyeBtn); ssEyeStroke.Color = Color3.fromRGB(100, 200, 255); ssEyeStroke.Thickness = 1.5; ssEyeStroke.Transparency = 0.5
-local function toggleSSEye() SS_UI_Hidden = not SS_UI_Hidden; ssEyeBtn.Text = SS_UI_Hidden and "👁‍🗨" or "👁"; for _, b in ipairs(ssButtons) do b.Visible = not SS_UI_Hidden end end
-ssEyeBtn.MouseButton1Click:Connect(toggleSSEye); ssEyeBtn.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch then toggleSSEye() end end)
-local function startSelfSpecLoop() SS.yaw = 0; SS.pitch = 20; RS:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function(dt) if not SS.active then return end; local char = LP.Character; local hrp = getCharRoot(char); if not hrp then return end; local safeDt = math.clamp(dt, 0.001, 0.05); Cam.CameraType = Enum.CameraType.Scriptable; local rotX = 0; local heightTarget = 0; if SS_UI_Btns.left then rotX = -1 elseif SS_UI_Btns.right then rotX = 1 end; if SS_UI_Btns.up then heightTarget = SS.speed * 5 elseif SS_UI_Btns.down then heightTarget = -SS.speed * 5 end; if SS_UI_Btns.rollL then SS.roll = (SS.roll or 0) - safeDt * 50 elseif SS_UI_Btns.rollR then SS.roll = (SS.roll or 0) + safeDt * 50 end; if SS_UI_Btns.zoomIn then SS.fov = math.clamp((SS.fov or 70) - safeDt * 30, 10, 120) end; if SS_UI_Btns.zoomOut then SS.fov = math.clamp((SS.fov or 70) + safeDt * 30, 10, 120) end; if SS.mode == "Orbit" then SS.yaw = SS.yaw + safeDt * 30 * SS.speed; elseif SS.mode == "Vertical Orbit" then SS.pitch = 20 + math.sin(tick() * SS.speed) * 40; elseif SS.mode == "Figure 8" then SS.yaw = math.sin(tick() * SS.speed * 0.7) * 90; SS.pitch = 20 + math.sin(tick() * SS.speed) * 30; elseif SS.mode == "Static" then SS.yaw = SS.yaw + rotX * safeDt * 60; SS.pitch = math.clamp(SS.pitch, -70, 70); elseif SS.mode == "Slow Drift" then SS.yaw = SS.yaw + safeDt * 10 * SS.speed end; if heightTarget == 0 then ssHeightVel = ssHeightVel * math.max(0, 1 - safeDt * 5) else ssHeightVel = ssHeightVel + (heightTarget - ssHeightVel) * math.clamp(safeDt * 3, 0, 1) end; SS.height = (SS.height or 3) + ssHeightVel * safeDt; Cam.FieldOfView = SS.fov or 70; local targetPos = hrp.Position + Vector3.new(0, SS.height or 3, 0); local orbitCF = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(SS.yaw), 0) * CFrame.Angles(math.rad(SS.pitch), 0, 0) * CFrame.new(0, 0, SS.radius); Cam.CFrame = orbitCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0)) end) end
-local function stopSelfSpecLoop() RS:UnbindFromRenderStep("XKIDSelfSpec"); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = SS.origFov; if SSUI then SSUI.Enabled = false end; for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end; SS.roll = 0; SS_UI_Hidden = false; ssEyeBtn.Text = "👁"; for _, b in ipairs(ssButtons) do b.Visible = true end end
+local SSUI = nil
 
--- Mobile gesture handling (FIXED: Natural + UIS:GetTouches)
+-- Lazy init SSUI
+local function getSSUI()
+    if not SSUI or not SSUI.Parent then
+        local newSSUI = Instance.new("ScreenGui")
+        newSSUI.Name = "XKID_SelfSpecUI"
+        newSSUI.ResetOnSpawn = false
+        newSSUI.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        newSSUI.Enabled = false
+        newSSUI.Parent = CoreGui
+        SSUI = newSSUI
+    end
+    return SSUI
+end
+
+local function isOnSSButtonArea(pos)
+    local vp = Cam.ViewportSize
+    return pos.X > vp.X - 180 and pos.Y > vp.Y - 200
+end
+
+local function resetAllSSButtonIndicators()
+    for _, b in ipairs(ssButtons) do
+        if b then
+            b.BackgroundTransparency = 0.7
+            local ind = b:FindFirstChild("Indicator")
+            if ind then
+                ind.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            end
+        end
+    end
+end
+
+local function makeSSBtn(name, txt, pos, actionKey)
+    local ui = getSSUI()
+    local b = Instance.new("TextButton", ui)
+    b.Name = name
+    b.Size = UDim2.new(0, 40, 0, 40)
+    b.Position = pos
+    b.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    b.BackgroundTransparency = 0.7
+    b.Text = txt
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.TextSize = 16
+    b.Font = Enum.Font.GothamBold
+    b.AutoButtonColor = false
+    
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+    local uis = Instance.new("UIStroke", b)
+    uis.Color = Color3.fromRGB(100, 200, 255)
+    uis.Thickness = 1.5
+    uis.Transparency = 0.5
+    
+    local indicator = Instance.new("Frame", b)
+    indicator.Name = "Indicator"
+    indicator.Size = UDim2.new(0, 5, 0, 5)
+    indicator.Position = UDim2.new(0, 3, 0, 3)
+    indicator.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
+    
+    local function press(down)
+        SS_UI_Btns[actionKey] = down
+        b.BackgroundTransparency = down and 0.3 or 0.7
+        indicator.BackgroundColor3 = down and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(60, 60, 60)
+    end
+    
+    b.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            press(true)
+        end
+    end)
+    b.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            press(false)
+        end
+    end)
+    b.MouseLeave:Connect(function() press(false) end)
+    
+    table.insert(ssButtons, b)
+    return b
+end
+
+-- Create buttons
+makeSSBtn("BtnLeft","←",UDim2.new(1,-152,0.5,-60),"left")
+makeSSBtn("BtnRight","→",UDim2.new(1,-56,0.5,-60),"right")
+makeSSBtn("BtnUp","↑",UDim2.new(1,-104,0.5,-100),"up")
+makeSSBtn("BtnDown","↓",UDim2.new(1,-104,0.5,-20),"down")
+makeSSBtn("BtnZIn","+",UDim2.new(1,-152,0.5,-20),"zoomIn")
+makeSSBtn("BtnZOut","-",UDim2.new(1,-56,0.5,-20),"zoomOut")
+makeSSBtn("BtnRollL","L",UDim2.new(1,-152,0.5,-100),"rollL")
+makeSSBtn("BtnRollR","R",UDim2.new(1,-56,0.5,-100),"rollR")
+
+local ssEyeBtn = nil
+do
+    local ui = getSSUI()
+    ssEyeBtn = Instance.new("TextButton", ui)
+    ssEyeBtn.Name = "BtnEye"
+    ssEyeBtn.Size = UDim2.new(0, 40, 0, 40)
+    ssEyeBtn.Position = UDim2.new(1,-104,0.5,-60)
+    ssEyeBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    ssEyeBtn.BackgroundTransparency = 0.8
+    ssEyeBtn.Text = "👁"
+    ssEyeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ssEyeBtn.TextSize = 16
+    ssEyeBtn.Font = Enum.Font.GothamBold
+    ssEyeBtn.AutoButtonColor = false
+    Instance.new("UICorner", ssEyeBtn).CornerRadius = UDim.new(0, 8)
+    local ssEyeStroke = Instance.new("UIStroke", ssEyeBtn)
+    ssEyeStroke.Color = Color3.fromRGB(100, 200, 255)
+    ssEyeStroke.Thickness = 1.5
+    ssEyeStroke.Transparency = 0.5
+end
+
+local function toggleSSEye()
+    SS_UI_Hidden = not SS_UI_Hidden
+    if ssEyeBtn then
+        ssEyeBtn.Text = SS_UI_Hidden and "👁‍🗨" or "👁"
+    end
+    for _, b in ipairs(ssButtons) do
+        if b then b.Visible = not SS_UI_Hidden end
+    end
+end
+
+if ssEyeBtn then
+    ssEyeBtn.MouseButton1Click:Connect(toggleSSEye)
+    ssEyeBtn.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.Touch then toggleSSEye() end
+    end)
+end
+
+-- Self-Spec Render Loop
+local function startSelfSpecLoop()
+    SS.yaw = SS.yaw or 0
+    SS.pitch = SS.pitch or 20
+    SS.roll = SS.roll or 0
+    SS.radius = SS.radius or 8
+    SS.height = SS.height or 3
+    SS.fov = SS.fov or 70
+    SS._currentRadius = SS.radius
+    SS._currentHeight = SS.height
+    
+    RS:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function(dt)
+        if not SS.active then return end
+        
+        local char = LP.Character
+        local hrp = getCharRoot(char)
+        if not hrp then return end
+        
+        local safeDt = math.clamp(dt, 0.001, 0.05)
+        Cam.CameraType = Enum.CameraType.Scriptable
+        
+        -- Manual input dari UI buttons
+        local rotX = 0
+        if SS_UI_Btns.left then rotX = -1
+        elseif SS_UI_Btns.right then rotX = 1 end
+        
+        local heightTarget = 0
+        if SS_UI_Btns.up then heightTarget = SS.speed * 5
+        elseif SS_UI_Btns.down then heightTarget = -SS.speed * 5 end
+        
+        -- Roll
+        if SS_UI_Btns.rollL then
+            SS.roll = (SS.roll or 0) - safeDt * 50
+        elseif SS_UI_Btns.rollR then
+            SS.roll = (SS.roll or 0) + safeDt * 50
+        end
+        
+        -- Zoom buttons
+        if SS_UI_Btns.zoomIn then
+            SS.fov = math.clamp((SS.fov or 70) - safeDt * 30, 10, 120)
+        end
+        if SS_UI_Btns.zoomOut then
+            SS.fov = math.clamp((SS.fov or 70) + safeDt * 30, 10, 120)
+        end
+        
+        -- Auto modes (hanya kalau gak ada manual drag)
+        if not ssDragActive then
+            if SS.mode == "Orbit" then
+                SS.yaw = SS.yaw + safeDt * 30 * SS.speed
+            elseif SS.mode == "Vertical Orbit" then
+                SS.pitch = 20 + math.sin(tick() * SS.speed) * 40
+            elseif SS.mode == "Figure 8" then
+                SS.yaw = math.sin(tick() * SS.speed * 0.7) * 90
+                SS.pitch = 20 + math.sin(tick() * SS.speed) * 30
+            elseif SS.mode == "Slow Drift" then
+                SS.yaw = SS.yaw + safeDt * 10 * SS.speed
+            elseif SS.mode == "Static" then
+                SS.yaw = SS.yaw + rotX * safeDt * 60
+                SS.pitch = math.clamp(SS.pitch, -70, 70)
+            end
+        end
+        
+        -- Height smoothing
+        if heightTarget == 0 then
+            ssHeightVel = ssHeightVel * math.max(0, 1 - safeDt * 5)
+        else
+            ssHeightVel = ssHeightVel + (heightTarget - ssHeightVel) * math.clamp(safeDt * 3, 0, 1)
+        end
+        SS.height = (SS.height or 3) + ssHeightVel * safeDt
+        
+        -- Smooth radius transition
+        SS._currentRadius = SS._currentRadius + (SS.radius - SS._currentRadius) * math.clamp(safeDt * 8, 0, 1)
+        
+        -- Apply camera
+        Cam.FieldOfView = SS.fov or 70
+        
+        local targetPos = hrp.Position + Vector3.new(0, SS.height or 3, 0)
+        local orbitCF = CFrame.new(targetPos)
+            * CFrame.Angles(0, math.rad(SS.yaw), 0)
+            * CFrame.Angles(math.rad(SS.pitch), 0, 0)
+            * CFrame.new(0, 0, SS._currentRadius)
+        
+        Cam.CFrame = orbitCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0))
+    end)
+end
+
+local function stopSelfSpecLoop()
+    RS:UnbindFromRenderStep("XKIDSelfSpec")
+    Cam.CameraType = Enum.CameraType.Custom
+    Cam.FieldOfView = SS.origFov
+    
+    -- Full state reset
+    SS.active = false
+    SS.yaw = 0
+    SS.pitch = 20
+    SS.roll = 0
+    SS.radius = 8
+    SS.height = 3
+    SS.fov = SS.origFov
+    SS._currentRadius = 8
+    SS._currentHeight = 3
+    ssHeightVel = 0
+    ssDragActive = false
+    ssPinchDist = 0
+    
+    -- Reset UI
+    local ui = getSSUI()
+    if ui then ui.Enabled = false end
+    for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end
+    resetAllSSButtonIndicators()
+    SS_UI_Hidden = false
+    if ssEyeBtn then ssEyeBtn.Text = "👁" end
+    for _, b in ipairs(ssButtons) do
+        if b then b.Visible = true end
+    end
+end
+
+-- Mobile touch gestures (Fixed)
 TrackC(UIS.InputBegan:Connect(function(inp, gp)
     if gp or not SS.active then return end
+    
+    -- Mouse right-click support (PC)
+    if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+        ssDragActive = true
+        ssDragStart = Vector2.new(inp.Position.X, inp.Position.Y)
+        ssDragYaw = SS.yaw
+        ssDragPitch = SS.pitch
+        UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+        return
+    end
+    
     if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-    if isOnButtonArea(inp.Position) then return end
+    
+    -- Skip kalau di area tombol
+    if isOnSSButtonArea(inp.Position) then return end
     
     local touches = UIS:GetTouches()
     if #touches == 1 then
@@ -605,23 +883,32 @@ TrackC(UIS.InputBegan:Connect(function(inp, gp)
         ssDragYaw = SS.yaw
         ssDragPitch = SS.pitch
     elseif #touches == 2 then
+        ssDragActive = false
         local p1, p2 = touches[1].Position, touches[2].Position
         ssPinchDist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
         ssPinchRadius = SS.radius
-        ssDragActive = false
     end
 end))
 
 TrackC(UIS.InputChanged:Connect(function(inp)
-    if not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end
+    if not SS.active then return end
+    
+    -- PC mouse movement
+    if inp.UserInputType == Enum.UserInputType.MouseMovement and ssDragActive then
+        SS.yaw = ssDragYaw - inp.Delta.X * 0.3
+        SS.pitch = math.clamp(ssDragPitch + inp.Delta.Y * 0.3, -75, 75)
+        return
+    end
+    
+    if inp.UserInputType ~= Enum.UserInputType.Touch then return end
     
     local touches = UIS:GetTouches()
     if #touches == 1 and ssDragActive then
         local pos = touches[1].Position
         local dx = pos.X - ssDragStart.X
         local dy = pos.Y - ssDragStart.Y
-        SS.yaw = ssDragYaw + dx * 0.3  -- NATURAL: drag kanan = orbit kanan
-        SS.pitch = math.clamp(ssDragPitch - dy * 0.3, -75, 75)  -- NATURAL: drag atas = orbit atas
+        SS.yaw = ssDragYaw + dx * 0.3
+        SS.pitch = math.clamp(ssDragPitch - dy * 0.3, -75, 75)
     elseif #touches == 2 then
         local p1, p2 = touches[1].Position, touches[2].Position
         local dist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
@@ -634,19 +921,66 @@ TrackC(UIS.InputChanged:Connect(function(inp)
 end))
 
 TrackC(UIS.InputEnded:Connect(function(inp)
-    if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-    local touches = UIS:GetTouches()
-    if #touches < 2 then
-        ssPinchDist = 0
+    -- PC mouse
+    if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+        ssDragActive = false
+        UIS.MouseBehavior = Enum.MouseBehavior.Default
+        return
     end
+    
+    if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+    
+    local touches = UIS:GetTouches()
     if #touches == 0 then
         ssDragActive = false
+        ssPinchDist = 0
+        ssDragStart = Vector2.zero
+    elseif #touches == 1 and ssPinchDist > 0 then
+        -- Transisi pinch ke drag
+        ssPinchDist = 0
+        ssDragActive = true
+        ssDragStart = touches[1].Position
+        ssDragYaw = SS.yaw
+        ssDragPitch = SS.pitch
     end
 end))
 
 local function toggleSelfSpec(v)
-    if v then if FC.active then fullCleanupFreecam() end; SS.active = true; SS.origFov = Cam.FieldOfView; SS.fov = Cam.FieldOfView; SS.yaw = 0; SS.pitch = 20; SS.roll = 0; if SSUI then SSUI.Enabled = true end; startSelfSpecLoop(); notify("Self-Spectate", "ON — " .. SS.mode, 2, "camera")
-    else SS.active = false; stopSelfSpecLoop(); notify("Self-Spectate", "OFF", 1.5) end
+    if v then
+        if FC.active then fullCleanupFreecam() end
+        
+        SS.active = true
+        SS.origFov = Cam.FieldOfView
+        SS.fov = Cam.FieldOfView
+        SS.yaw = 0
+        SS.pitch = 20
+        SS.roll = 0
+        SS.radius = SS.radius or 8
+        SS.height = SS.height or 3
+        SS._currentRadius = SS.radius
+        SS._currentHeight = SS.height
+        ssHeightVel = 0
+        ssDragActive = false
+        ssPinchDist = 0
+        
+        local ui = getSSUI()
+        if ui then ui.Enabled = true end
+        
+        for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end
+        resetAllSSButtonIndicators()
+        SS_UI_Hidden = false
+        if ssEyeBtn then ssEyeBtn.Text = "👁" end
+        for _, b in ipairs(ssButtons) do
+            if b then b.Visible = true end
+        end
+        
+        startSelfSpecLoop()
+        notify("Self-Spectate", "ON — " .. (SS.mode or "Static"), 2, "camera")
+    else
+        SS.active = false
+        stopSelfSpecLoop()
+        notify("Self-Spectate", "OFF", 1.5)
+    end
 end
 
 ----------------------------------------------------
@@ -838,7 +1172,7 @@ secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Defaul
 -- TAB: CINEMATIC
 ----------------------------------------------------
 local secSelfSpec = TabCine:Section({ Title = "🎥 Self-Spectate", Icon = "camera", Box = true })
-secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "Buttons + Drag + Pinch", Default = false, Callback = function(v) toggleSelfSpec(v) end })
+secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "Buttons + Drag + Pinch + Mouse (PC)", Default = false, Callback = function(v) toggleSelfSpec(v) end })
 secSelfSpec:Dropdown({ Title = "Preset Mode", Values = { "Static", "Orbit", "Vertical Orbit", "Figure 8", "Slow Drift" }, Default = "Static", Callback = function(v) SS.mode = v; notify("Self-Spec", v, 1.5) end })
 secSelfSpec:Slider({ Title = "Radius", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) SS.radius = v end })
 secSelfSpec:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20, Default = 3 }, Callback = function(v) SS.height = v end })
@@ -968,21 +1302,56 @@ task.delay(0.5, function()
 end)
 
 ----------------------------------------------------
--- STARTUP
+-- STARTUP — NOTIFICATION QUEUE ACTIVATION
 ----------------------------------------------------
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
 pcall(function() setfpscap(9999) end)
 
 task.spawn(function()
-    task.wait(2)
-    getgenv()._XKID_UI_LOADING = false
-    pcall(function()
+    -- Tunggu WindUI fully initialized
+    task.wait(1.5)
+    
+    -- Test notifikasi dulu
+    local testOk, testErr = pcall(function()
         WindUI:Notify({
             Title = "System",
-            Content = "XKID AKTIF",
-            Duration = 3,
-            Icon = "rocket"
+            Content = "WindUI Ready",
+            Duration = 0.1,
+            Icon = "check"
         })
     end)
-    print("✅ XKID v" .. CURRENT_VERSION .. " - WindUI Footagesus · Final · Delta Ready")
+    
+    if testOk then
+        _windUINotifyReady = true
+        getgenv()._XKID_UI_LOADING = false
+    else
+        warn("[XKID] WindUI notify test failed:", testErr)
+        warn("[XKID] Retrying in 2 seconds...")
+        task.wait(2)
+        -- Retry
+        local retryOk = pcall(function()
+            WindUI:Notify({
+                Title = "System",
+                Content = "WindUI Ready",
+                Duration = 0.1,
+            })
+        end)
+        if retryOk then
+            _windUINotifyReady = true
+        else
+            warn("[XKID] WindUI notify still failing, forcing ready state")
+            _windUINotifyReady = true -- Force ready, biar notif tetep dicoba
+        end
+        getgenv()._XKID_UI_LOADING = false
+    end
+    
+    -- Process queued notifications
+    processNotifyQueue()
+    
+    -- Startup notification
+    notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
+    
+    print("✅ XKID v" .. CURRENT_VERSION .. " - WindUI Footagesus · Fixed · Delta Ready")
+    print("✅ Notifikasi: Queue System Active")
+    print("✅ Self-Spectate: Mobile Gesture + PC Mouse + UI Overlay Fixed")
 end)
