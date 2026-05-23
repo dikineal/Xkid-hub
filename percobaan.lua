@@ -1,20 +1,17 @@
--- @XKID SCRIPT v4.5.0
+-- @XKID SCRIPT v4.5.1
 -- by @WTF.XKID
 -- Roblox Build For Mobile
 -- WindUI Footagesus Release
 
 repeat task.wait() until game:IsLoaded()
-print("1. Game loaded")
 
 local WindUI
 do
-    print("2. Loading WindUI...")
-    local success, result = pcall(function()
+    local s, r = pcall(function()
         return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
     end)
-    if success then WindUI = result else print("GAGAL WINDUI:", result); return end
+    if s then WindUI = r else error("Failed to load WindUI") end
 end
-print("3. WindUI loaded")
 
 local RS               = game:GetService("RunService")
 local HttpService       = game:GetService("HttpService")
@@ -32,9 +29,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LP                = Players.LocalPlayer
 local Cam               = workspace.CurrentCamera
 local onMobile          = not UIS.KeyboardEnabled
-print("4. Services loaded:", LP.Name)
 
-local CURRENT_VERSION = "4.5.0"
+local CURRENT_VERSION = "4.5.1"
+
 getgenv()._XKID_UI_LOADING = true
 
 local originalLighting = {
@@ -42,9 +39,7 @@ local originalLighting = {
     OutdoorAmbient = Lighting.OutdoorAmbient, GlobalShadows = Lighting.GlobalShadows,
     ExposureCompensation = Lighting.ExposureCompensation, FogEnd = Lighting.FogEnd,
 }
-print("5. Lighting saved")
 
-print("6. Cleanup...")
 if getgenv()._XKID_RUNNING then getgenv()._XKID_RUNNING = false; task.wait(0.5) end
 if getgenv()._XKID_ESP_CACHE then
     for _, c in pairs(getgenv()._XKID_ESP_CACHE) do
@@ -75,24 +70,17 @@ if getgenv()._XKID_LOADED then
     pcall(function() RS:UnbindFromRenderStep("XKIDSelfSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
 end
-print("7. Cleanup done")
 
 getgenv()._XKID_LOADED  = true
 getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS   = {}
 
-local function TrackC(conn)
-    table.insert(getgenv()._XKID_CONNS, conn)
-    return conn
-end
+local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
 local function notify(title, content, dur, icon)
-    local ok = pcall(function()
-        WindUI:Notify({ Title = title, Content = content, Duration = dur or 2, Icon = icon or "bell" })
-    end)
+    local ok = pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = dur or 2, Icon = icon or "bell" }) end)
     if not ok then task.wait(0.03); pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = dur or 2, Icon = icon or "bell" }) end) end
 end
-print("8. Notify ready")
 
 local State = {
     Move      = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
@@ -107,7 +95,6 @@ local State = {
     SelfSpec  = { active = false, mode = "Third Person", dist = 8, height = 3, orbitYaw = 0, orbitPitch = 20, fpYaw = 0, fpPitch = 0, fov = 70, origFov = 70, roll = 0, radius = 8, speed = 1 },
     ESP       = { active = false, cache = getgenv()._XKID_ESP_CACHE, tracerMode = "Bottom", maxDrawDistance = 300, highlightMode = false, boxColor_N = Color3.fromRGB(0, 255, 150), boxColor_S = Color3.fromRGB(220, 20, 60), boxColor_G = Color3.fromRGB(255, 165, 0), tracerColor_N = Color3.fromRGB(0, 200, 255), tracerColor_S = Color3.fromRGB(220, 20, 60), tracerColor_G = Color3.fromRGB(255, 165, 0), nameColor = Color3.fromRGB(255, 255, 255) },
 }
-print("9. State ready")
 
 local colorMap = {
     ["Merah"] = Color3.fromRGB(255, 0, 0), ["Hijau"] = Color3.fromRGB(0, 255, 0), ["Biru"] = Color3.fromRGB(0, 0, 255),
@@ -119,16 +106,12 @@ local colorMap = {
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
 local function getHum()  return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
 local function getDisplayNames()
-    local t = {}
-    for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName) end end
-    if #t == 0 then table.insert(t, "N/A") end
-    return t
+    local t = {}; for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName) end end
+    if #t == 0 then table.insert(t, "N/A") end; return t
 end
 local function getDisplayNamesWithSelf()
-    local t = { "[Self]" }
-    for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName) end end
-    if #t == 1 then table.insert(t, "N/A") end
-    return t
+    local t = { "[Self]" }; for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName) end end
+    if #t == 1 then table.insert(t, "N/A") end; return t
 end
 local function findPlayerByDisplay(str)
     if str == "[Self]" then return LP end
@@ -139,34 +122,22 @@ local function getCharRoot(char)
     if not char then return nil end
     return char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
 end
-local function formatTime(seconds)
-    local m = math.floor(seconds / 60); local s = seconds % 60
-    return string.format("%02d:%02d", m, s)
-end
-local function makeBar(val, maxVal, len)
-    local fill = math.clamp(math.floor((val / maxVal) * len), 0, len)
-    return string.rep("█", fill) .. string.rep("░", len - fill)
-end
+local function formatTime(seconds) local m = math.floor(seconds / 60); local s = seconds % 60; return string.format("%02d:%02d", m, s) end
+local function makeBar(val, maxVal, len) local fill = math.clamp(math.floor((val / maxVal) * len), 0, len); return string.rep("█", fill) .. string.rep("░", len - fill) end
 local function getConfigList()
     local list = {}
     pcall(function()
         if isfolder and isfolder("XKID_HUB") then
             for _, file in ipairs(listfiles("XKID_HUB")) do
-                if file:match("%.json$") then
-                    local name = file:match("([^/\\]+)%.json$")
-                    if name then table.insert(list, name) end
-                end
+                if file:match("%.json$") then local name = file:match("([^/\\]+)%.json$"); if name then table.insert(list, name) end end
             end
         end
     end)
-    if #list == 0 then table.insert(list, "No config") end
-    return list
+    if #list == 0 then table.insert(list, "No config") end; return list
 end
 local function isOnGround()
     local r = getRoot(); if not r then return false end
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = { LP.Character }
+    local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude; params.FilterDescendantsInstances = { LP.Character }
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
 
@@ -181,8 +152,6 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(fun
 task.spawn(function() while getgenv()._XKID_RUNNING do pcall(function() if tick() - lastMapCheck > 30 or not cachedMapName then cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name; lastMapCheck = tick() end end); task.wait(5) end end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
-print("10. Helpers + loops ready")
-
 ----------------------------------------------------
 -- ANTI AFK
 ----------------------------------------------------
@@ -191,14 +160,9 @@ local function startAFK()
     if AFKSystem.active then return end
     AFKSystem.active = true; State.Security.afkActive = true
     AFKSystem.idleConn = TrackC(LP.Idled:Connect(function()
-        if not AFKSystem.active then return end
-        if AFKSystem.debounce then return end
+        if not AFKSystem.active then return end; if AFKSystem.debounce then return end
         AFKSystem.debounce = true
-        pcall(function()
-            local cf = Cam.CFrame; local rx, ry, rz = cf:ToEulerAnglesYXZ()
-            Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + math.rad(1), rz)
-            task.wait(0.05); Cam.CFrame = cf
-        end)
+        pcall(function() local cf = Cam.CFrame; local rx, ry, rz = cf:ToEulerAnglesYXZ(); Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + math.rad(1), rz); task.wait(0.05); Cam.CFrame = cf end)
         task.wait(30); AFKSystem.debounce = false
     end))
     notify("Anti AFK", "ON", 1.5, "shield-check")
@@ -225,8 +189,7 @@ TrackC(LP.CharacterAdded:Connect(function(char)
         if hrp then
             if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end
             State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp)
-            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
+            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9); State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
         end
     end
 end))
@@ -238,8 +201,7 @@ local function toggleShiftLock(v)
         if hrp then
             if State.Security.shiftLockGyro then State.Security.shiftLockGyro:Destroy() end
             State.Security.shiftLockGyro = Instance.new("BodyGyro", hrp)
-            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
+            State.Security.shiftLockGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9); State.Security.shiftLockGyro.P = 50000; State.Security.shiftLockGyro.D = 1000
         end
         RS:BindToRenderStep("XKIDShiftLock", Enum.RenderPriority.Camera.Value + 2, function()
             if not State.Security.shiftLock then return end
@@ -269,15 +231,13 @@ local function refreshCharacter()
     pendingRefreshCF = hrp.CFrame; pendingRefreshWS = State.Move.ws; pendingRefreshJP = State.Move.jp; pendingRefreshZoom = LP.CameraMaxZoomDistance
     notify("Refresh", "Reloading...", 1.5, "refresh-cw")
     pcall(function() char:BreakJoints() end)
-    local waited = 0
-    repeat task.wait(0.1); waited = waited + 0.1 until not LP.Character or waited > 2
+    local waited = 0; repeat task.wait(0.1); waited = waited + 0.1 until not LP.Character or waited > 2
     if LP.Character then pcall(function() LP.Character:Destroy() end); task.wait(0.3) end
     if not LP.Character then pcall(function() LP:LoadCharacter() end) end
     task.delay(12, function() if State.Avatar.isRefreshing then State.Avatar.isRefreshing = false; pendingRefreshCF = nil; notify("Error", "Refresh timeout", 3, "circle-alert") end end)
 end
 TrackC(LP.CharacterAdded:Connect(function(newChar)
-    if not State.Avatar.isRefreshing then return end
-    if not pendingRefreshCF then return end
+    if not State.Avatar.isRefreshing then return end; if not pendingRefreshCF then return end
     task.wait(0.3)
     local newHrp = newChar:FindFirstChild("HumanoidRootPart") or newChar:WaitForChild("HumanoidRootPart", 8)
     local newHum = newChar:FindFirstChildOfClass("Humanoid") or newChar:WaitForChild("Humanoid", 8)
@@ -299,17 +259,12 @@ end))
 local Teleport = { clickConn = nil, clickActive = false, toolActive = false, tool = nil }
 local function executeTP()
     local hrp = getRoot(); if not hrp then return end
-    local m = LP:GetMouse()
-    if m.Hit then hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0)); hrp.AssemblyLinearVelocity = Vector3.zero end
+    local m = LP:GetMouse(); if m.Hit then hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3.5, 0)); hrp.AssemblyLinearVelocity = Vector3.zero end
 end
 local function toggleSmartTP(v)
     Teleport.clickActive = v
     if v then
-        pcall(function()
-            local tool = Instance.new("Tool"); tool.Name = "TP Tool"; tool.RequiresHandle = false
-            tool.Parent = LP.Backpack; Teleport.tool = tool; Teleport.toolActive = false
-            tool.Activated:Connect(function() Teleport.toolActive = not Teleport.toolActive end)
-        end)
+        pcall(function() local tool = Instance.new("Tool"); tool.Name = "TP Tool"; tool.RequiresHandle = false; tool.Parent = LP.Backpack; Teleport.tool = tool; Teleport.toolActive = false; tool.Activated:Connect(function() Teleport.toolActive = not Teleport.toolActive end) end)
         Teleport.clickConn = TrackC(UIS.InputBegan:Connect(function(inp, gp)
             if gp then return end
             if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -320,8 +275,7 @@ local function toggleSmartTP(v)
     else
         if Teleport.clickConn then Teleport.clickConn:Disconnect(); Teleport.clickConn = nil end
         pcall(function() if Teleport.tool then Teleport.tool:Destroy(); Teleport.tool = nil end end)
-        Teleport.toolActive = false
-        notify("Smart TP", "OFF", 1.5, "map-pin")
+        Teleport.toolActive = false; notify("Smart TP", "OFF", 1.5, "map-pin")
     end
 end
 
@@ -332,10 +286,8 @@ local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
     local cache = { texts = nil, tracer = nil, boxLines = {}, hl = nil, isSuspect = false, isGlitch = false, reason = "" }
     pcall(function()
-        cache.texts = Drawing.new("Text")
-        if cache.texts then cache.texts.Center = true; cache.texts.Outline = true; cache.texts.Font = 2; cache.texts.Size = 13; cache.texts.ZIndex = 2 end
-        cache.tracer = Drawing.new("Line")
-        if cache.tracer then cache.tracer.Thickness = 1.5; cache.tracer.ZIndex = 1 end
+        cache.texts = Drawing.new("Text"); if cache.texts then cache.texts.Center = true; cache.texts.Outline = true; cache.texts.Font = 2; cache.texts.Size = 13; cache.texts.ZIndex = 2 end
+        cache.tracer = Drawing.new("Line"); if cache.tracer then cache.tracer.Thickness = 1.5; cache.tracer.ZIndex = 1 end
         for i = 1, 4 do local line = Drawing.new("Line"); if line then line.Thickness = 1.5; line.ZIndex = 1; cache.boxLines[i] = line end end
     end)
     State.ESP.cache[player] = cache
@@ -353,8 +305,7 @@ local espsortedPlayers = {}
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         if State.ESP.active then
-            local tempSorted = {}
-            local myHrp = getCharRoot(LP.Character)
+            local tempSorted = {}; local myHrp = getCharRoot(LP.Character)
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LP and p.Character then
                     local isSus, isGlitch, reason = false, false, ""
@@ -378,8 +329,7 @@ task.spawn(function()
                     initPlayerCache(p)
                     if State.ESP.cache[p] then State.ESP.cache[p].isSuspect = isSus; State.ESP.cache[p].isGlitch = isGlitch; State.ESP.cache[p].reason = reason end
                     if myHrp then
-                        local hrp = getCharRoot(p.Character)
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                        local hrp = getCharRoot(p.Character); local hum = p.Character:FindFirstChildOfClass("Humanoid")
                         if hrp and hum and hum.Health > 0 then
                             local dist = (hrp.Position - myHrp.Position).Magnitude
                             if dist <= State.ESP.maxDrawDistance then table.insert(tempSorted, { p = p, hrp = hrp, dist = dist, char = p.Character }) end
@@ -387,8 +337,7 @@ task.spawn(function()
                     end
                 end
             end
-            table.sort(tempSorted, function(a, b) return a.dist < b.dist end)
-            espsortedPlayers = tempSorted
+            table.sort(tempSorted, function(a, b) return a.dist < b.dist end); espsortedPlayers = tempSorted
         end
         task.wait(0.5)
     end
@@ -400,8 +349,7 @@ TrackC(RS.RenderStepped:Connect(function()
     for _, c in pairs(State.ESP.cache) do
         pcall(function()
             if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end
-            for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end
-            if c.hl then c.hl.Enabled = false end
+            for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end
         end)
     end
     local hlCount = 0
@@ -509,7 +457,8 @@ local fcButtons = {}
 local FCUI = Instance.new("ScreenGui"); FCUI.Name = "XKID_FreecamUI"; FCUI.ResetOnSpawn = false; FCUI.ZIndexBehavior = Enum.ZIndexBehavior.Global; FCUI.Enabled = false; FCUI.Parent = CoreGui; getgenv()._XKID_FCUI = FCUI
 local function makeFCBtn(name, txt, pos, actionKey)
     local b = Instance.new("TextButton", FCUI); b.Name = name; b.Size = UDim2.new(0, 44, 0, 44); b.Position = pos; b.BackgroundColor3 = Color3.fromRGB(15, 15, 15); b.BackgroundTransparency = 0.4; b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 18; b.Font = Enum.Font.GothamBold; b.AutoButtonColor = false
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10); local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(220, 20, 60); uis.Thickness = 2; uis.Transparency = 0.3; local indicator = Instance.new("Frame", b); indicator.Name = "Indicator"; indicator.Size = UDim2.new(0, 6, 0, 6); indicator.Position = UDim2.new(0, 4, 0, 4); indicator.BackgroundColor3 = Color3.fromRGB(60, 60, 60); Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10); local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(220, 20, 60); uis.Thickness = 2; uis.Transparency = 0.3
+    local indicator = Instance.new("Frame", b); indicator.Name = "Indicator"; indicator.Size = UDim2.new(0, 6, 0, 6); indicator.Position = UDim2.new(0, 4, 0, 4); indicator.BackgroundColor3 = Color3.fromRGB(60, 60, 60); Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
     local function press(down) FC_UI_Btns[actionKey] = down; b.BackgroundTransparency = down and 0.05 or 0.4; indicator.BackgroundColor3 = down and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(60, 60, 60) end
     b.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then press(true) end end)
     b.InputEnded:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then press(false) end end)
@@ -519,7 +468,8 @@ end
 makeFCBtn("BtnRollL","L",UDim2.new(1,-156,0.5,-66),"rollLeft"); makeFCBtn("BtnRollR","R",UDim2.new(1,-58,0.5,-66),"rollRight")
 makeFCBtn("BtnUp","↑",UDim2.new(1,-107,0.5,-110),"up"); makeFCBtn("BtnDown","↓",UDim2.new(1,-107,0.5,-22),"down")
 makeFCBtn("BtnZIn","+",UDim2.new(1,-156,0.5,-22),"zoomIn"); makeFCBtn("BtnZOut","-",UDim2.new(1,-58,0.5,-22),"zoomOut")
-local eyeBtn = Instance.new("TextButton", FCUI); eyeBtn.Name = "BtnEye"; eyeBtn.Size = UDim2.new(0, 44, 0, 44); eyeBtn.Position = UDim2.new(1,-107,0.5,-66); eyeBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15); eyeBtn.BackgroundTransparency = 0.6; eyeBtn.Text = "👁"; eyeBtn.TextColor3 = Color3.fromRGB(255, 255, 255); eyeBtn.TextSize = 18; eyeBtn.Font = Enum.Font.GothamBold; eyeBtn.AutoButtonColor = false; Instance.new("UICorner", eyeBtn).CornerRadius = UDim.new(0, 10); local eyeStroke = Instance.new("UIStroke", eyeBtn); eyeStroke.Color = Color3.fromRGB(220, 20, 60); eyeStroke.Thickness = 2; eyeStroke.Transparency = 0.5
+local eyeBtn = Instance.new("TextButton", FCUI); eyeBtn.Name = "BtnEye"; eyeBtn.Size = UDim2.new(0, 44, 0, 44); eyeBtn.Position = UDim2.new(1,-107,0.5,-66); eyeBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15); eyeBtn.BackgroundTransparency = 0.6; eyeBtn.Text = "👁"; eyeBtn.TextColor3 = Color3.fromRGB(255, 255, 255); eyeBtn.TextSize = 18; eyeBtn.Font = Enum.Font.GothamBold; eyeBtn.AutoButtonColor = false
+Instance.new("UICorner", eyeBtn).CornerRadius = UDim.new(0, 10); local eyeStroke = Instance.new("UIStroke", eyeBtn); eyeStroke.Color = Color3.fromRGB(220, 20, 60); eyeStroke.Thickness = 2; eyeStroke.Transparency = 0.5
 local function toggleFCEye() FC_UI_Hidden = not FC_UI_Hidden; eyeBtn.Text = FC_UI_Hidden and "👁‍🗨" or "👁"; for _, b in ipairs(fcButtons) do b.Visible = not FC_UI_Hidden end end
 eyeBtn.MouseButton1Click:Connect(toggleFCEye); eyeBtn.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch then toggleFCEye() end end)
 local function startFreecamCapture() fcKeysHeld = {}; table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp) if gp then return end; fcKeysHeld[inp.KeyCode] = true; if inp.UserInputType == Enum.UserInputType.MouseButton2 then FC._mouseRot = true; UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition end end)); table.insert(fcConns, UIS.InputEnded:Connect(function(inp) fcKeysHeld[inp.KeyCode] = false; if inp.UserInputType == Enum.UserInputType.MouseButton2 then FC._mouseRot = false; UIS.MouseBehavior = Enum.MouseBehavior.Default end end)); table.insert(fcConns, UIS.InputChanged:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.MouseMovement and FC._mouseRot then I_YawVel = I_YawVel - inp.Delta.X * FC.sens * 120; I_PitchVel = I_PitchVel - inp.Delta.Y * FC.sens * 120 end end)); table.insert(fcConns, UIS.InputBegan:Connect(function(inp, gp) if gp or inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp.Position.X > Cam.ViewportSize.X / 2 then if not fcRotTouch then fcRotTouch = inp; fcRotLast = inp.Position end else if not fcMoveTouch then fcMoveTouch = inp; fcMoveSt = inp.Position; fcJoy = Vector2.zero end end end)); table.insert(fcConns, UIS.TouchMoved:Connect(function(inp) if inp == fcRotTouch and fcRotLast then local dx, dy = inp.Position.X - fcRotLast.X, inp.Position.Y - fcRotLast.Y; fcRotLast = inp.Position; I_YawVel = I_YawVel - dx * FC.sens * 80; I_PitchVel = I_PitchVel - dy * FC.sens * 80 end; if inp == fcMoveTouch and fcMoveSt then local dx, dy = inp.Position.X - fcMoveSt.X, inp.Position.Y - fcMoveSt.Y; local function ad(v,d,m) if math.abs(v)<d then return 0 end; return math.clamp((v-math.sign(v)*d)/(m-d),-1,1) end; fcJoy = Vector2.new(ad(dx,15,70), ad(dy,15,70)) end end)); table.insert(fcConns, UIS.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp == fcRotTouch then fcRotTouch = nil; fcRotLast = nil end; if inp == fcMoveTouch then fcMoveTouch = nil; fcMoveSt = nil; fcJoy = Vector2.zero end end)) end
@@ -529,7 +479,7 @@ local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 local function fullCleanupFreecam() stopFreecamLoop(); stopFreecamCapture(); local hum = getHum(); if hum then hum.WalkSpeed = FC.savedWalkSpeed; hum.UseJumpPower = true; hum.JumpPower = FC.savedJumpPower end; Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end; FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end end
 
 ----------------------------------------------------
--- SELF-SPECTATE
+-- SELF-SPECTATE v4.5.1 - FIXED
 ----------------------------------------------------
 local SS = State.SelfSpec
 local ssHeightVel = 0
@@ -544,51 +494,59 @@ local ssPinchDist = 0
 local ssPinchRadius = 8
 local SSUI = nil
 local ssUIScale = 1.0
+local ssAllTouchesEnded = true
+
+local function resetAllSSBtns()
+    for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end
+    for _, b in ipairs(ssButtons) do
+        if b then
+            b.BackgroundTransparency = 0.75
+            local ind = b:FindFirstChild("Indicator")
+            if ind then ind.BackgroundColor3 = Color3.fromRGB(60, 60, 60) end
+        end
+    end
+end
 
 local function getSSUI()
-    if not SSUI or not SSUI.Parent then
-        local gui = Instance.new("ScreenGui")
-        gui.Name = "XKID_SelfSpecUI"
-        gui.ResetOnSpawn = false
-        gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-        gui.Enabled = false
-        gui.Parent = CoreGui
-        SSUI = gui
-    end
+    if SSUI and SSUI.Parent then return SSUI end
+    -- Destroy invalid old one
+    local old = CoreGui:FindFirstChild("XKID_SelfSpecUI")
+    if old then old:Destroy() end
+    -- Clear old buttons
+    ssButtons = {}
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "XKID_SelfSpecUI"
+    gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    gui.Enabled = false
+    gui.Parent = CoreGui
+    SSUI = gui
     return SSUI
 end
 
 local BTN_SIZE = 32
+local BASE_X, BASE_Y = 5, 5
 
 local function makeSSBtn(name, txt, xOff, yOff, actionKey)
     local ui = getSSUI()
     local b = Instance.new("TextButton", ui)
     b.Name = name
     b.Size = UDim2.new(0, BTN_SIZE, 0, BTN_SIZE)
-    b.Position = UDim2.new(0, xOff, 0, yOff)
+    b.Position = UDim2.new(0, BASE_X + xOff, 0, BASE_Y + yOff)
     b.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     b.BackgroundTransparency = 0.75
-    b.Text = txt
-    b.TextColor3 = Color3.fromRGB(255, 255, 255)
-    b.TextSize = 13
-    b.Font = Enum.Font.GothamBold
-    b.AutoButtonColor = false
-    b.ZIndex = 10
+    b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.TextSize = 13; b.Font = Enum.Font.GothamBold
+    b.AutoButtonColor = false; b.ZIndex = 10
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-    local stroke = Instance.new("UIStroke", b)
-    stroke.Color = Color3.fromRGB(100, 200, 255)
-    stroke.Thickness = 1
-    stroke.Transparency = 0.6
+    local stroke = Instance.new("UIStroke", b); stroke.Color = Color3.fromRGB(100, 200, 255); stroke.Thickness = 1; stroke.Transparency = 0.6
     b.InputBegan:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            SS_UI_Btns[actionKey] = true
-            b.BackgroundTransparency = 0.3
+            SS_UI_Btns[actionKey] = true; b.BackgroundTransparency = 0.3
         end
     end)
     b.InputEnded:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            SS_UI_Btns[actionKey] = false
-            b.BackgroundTransparency = 0.75
+            SS_UI_Btns[actionKey] = false; b.BackgroundTransparency = 0.75
         end
     end)
     b.MouseLeave:Connect(function() SS_UI_Btns[actionKey] = false; b.BackgroundTransparency = 0.75 end)
@@ -596,27 +554,23 @@ local function makeSSBtn(name, txt, xOff, yOff, actionKey)
     return b
 end
 
-makeSSBtn("BtnRollL", "L", 5,  5,  "rollL")
-makeSSBtn("BtnUp",    "↑", 42, 5,  "up")
-makeSSBtn("BtnRollR", "R", 79, 5,  "rollR")
-makeSSBtn("BtnLeft",  "←", 5,  42, "left")
-makeSSBtn("BtnRight", "→", 79, 42, "right")
-makeSSBtn("BtnZIn",   "+", 5,  79, "zoomIn")
-makeSSBtn("BtnDown",  "↓", 42, 79, "down")
-makeSSBtn("BtnZOut",  "-", 79, 79, "zoomOut")
+makeSSBtn("BtnRollL", "L", 0,  0,  "rollL")
+makeSSBtn("BtnUp",    "↑", 37, 0,  "up")
+makeSSBtn("BtnRollR", "R", 74, 0,  "rollR")
+makeSSBtn("BtnLeft",  "←", 0,  37, "left")
+makeSSBtn("BtnRight", "→", 74, 37, "right")
+makeSSBtn("BtnZIn",   "+", 0,  74, "zoomIn")
+makeSSBtn("BtnDown",  "↓", 37, 74, "down")
+makeSSBtn("BtnZOut",  "-", 74, 74, "zoomOut")
 
 local ssEyeBtn = Instance.new("TextButton", getSSUI())
 ssEyeBtn.Name = "BtnEye"
 ssEyeBtn.Size = UDim2.new(0, BTN_SIZE, 0, BTN_SIZE)
-ssEyeBtn.Position = UDim2.new(0, 42, 0, 42)
+ssEyeBtn.Position = UDim2.new(0, BASE_X + 37, 0, BASE_Y + 37)
 ssEyeBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 ssEyeBtn.BackgroundTransparency = 0.8
-ssEyeBtn.Text = "👁"
-ssEyeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ssEyeBtn.TextSize = 14
-ssEyeBtn.Font = Enum.Font.GothamBold
-ssEyeBtn.AutoButtonColor = false
-ssEyeBtn.ZIndex = 20
+ssEyeBtn.Text = "👁"; ssEyeBtn.TextColor3 = Color3.fromRGB(255, 255, 255); ssEyeBtn.TextSize = 14; ssEyeBtn.Font = Enum.Font.GothamBold
+ssEyeBtn.AutoButtonColor = false; ssEyeBtn.ZIndex = 20
 Instance.new("UICorner", ssEyeBtn).CornerRadius = UDim.new(0, 6)
 
 local function toggleSSEye()
@@ -628,7 +582,7 @@ ssEyeBtn.MouseButton1Click:Connect(toggleSSEye)
 
 local function isInButtonZone(pos)
     if SS_UI_Hidden then return false end
-    if pos.X < 120 and pos.Y < 120 then
+    if pos.X < BASE_X + 120 and pos.Y < BASE_Y + 120 then
         for _, btn in ipairs(ssButtons) do
             if btn and btn.Visible and btn.AbsolutePosition then
                 local x1, y1 = btn.AbsolutePosition.X, btn.AbsolutePosition.Y
@@ -647,12 +601,24 @@ end
 
 local function updateSSUIScale()
     for _, b in ipairs(ssButtons) do
-        if b then b.Size = UDim2.new(0, BTN_SIZE * ssUIScale, 0, BTN_SIZE * ssUIScale); b.TextSize = 13 * ssUIScale end
+        if b then
+            b.Size = UDim2.new(0, BTN_SIZE * ssUIScale, 0, BTN_SIZE * ssUIScale)
+            b.Position = UDim2.new(0, BASE_X + (b.Position.X.Offset - BASE_X) * ssUIScale, 0, BASE_Y + (b.Position.Y.Offset - BASE_Y) * ssUIScale)
+            b.TextSize = 13 * ssUIScale
+        end
     end
-    if ssEyeBtn then ssEyeBtn.Size = UDim2.new(0, BTN_SIZE * ssUIScale, 0, BTN_SIZE * ssUIScale); ssEyeBtn.TextSize = 14 * ssUIScale end
+    if ssEyeBtn then
+        ssEyeBtn.Size = UDim2.new(0, BTN_SIZE * ssUIScale, 0, BTN_SIZE * ssUIScale)
+        ssEyeBtn.Position = UDim2.new(0, BASE_X + 37 * ssUIScale, 0, BASE_Y + 37 * ssUIScale)
+        ssEyeBtn.TextSize = 14 * ssUIScale
+    end
 end
 
+local MOBILE_SENS = 0.2
+local PC_SENS = 0.3
+
 local function startSelfSpecLoop()
+    RS:UnbindFromRenderStep("XKIDSelfSpec")
     RS:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function(dt)
         if not SS.active then return end
         local char = LP.Character; local hrp = getCharRoot(char)
@@ -676,7 +642,7 @@ local function startSelfSpecLoop()
             Cam.CFrame = CFrame.new(origin) * CFrame.Angles(0, math.rad(SS.fpYaw), 0) * CFrame.Angles(math.rad(SS.fpPitch), 0, 0)
         else
             local targetPos = hrp.Position + Vector3.new(0, SS.height or 3, 0)
-            local orbitCF = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(SS.orbitYaw), 0) * CFrame.Angles(math.rad(SS.orbitPitch), 0, 0) * CFrame.new(0, 0, SS._smoothRadius or SS.radius)
+            local orbitCF = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(SS.orbitYaw), 0) * CFrame.Angles(math.rad(SS.orbitPitch), 0, 0) * CFrame.new(0, 0, -SS._smoothRadius)
             Cam.CFrame = orbitCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0))
         end
     end)
@@ -689,7 +655,7 @@ local function stopSelfSpecLoop()
     SS.radius = 8; SS.height = 3; SS.fov = SS.origFov; SS._smoothRadius = 8
     ssHeightVel = 0; ssDragActive = false; ssPinchDist = 0
     if getSSUI() then getSSUI().Enabled = false end
-    for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end
+    resetAllSSBtns()
     SS_UI_Hidden = false
     if ssEyeBtn then ssEyeBtn.Text = "👁" end
     for _, b in ipairs(ssButtons) do if b then b.Visible = true end end
@@ -698,6 +664,7 @@ end
 TrackC(UIS.InputBegan:Connect(function(inp, gp)
     if not SS.active then return end
     if gp then return end
+    ssAllTouchesEnded = false
     if inp.UserInputType == Enum.UserInputType.MouseButton2 then
         if isInButtonZone(Vector2.new(inp.Position.X, inp.Position.Y)) then return end
         ssDragActive = true
@@ -711,7 +678,7 @@ TrackC(UIS.InputBegan:Connect(function(inp, gp)
     if isInButtonZone(inp.Position) then return end
     local touches = UIS:GetTouches()
     if #touches == 1 then
-        ssDragActive = true
+        ssDragActive = true; ssPinchDist = 0
         ssDragStart = touches[1].Position
         ssDragYaw = (SS.mode == "First Person") and SS.fpYaw or SS.orbitYaw
         ssDragPitch = (SS.mode == "First Person") and SS.fpPitch or SS.orbitPitch
@@ -725,9 +692,10 @@ end))
 
 TrackC(UIS.InputChanged:Connect(function(inp)
     if not SS.active then return end
+    local sens = onMobile and MOBILE_SENS or PC_SENS
     if inp.UserInputType == Enum.UserInputType.MouseMovement and ssDragActive then
-        local newYaw = ssDragYaw - inp.Delta.X * 0.3
-        local newPitch = math.clamp(ssDragPitch + inp.Delta.Y * 0.3, -75, 75)
+        local newYaw = ssDragYaw - inp.Delta.X * sens
+        local newPitch = math.clamp(ssDragPitch + inp.Delta.Y * sens, -75, 75)
         if SS.mode == "First Person" then SS.fpYaw = newYaw; SS.fpPitch = newPitch else SS.orbitYaw = newYaw; SS.orbitPitch = newPitch end
         return
     end
@@ -736,14 +704,15 @@ TrackC(UIS.InputChanged:Connect(function(inp)
     if #touches == 1 and ssDragActive then
         local pos = touches[1].Position
         local dx = pos.X - ssDragStart.X; local dy = pos.Y - ssDragStart.Y
-        local newYaw = ssDragYaw + dx * 0.3
-        local newPitch = math.clamp(ssDragPitch - dy * 0.3, -75, 75)
+        local newYaw = ssDragYaw + dx * sens
+        local newPitch = math.clamp(ssDragPitch - dy * sens, -75, 75)
         if SS.mode == "First Person" then SS.fpYaw = newYaw; SS.fpPitch = newPitch else SS.orbitYaw = newYaw; SS.orbitPitch = newPitch end
     elseif #touches == 2 then
         local p1, p2 = touches[1].Position, touches[2].Position
         local dist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
         if ssPinchDist > 0 then
-            SS.radius = math.clamp(ssPinchRadius * (ssPinchDist / math.max(dist, 1)), 3, 30)
+            local ratio = ssPinchDist / math.max(dist, 1)
+            SS.radius = math.clamp(ssPinchRadius * ratio, 3, 30)
             if SS.mode == "First Person" then SS.fov = math.clamp(70 + (8 - SS.radius) * 5, 10, 120) end
         end
         ssPinchDist = dist; ssPinchRadius = SS.radius
@@ -755,7 +724,11 @@ TrackC(UIS.InputEnded:Connect(function(inp)
     if inp.UserInputType == Enum.UserInputType.MouseButton2 then ssDragActive = false; UIS.MouseBehavior = Enum.MouseBehavior.Default; return end
     if inp.UserInputType ~= Enum.UserInputType.Touch then return end
     local touches = UIS:GetTouches()
-    if #touches == 0 then ssDragActive = false; ssPinchDist = 0
+    if #touches == 0 then
+        ssAllTouchesEnded = true
+        ssDragActive = false; ssPinchDist = 0
+        task.wait(0.05)
+        if ssAllTouchesEnded then resetAllSSBtns() end
     elseif #touches == 1 and ssPinchDist > 0 then
         ssPinchDist = 0; ssDragActive = true
         ssDragStart = touches[1].Position
@@ -773,9 +746,9 @@ local function toggleSelfSpec(v)
         SS.active = true; SS.origFov = Cam.FieldOfView; SS.fov = Cam.FieldOfView
         SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.roll = 0
         SS.radius = SS.radius or 8; SS.height = SS.height or 3; SS._smoothRadius = SS.radius
-        ssHeightVel = 0; ssDragActive = false; ssPinchDist = 0
+        ssHeightVel = 0; ssDragActive = false; ssPinchDist = 0; ssAllTouchesEnded = true
         getSSUI().Enabled = true
-        for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end
+        resetAllSSBtns()
         SS_UI_Hidden = false; ssEyeBtn.Text = "👁"
         for _, b in ipairs(ssButtons) do if b then b.Visible = true end end
         startSelfSpecLoop()
@@ -837,35 +810,22 @@ local function applyFilter(filter) resetFilterOnly(); resetDOFOnly(); Lighting.C
     notify("Visuals", filter, 2, "palette")
 end
 
-print("11. All systems ready, creating Window...")
-
 ----------------------------------------------------
 -- MAIN WINDOW
 ----------------------------------------------------
 local Window = WindUI:CreateWindow({
-    Title = "XKID HUB",
-    Icon = "bluetooth",
-    Author = "v" .. CURRENT_VERSION,
-    Folder = "XKIDHub",
-    Size = UDim2.fromOffset(360, 320),
-    Transparent = true,
-    Theme = "Crimson",
-    SideBarWidth = 160,
-    User = { Enabled = true, Anonymous = false },
-    Topbar = { Height = 40, ButtonsType = "Default" },
+    Title = "XKID HUB", Icon = "bluetooth", Author = "v" .. CURRENT_VERSION, Folder = "XKIDHub",
+    Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
+    User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
-
-print("12. Window created")
 
 pcall(function() WindUI:SetFont("rbxassetid://12187376357") end)
 pcall(function() WindUI:SetNotificationLower(true) end)
-
 pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
 
 Window:EditOpenButton({
     Title = "WTF.XKID", Icon = "wifi", CornerRadius = UDim.new(1, 0),
-    StrokeThickness = 2, StrokeColor = Color3.fromRGB(255, 70, 120),
-    Enabled = true, Draggable = true, Scale = 0.72,
+    StrokeThickness = 2, StrokeColor = Color3.fromRGB(255, 70, 120), Enabled = true, Draggable = true, Scale = 0.72,
 })
 
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255, 215, 0), Icon = "github" })
@@ -881,8 +841,6 @@ local TabESP  = Window:Tab({ Title = "ESP", Icon = "scan-search" })
 local TabLog  = Window:Tab({ Title = "Logger", Icon = "square-terminal" })
 local TabProt = Window:Tab({ Title = "Protection", Icon = "shield-half" })
 local TabSet  = Window:Tab({ Title = "Settings", Icon = "panels-top-left" })
-
-print("13. Tabs created")
 
 ----------------------------------------------------
 -- TAB: INFORMASI
@@ -928,8 +886,7 @@ secTargetTP:Button({ Title = "Refresh List", Callback = function() notify("Telep
 local secCache = TabTP:Section({ Title = "Coordinates Cache", Icon = "save", Box = true })
 local SavedLocs = {}
 for i = 1, 3 do
-    local idx = i
-    local hCache = secCache:HStack({ Columns = 2 })
+    local idx = i; local hCache = secCache:HStack({ Columns = 2 })
     hCache:Button({ Title = "💾 Save " .. idx, Callback = function() local r = getRoot(); if not r then return end; SavedLocs[idx] = r.CFrame; notify("Slot " .. idx, "Saved", 1.5, "save") end })
     hCache:Button({ Title = "📍 Load " .. idx, Callback = function() if not SavedLocs[idx] then notify("Slot " .. idx, "Empty", 1.5, "save"); return end; local r = getRoot(); if not r then return end; r.CFrame = SavedLocs[idx]; notify("Slot " .. idx, "Loaded", 1.5, "map-pin") end })
 end
@@ -1049,19 +1006,11 @@ secLike:Slider({ Title = "Max Cooldown", Step = 0.5, Value = { Min = 1, Max = 15
 local autoLikeInfo = secLike:Paragraph({ Title = "Info", Desc = "Total likes sent: 0" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(function() autoLikeInfo:SetDesc("Total likes sent: " .. State.AutoLike.count) end) end end)
 
-print("14. All tabs built")
-
 ----------------------------------------------------
 -- AUTO-EXPAND + STARTUP
 ----------------------------------------------------
 task.delay(0.5, function()
-    pcall(function()
-        for _, tab in pairs(Window.Tabs) do
-            for _, section in ipairs(tab.Sections) do
-                if section.Expand then section:Expand() end
-            end
-        end
-    end)
+    pcall(function() for _, tab in pairs(Window.Tabs) do for _, section in ipairs(tab.Sections) do if section.Expand then section:Expand() end end end end)
 end)
 
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
@@ -1071,5 +1020,4 @@ task.spawn(function()
     task.wait(2)
     getgenv()._XKID_UI_LOADING = false
     notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
-    print("✅ XKID v" .. CURRENT_VERSION .. " - Ready")
 end)
