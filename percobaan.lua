@@ -1,5 +1,5 @@
 --[[
-    @XKID SCRIPT 👉😜👈 v4.2.6
+    @XKID SCRIPT 👉😜👈 v4.2.7
     by @WTF.XKID
     Roblox Build For Mobile
     WindUI Footagesus Release
@@ -40,7 +40,7 @@ local LP                = Players.LocalPlayer
 local Cam               = workspace.CurrentCamera
 local onMobile          = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "4.2.6"
+local CURRENT_VERSION = "4.2.7"
 local OWNER_USER_ID   = 3507208058
 
 getgenv()._XKID_UI_LOADING = true
@@ -555,14 +555,13 @@ local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 local function fullCleanupFreecam() stopFreecamLoop(); stopFreecamCapture(); local hum = getHum(); if hum then hum.WalkSpeed = FC.savedWalkSpeed; hum.UseJumpPower = true; hum.JumpPower = FC.savedJumpPower end; Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end; FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end end
 
 ----------------------------------------------------
--- SELF-SPEC (UI + TOUCH GESTURE MOBILE-ONLY, FIX DRAG NATURAL)
+-- SELF-SPEC (UI + TOUCH GESTURE MOBILE-ONLY, FIXED)
 ----------------------------------------------------
 local SS = State.SelfSpec
 local ssHeightVel = 0
 local SS_UI_Btns = { up = false, down = false, left = false, right = false, zoomIn = false, zoomOut = false, rollL = false, rollR = false }
 local SS_UI_Hidden = false
 local ssButtons = {}
-local ssTouches = {}
 local ssDragActive = false
 local ssDragStart = Vector2.zero
 local ssDragYaw = 0
@@ -593,38 +592,58 @@ ssEyeBtn.MouseButton1Click:Connect(toggleSSEye); ssEyeBtn.InputBegan:Connect(fun
 local function startSelfSpecLoop() SS.yaw = 0; SS.pitch = 20; RS:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function(dt) if not SS.active then return end; local char = LP.Character; local hrp = getCharRoot(char); if not hrp then return end; local safeDt = math.clamp(dt, 0.001, 0.05); Cam.CameraType = Enum.CameraType.Scriptable; local rotX = 0; local heightTarget = 0; if SS_UI_Btns.left then rotX = -1 elseif SS_UI_Btns.right then rotX = 1 end; if SS_UI_Btns.up then heightTarget = SS.speed * 5 elseif SS_UI_Btns.down then heightTarget = -SS.speed * 5 end; if SS_UI_Btns.rollL then SS.roll = (SS.roll or 0) - safeDt * 50 elseif SS_UI_Btns.rollR then SS.roll = (SS.roll or 0) + safeDt * 50 end; if SS_UI_Btns.zoomIn then SS.fov = math.clamp((SS.fov or 70) - safeDt * 30, 10, 120) end; if SS_UI_Btns.zoomOut then SS.fov = math.clamp((SS.fov or 70) + safeDt * 30, 10, 120) end; if SS.mode == "Orbit" then SS.yaw = SS.yaw + safeDt * 30 * SS.speed; elseif SS.mode == "Vertical Orbit" then SS.pitch = 20 + math.sin(tick() * SS.speed) * 40; elseif SS.mode == "Figure 8" then SS.yaw = math.sin(tick() * SS.speed * 0.7) * 90; SS.pitch = 20 + math.sin(tick() * SS.speed) * 30; elseif SS.mode == "Static" then SS.yaw = SS.yaw + rotX * safeDt * 60; SS.pitch = math.clamp(SS.pitch, -70, 70); elseif SS.mode == "Slow Drift" then SS.yaw = SS.yaw + safeDt * 10 * SS.speed end; if heightTarget == 0 then ssHeightVel = ssHeightVel * math.max(0, 1 - safeDt * 5) else ssHeightVel = ssHeightVel + (heightTarget - ssHeightVel) * math.clamp(safeDt * 3, 0, 1) end; SS.height = (SS.height or 3) + ssHeightVel * safeDt; Cam.FieldOfView = SS.fov or 70; local targetPos = hrp.Position + Vector3.new(0, SS.height or 3, 0); local orbitCF = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(SS.yaw), 0) * CFrame.Angles(math.rad(SS.pitch), 0, 0) * CFrame.new(0, 0, SS.radius); Cam.CFrame = orbitCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0)) end) end
 local function stopSelfSpecLoop() RS:UnbindFromRenderStep("XKIDSelfSpec"); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = SS.origFov; if SSUI then SSUI.Enabled = false end; for k in pairs(SS_UI_Btns) do SS_UI_Btns[k] = false end; SS.roll = 0; SS_UI_Hidden = false; ssEyeBtn.Text = "👁"; for _, b in ipairs(ssButtons) do b.Visible = true end end
 
--- Mobile gesture handling (NATURAL DRAG)
+-- Mobile gesture handling (FIXED: Natural + UIS:GetTouches)
 TrackC(UIS.InputBegan:Connect(function(inp, gp)
     if gp or not SS.active then return end
     if inp.UserInputType ~= Enum.UserInputType.Touch then return end
     if isOnButtonArea(inp.Position) then return end
-    table.insert(ssTouches, inp)
-    if #ssTouches == 1 then
-        ssDragActive = true; ssDragStart = inp.Position; ssDragYaw = SS.yaw; ssDragPitch = SS.pitch
-    elseif #ssTouches == 2 then
-        local p1 = ssTouches[1].Position; local p2 = ssTouches[2].Position
+    
+    local touches = UIS:GetTouches()
+    if #touches == 1 then
+        ssDragActive = true
+        ssDragStart = touches[1].Position
+        ssDragYaw = SS.yaw
+        ssDragPitch = SS.pitch
+    elseif #touches == 2 then
+        local p1, p2 = touches[1].Position, touches[2].Position
         ssPinchDist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
-        ssPinchRadius = SS.radius; ssDragActive = false
+        ssPinchRadius = SS.radius
+        ssDragActive = false
     end
 end))
+
 TrackC(UIS.InputChanged:Connect(function(inp)
     if not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end
-    if #ssTouches == 1 and ssDragActive then
-        local dx = inp.Position.X - ssDragStart.X; local dy = inp.Position.Y - ssDragStart.Y
+    
+    local touches = UIS:GetTouches()
+    if #touches == 1 and ssDragActive then
+        local pos = touches[1].Position
+        local dx = pos.X - ssDragStart.X
+        local dy = pos.Y - ssDragStart.Y
         SS.yaw = ssDragYaw + dx * 0.3  -- NATURAL: drag kanan = orbit kanan
         SS.pitch = math.clamp(ssDragPitch - dy * 0.3, -75, 75)  -- NATURAL: drag atas = orbit atas
-    elseif #ssTouches == 2 then
-        local p1 = ssTouches[1].Position; local p2 = ssTouches[2].Position
+    elseif #touches == 2 then
+        local p1, p2 = touches[1].Position, touches[2].Position
         local dist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
-        if ssPinchDist > 0 then SS.radius = math.clamp(ssPinchRadius * (ssPinchDist / math.max(dist, 1)), 3, 30) end
+        if ssPinchDist > 0 then
+            SS.radius = math.clamp(ssPinchRadius * (ssPinchDist / math.max(dist, 1)), 3, 30)
+        end
+        ssPinchDist = dist
+        ssPinchRadius = SS.radius
     end
 end))
+
 TrackC(UIS.InputEnded:Connect(function(inp)
     if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-    for i, t in ipairs(ssTouches) do if t == inp then table.remove(ssTouches, i); break end end
-    if #ssTouches < 2 then ssPinchDist = 0 end
-    if #ssTouches == 0 then ssDragActive = false end
+    local touches = UIS:GetTouches()
+    if #touches < 2 then
+        ssPinchDist = 0
+    end
+    if #touches == 0 then
+        ssDragActive = false
+    end
 end))
+
 local function toggleSelfSpec(v)
     if v then if FC.active then fullCleanupFreecam() end; SS.active = true; SS.origFov = Cam.FieldOfView; SS.fov = Cam.FieldOfView; SS.yaw = 0; SS.pitch = 20; SS.roll = 0; if SSUI then SSUI.Enabled = true end; startSelfSpecLoop(); notify("Self-Spectate", "ON — " .. SS.mode, 2, "camera")
     else SS.active = false; stopSelfSpecLoop(); notify("Self-Spectate", "OFF", 1.5) end
@@ -954,8 +973,16 @@ end)
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
 pcall(function() setfpscap(9999) end)
 
-task.delay(1, function()
+task.spawn(function()
+    task.wait(2)
     getgenv()._XKID_UI_LOADING = false
-    notify("System", "XKID AKTIF", 3, "rocket")
+    pcall(function()
+        WindUI:Notify({
+            Title = "System",
+            Content = "XKID AKTIF",
+            Duration = 3,
+            Icon = "rocket"
+        })
+    end)
     print("✅ XKID v" .. CURRENT_VERSION .. " - WindUI Footagesus · Final · Delta Ready")
 end)
