@@ -463,181 +463,103 @@ local function startFreecamLoop() RS:BindToRenderStep("XKIDFreecam", Enum.Render
 local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 local function fullCleanupFreecam() stopFreecamLoop(); stopFreecamCapture(); local hum = getHum(); if hum then hum.WalkSpeed = FC.savedWalkSpeed; hum.UseJumpPower = true; hum.JumpPower = FC.savedJumpPower end; Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end; FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end end
 
--- SELF-SPECTATE v5.0 - NO UI, GESTURE ONLY, PRESET MODES
+-- SELF-SPECTATE v5.1 (adapted from Spectator)
 local SS = State.SelfSpec
+local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
 local ssHeightVel = 0
-local ssDragActive = false
-local ssDragStart = Vector2.zero
-local ssDragYaw = 0
-local ssDragPitch = 0
-local ssPinchDist = 0
-local ssPinchRadius = 8
-local ssManualOverride = false
-local ssManualTimer = 0
 
-local MOBILE_SENS = 0.25
-local PC_SENS = 0.35
+local function startSSGesture()
+    ssConns = {}
+    table.insert(ssConns, UIS.InputBegan:Connect(function(inp, gp)
+        if gp or not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        table.insert(ssPinch, inp)
+        ssTM = #ssPinch == 1 and inp or nil
+    end))
+    table.insert(ssConns, UIS.InputChanged:Connect(function(inp)
+        if not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        if #ssPinch == 1 and inp == ssTM then
+            ssPan = ssPan + Vector2.new(inp.Delta.X, inp.Delta.Y)
+        elseif #ssPinch >= 2 then
+            local d = (ssPinch[1].Position - ssPinch[2].Position).Magnitude
+            if ssPinchD then
+                local diff = d - ssPinchD
+                Cam.FieldOfView = math.clamp(Cam.FieldOfView - diff * 0.15, 10, 120)
+                SS.radius = math.clamp(SS.radius - diff * 0.03, 3, 30)
+            end
+            ssPinchD = d
+        end
+    end))
+    table.insert(ssConns, UIS.InputEnded:Connect(function(inp)
+        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        for i, v in ipairs(ssPinch) do if v == inp then table.remove(ssPinch, i); break end end
+        ssPinchD = nil
+        ssTM = #ssPinch == 1 and ssPinch[1] or nil
+    end))
+end
+
+local function stopSSGesture()
+    for _, c in ipairs(ssConns) do c:Disconnect() end
+    ssConns = {}; ssTM = nil; ssPinch = {}; ssPinchD = nil; ssPan = Vector2.zero
+end
 
 local function startSelfSpecLoop()
     RS:UnbindFromRenderStep("XKIDSelfSpec")
-    RS:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function(dt)
+    RS:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function()
         if not SS.active then return end
-        local char = LP.Character; local hrp = getCharRoot(char)
-        if not hrp then return end
-        local safeDt = math.clamp(dt, 0.001, 0.05)
-        Cam.CameraType = Enum.CameraType.Scriptable
-        
-        -- Preset auto movements (hanya kalau tidak ada manual override)
-        if not ssDragActive then
-            if SS.mode == "Slow Orbit" then
-                SS.orbitYaw = SS.orbitYaw + safeDt * 25 * SS.speed
-            elseif SS.mode == "Vertical Swing" then
-                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.5) * 40
-                SS.orbitYaw = SS.orbitYaw + safeDt * 10 * SS.speed
-            elseif SS.mode == "Figure 8" then
-                SS.orbitYaw = math.sin(tick() * SS.speed * 0.8) * 80
-                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.2) * 35
-            elseif SS.mode == "Cinematic Drift" then
-                SS.orbitYaw = SS.orbitYaw + safeDt * 15 * SS.speed
-                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.7) * 15
-            elseif SS.mode == "Top Down" then
-                SS.orbitPitch = -75
-                SS.orbitYaw = SS.orbitYaw + safeDt * 8 * SS.speed
-                SS.height = 15
+        pcall(function()
+            local targetChar = LP.Character
+            local targetHrp = getCharRoot(targetChar)
+            if not targetHrp then return end
+            
+            Cam.CameraType = Enum.CameraType.Scriptable
+            local pan, sens = ssPan, onMobile and 0.2 or 0.3
+            ssPan = Vector2.zero
+            
+            if SS.mode == "First Person" then
+                local head = targetChar:FindFirstChild("Head")
+                local origin = head and head.Position or targetHrp.Position + Vector3.new(0, 1.5, 0)
+                SS.fpYaw = SS.fpYaw - pan.X * sens
+                SS.fpPitch = math.clamp(SS.fpPitch - pan.Y * sens, -85, 85)
+                Cam.CFrame = CFrame.new(origin) * CFrame.Angles(0, math.rad(SS.fpYaw), 0) * CFrame.Angles(math.rad(SS.fpPitch), 0, 0)
+            else
+                -- Auto preset movement (only if not being dragged)
+                if #ssPinch == 0 and ssPan.Magnitude < 0.01 then
+                    local dt = 0.016
+                    if SS.mode == "Slow Orbit" then
+                        SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
+                    elseif SS.mode == "Vertical Swing" then
+                        SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.5) * 40
+                        SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed
+                    elseif SS.mode == "Figure 8" then
+                        SS.orbitYaw = math.sin(tick() * SS.speed * 0.8) * 80
+                        SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.2) * 35
+                    elseif SS.mode == "Cinematic Drift" then
+                        SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed
+                        SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.7) * 15
+                    elseif SS.mode == "Top Down" then
+                        SS.orbitPitch = -75
+                        SS.orbitYaw = SS.orbitYaw + dt * 8 * SS.speed
+                    end
+                end
+                
+                SS.orbitYaw = SS.orbitYaw + pan.X * sens
+                SS.orbitPitch = math.clamp(SS.orbitPitch + pan.Y * sens, -75, 75)
+                
+                local h = (SS.mode == "Top Down") and 15 or (SS.height or 3)
+                Cam.CFrame = CFrame.new((CFrame.new(targetHrp.Position + Vector3.new(0, h, 0)) * CFrame.Angles(0, math.rad(-SS.orbitYaw), 0) * CFrame.Angles(math.rad(-SS.orbitPitch), 0, 0) * CFrame.new(0, 0, SS.radius)).Position, targetHrp.Position + Vector3.new(0, h, 0))
             end
-        end
-        
-        -- Height smoothing
-        local targetH = (SS.mode == "Top Down") and 15 or (SS.height or 3)
-        if SS.mode ~= "Top Down" then
-            if math.abs(targetH - (SS.height or 3)) > 0.01 then
-                SS.height = (SS.height or 3) + (targetH - (SS.height or 3)) * math.clamp(safeDt * 3, 0, 1)
-            end
-        end
-        
-        -- Smooth radius
-        SS._smoothRadius = SS._smoothRadius or SS.radius
-        SS._smoothRadius = SS._smoothRadius + (SS.radius - SS._smoothRadius) * math.clamp(safeDt * 8, 0, 1)
-        
-        Cam.FieldOfView = SS.fov or 70
-        
-        if SS.mode == "First Person" then
-            local head = char:FindFirstChild("Head")
-            local origin = head and head.Position or (hrp.Position + Vector3.new(0, 1.5, 0))
-            Cam.CFrame = CFrame.new(origin) * CFrame.Angles(0, math.rad(SS.fpYaw), 0) * CFrame.Angles(math.rad(SS.fpPitch), 0, 0)
-        else
-            local targetPos = hrp.Position + Vector3.new(0, SS.height or 3, 0)
-            local orbitCF = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(SS.orbitYaw), 0) * CFrame.Angles(math.rad(SS.orbitPitch), 0, 0) * CFrame.new(0, 0, -SS._smoothRadius)
-            Cam.CFrame = orbitCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0))
-        end
+        end)
     end)
 end
 
 local function stopSelfSpecLoop()
     RS:UnbindFromRenderStep("XKIDSelfSpec")
-    Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = SS.origFov
-    SS.active = false; SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.roll = 0
-    SS.radius = 8; SS.height = 3; SS.fov = SS.origFov; SS._smoothRadius = 8
-    ssHeightVel = 0; ssDragActive = false; ssPinchDist = 0
-end
-
--- Dedicated gesture connections (NOT using TrackC, self-managed)
-local ssGestureConns = {}
-
-local function connectSSGestures()
-    disconnectSSGestures()
-    
-    local conn1 = UIS.InputBegan:Connect(function(inp, gp)
-        if not SS.active then return end
-        if gp then return end
-        
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            ssDragActive = true
-            ssDragStart = Vector2.new(inp.Position.X, inp.Position.Y)
-            ssDragYaw = (SS.mode == "First Person") and SS.fpYaw or SS.orbitYaw
-            ssDragPitch = (SS.mode == "First Person") and SS.fpPitch or SS.orbitPitch
-            UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
-            return
-        end
-        
-        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        
-        local touches = UIS:GetTouches()
-        if #touches == 1 then
-            ssDragActive = true; ssPinchDist = 0
-            ssDragStart = touches[1].Position
-            ssDragYaw = (SS.mode == "First Person") and SS.fpYaw or SS.orbitYaw
-            ssDragPitch = (SS.mode == "First Person") and SS.fpPitch or SS.orbitPitch
-        elseif #touches == 2 then
-            ssDragActive = false
-            local p1, p2 = touches[1].Position, touches[2].Position
-            ssPinchDist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
-            ssPinchRadius = SS.radius
-        end
-    end)
-    
-    local conn2 = UIS.InputChanged:Connect(function(inp)
-        if not SS.active then return end
-        local sens = onMobile and MOBILE_SENS or PC_SENS
-        
-        if inp.UserInputType == Enum.UserInputType.MouseMovement and ssDragActive then
-            local newYaw = ssDragYaw - inp.Delta.X * sens
-            local newPitch = math.clamp(ssDragPitch + inp.Delta.Y * sens, -75, 75)
-            if SS.mode == "First Person" then SS.fpYaw = newYaw; SS.fpPitch = newPitch else SS.orbitYaw = newYaw; SS.orbitPitch = newPitch end
-            return
-        end
-        
-        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        
-        local touches = UIS:GetTouches()
-        if #touches == 1 and ssDragActive then
-            local pos = touches[1].Position
-            local dx = pos.X - ssDragStart.X; local dy = pos.Y - ssDragStart.Y
-            local newYaw = ssDragYaw + dx * sens
-            local newPitch = math.clamp(ssDragPitch - dy * sens, -75, 75)
-            if SS.mode == "First Person" then SS.fpYaw = newYaw; SS.fpPitch = newPitch else SS.orbitYaw = newYaw; SS.orbitPitch = newPitch end
-        elseif #touches == 2 then
-            local p1, p2 = touches[1].Position, touches[2].Position
-            local dist = (Vector2.new(p1.X, p1.Y) - Vector2.new(p2.X, p2.Y)).Magnitude
-            if ssPinchDist > 0 then
-                local ratio = ssPinchDist / math.max(dist, 1)
-                SS.radius = math.clamp(ssPinchRadius * ratio, 3, 30)
-                if SS.mode == "First Person" then SS.fov = math.clamp(70 + (8 - SS.radius) * 5, 10, 120) end
-            end
-            ssPinchDist = dist; ssPinchRadius = SS.radius
-        end
-    end)
-    
-    local conn3 = UIS.InputEnded:Connect(function(inp)
-        if not SS.active then return end
-        
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            ssDragActive = false; UIS.MouseBehavior = Enum.MouseBehavior.Default; return
-        end
-        
-        if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        
-        local touches = UIS:GetTouches()
-        if #touches == 0 then
-            ssDragActive = false; ssPinchDist = 0
-        elseif #touches == 1 and ssPinchDist > 0 then
-            ssPinchDist = 0; ssDragActive = true
-            ssDragStart = touches[1].Position
-            ssDragYaw = (SS.mode == "First Person") and SS.fpYaw or SS.orbitYaw
-            ssDragPitch = (SS.mode == "First Person") and SS.fpPitch or SS.orbitPitch
-        end
-    end)
-    
-    table.insert(ssGestureConns, conn1)
-    table.insert(ssGestureConns, conn2)
-    table.insert(ssGestureConns, conn3)
-end
-
-local function disconnectSSGestures()
-    for _, c in ipairs(ssGestureConns) do pcall(function() c:Disconnect() end) end
-    ssGestureConns = {}
-    ssDragActive = false; ssPinchDist = 0
-    UIS.MouseBehavior = Enum.MouseBehavior.Default
+    Cam.CameraType = Enum.CameraType.Custom
+    Cam.FieldOfView = SS.origFov
+    SS.active = false
+    SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0
+    SS.radius = 8; SS.height = 3
+    ssPan = Vector2.zero
 end
 
 local function toggleSelfSpec(v)
@@ -647,17 +569,17 @@ local function toggleSelfSpec(v)
         if Spec and Spec.active then stopSpecCapture() end
         if Teleport.clickConn then Teleport.clickConn:Disconnect(); Teleport.clickConn = nil end
         
-        SS.active = true; SS.origFov = Cam.FieldOfView; SS.fov = Cam.FieldOfView
-        SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.roll = 0
-        SS.radius = SS.radius or 8; SS.height = SS.height or 3; SS._smoothRadius = SS.radius
-        ssHeightVel = 0; ssDragActive = false; ssPinchDist = 0
+        SS.active = true
+        SS.origFov = Cam.FieldOfView
+        SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0
+        SS.radius = SS.radius or 8; SS.height = SS.height or 3
         
-        connectSSGestures()
+        startSSGesture()
         startSelfSpecLoop()
         notify("Self-Spectate", "ON — " .. (SS.mode or "Manual"), 2, "camera")
     else
         SS.active = false
-        disconnectSSGestures()
+        stopSSGesture()
         stopSelfSpecLoop()
         notify("Self-Spectate", "OFF", 1.5, "camera")
     end
