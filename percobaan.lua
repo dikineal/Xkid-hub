@@ -707,10 +707,25 @@ local secMov = TabChar:Section({ Title = "Movement", Icon = "activity", Box = tr
 secMov:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
 secMov:Slider({ Title = "Jump Power", Step = 1, Value = { Min = 50, Max = 500, Default = 50 }, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end end })
 secMov:Toggle({ Title = "Infinite Jump", Default = false, Callback = function(v) if v then State.Move.infJ = TrackC(UIS.JumpRequest:Connect(function() if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end end)) else if State.Move.infJ then State.Move.infJ:Disconnect(); State.Move.infJ = nil end end; notify("Infinite Jump", v and "ON" or "OFF", 1.5, "arrow-big-up") end })
-local secAutoWalk = TabChar:Section({ Title = "Auto Walk", Icon = "play", Box = true })
-secAutoWalk:Toggle({ Title = "Auto Walk", Default = false, Callback = function(v) toggleAutoWalk(v, State.Move.ws) end })
-secAutoWalk:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 1, Max = 100, Default = 16 }, Callback = function(v) State.Move.ws = v; if autoWalkActive then local hum = getHum(); if hum then hum.WalkSpeed = v end end end })
-secAutoWalk:Paragraph({ Title = "Info", Desc = "Character walks forward automatically\nMove manually to override" })
+local function startAutoWalk(speed)
+    if autoWalkActive then return end
+    autoWalkActive = true
+    local hum = getHum()
+    if hum then hum.WalkSpeed = speed end
+    autoWalkConn = TrackC(RS.Heartbeat:Connect(function()
+        if not autoWalkActive then return end
+        local hrp = getRoot()
+        local hum = getHum()
+        if not hrp or not hum then return end
+        if hum.MoveDirection.Magnitude > 0 then return end
+        
+        local camDir = workspace.CurrentCamera.CFrame.LookVector
+        local moveDir = Vector3.new(camDir.X, 0, camDir.Z).Unit
+        
+        -- Cara 1: MoveDirection langsung
+        hum:MoveTo(hrp.Position + moveDir * 10)
+    end))
+end
 local secAbi = TabChar:Section({ Title = "Abilities", Icon = "zap", Box = true })
 secAbi:Toggle({ Title = "Fly", Default = false, Callback = function(v) toggleFly(v) end })
 secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = v end })
