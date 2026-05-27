@@ -1,4 +1,4 @@
--- @XKID SCRIPT v5.0
+-- @XKID SCRIPT v5.1
 -- by @WTF.XKID
 -- Roblox Build For Mobile
 -- WindUI Footagesus Release
@@ -30,7 +30,7 @@ local LP                = Players.LocalPlayer
 local Cam               = workspace.CurrentCamera
 local onMobile          = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "5.0"
+local CURRENT_VERSION = "5.1"
 
 getgenv()._XKID_UI_LOADING = true
 
@@ -69,6 +69,7 @@ if getgenv()._XKID_LOADED then
     pcall(function() RS:UnbindFromRenderStep("XKIDSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDSelfSpec") end)
     pcall(function() RS:UnbindFromRenderStep("XKIDShiftLock") end)
+    pcall(function() RS:UnbindFromRenderStep("XKIDAutoWalk") end)
 end
 
 getgenv()._XKID_LOADED  = true
@@ -83,7 +84,7 @@ local function notify(title, content, dur, icon)
 end
 
 local State = {
-    Move      = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
+    Move      = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60, autoWalk = false, autoWalkSpeed = 16 },
     Fly       = { active = false, bv = nil, bg = nil, _keys = {} },
     HardFling = { active = false, power = 10000, mode = "Spin", currentPower = 0, rampUpActive = false },
     Security  = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false },
@@ -272,37 +273,31 @@ end
 
 -- AUTO WALK
 local autoWalkConn = nil
-local autoWalkActive = false
-
-local function startAutoWalk(speed)
-    if autoWalkActive then return end
-    autoWalkActive = true
+local function startAutoWalk()
+    RS:UnbindFromRenderStep("XKIDAutoWalk")
+    State.Move.autoWalk = true
     local hum = getHum()
-    if hum then hum.WalkSpeed = speed end
-    autoWalkConn = TrackC(RS.Heartbeat:Connect(function()
-        if not autoWalkActive then return end
+    if hum then hum.WalkSpeed = State.Move.autoWalkSpeed end
+    RS:BindToRenderStep("XKIDAutoWalk", Enum.RenderPriority.Character.Value + 1, function()
+        if not State.Move.autoWalk then return end
         local hrp = getRoot()
         local hum = getHum()
         if not hrp or not hum then return end
-        if hum.MoveDirection.Magnitude > 0 then return end -- user input override
-        
+        if hum.MoveDirection.Magnitude > 0.1 then return end
         local camDir = Cam.CFrame.LookVector
         local moveDir = Vector3.new(camDir.X, 0, camDir.Z).Unit
-        hum:Move(moveDir, false)
-    end))
+        hrp.CFrame = hrp.CFrame + moveDir * (State.Move.autoWalkSpeed / 60)
+    end)
+    notify("Auto Walk", "ON", 1.5, "play")
 end
-
 local function stopAutoWalk()
-    autoWalkActive = false
-    if autoWalkConn then autoWalkConn:Disconnect(); autoWalkConn = nil end
+    RS:UnbindFromRenderStep("XKIDAutoWalk")
+    State.Move.autoWalk = false
     local hum = getHum()
     if hum then hum.WalkSpeed = State.Move.ws end
+    notify("Auto Walk", "OFF", 1.5, "play")
 end
 
-local function toggleAutoWalk(v, speed)
-    if v then startAutoWalk(speed or State.Move.ws)
-    else stopAutoWalk() end
-end
 -- ESP ENGINE
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
@@ -496,124 +491,73 @@ local function startFreecamLoop() RS:BindToRenderStep("XKIDFreecam", Enum.Render
 local function stopFreecamLoop() RS:UnbindFromRenderStep("XKIDFreecam") end
 local function fullCleanupFreecam() stopFreecamLoop(); stopFreecamCapture(); local hum = getHum(); if hum then hum.WalkSpeed = FC.savedWalkSpeed; hum.UseJumpPower = true; hum.JumpPower = FC.savedJumpPower end; Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = FC.origFov; if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end; for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end; FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end end
 
--- SELF-SPECTATE v5.1 (adapted from Spectator)
+-- SELF-SPECTATE
 local SS = State.SelfSpec
 local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
-local ssHeightVel = 0
-
 local function startSSGesture()
     ssConns = {}
     table.insert(ssConns, UIS.InputBegan:Connect(function(inp, gp)
         if gp or not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        table.insert(ssPinch, inp)
-        ssTM = #ssPinch == 1 and inp or nil
+        table.insert(ssPinch, inp); ssTM = #ssPinch == 1 and inp or nil
     end))
     table.insert(ssConns, UIS.InputChanged:Connect(function(inp)
         if not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        if #ssPinch == 1 and inp == ssTM then
-            ssPan = ssPan + Vector2.new(inp.Delta.X, inp.Delta.Y)
+        if #ssPinch == 1 and inp == ssTM then ssPan = ssPan + Vector2.new(inp.Delta.X, inp.Delta.Y)
         elseif #ssPinch >= 2 then
             local d = (ssPinch[1].Position - ssPinch[2].Position).Magnitude
-            if ssPinchD then
-                local diff = d - ssPinchD
-                Cam.FieldOfView = math.clamp(Cam.FieldOfView - diff * 0.15, 10, 120)
-                SS.radius = math.clamp(SS.radius - diff * 0.03, 3, 30)
-            end
+            if ssPinchD then local diff = d - ssPinchD; Cam.FieldOfView = math.clamp(Cam.FieldOfView - diff * 0.15, 10, 120); SS.radius = math.clamp(SS.radius - diff * 0.03, 3, 30) end
             ssPinchD = d
         end
     end))
     table.insert(ssConns, UIS.InputEnded:Connect(function(inp)
         if inp.UserInputType ~= Enum.UserInputType.Touch then return end
         for i, v in ipairs(ssPinch) do if v == inp then table.remove(ssPinch, i); break end end
-        ssPinchD = nil
-        ssTM = #ssPinch == 1 and ssPinch[1] or nil
+        ssPinchD = nil; ssTM = #ssPinch == 1 and ssPinch[1] or nil
     end))
 end
-
-local function stopSSGesture()
-    for _, c in ipairs(ssConns) do c:Disconnect() end
-    ssConns = {}; ssTM = nil; ssPinch = {}; ssPinchD = nil; ssPan = Vector2.zero
-end
-
+local function stopSSGesture() for _, c in ipairs(ssConns) do c:Disconnect() end; ssConns = {}; ssTM = nil; ssPinch = {}; ssPinchD = nil; ssPan = Vector2.zero end
 local function startSelfSpecLoop()
     RS:UnbindFromRenderStep("XKIDSelfSpec")
     RS:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function()
         if not SS.active then return end
         pcall(function()
-            local targetChar = LP.Character
-            local targetHrp = getCharRoot(targetChar)
+            local targetChar = LP.Character; local targetHrp = getCharRoot(targetChar)
             if not targetHrp then return end
-            
             Cam.CameraType = Enum.CameraType.Scriptable
-            local pan, sens = ssPan, onMobile and 0.2 or 0.3
-            ssPan = Vector2.zero
-            
+            local pan, sens = ssPan, onMobile and 0.2 or 0.3; ssPan = Vector2.zero
             if SS.mode == "First Person" then
-                local head = targetChar:FindFirstChild("Head")
-                local origin = head and head.Position or targetHrp.Position + Vector3.new(0, 1.5, 0)
-                SS.fpYaw = SS.fpYaw - pan.X * sens
-                SS.fpPitch = math.clamp(SS.fpPitch - pan.Y * sens, -85, 85)
+                local head = targetChar:FindFirstChild("Head"); local origin = head and head.Position or targetHrp.Position + Vector3.new(0, 1.5, 0)
+                SS.fpYaw = SS.fpYaw - pan.X * sens; SS.fpPitch = math.clamp(SS.fpPitch - pan.Y * sens, -85, 85)
                 Cam.CFrame = CFrame.new(origin) * CFrame.Angles(0, math.rad(SS.fpYaw), 0) * CFrame.Angles(math.rad(SS.fpPitch), 0, 0)
             else
-                -- Auto preset movement (only if not being dragged)
-                if #ssPinch == 0 and ssPan.Magnitude < 0.01 then
+                if #ssPinch == 0 and pan.Magnitude < 0.01 then
                     local dt = 0.016
-                    if SS.mode == "Slow Orbit" then
-                        SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
-                    elseif SS.mode == "Vertical Swing" then
-                        SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.5) * 40
-                        SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed
-                    elseif SS.mode == "Figure 8" then
-                        SS.orbitYaw = math.sin(tick() * SS.speed * 0.8) * 80
-                        SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.2) * 35
-                    elseif SS.mode == "Cinematic Drift" then
-                        SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed
-                        SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.7) * 15
-                    elseif SS.mode == "Top Down" then
-                        SS.orbitPitch = -75
-                        SS.orbitYaw = SS.orbitYaw + dt * 8 * SS.speed
+                    if SS.mode == "Slow Orbit" then SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
+                    elseif SS.mode == "Vertical Swing" then SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.5) * 40; SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed
+                    elseif SS.mode == "Figure 8" then SS.orbitYaw = math.sin(tick() * SS.speed * 0.8) * 80; SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.2) * 35
+                    elseif SS.mode == "Cinematic Drift" then SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed; SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.7) * 15
+                    elseif SS.mode == "Top Down" then SS.orbitPitch = -75; SS.orbitYaw = SS.orbitYaw + dt * 8 * SS.speed
                     end
                 end
-                
-                SS.orbitYaw = SS.orbitYaw + pan.X * sens
-                SS.orbitPitch = math.clamp(SS.orbitPitch + pan.Y * sens, -75, 75)
-                
+                SS.orbitYaw = SS.orbitYaw + pan.X * sens; SS.orbitPitch = math.clamp(SS.orbitPitch + pan.Y * sens, -75, 75)
                 local h = (SS.mode == "Top Down") and 15 or (SS.height or 3)
                 Cam.CFrame = CFrame.new((CFrame.new(targetHrp.Position + Vector3.new(0, h, 0)) * CFrame.Angles(0, math.rad(-SS.orbitYaw), 0) * CFrame.Angles(math.rad(-SS.orbitPitch), 0, 0) * CFrame.new(0, 0, SS.radius)).Position, targetHrp.Position + Vector3.new(0, h, 0))
             end
         end)
     end)
 end
-
-local function stopSelfSpecLoop()
-    RS:UnbindFromRenderStep("XKIDSelfSpec")
-    Cam.CameraType = Enum.CameraType.Custom
-    Cam.FieldOfView = SS.origFov
-    SS.active = false
-    SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0
-    SS.radius = 8; SS.height = 3
-    ssPan = Vector2.zero
-end
-
+local function stopSelfSpecLoop() RS:UnbindFromRenderStep("XKIDSelfSpec"); Cam.CameraType = Enum.CameraType.Custom; Cam.FieldOfView = SS.origFov; SS.active = false; SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.radius = 8; SS.height = 3; ssPan = Vector2.zero end
 local function toggleSelfSpec(v)
     if v then
         if FC.active then fullCleanupFreecam() end
         if State.Fly.active then stopFlyCapture() end
         if Spec and Spec.active then stopSpecCapture() end
         if Teleport.clickConn then Teleport.clickConn:Disconnect(); Teleport.clickConn = nil end
-        
-        SS.active = true
-        SS.origFov = Cam.FieldOfView
-        SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0
-        SS.radius = SS.radius or 8; SS.height = SS.height or 3
-        
-        startSSGesture()
-        startSelfSpecLoop()
+        SS.active = true; SS.origFov = Cam.FieldOfView; SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.radius = SS.radius or 8; SS.height = SS.height or 3
+        startSSGesture(); startSelfSpecLoop()
         notify("Self-Spectate", "ON — " .. (SS.mode or "Manual"), 2, "camera")
     else
-        SS.active = false
-        stopSSGesture()
-        stopSelfSpecLoop()
+        SS.active = false; stopSSGesture(); stopSelfSpecLoop()
         notify("Self-Spectate", "OFF", 1.5, "camera")
     end
 end
@@ -707,25 +651,10 @@ local secMov = TabChar:Section({ Title = "Movement", Icon = "activity", Box = tr
 secMov:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 16, Max = 500, Default = 16 }, Callback = function(v) State.Move.ws = v; if getHum() then getHum().WalkSpeed = v end end })
 secMov:Slider({ Title = "Jump Power", Step = 1, Value = { Min = 50, Max = 500, Default = 50 }, Callback = function(v) State.Move.jp = v; local h = getHum(); if h then h.UseJumpPower = true; h.JumpPower = v end end })
 secMov:Toggle({ Title = "Infinite Jump", Default = false, Callback = function(v) if v then State.Move.infJ = TrackC(UIS.JumpRequest:Connect(function() if getHum() then getHum():ChangeState(Enum.HumanoidStateType.Jumping) end end)) else if State.Move.infJ then State.Move.infJ:Disconnect(); State.Move.infJ = nil end end; notify("Infinite Jump", v and "ON" or "OFF", 1.5, "arrow-big-up") end })
-local function startAutoWalk(speed)
-    if autoWalkActive then return end
-    autoWalkActive = true
-    local hum = getHum()
-    if hum then hum.WalkSpeed = speed end
-    autoWalkConn = TrackC(RS.Heartbeat:Connect(function()
-        if not autoWalkActive then return end
-        local hrp = getRoot()
-        local hum = getHum()
-        if not hrp or not hum then return end
-        if hum.MoveDirection.Magnitude > 0 then return end
-        
-        local camDir = workspace.CurrentCamera.CFrame.LookVector
-        local moveDir = Vector3.new(camDir.X, 0, camDir.Z).Unit
-        
-        -- Cara 1: MoveDirection langsung
-        hum:MoveTo(hrp.Position + moveDir * 10)
-    end))
-end
+local secAutoWalk = TabChar:Section({ Title = "Auto Walk", Icon = "play", Box = true })
+secAutoWalk:Toggle({ Title = "Auto Walk", Default = false, Callback = function(v) if v then startAutoWalk() else stopAutoWalk() end end })
+secAutoWalk:Slider({ Title = "Walk Speed", Step = 1, Value = { Min = 1, Max = 100, Default = 16 }, Callback = function(v) State.Move.autoWalkSpeed = v; if State.Move.autoWalk then local hum = getHum(); if hum then hum.WalkSpeed = v end end end })
+secAutoWalk:Paragraph({ Title = "Info", Desc = "Character walks forward automatically\nMove manually to override" })
 local secAbi = TabChar:Section({ Title = "Abilities", Icon = "zap", Box = true })
 secAbi:Toggle({ Title = "Fly", Default = false, Callback = function(v) toggleFly(v) end })
 secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = v end })
@@ -753,7 +682,7 @@ for i = 1, 3 do
     hCache:Button({ Title = "📍 Load " .. idx, Callback = function() if not SavedLocs[idx] then notify("Slot " .. idx, "Empty", 1.5, "save"); return end; local r = getRoot(); if not r then return end; r.CFrame = SavedLocs[idx]; notify("Slot " .. idx, "Loaded", 1.5, "map-pin") end })
 end
 
--- TAB: SPECTATOR (UNCHANGED)
+-- TAB: SPECTATOR
 local secZoom = TabSpec:Section({ Title = "Zoom Override", Icon = "zoom-in", Box = true })
 secZoom:Toggle({ Title = "Max Zoom Out", Default = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Zoom", v and "Max" or "Default", 1.5, "zoom-in") end })
 local secSP = TabSpec:Section({ Title = "Spectator Mode", Icon = "eye", Box = true })
@@ -841,8 +770,8 @@ secTheme:Dropdown({ Title = "UI Theme", Values = { "Dark","Light","Rose","Sky","
 local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box = true })
 local cfgName = "XKID_Config"; local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config", Callback = function(v) cfgName = v end })
-secFile:Button({ Title = "Save Config", Callback = function() pcall(function() if makefolder and writefile then if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local data = { Move={ws=State.Move.ws,jp=State.Move.jp,flyS=State.Move.flyS}, ESP={tracerMode=State.ESP.tracerMode,maxDrawDistance=State.ESP.maxDrawDistance,highlightMode=State.ESP.highlightMode}, Security={shiftLock=State.Security.shiftLock,antiLag=State.Security.antiLag}, AutoLike={radius=State.AutoLike.radius,minCD=State.AutoLike.minCD,maxCD=State.AutoLike.maxCD}, HardFling={power=State.HardFling.power,mode=State.HardFling.mode}, SelfSpec={mode=SS.mode,radius=SS.radius,height=SS.height,speed=SS.speed}, CustomFilter={tintR=State.CustomFilter.tintR,tintG=State.CustomFilter.tintG,tintB=State.CustomFilter.tintB,saturation=State.CustomFilter.saturation,contrast=State.CustomFilter.contrast,brightness=State.CustomFilter.brightness,exposure=State.CustomFilter.exposure,bloomIntensity=State.CustomFilter.bloomIntensity,bloomSize=State.CustomFilter.bloomSize,clockTime=State.CustomFilter.clockTime,dofIntensity=State.CustomFilter.dofIntensity,dofDistance=State.CustomFilter.dofDistance} }; writefile("XKID_HUB/"..cfgName..".json", HttpService:JSONEncode(data)); notify("Config", "Saved: "..cfgName, 2, "save") end end) end })
-local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected; if selected == "No config" then return end; pcall(function() if isfile and readfile and isfile("XKID_HUB/"..selected..".json") then local data = HttpService:JSONDecode(readfile("XKID_HUB/"..selected..".json")); if data then if data.Move then State.Move.ws=data.Move.ws or 16; State.Move.jp=data.Move.jp or 50; State.Move.flyS=data.Move.flyS or 60; local h=getHum(); if h then h.WalkSpeed=State.Move.ws; h.UseJumpPower=true; h.JumpPower=State.Move.jp end end; if data.ESP then State.ESP.tracerMode=data.ESP.tracerMode or "Bottom"; State.ESP.maxDrawDistance=data.ESP.maxDrawDistance or 300; State.ESP.highlightMode=data.ESP.highlightMode or false end; if data.Security and data.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(data.Security.shiftLock) end; if data.AutoLike then State.AutoLike.radius=data.AutoLike.radius or 100; State.AutoLike.minCD=data.AutoLike.minCD or 2; State.AutoLike.maxCD=data.AutoLike.maxCD or 6 end; if data.HardFling then State.HardFling.power=data.HardFling.power or 5000; State.HardFling.mode=data.HardFling.mode or "Spin" end; if data.SelfSpec then SS.mode=data.SelfSpec.mode or "Manual"; SS.radius=data.SelfSpec.radius or 8; SS.height=data.SelfSpec.height or 3; SS.speed=data.SelfSpec.speed or 1 end; if data.CustomFilter then for k,v in pairs(data.CustomFilter) do State.CustomFilter[k]=v end; applyCustomFilter() end; notify("Config", "Loaded: "..selected, 2, "folder-open") end end end) end })
+secFile:Button({ Title = "Save Config", Callback = function() pcall(function() if makefolder and writefile then if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local data = { Move={ws=State.Move.ws,jp=State.Move.jp,flyS=State.Move.flyS,autoWalkSpeed=State.Move.autoWalkSpeed}, ESP={tracerMode=State.ESP.tracerMode,maxDrawDistance=State.ESP.maxDrawDistance,highlightMode=State.ESP.highlightMode}, Security={shiftLock=State.Security.shiftLock,antiLag=State.Security.antiLag}, AutoLike={radius=State.AutoLike.radius,minCD=State.AutoLike.minCD,maxCD=State.AutoLike.maxCD}, HardFling={power=State.HardFling.power,mode=State.HardFling.mode}, SelfSpec={mode=SS.mode,radius=SS.radius,height=SS.height,speed=SS.speed}, CustomFilter={tintR=State.CustomFilter.tintR,tintG=State.CustomFilter.tintG,tintB=State.CustomFilter.tintB,saturation=State.CustomFilter.saturation,contrast=State.CustomFilter.contrast,brightness=State.CustomFilter.brightness,exposure=State.CustomFilter.exposure,bloomIntensity=State.CustomFilter.bloomIntensity,bloomSize=State.CustomFilter.bloomSize,clockTime=State.CustomFilter.clockTime,dofIntensity=State.CustomFilter.dofIntensity,dofDistance=State.CustomFilter.dofDistance} }; writefile("XKID_HUB/"..cfgName..".json", HttpService:JSONEncode(data)); notify("Config", "Saved: "..cfgName, 2, "save") end end) end })
+local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected; if selected == "No config" then return end; pcall(function() if isfile and readfile and isfile("XKID_HUB/"..selected..".json") then local data = HttpService:JSONDecode(readfile("XKID_HUB/"..selected..".json")); if data then if data.Move then State.Move.ws=data.Move.ws or 16; State.Move.jp=data.Move.jp or 50; State.Move.flyS=data.Move.flyS or 60; State.Move.autoWalkSpeed=data.Move.autoWalkSpeed or 16; local h=getHum(); if h then h.WalkSpeed=State.Move.ws; h.UseJumpPower=true; h.JumpPower=State.Move.jp end end; if data.ESP then State.ESP.tracerMode=data.ESP.tracerMode or "Bottom"; State.ESP.maxDrawDistance=data.ESP.maxDrawDistance or 300; State.ESP.highlightMode=data.ESP.highlightMode or false end; if data.Security and data.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(data.Security.shiftLock) end; if data.AutoLike then State.AutoLike.radius=data.AutoLike.radius or 100; State.AutoLike.minCD=data.AutoLike.minCD or 2; State.AutoLike.maxCD=data.AutoLike.maxCD or 6 end; if data.HardFling then State.HardFling.power=data.HardFling.power or 5000; State.HardFling.mode=data.HardFling.mode or "Spin" end; if data.SelfSpec then SS.mode=data.SelfSpec.mode or "Manual"; SS.radius=data.SelfSpec.radius or 8; SS.height=data.SelfSpec.height or 3; SS.speed=data.SelfSpec.speed or 1 end; if data.CustomFilter then for k,v in pairs(data.CustomFilter) do State.CustomFilter[k]=v end; applyCustomFilter() end; notify("Config", "Loaded: "..selected, 2, "folder-open") end end end) end })
 secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" then pcall(function() if isfile and delfile and isfile("XKID_HUB/"..currentConfig..".json") then delfile("XKID_HUB/"..currentConfig..".json"); pcall(function() configDrop:Refresh(getConfigList(), true) end); currentConfig = "No config"; notify("Config", "Deleted", 2, "trash-2") end end) end end })
 secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end); notify("Config", "Files refreshed", 1.5, "folder") end })
 local secLike = TabSet:Section({ Title = "Auto Like (Smart)", Icon = "heart", Box = true })
@@ -853,7 +782,6 @@ secLike:Slider({ Title = "Max Cooldown", Step = 0.5, Value = { Min = 1, Max = 15
 local autoLikeInfo = secLike:Paragraph({ Title = "Info", Desc = "Total likes sent: 0" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(function() autoLikeInfo:SetDesc("Total likes sent: " .. State.AutoLike.count) end) end end)
 
--- AUTO-EXPAND + STARTUP
 task.delay(0.5, function()
     pcall(function() for _, tab in pairs(Window.Tabs) do for _, section in ipairs(tab.Sections) do if section.Expand then section:Expand() end end end end)
 end)
