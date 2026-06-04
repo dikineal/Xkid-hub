@@ -1,4 +1,4 @@
--- @XKID SCRIPT v5.2
+-- @XKID SCRIPT v5.4
 -- by @WTF.XKID
 -- Roblox Build For Mobile
 -- WindUI Footagesus Release
@@ -30,7 +30,7 @@ local LP                = Players.LocalPlayer
 local Cam               = workspace.CurrentCamera
 local onMobile          = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "5.2"
+local CURRENT_VERSION = "5.4"
 
 getgenv()._XKID_UI_LOADING = true
 
@@ -653,6 +653,25 @@ local TabSet  = Window:Tab({ Title = "Settings", Icon = "panels-top-left" })
 -- TAB: INFORMASI
 local function getExecutor() pcall(function() local e=identifyexecutor(); if e and e~="" then return e end end); pcall(function() local e=getexecutorname(); if e and e~="" then return e end end); return "Unknown" end
 local execName = getExecutor()
+local accountAge = LP.AccountAge .. " days"
+local avatarImage = "rbxthumb://type=AvatarHeadShot&id=" .. LP.UserId .. "&w=420&h=420"
+
+local afkStatusParagraph = TabInfo:Paragraph({
+    Title = "YooWssp!!, " .. LP.DisplayName,
+    Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal") .. "\nAnti AFK: ON ✅",
+    Image = avatarImage,
+    ImageSize = 80
+})
+
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do
+        task.wait(1)
+        pcall(function()
+            afkStatusParagraph:SetDesc("Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal") .. "\nAnti AFK: " .. (State.Security.afkActive and "ON ✅" or "OFF ❌"))
+        end)
+    end
+end)
+
 local infoParagraph = TabInfo:Paragraph({ 
     Title = "💀 " .. LP.DisplayName .. " v" .. CURRENT_VERSION .. "\n⚡ " .. makeBar(sharedFPS, 120, 10) .. " " .. sharedFPS .. " FPS\n📡 " .. makeBar(math.max(1, 200 - sharedPing), 200, 10) .. " " .. sharedPing .. "ms\n🕐 " .. makeBar(os.difftime(os.time(), START_TIME) % 3600, 3600, 10) .. " " .. formatTime(os.difftime(os.time(), START_TIME)),
     Desc = "👤 " .. LP.DisplayName .. "\n📱 " .. (onMobile and "Mobile" or "PC") .. " | 🚀 " .. execName .. "\n\n🎮 " .. (cachedMapName or "Loading...") .. "\n👥 " .. makeBar(#Players:GetPlayers(), Players.MaxPlayers, 10) .. " " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers .. " Players\n\n🌐 discord.gg/bzumc2u96"
@@ -823,8 +842,9 @@ pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 e
 pcall(function() setfpscap(9999) end)
 
 task.spawn(function()
-    task.wait(2)
-    getgenv()._XKID_UI_LOADING = false
+    task.wait(1)
     startAFK()
+    task.wait(1)
+    getgenv()._XKID_UI_LOADING = false
     notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
 end)
