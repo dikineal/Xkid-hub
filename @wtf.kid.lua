@@ -658,7 +658,7 @@ local avatarImage = "rbxthumb://type=AvatarHeadShot&id=" .. LP.UserId .. "&w=420
 
 TabInfo:Paragraph({
     Title = "YooWssp!!, " .. LP.DisplayName,
-    Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal"),
+    Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal") .. "\nAnti AFK: " .. (State.Security.afkActive and "ON ✅" or "OFF ❌"),
     Image = avatarImage,
     ImageSize = 80
 })
@@ -835,6 +835,5 @@ pcall(function() setfpscap(9999) end)
 task.spawn(function()
     task.wait(2)
     getgenv()._XKID_UI_LOADING = false
-    startAFK()
     notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
 end)
