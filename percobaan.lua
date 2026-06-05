@@ -1,10 +1,23 @@
--- @XKID SCRIPT v5.4
+-- @XKID SCRIPT v5.5
 -- by @WTF.XKID
 -- Roblox Build For Mobile
 -- WindUI Footagesus Release
+-- [UPDATED] Anti AFK Universal v3.5 (Delta Compatible)
 
 repeat task.wait() until game:IsLoaded()
 
+-- ========== FALLBACK FOR DELTA COMPATIBILITY ==========
+if not table.clear then
+    function table.clear(t)
+        for i = #t, 1, -1 do
+            t[i] = nil
+        end
+    end
+end
+
+math.randomseed(tick() * 1000 + game:GetService("Players").LocalPlayer.UserId)
+
+-- ========== WINDUI LOAD ==========
 local WindUI
 do
     local s, r = pcall(function()
@@ -13,12 +26,13 @@ do
     if s then WindUI = r else error("Failed to load WindUI") end
 end
 
+-- ========== SERVICES ==========
 local RS               = game:GetService("RunService")
 local HttpService       = game:GetService("HttpService")
 local TS                = game:GetService("TweenService")
 local Players           = game:GetService("Players")
 local UIS               = game:GetService("UserInputService")
-local VirtualUser       = game:GetService("VirtualUser")
+local VirtualUser       = pcall(function() return game:GetService("VirtualUser") end) and game:GetService("VirtualUser") or nil
 local Lighting          = game:GetService("Lighting")
 local TPService         = game:GetService("TeleportService")
 local StatsService      = game:GetService("Stats")
@@ -30,7 +44,7 @@ local LP                = Players.LocalPlayer
 local Cam               = workspace.CurrentCamera
 local onMobile          = not UIS.KeyboardEnabled
 
-local CURRENT_VERSION = "5.4"
+local CURRENT_VERSION = "5.5"
 
 getgenv()._XKID_UI_LOADING = true
 
@@ -154,28 +168,159 @@ task.spawn(function() while getgenv()._XKID_RUNNING do pcall(function() if tick(
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
 -- FPS UNLOCKER
-pcall(function() setfpscap(9999) end)
-TrackC(LP.CharacterAdded:Connect(function() pcall(function() setfpscap(9999) end) end))
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); pcall(function() setfpscap(9999) end) end end)
+pcall(function() if setfpscap then setfpscap(9999) end end)
+TrackC(LP.CharacterAdded:Connect(function() pcall(function() if setfpscap then setfpscap(9999) end end) end))
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); pcall(function() if setfpscap then setfpscap(9999) end end) end end)
 
--- ANTI AFK
-local AFKSystem = { active = false, idleConn = nil, debounce = false }
-local function startAFK()
-    if AFKSystem.active then return end
-    AFKSystem.active = true; State.Security.afkActive = true
-    AFKSystem.idleConn = TrackC(LP.Idled:Connect(function()
-        if not AFKSystem.active then return end; if AFKSystem.debounce then return end
-        AFKSystem.debounce = true
-        pcall(function() local cf = Cam.CFrame; local rx, ry, rz = cf:ToEulerAnglesYXZ(); Cam.CFrame = CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(rx, ry + math.rad(1), rz); task.wait(0.05); Cam.CFrame = cf end)
-        task.wait(30); AFKSystem.debounce = false
-    end))
-    notify("Anti AFK", "ON", 1.5, "shield-check")
+-- ========== ANTI AFK UNIVERSAL v3.5 (Delta Compatible) ==========
+local AntiAFK = {
+    Active = false,
+    IntervalMin = 20,
+    IntervalMax = 35,
+    Method = "Camera",
+    LastActivity = tick(),
+    CurrentInterval = 25,
+    MainThread = nil,
+    Listeners = {},
+    Camera = workspace.CurrentCamera,
+}
+
+local function resetTimer()
+    AntiAFK.LastActivity = tick()
 end
+
+local function addConnection(conn)
+    table.insert(AntiAFK.Listeners, conn)
+    return conn
+end
+
+local function cleanupConnections()
+    for _, v in ipairs(AntiAFK.Listeners) do
+        pcall(function() v:Disconnect() end)
+    end
+    table.clear(AntiAFK.Listeners)
+end
+
+local function randomInterval()
+    return math.random(AntiAFK.IntervalMin, AntiAFK.IntervalMax)
+end
+
+local function wiggleCamera()
+    local cam = AntiAFK.Camera
+    if not cam then return end
+    
+    pcall(function()
+        local cf = cam.CFrame
+        local yaw = math.random(2, 5)
+        local target = CFrame.new(cf.Position) * CFrame.Angles(0, math.rad(yaw), 0)
+        cam.CFrame = target
+        task.wait(0.05)
+        cam.CFrame = cf
+    end)
+end
+
+local function microMovement()
+    local char = LP.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    pcall(function()
+        local original = hrp.CFrame
+        local moveAmount = 0.1
+        local direction = AntiAFK.Camera and AntiAFK.Camera.CFrame.LookVector or Vector3.new(0, 0, -1)
+        hrp.CFrame = original + (direction * moveAmount)
+        task.wait(0.05)
+        hrp.CFrame = original
+    end)
+end
+
+local function executeActivity()
+    if AntiAFK.Method == "Camera" then
+        wiggleCamera()
+    elseif AntiAFK.Method == "Movement" then
+        microMovement()
+    elseif AntiAFK.Method == "Both" then
+        wiggleCamera()
+        task.wait(0.08)
+        microMovement()
+    elseif AntiAFK.Method == "Adaptive" then
+        if math.random() > 0.5 then
+            wiggleCamera()
+        else
+            microMovement()
+        end
+    end
+end
+
+local function setupInputListeners()
+    addConnection(UIS.InputBegan:Connect(resetTimer))
+    addConnection(UIS.InputEnded:Connect(resetTimer))
+    addConnection(UIS.TouchStarted:Connect(resetTimer))
+    addConnection(UIS.TouchMoved:Connect(resetTimer))
+    
+    addConnection(LP.CharacterAdded:Connect(function()
+        resetTimer()
+    end))
+    
+    addConnection(RS.RenderStepped:Connect(function()
+        if not AntiAFK.Active then return end
+        local char = LP.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.MoveDirection.Magnitude > 0 then
+            resetTimer()
+        end
+    end))
+end
+
+local function startMainLoop()
+    if AntiAFK.MainThread then
+        task.cancel(AntiAFK.MainThread)
+    end
+    
+    AntiAFK.MainThread = task.spawn(function()
+        while AntiAFK.Active do
+            local idleTime = tick() - AntiAFK.LastActivity
+            
+            if idleTime >= AntiAFK.CurrentInterval then
+                pcall(executeActivity)
+                AntiAFK.LastActivity = tick()
+                AntiAFK.CurrentInterval = randomInterval()
+            end
+            
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function startAFK()
+    if AntiAFK.Active then return end
+    
+    AntiAFK.Active = true
+    State.Security.afkActive = true
+    AntiAFK.Method = "Camera"
+    AntiAFK.LastActivity = tick()
+    AntiAFK.CurrentInterval = randomInterval()
+    
+    setupInputListeners()
+    startMainLoop()
+    
+    notify("Anti AFK", "ON (Universal)", 1.5, "shield-check")
+end
+
 local function stopAFK()
-    AFKSystem.active = false; State.Security.afkActive = false
-    if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect(); AFKSystem.idleConn = nil end
+    AntiAFK.Active = false
+    State.Security.afkActive = false
+    
+    if AntiAFK.MainThread then
+        task.cancel(AntiAFK.MainThread)
+        AntiAFK.MainThread = nil
+    end
+    
+    cleanupConnections()
     notify("Anti AFK", "OFF", 1.5, "shield-check")
 end
+-- ========== END ANTI AFK UNIVERSAL ==========
 
 -- SHIFT LOCK
 TrackC(LP.CharacterAdded:Connect(function(char)
@@ -810,7 +955,7 @@ secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Callback = fun
 local secPerf = TabProt:Section({ Title = "Performance", Icon = "gauge", Box = true })
 local gfxMap = { [1]="Level01",[2]="Level02",[3]="Level03",[4]="Level04",[5]="Level05",[6]="Level06",[7]="Level07",[8]="Level08",[9]="Level09",[10]="Level10" }
 secPerf:Slider({ Title = "Quality Level", Step = 1, Value = { Min = 1, Max = 10, Default = 2 }, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end; notify("Graphics", gfxMap[v], 1.5, "gauge") end })
-secPerf:Dropdown({ Title = "FPS Cap", Values = { "30","60","120","144","240","Unlimited" }, Default = "Unlimited", Callback = function(v) if v == "Unlimited" then pcall(function() setfpscap(9999) end) else pcall(function() setfpscap(tonumber(v)) end) end; notify("Graphics", v .. " FPS", 1.5, "gauge") end })
+secPerf:Dropdown({ Title = "FPS Cap", Values = { "30","60","120","144","240","Unlimited" }, Default = "Unlimited", Callback = function(v) if v == "Unlimited" then pcall(function() if setfpscap then setfpscap(9999) end end) else pcall(function() if setfpscap then setfpscap(tonumber(v)) end end) end; notify("Graphics", v .. " FPS", 1.5, "gauge") end })
 local advCache = { level=nil, shadows=true, brightness=5, clockTime=14, fogEnd=100000, mats={}, texs={} }
 secPerf:Toggle({ Title = "FPS Boost", Default = false, Callback = function(v) State.Security.antiLag = v; if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end); advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness; advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd; pcall(function() settings().Rendering.QualityLevel = 1 end); Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000; for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end end; notify("Performance", "FPS Boost ON", 2, "zap") else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end); Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness; Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd; for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then obj.Material = mat end end; for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then obj.Enabled = enb end end; advCache.mats={}; advCache.texs={}; notify("Performance", "Graphics restored", 2, "zap") end end })
 local secCam = TabProt:Section({ Title = "Camera Lock", Icon = "lock", Box = true })
@@ -839,10 +984,10 @@ task.delay(0.5, function()
 end)
 
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
-pcall(function() setfpscap(9999) end)
+pcall(function() if setfpscap then setfpscap(9999) end end)
 
 task.spawn(function()
-    startAFK()  -- Langsung, gak pake task.wait
+    startAFK()  -- Anti AFK Universal otomatis aktif
     task.wait(2)
     getgenv()._XKID_UI_LOADING = false
     notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
