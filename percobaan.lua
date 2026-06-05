@@ -5,30 +5,10 @@
 repeat task.wait() until game:IsLoaded()
 
 -- ================================ WINDUI LOADER V2 (MULTI-FALLBACK) ================================
-local WindUI = nil
-local WindUILoaded = false
-
-local windui_urls = {
-    "https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.lua",
-    "https://raw.githubusercontent.com/Footagesus/WindUI/main/main.lua",
-}
-
-for _, url in ipairs(windui_urls) do
-    if not WindUILoaded then
-        local success, result = pcall(function()
-            return loadstring(game:HttpGet(url, true))()
-        end)
-        if success and result then
-            WindUI = result
-            WindUILoaded = true
-            break
-        end
-    end
-end
-
-if not WindUI then
-    error("WindUI: Gagal load dari semua source. Cek koneksi atau executor.")
-end
+local WindUI = (function()
+    local s,r = pcall(function() return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))() end)
+    if s then return r else error("Failed to load WindUI") end
+end)()
 
 -- ================================ EXECUTOR DETECTION + HTTP REQUEST ================================
 local executor = {
