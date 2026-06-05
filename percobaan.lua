@@ -2,7 +2,7 @@
 -- by @WTF.XKID
 -- Roblox Build For Mobile
 -- WindUI Footagesus Release
--- [UPDATED] Anti AFK Universal v3.5 (Delta Compatible)
+-- [UPDATED] Anti AFK Universal v3.5 (Auto ON)
 
 repeat task.wait() until game:IsLoaded()
 
@@ -172,7 +172,7 @@ pcall(function() if setfpscap then setfpscap(9999) end end)
 TrackC(LP.CharacterAdded:Connect(function() pcall(function() if setfpscap then setfpscap(9999) end end) end))
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); pcall(function() if setfpscap then setfpscap(9999) end end) end end)
 
--- ========== ANTI AFK UNIVERSAL v3.5 (Delta Compatible) ==========
+-- ========== ANTI AFK UNIVERSAL v3.5 (AUTO ON) ==========
 local AntiAFK = {
     Active = false,
     IntervalMin = 20,
@@ -319,6 +319,10 @@ local function stopAFK()
     
     cleanupConnections()
     notify("Anti AFK", "OFF", 1.5, "shield-check")
+end
+
+function ToggleAntiAFK()
+    if AntiAFK.Active then stopAFK() else startAFK() end
 end
 -- ========== END ANTI AFK UNIVERSAL ==========
 
@@ -986,9 +990,28 @@ end)
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
 pcall(function() if setfpscap then setfpscap(9999) end end)
 
-task.spawn(function()
-    startAFK()  -- Anti AFK Universal otomatis aktif
-    task.wait(2)
-    getgenv()._XKID_UI_LOADING = false
-    notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
-end)
+-- ========== FORCE AUTO START ANTI AFK (UNIVERSAL) ==========
+local function forceStartAntiAFK()
+    pcall(function()
+        if startAFK then startAFK() end
+        if AntiAFK then
+            AntiAFK.Active = true
+            AntiAFK.LastActivity = tick()
+            AntiAFK.CurrentInterval = math.random(20, 35)
+            if AntiAFK.startMainLoop then pcall(AntiAFK.startMainLoop) end
+        end
+        if State and State.Security then State.Security.afkActive = true end
+    end)
+end
+
+task.wait(0.5)
+forceStartAntiAFK()
+task.delay(1, forceStartAntiAFK)
+
+task.wait(1.5)
+getgenv()._XKID_UI_LOADING = false
+notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
+task.wait(0.5)
+notify("Anti AFK", "AUTO ACTIVATED ✓", 2, "shield-check")
+
+print("[XKID] Anti AFK force started - ON")
