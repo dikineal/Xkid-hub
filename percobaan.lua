@@ -802,7 +802,7 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); if chatLo
 
 -- TAB: PROTECTION
 local secProt = TabProt:Section({ Title = "Protection Protocols", Icon = "shield-check", Box = true })
-secProt:Toggle({ Title = "Anti AFK", Default = true, Callback = function(v) if v then startAFK() else stopAFK() end end })
+secProt:Toggle({ Title = "Anti AFK", Default = false, Callback = function(v) if v then startAFK() else stopAFK() end end })
 secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Callback = function() local hrp, hum = getRoot(), getHum(); if hrp then hrp.Anchored = false; hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end; if hum then hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Protection", "Stuck fix applied", 2, "wrench") end })
 local secSrv = TabProt:Section({ Title = "Server Control", Icon = "server", Box = true })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Callback = function() pcall(function() TPService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end); notify("Server", "Rejoining...", 2, "log-in") end })
@@ -842,7 +842,7 @@ pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 e
 pcall(function() setfpscap(9999) end)
 
 task.spawn(function()
-    startAFK()  
+    startAFK()  -- Langsung, gak pake task.wait
     task.wait(2)
     getgenv()._XKID_UI_LOADING = false
     notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
