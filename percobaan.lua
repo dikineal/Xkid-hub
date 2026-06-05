@@ -1,6 +1,5 @@
 -- @XKID SCRIPT (Final Optimization)
 -- by @WTF.XKID | Roblox Build For Mobile | Ready for All Executors
--- EDITION: CYBER CRIMSON | v3.0
 
 repeat task.wait() until game:IsLoaded()
 
@@ -233,6 +232,7 @@ task.spawn(function()
 end)
 
 -- ========== ANTI AFK (HYBRID SILUMAN - UNIVERSAL) ==========
+-- Hybrid method: VIM priority, VirtualUser fallback, zero interruption
 local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
 local AFKSystem = { active = false, thread = nil }
 
@@ -1390,7 +1390,8 @@ local function startHardFling()
             if hardFlingBAV and hardFlingBAV.Parent then
                 hardFlingBAV.AngularVelocity = Vector3.new(0, State.HardFling.currentPower, 0)
             end
-        elseif State.HardFling.mode == "Shake" then            if hardFlingBAV and hardFlingBAV.Parent then
+        elseif State.HardFling.mode == "Shake" then
+            if hardFlingBAV and hardFlingBAV.Parent then
                 local shakeX = (math.random() - 0.5) * State.HardFling.currentPower * 0.5
                 local shakeY = (math.random() - 0.5) * State.HardFling.currentPower * 0.3
                 local shakeZ = (math.random() - 0.5) * State.HardFling.currentPower * 0.5
@@ -1580,50 +1581,21 @@ local function applyFilter(filterName)
     end
 end
 
--- ========== MAIN WINDOW UI (CYBER CRIMSON EDITION) ==========
+-- ========== MAIN WINDOW UI ==========
 local Window = WindUI:CreateWindow({
     Title = "XKID HUB", Icon = "bluetooth", Author = "Final", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
-    -- [PERUBAHAN 2] TAMBAH BACKGROUND GRADIENT DI SINI
-    Background = WindUI:Gradient({
-        ["0"] = { Color = Color3.fromHex("#0a0a0f"), Transparency = 0 },
-        ["50"] = { Color = Color3.fromHex("#1a0a2e"), Transparency = 0 },
-        ["100"] = { Color = Color3.fromHex("#3d0a1a"), Transparency = 0 },
-    }, { Rotation = 135 }),
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
-
--- [PERUBAHAN 3] TAMBAH SIDEBAR GRADIENT
-Window:SetSidebarBackground(
-    WindUI:Gradient({
-        ["0"] = { Color = Color3.fromHex("#00d4ff"), Transparency = 0.15 },
-        ["100"] = { Color = Color3.fromHex("#0a0a0f"), Transparency = 0 },
-    }, { Rotation = 0 })
-)
-
--- [PERUBAHAN 4] TAMBAH TAB ACTIVE GRADIENT
-Window:SetTabActiveBackground(
-    WindUI:Gradient({
-        ["0"] = { Color = Color3.fromHex("#ff0040"), Transparency = 0.05 },
-        ["100"] = { Color = Color3.fromHex("#ff0040"), Transparency = 0.2 },
-    }, { Rotation = 0 })
-)
 
 pcall(function() WindUI:SetFont("rbxassetid://12187376357") end)
 pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
 
--- [PERUBAHAN 1] GANTI ICON OPEN BUTTON DARI "wifi" KE "discord" + TAMBAH BACKGROUND GRADIENT
 Window:EditOpenButton({
-    Title = "WTF.XKID", 
-    Icon = "discord",  -- ← INI YANG DIGANTI
-    CornerRadius = UDim.new(1, 0),
+    Title = "WTF.XKID", Icon = "wifi", CornerRadius = UDim.new(1, 0),
     StrokeThickness = 2, StrokeColor = Color3.fromRGB(255, 70, 120),
     Enabled = true, Draggable = true, Scale = 0.72,
-    Background = WindUI:Gradient({
-        ["0"] = { Color = Color3.fromHex("#0a0a0f"), Transparency = 0 },
-        ["100"] = { Color = Color3.fromHex("#3d0a1a"), Transparency = 0 },
-    }, { Rotation = 45 }),
 })
 
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255, 215, 0), Icon = "github" })
@@ -1943,7 +1915,8 @@ secCine:Toggle({ Title = "Hide All UI", Default = false, Callback = function(v)
     if v then
         State.Cinema.hideUI = true
         State.Cinema.cachedGuis = {}
-        for _,gui in pairs(LP.PlayerGui:GetChildren()) do            if gui:IsA("ScreenGui") and gui.Enabled then
+        for _,gui in pairs(LP.PlayerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
                 table.insert(State.Cinema.cachedGuis, gui)
                 gui.Enabled = false
             end
