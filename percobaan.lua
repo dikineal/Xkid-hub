@@ -3,17 +3,17 @@
 
 repeat task.wait() until game:IsLoaded()
 
--- ================================ FALLBACK ================================
+--[ FALLBACK ]--
 if not table.clear then function table.clear(t) for i=#t,1,-1 do t[i]=nil end end end
 math.randomseed(tick()*1000+game:GetService("Players").LocalPlayer.UserId)
 
--- ================================ WINDUI ================================
+--[ WINDUI ]--
 local WindUI = (function()
     local s,r = pcall(function() return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))() end)
     if s then return r else error("Failed to load WindUI") end
 end)()
 
--- ================================ SERVICES ================================
+--[ SERVICES ]--
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
@@ -34,7 +34,7 @@ local onMobile = not UserInputService.KeyboardEnabled
 
 getgenv()._XKID_UI_LOADING = true
 
--- ================================ ORIGINAL LIGHTING ================================
+--[ ORIGINAL LIGHTING ]--
 local originalLighting = {
     ClockTime = Lighting.ClockTime,
     Brightness = Lighting.Brightness,
@@ -45,7 +45,7 @@ local originalLighting = {
     FogEnd = Lighting.FogEnd,
 }
 
--- ================================ CLEANUP OLD INSTANCE ================================
+--[ CLEANUP OLD INSTANCE ]--
 if getgenv()._XKID_RUNNING then getgenv()._XKID_RUNNING = false; task.wait(0.5) end
 
 if getgenv()._XKID_ESP_CACHE then
@@ -93,7 +93,7 @@ local function notify(title, content, duration, icon)
     if not ok then task.wait(0.03); pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) end) end
 end
 
--- ================================ STATE ================================
+--[ STATE ]--
 local State = {
     Move = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60, autoWalk = false, autoWalkSpeed = 16 },
     Fly = { active = false, bv = nil, bg = nil, _keys = {} },
@@ -115,7 +115,7 @@ local colorMap = {
     Hitam = Color3.fromRGB(0,0,0), Crimson = Color3.fromRGB(220,20,60),
 }
 
--- ================================ HELPER FUNCTIONS ================================
+--[ HELPERS ]--
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
 local function getHum() return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
 
@@ -182,14 +182,14 @@ local function isOnGround()
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
 
--- ================================ GLOBAL VARS ================================
+--[ GLOBAL VARS ]--
 local START_TIME = os.time()
 local cachedMapName = nil
 local lastMapCheck = 0
 local sharedFPS = 60
 local sharedPing = 0
 
--- ================================ FPS & PING TRACKER ================================
+--[ FPS & PING TRACKER ]--
 TrackC(RunService.RenderStepped:Connect(function(dt) if dt > 0 then sharedFPS = math.floor(1 / dt) end end))
 
 task.spawn(function()
@@ -221,7 +221,7 @@ task.spawn(function()
     end
 end)
 
--- ================================ FPS UNLOCKER ================================
+--[ FPS UNLOCKER ]--
 pcall(function() if setfpscap then setfpscap(9999) end end)
 TrackC(LP.CharacterAdded:Connect(function() pcall(function() if setfpscap then setfpscap(9999) end end) end))
 task.spawn(function()
@@ -231,7 +231,7 @@ task.spawn(function()
     end
 end)
 
--- ================================ ANTI AFK (HYBRID) ================================
+--[ ANTI AFK ]--
 local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
 local AFKSystem = { active = false, thread = nil }
 
@@ -244,7 +244,6 @@ local function sendSilentInput()
         end)
         return
     end
-    
     if VirtualUser and VirtualUser.ClickButton2 then
         pcall(function()
             local vp = Camera.ViewportSize
@@ -253,7 +252,6 @@ local function sendSilentInput()
         end)
         return
     end
-    
     pcall(function()
         local cf = Camera.CFrame
         Camera.CFrame = cf * CFrame.Angles(0, math.rad(2), 0)
@@ -266,7 +264,6 @@ local function startAFK()
     if AFKSystem.active then return end
     AFKSystem.active = true
     State.Security.afkActive = true
-    
     AFKSystem.thread = task.spawn(function()
         while AFKSystem.active do
             sendSilentInput()
@@ -276,7 +273,6 @@ local function startAFK()
             end
         end
     end)
-    
     notify("Anti AFK", "ON (Hybrid)", 1.5, "shield-check")
 end
 
@@ -299,7 +295,7 @@ task.spawn(function()
     startAFK()
 end)
 
--- ================================ SHIFT LOCK ================================
+--[ SHIFT LOCK ]--
 TrackC(LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     local hum = char:FindFirstChildOfClass("Humanoid")
@@ -352,7 +348,7 @@ local function toggleShiftLock(v)
     end
 end
 
--- ================================ REFRESH CHARACTER ================================
+--[ REFRESH CHARACTER ]--
 local pendingRefreshCF, pendingRefreshWS, pendingRefreshJP, pendingRefreshZoom = nil, 16, 50, 400
 
 local function refreshCharacter()
@@ -413,7 +409,7 @@ TrackC(LP.CharacterAdded:Connect(function(newChar)
     pendingRefreshCF = nil
 end))
 
--- ================================ SMART TP ================================
+--[ SMART TP ]--
 local Teleport = { clickConn = nil, clickActive = false, toolActive = false, tool = nil }
 
 local function executeTP()
@@ -464,7 +460,7 @@ local function toggleSmartTP(v)
     end
 end
 
--- ================================ AUTO WALK ================================
+--[ AUTO WALK ]--
 local function startAutoWalk()
     RunService:UnbindFromRenderStep("XKIDAutoWalk")
     State.Move.autoWalk = true
@@ -491,7 +487,7 @@ local function stopAutoWalk()
     notify("Auto Walk", "OFF", 1.5, "play")
 end
 
--- ================================ ESP ENGINE ================================
+--[ ESP ENGINE ]--
 local function initPlayerCache(player)
     if State.ESP.cache[player] then return end
     local cache = { texts = nil, tracer = nil, boxLines = {}, hl = nil, isSuspect = false, isGlitch = false, reason = "" }
@@ -687,7 +683,7 @@ TrackC(RunService.RenderStepped:Connect(function()
     end
 end))
 
--- ================================ FLY ENGINE ================================
+--[ FLY ENGINE ]--
 local flyMoveTouch, flyMoveSt, flyJoy, flyConns = nil, nil, Vector2.zero, {}
 local flyVel = Vector3.zero
 
@@ -804,7 +800,7 @@ local function toggleFly(v)
     end)
 end
 
--- ================================ FREECAM ================================
+--[ FREECAM ]--
 local FC = {
     active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0,
     speed = 3, sens = 0.25, savedCF = nil, origFov = 70,
@@ -1043,7 +1039,7 @@ local function fullCleanupFreecam()
     for _,b in ipairs(fcButtons) do b.Visible = true end
 end
 
--- ================================ SELF-SPECTATE ================================
+--[ SELF SPECTATE ]--
 local SS = State.SelfSpec
 local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
 
@@ -1180,7 +1176,7 @@ local function toggleSelfSpec(v)
     end
 end
 
--- ================================ SPECTATE ================================
+--[ SPECTATE ]--
 local Spec = {
     active = false, target = nil, mode = "third", dist = 8, origFov = 70,
     orbitYaw = 0, orbitPitch = 0, fpYaw = 0, fpPitch = 0, isSelf = false
@@ -1284,7 +1280,7 @@ end
 
 local function stopSpecLoop() RunService:UnbindFromRenderStep("XKIDSpec") end
 
--- ================================ AUTO LIKE ================================
+--[ AUTO LIKE ]--
 local function getLikeRemotes()
     local remotes = ReplicatedStorage:FindFirstChild("Remotes")
     if not remotes then return nil, nil end
@@ -1355,7 +1351,7 @@ local function stopAutoLike()
     notify("Auto Like", "OFF", 1.5, "heart")
 end
 
--- ================================ HARD FLING ================================
+--[ HARD FLING ]--
 local hardFlingConn, hardFlingRampConn, hardFlingBAV = nil, nil, nil
 
 local function startHardFling()
@@ -1440,7 +1436,7 @@ local function stopHardFling()
     notify("Hard Fling", "OFF", 1.5, "zap")
 end
 
--- ================================ FILTERS (PRESETS) ================================
+--[ FILTERS ]--
 local FILTER_PRESETS = {
     Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7 },
     Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2 },
@@ -1579,7 +1575,7 @@ local function applyFilter(filterName)
     end
 end
 
--- ================================ MAIN WINDOW UI ================================
+--[ MAIN UI ]--
 local Window = WindUI:CreateWindow({
     Title = "XKID HUB", Icon = "bluetooth", Author = "Final", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
@@ -1590,12 +1586,34 @@ pcall(function() WindUI:SetFont("rbxassetid://12187376357") end)
 pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
 
+--[ GRADIENT CRIMSON TO PINK ]--
+pcall(function() WindUI:RemoveTheme("Crimson") end)
+local XKID_PINK_THEME = {
+    Name = "XKID_CrimsonPink",
+    Background = Color3.fromRGB(16, 16, 16),
+    Dialog = Color3.fromRGB(22, 22, 22),
+    Outline = Color3.fromRGB(255, 255, 255),
+    Text = Color3.fromRGB(255, 255, 255),
+    Button = Color3.fromRGB(82, 82, 91),
+    Icon = Color3.fromRGB(200, 200, 200),
+    Accent = WindUI:Gradient({
+        ["0"] = { Color = Color3.fromRGB(220, 20, 60), Transparency = 0 },
+        ["33"] = { Color = Color3.fromRGB(255, 50, 100), Transparency = 0 },
+        ["66"] = { Color = Color3.fromRGB(255, 80, 140), Transparency = 0 },
+        ["100"] = { Color = Color3.fromRGB(255, 150, 200), Transparency = 0 },
+    }, { Rotation = 45, Transparency = 0 }),
+}
+WindUI:AddTheme(XKID_PINK_THEME)
+WindUI:SetTheme("XKID_CrimsonPink")
+
+--[ OPEN BUTTON ]--
 Window:EditOpenButton({
     Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1, 0),
     StrokeThickness = 2, StrokeColor = Color3.fromRGB(255, 70, 120),
     Enabled = true, Draggable = true, Scale = 0.72,
 })
 
+--[ FPS TAG ]--
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255, 215, 0), Icon = "github" })
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
@@ -1606,7 +1624,7 @@ task.spawn(function()
     end
 end)
 
--- ================================ TAB: INFORMASI ================================
+--[ TAB INFO ]--
 local TabInfo = Window:Tab({ Title = "Informasi", Icon = "activity" })
 
 local function getExecutor()
@@ -1658,7 +1676,7 @@ TabInfo:Section({ Title = "🔗 Discord", Icon = "message-circle", Box = true })
     end
 })
 
--- ================================ TAB: CHARACTER ================================
+--[ TAB CHARACTER ]--
 local TabChar = Window:Tab({ Title = "Character", Icon = "fingerprint" })
 
 TabChar:Button({ Title = "Refresh Character 🔄", Desc = "Reload character like /re — no gamepass", Callback = refreshCharacter })
@@ -1728,7 +1746,7 @@ secFling:Toggle({ Title = "Hard Fling", Default = false, Callback = function(v) 
 secFling:Dropdown({ Title = "Fling Mode", Values = { "Spin", "Shake" }, Default = "Spin", Callback = function(v) State.HardFling.mode = v; notify("Fling Mode", v, 1.5, "rotate-cw") end })
 secFling:Slider({ Title = "Fling Power", Step = 500, Value = { Min = 1000, Max = 50000, Default = 10000 }, Callback = function(v) State.HardFling.power = v end })
 
--- ================================ TAB: TELEPORT ================================
+--[ TAB TELEPORT ]--
 local TabTP = Window:Tab({ Title = "Teleport", Icon = "map-pin-x-inside" })
 
 local secDirTP = TabTP:Section({ Title = "Direct Teleport", Icon = "map-pin", Box = true })
@@ -1787,7 +1805,7 @@ for i = 1, 3 do
     end })
 end
 
--- ================================ TAB: SPECTATOR ================================
+--[ TAB SPECTATOR ]--
 local TabSpec = Window:Tab({ Title = "Spectator", Icon = "cctv" })
 
 local secZoom = TabSpec:Section({ Title = "Zoom Override", Icon = "zoom-in", Box = true })
@@ -1852,7 +1870,7 @@ secSP:Toggle({ Title = "First Person View", Default = false, Callback = function
 end })
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) Spec.dist = v end })
 
--- ================================ TAB: CINEMATIC ================================
+--[ TAB CINEMATIC ]--
 local TabCine = Window:Tab({ Title = "Cinematic", Icon = "aperture" })
 
 local secSelfSpec = TabCine:Section({ Title = "🎥 Self-Spectate", Icon = "camera", Box = true })
@@ -1930,7 +1948,7 @@ secCine:Toggle({ Title = "Hide All UI", Default = false, Callback = function(v)
     notify("Cinematic", v and "UI Hidden" or "UI Shown", 1.5, "film")
 end })
 
--- ================================ TAB: VISUALS ================================
+--[ TAB VISUALS ]--
 local TabVis = Window:Tab({ Title = "Visuals", Icon = "moon-star" })
 
 local secPresets = TabVis:Section({ Title = "Presets", Icon = "palette", Box = true })
@@ -1972,7 +1990,7 @@ local secDOF = TabVis:Section({ Title = "Depth of Field", Icon = "focus", Box = 
 secDOF:Slider({ Title = "Blur Intensity", Step = 0.1, Value = { Min = 0, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.dofIntensity = v; applyCustomFilter() end })
 secDOF:Slider({ Title = "Focus Distance", Step = 5, Value = { Min = 1, Max = 500, Default = 50 }, Callback = function(v) State.CustomFilter.dofDistance = v; applyCustomFilter() end })
 
--- ================================ TAB: ESP ================================
+--[ TAB ESP ]--
 local TabESP = Window:Tab({ Title = "ESP", Icon = "scan-search" })
 
 local secDetect = TabESP:Section({ Title = "Detection System", Icon = "radar", Box = true })
@@ -2017,7 +2035,7 @@ secESPCol:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "
     notify("ESP", "Glitch: " .. v, 1.5, "palette")
 end })
 
--- ================================ TAB: LOGGER ================================
+--[ TAB LOGGER ]--
 local TabLog = Window:Tab({ Title = "Logger", Icon = "square-terminal" })
 
 local secChat = TabLog:Section({ Title = "Chat Logger", Icon = "message-square", Box = true })
@@ -2112,7 +2130,7 @@ task.spawn(function()
     end
 end)
 
--- ================================ TAB: PROTECTION ================================
+--[ TAB PROTECTION ]--
 local TabProt = Window:Tab({ Title = "Protection", Icon = "shield-half" })
 
 local secProt = TabProt:Section({ Title = "Protection Protocols", Icon = "shield-check", Box = true })
@@ -2220,7 +2238,7 @@ end })
 local secCam = TabProt:Section({ Title = "Camera Lock", Icon = "lock", Box = true })
 secCam:Toggle({ Title = "Force Shift Lock", Default = false, Callback = function(v) toggleShiftLock(v) end })
 
--- ================================ TAB: SETTINGS ================================
+--[ TAB SETTINGS ]--
 local TabSet = Window:Tab({ Title = "Settings", Icon = "panels-top-left" })
 
 local secTheme = TabSet:Section({ Title = "🎨 Theme", Icon = "palette", Box = true })
@@ -2341,7 +2359,7 @@ task.spawn(function()
     end
 end)
 
--- ================================ FINAL SETUP ================================
+--[ EXPAND ALL SECTIONS ]--
 task.delay(0.5, function()
     pcall(function()
         for _,tab in pairs(Window.Tabs) do
@@ -2355,7 +2373,7 @@ end)
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
 pcall(function() if setfpscap then setfpscap(9999) end end)
 
--- ================================ AUTO START ANTI AFK ================================
+--[ AUTO START ]--
 task.spawn(function()
     task.wait(0.5)
     startAFK()
