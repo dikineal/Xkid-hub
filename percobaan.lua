@@ -842,9 +842,8 @@ pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 e
 pcall(function() setfpscap(9999) end)
 
 task.spawn(function()
-    task.wait(1)
-    startAFK()
-    task.wait(1)
+    startAFK()  
+    task.wait(2)
     getgenv()._XKID_UI_LOADING = false
     notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
 end)
