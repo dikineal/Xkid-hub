@@ -232,6 +232,7 @@ task.spawn(function()
 end)
 
 -- ========== ANTI AFK (HYBRID SILUMAN - UNIVERSAL) ==========
+-- Hybrid method: VIM priority, VirtualUser fallback, zero interruption
 local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
 local AFKSystem = { active = false, thread = nil }
 
@@ -1580,59 +1581,22 @@ local function applyFilter(filterName)
     end
 end
 
--- ========== MAIN WINDOW UI (DENGAN GRADIENT ROYAL CRIMSON) ==========
+-- ========== MAIN WINDOW UI ==========
 local Window = WindUI:CreateWindow({
     Title = "XKID HUB", Icon = "bluetooth", Author = "Final", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
-    -- ROYAL CRIMSON GRADIENT (Merah → Ungu Tua)
-    Background = WindUI:Gradient({
-        ["0"] = { Color = Color3.fromHex("#e74c3c"), Transparency = 0 },
-        ["100"] = { Color = Color3.fromHex("#6c3483"), Transparency = 0 },
-    }, { Rotation = 45 }),
 })
-
--- SIDEBAR GRADIENT (Ungu Tua → Hitam Keunguan)
-Window:SetSidebarBackground(
-    WindUI:Gradient({
-        ["0"] = { Color = Color3.fromHex("#6c3483"), Transparency = 0 },
-        ["100"] = { Color = Color3.fromHex("#2c0b3a"), Transparency = 0 },
-    }, { Rotation = 0 })
-)
-
--- TAB ACTIVE GRADIENT (Merah Terang → Ungu Muda)
-Window:SetTabActiveBackground(
-    WindUI:Gradient({
-        ["0"] = { Color = Color3.fromHex("#e74c3c"), Transparency = 0 },
-        ["100"] = { Color = Color3.fromHex("#9b59b6"), Transparency = 0 },
-    }, { Rotation = 90 })
-)
 
 pcall(function() WindUI:SetFont("rbxassetid://12187376357") end)
 pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
 
--- OPEN BUTTON dengan icon gamepad
 Window:EditOpenButton({
-    Title = "WTF.XKID", Icon = "solar:gamepad-minimalistic-bold", CornerRadius = UDim.new(1, 0),
+    Title = "WTF.XKID", Icon = "wifi", CornerRadius = UDim.new(1, 0),
     StrokeThickness = 2, StrokeColor = Color3.fromRGB(255, 70, 120),
     Enabled = true, Draggable = true, Scale = 0.72,
 })
-
--- ========== ANIMATED ROYAL CRIMSON GRADIENT (Opsional - Putar perlahan) ==========
-local rotation = 0
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        rotation = (rotation + 0.3) % 360
-        Window:SetBackground(
-            WindUI:Gradient({
-                ["0"] = { Color = Color3.fromHex("#e74c3c"), Transparency = 0 },
-                ["100"] = { Color = Color3.fromHex("#6c3483"), Transparency = 0 },
-            }, { Rotation = rotation })
-        )
-        task.wait(0.05)
-    end
-end)
 
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255, 215, 0), Icon = "github" })
 task.spawn(function()
