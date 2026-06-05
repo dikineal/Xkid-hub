@@ -1,5 +1,5 @@
--- @XKID SCRIPT v5.5 (Rapi)
--- by @WTF.XKID | Roblox Build For Mobile
+-- @XKID SCRIPT (Final Optimization)
+-- by @WTF.XKID | Roblox Build For Mobile | Ready for All Executors
 
 repeat task.wait() until game:IsLoaded()
 
@@ -32,7 +32,6 @@ local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local onMobile = not UserInputService.KeyboardEnabled
 
-local CURRENT_VERSION = "5.5"
 getgenv()._XKID_UI_LOADING = true
 
 -- ========== ORIGINAL LIGHTING ==========
@@ -232,84 +231,70 @@ task.spawn(function()
     end
 end)
 
--- ========== ANTI AFK (Delta Compatible) ==========
--- Timer untuk deteksi idle
-local lastActivity = tick()
-local AFKActive = true
+-- ========== ANTI AFK (HYBRID SILUMAN - UNIVERSAL) ==========
+-- Hybrid method: VIM priority, VirtualUser fallback, zero interruption
+local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
+local AFKSystem = { active = false, thread = nil }
 
--- Reset timer saat user berinteraksi
-local function resetActivity()
-    lastActivity = tick()
-end
-
-UserInputService.InputBegan:Connect(resetActivity)
-UserInputService.InputEnded:Connect(resetActivity)
-UserInputService.TouchStarted:Connect(resetActivity)
-UserInputService.TouchMoved:Connect(resetActivity)
-
--- Reset juga saat karakter bergerak
-RunService.RenderStepped:Connect(function()
-    local char = LP.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum and hum.MoveDirection.Magnitude > 0 then
-        resetActivity()
+local function sendSilentInput()
+    if VIM and VIM.SendKeyEvent then
+        pcall(function()
+            VIM:SendKeyEvent(true, Enum.KeyCode.F24, false, game)
+            task.wait(0.05)
+            VIM:SendKeyEvent(false, Enum.KeyCode.F24, false, game)
+        end)
+        return
     end
-end)
-
--- Simulasi gerak kamera (paling universal)
-local function wiggleCamera()
+    
+    if VirtualUser and VirtualUser.ClickButton2 then
+        pcall(function()
+            local vp = Camera.ViewportSize
+            local center = vp and Vector2.new(vp.X / 2, vp.Y / 2) or Vector2.new(0, 0)
+            VirtualUser:ClickButton2(center)
+        end)
+        return
+    end
+    
     pcall(function()
         local cf = Camera.CFrame
-        Camera.CFrame = cf * CFrame.Angles(0, math.rad(3), 0)
+        Camera.CFrame = cf * CFrame.Angles(0, math.rad(2), 0)
         task.wait(0.05)
         Camera.CFrame = cf
     end)
 end
 
--- Simulasi sentuhan (pengganti VirtualUser untuk Delta)
-local function doTouchSim()
-    pcall(function()
-        local vp = Camera.ViewportSize
-        if vp and vp.X > 0 and vp.Y > 0 then
-            UserInputService:InjectTouchDown({ Position = Vector2.new(vp.X / 2, vp.Y / 2) })
-            task.wait(0.05)
-            UserInputService:InjectTouchUp({ Position = Vector2.new(vp.X / 2, vp.Y / 2) })
+local function startAFK()
+    if AFKSystem.active then return end
+    AFKSystem.active = true
+    State.Security.afkActive = true
+    
+    AFKSystem.thread = task.spawn(function()
+        while AFKSystem.active do
+            sendSilentInput()
+            for i = 1, 55 do
+                if not AFKSystem.active then break end
+                task.wait(1)
+            end
         end
     end)
-end
-
--- Eksekusi aktivitas
-local function executeActivity()
-    wiggleCamera()
-    doTouchSim()
-end
-
--- Timer loop
-RunService.Heartbeat:Connect(function()
-    if not AFKActive then return end
     
-    local idleTime = tick() - lastActivity
-    if idleTime >= 15 then  -- 15 detik tanpa input, simulasi aktivitas
-        pcall(executeActivity)
-        lastActivity = tick()
-    end
-end)
-
--- Fungsi publik untuk kompatibilitas dengan toggle UI
-local function startAFK()
-    AFKActive = true
-    State.Security.afkActive = true
-    resetActivity()
-    notify("Anti AFK", "ON", 1.5, "shield-check")
+    notify("Anti AFK", "ON (Hybrid)", 1.5, "shield-check")
 end
 
 local function stopAFK()
-    AFKActive = false
+    AFKSystem.active = false
     State.Security.afkActive = false
+    if AFKSystem.thread then
+        task.cancel(AFKSystem.thread)
+        AFKSystem.thread = nil
+    end
     notify("Anti AFK", "OFF", 1.5, "shield-check")
 end
 
--- Auto start
+function ToggleAntiAFK()
+    if AFKSystem.active then stopAFK() else startAFK() end
+end
+
 task.spawn(function()
     task.wait(0.5)
     startAFK()
@@ -1598,7 +1583,7 @@ end
 
 -- ========== MAIN WINDOW UI ==========
 local Window = WindUI:CreateWindow({
-    Title = "XKID HUB", Icon = "bluetooth", Author = "v" .. CURRENT_VERSION, Folder = "XKIDHub",
+    Title = "XKID HUB", Icon = "bluetooth", Author = "Final", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1662,7 +1647,7 @@ task.spawn(function()
 end)
 
 local infoParagraph = TabInfo:Paragraph({
-    Title = "💀 " .. LP.DisplayName .. " v" .. CURRENT_VERSION .. "\n⚡ " .. makeBar(sharedFPS, 120, 10) .. " " .. sharedFPS .. " FPS\n📡 " .. makeBar(math.max(1, 200 - sharedPing), 200, 10) .. " " .. sharedPing .. "ms\n🕐 " .. makeBar(os.difftime(os.time(), START_TIME) % 3600, 3600, 10) .. " " .. formatTime(os.difftime(os.time(), START_TIME)),
+    Title = "💀 " .. LP.DisplayName .. "\n⚡ " .. makeBar(sharedFPS, 120, 10) .. " " .. sharedFPS .. " FPS\n📡 " .. makeBar(math.max(1, 200 - sharedPing), 200, 10) .. " " .. sharedPing .. "ms\n🕐 " .. makeBar(os.difftime(os.time(), START_TIME) % 3600, 3600, 10) .. " " .. formatTime(os.difftime(os.time(), START_TIME)),
     Desc = "👤 " .. LP.DisplayName .. "\n📱 " .. (onMobile and "Mobile" or "PC") .. " | 🚀 " .. execName .. "\n\n🎮 " .. (cachedMapName or "Loading...") .. "\n👥 " .. makeBar(#Players:GetPlayers(), Players.MaxPlayers, 10) .. " " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers .. " Players\n\n🌐 discord.gg/bzumc2u96"
 })
 
@@ -1670,7 +1655,7 @@ task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(1)
         pcall(function()
-            infoParagraph:SetTitle("💀 " .. LP.DisplayName .. " v" .. CURRENT_VERSION .. "\n⚡ " .. makeBar(sharedFPS, 120, 10) .. " " .. sharedFPS .. " FPS\n📡 " .. makeBar(math.max(1, 200 - sharedPing), 200, 10) .. " " .. sharedPing .. "ms\n🕐 " .. makeBar(os.difftime(os.time(), START_TIME) % 3600, 3600, 10) .. " " .. formatTime(os.difftime(os.time(), START_TIME)))
+            infoParagraph:SetTitle("💀 " .. LP.DisplayName .. "\n⚡ " .. makeBar(sharedFPS, 120, 10) .. " " .. sharedFPS .. " FPS\n📡 " .. makeBar(math.max(1, 200 - sharedPing), 200, 10) .. " " .. sharedPing .. "ms\n🕐 " .. makeBar(os.difftime(os.time(), START_TIME) % 3600, 3600, 10) .. " " .. formatTime(os.difftime(os.time(), START_TIME)))
         end)
     end
 end)
@@ -2369,6 +2354,6 @@ task.spawn(function()
     startAFK()
     task.wait(2)
     getgenv()._XKID_UI_LOADING = false
-    notify("System", "XKID AKTIF — v" .. CURRENT_VERSION, 3, "rocket")
+    notify("System", "XKID AKTIF — Ready", 3, "rocket")
     notify("Anti AFK", "AUTO ACTIVATED", 2, "shield-check")
 end)
