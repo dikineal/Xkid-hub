@@ -232,102 +232,84 @@ task.spawn(function()
     end
 end)
 
--- ========== ANTI AFK ==========
-local AntiAFK = {
-    Active = false,
-    IntervalMin = 20,
-    IntervalMax = 35,
-    LastActivity = tick(),
-    CurrentInterval = 25,
-    MainThread = nil,
-    Listeners = {},
-}
+-- ========== ANTI AFK (Delta Compatible) ==========
+-- Timer untuk deteksi idle
+local lastActivity = tick()
+local AFKActive = true
 
-local function resetTimer() AntiAFK.LastActivity = tick() end
-
-local function addConnection(conn)
-    table.insert(AntiAFK.Listeners, conn)
-    return conn
+-- Reset timer saat user berinteraksi
+local function resetActivity()
+    lastActivity = tick()
 end
 
-local function cleanupConnections()
-    for _,v in ipairs(AntiAFK.Listeners) do
-        pcall(function() v:Disconnect() end)
+UserInputService.InputBegan:Connect(resetActivity)
+UserInputService.InputEnded:Connect(resetActivity)
+UserInputService.TouchStarted:Connect(resetActivity)
+UserInputService.TouchMoved:Connect(resetActivity)
+
+-- Reset juga saat karakter bergerak
+RunService.RenderStepped:Connect(function()
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum and hum.MoveDirection.Magnitude > 0 then
+        resetActivity()
     end
-    table.clear(AntiAFK.Listeners)
-end
+end)
 
-local function randomInterval()
-    return math.random(AntiAFK.IntervalMin, AntiAFK.IntervalMax)
-end
-
+-- Simulasi gerak kamera (paling universal)
 local function wiggleCamera()
     pcall(function()
         local cf = Camera.CFrame
-        local yaw = math.random(2, 5)
-        local target = CFrame.new(cf.Position) * CFrame.Angles(0, math.rad(yaw), 0)
-        Camera.CFrame = target
+        Camera.CFrame = cf * CFrame.Angles(0, math.rad(3), 0)
         task.wait(0.05)
         Camera.CFrame = cf
     end)
 end
 
-local function setupInputListeners()
-    addConnection(UserInputService.InputBegan:Connect(resetTimer))
-    addConnection(UserInputService.InputEnded:Connect(resetTimer))
-    addConnection(UserInputService.TouchStarted:Connect(resetTimer))
-    addConnection(UserInputService.TouchMoved:Connect(resetTimer))
-    addConnection(LP.CharacterAdded:Connect(resetTimer))
-    addConnection(RunService.RenderStepped:Connect(function()
-        if not AntiAFK.Active then return end
-        local char = LP.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum and hum.MoveDirection.Magnitude > 0 then resetTimer() end
-    end))
-end
-
-local function startMainLoop()
-    if AntiAFK.MainThread then task.cancel(AntiAFK.MainThread) end
-    AntiAFK.MainThread = task.spawn(function()
-        while AntiAFK.Active do
-            local idleTime = tick() - AntiAFK.LastActivity
-            if idleTime >= AntiAFK.CurrentInterval then
-                pcall(wiggleCamera)
-                AntiAFK.LastActivity = tick()
-                AntiAFK.CurrentInterval = randomInterval()
-            end
-            task.wait(0.5)
+-- Simulasi sentuhan (pengganti VirtualUser untuk Delta)
+local function doTouchSim()
+    pcall(function()
+        local vp = Camera.ViewportSize
+        if vp and vp.X > 0 and vp.Y > 0 then
+            UserInputService:InjectTouchDown({ Position = Vector2.new(vp.X / 2, vp.Y / 2) })
+            task.wait(0.05)
+            UserInputService:InjectTouchUp({ Position = Vector2.new(vp.X / 2, vp.Y / 2) })
         end
     end)
 end
 
+-- Eksekusi aktivitas
+local function executeActivity()
+    wiggleCamera()
+    doTouchSim()
+end
+
+-- Timer loop
+RunService.Heartbeat:Connect(function()
+    if not AFKActive then return end
+    
+    local idleTime = tick() - lastActivity
+    if idleTime >= 15 then  -- 15 detik tanpa input, simulasi aktivitas
+        pcall(executeActivity)
+        lastActivity = tick()
+    end
+end)
+
+-- Fungsi publik untuk kompatibilitas dengan toggle UI
 local function startAFK()
-    if AntiAFK.Active then return end
-    AntiAFK.Active = true
+    AFKActive = true
     State.Security.afkActive = true
-    AntiAFK.LastActivity = tick()
-    AntiAFK.CurrentInterval = randomInterval()
-    setupInputListeners()
-    startMainLoop()
+    resetActivity()
     notify("Anti AFK", "ON", 1.5, "shield-check")
 end
 
 local function stopAFK()
-    AntiAFK.Active = false
+    AFKActive = false
     State.Security.afkActive = false
-    if AntiAFK.MainThread then
-        task.cancel(AntiAFK.MainThread)
-        AntiAFK.MainThread = nil
-    end
-    cleanupConnections()
     notify("Anti AFK", "OFF", 1.5, "shield-check")
 end
 
-function ToggleAntiAFK()
-    if AntiAFK.Active then stopAFK() else startAFK() end
-end
-
--- ========== FORCE AUTO START ==========
+-- Auto start
 task.spawn(function()
     task.wait(0.5)
     startAFK()
