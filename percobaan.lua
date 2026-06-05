@@ -4,39 +4,11 @@
 
 repeat task.wait() until game:IsLoaded()
 
--- ================================ WINDUI LOADER V2 (MULTI-FALLBACK) ================================
-local WindUI = nil
-local loadError = nil
-
--- Coba method 1: Raw GitHub (tanpa bypass)
-local urls = {
-    "https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.lua",
-    "https://raw.githubusercontent.com/Footagesus/WindUI/main/main.lua",
-    "https://raw.githubusercontent.com/Footagesus/WindUI/master/main.lua"
-}
-
-for _, url in ipairs(urls) do
-    if not WindUI then
-        local success, result = pcall(function()
-            print("[XKID] Trying: " .. url)
-            local content = game:HttpGet(url) -- tanpa true parameter
-            return loadstring(content)
-        end)
-        if success and result then
-            local execSuccess, execResult = pcall(result)
-            if execSuccess and execResult then
-                WindUI = execResult
-                print("[XKID] WindUI loaded from: " .. url)
-                break
-            else
-                loadError = execSuccess and "execution failed" or tostring(execResult)
-            end
-        else
-            loadError = tostring(result)
-        end
-    end
-    task.wait(0.5)
-end
+-- ================================ WINDUI ================================
+local WindUI = (function()
+    local s,r = pcall(function() return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))() end)
+    if s then return r else error("Failed to load WindUI") end
+end)()
 
 -- ================================ EXECUTOR DETECTION + HTTP REQUEST ================================
 local executor = {
