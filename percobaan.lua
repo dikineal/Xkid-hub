@@ -706,7 +706,43 @@ secSelfSpec:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20
 secSelfSpec:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, Default = 1 }, Callback = function(v) SS.speed = v end })
 
 local secFC = TabCine:Section({ Title = "Drone Engine", Icon = "video", Box = true })
-secFC:Toggle({ Title = "Enable Freecam", Default = false, Callback = function(v) if v and SS.active then toggleSelfSpec(false) end; FC.active = v; if v then local cf = Camera.CFrame; FC.pos = cf.Position; FC.pitchDeg = 0; FC.yawDeg = 0; FC.rollDeg = 0; I_CamVel = Vector3.zero; I_YawVel = 0; I_PitchVel = 0; I_RollVel = 0; heightVelocity = 0; fcJoy = Vector2.zero; local hum = getHum(); local hrp = getRoot(); if hum then FC.savedWalkSpeed = hum.WalkSpeed; FC.savedJumpPower = hum.JumpPower; hum.WalkSpeed = 0; hum.JumpPower = 0 end; if hrp then hrp.Anchored = true; FC.wasAnchored = true end; FC.origFov = Camera.FieldOfView; startFreecamCapture(); startFreecamLoop(); if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end; FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end; notify("Freecam", "ON", 2, "video") else fullCleanupFreecam(); notify("Freecam", "OFF", 1.5, "video") end end })
+secFCsecFC:Toggle({ Title = "Enable Freecam", Default = false, Callback = function(v)
+    if v and SS.ac then TSS(false) end
+    FC.active = v
+    if v then
+        -- Tunggu karakter siap
+        local hrp, hum = nil, nil
+        repeat task.wait(0.1) hrp = GR() hum = GH() until hrp and hum
+        -- Simpan state awal
+        FC.savedWalkSpeed = hum.WalkSpeed
+        FC.savedJumpPower = hum.JumpPower
+        FC.wasAnchored = true
+        -- Bekukan karakter
+        hum.WalkSpeed = 0
+        hum.JumpPower = 0
+        hum.AutoRotate = false
+        hrp.Anchored = true
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        -- Reset freecam
+        local cf = Camera.CFrame
+        FC.pos = cf.Position
+        FC.pi = 0; FC.ya = 0; FC.ro = 0
+        cV = Vector3.zero; yV = 0; pV = 0; rV = 0; hV = 0; fmJ = Vector2.zero
+        FC.of = Camera.FieldOfView
+        SFCC(); SFCL()
+        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end
+        FC_UH = false; eBtn.Text = "👁"
+        for _, b in ipairs(fB) do b.Visible = true end
+        N("Freecam","ON",2,"video")
+    else
+        FCFC()
+        -- Kembalikan AutoRotate
+        local hum = GH()
+        if hum then hum.AutoRotate = true end
+        N("Freecam","OFF",1.5,"video")
+    end
+end })
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 secFC:Toggle({ Title = "Hide All UI (Cinematic)", Default = false, Callback = function(v) if getgenv()._XKID_UI_LOADING then return end; if v then State.Cinema.hideUI = true; State.Cinema.cachedGuis = {}; for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end) else State.Cinema.hideUI = false; for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end) end; notify("Cinematic", v and "UI Hidden" or "UI Shown", 1.5, "film") end })
