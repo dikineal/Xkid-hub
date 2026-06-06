@@ -1,14 +1,9 @@
--- @XKID SCRIPT V3.3 (Debug Log + ESP Fix + Version Tag + Freecam Fix)
+-- @XKID SCRIPT V3.4 (Drone Fix + Debug Log + ESP Fix)
 -- by @WTF.XKID | Roblox Build For Mobile/PC | Tested on Delta X
--- Changelog V3.3:
--- - Header: XKID_HUB + WTF.XKID
--- - Version Tag Gold V3.3 di topbar
--- - Debug Log section di Settings (Copy & Clear)
--- - ESP: Normal Color default Merah, hapus Tracer Origin dropdown (default Bottom)
--- - Informasi: tambah FPS Cap status
--- - Hapus Custom Theme Color (balik Theme dropdown biasa)
--- - Fix Freecam: karakter diam saat drone aktif (AutoRotate false + Anchored)
--- - Semua fitur V3.2 tetap work
+-- Changelog V3.4:
+-- - Fix Drone Engine: hapus repeat loop, karakter diam (AutoRotate false)
+-- - Debug Log + Version Tag + ESP Fix + FPS Cap info
+-- - Semua fitur V3.3 tetap work
 
 repeat task.wait() until game:IsLoaded()
 
@@ -618,7 +613,7 @@ Window:EditOpenButton({
 })
 
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255, 215, 0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.3", Color = Color3.fromRGB(255, 215, 0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.4", Color = Color3.fromRGB(255, 215, 0), Icon = "tag" })
 
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
@@ -708,34 +703,23 @@ secSelfSpec:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, 
 
 local secFC = TabCine:Section({ Title = "Drone Engine", Icon = "video", Box = true })
 secFC:Toggle({ Title = "Enable Freecam", Default = false, Callback = function(v)
-    if v and SS.ac then TSS(false) end
-    FC.ac = v
+    if v and SS.active then toggleSelfSpec(false) end
+    FC.active = v
     if v then
         local cf = Camera.CFrame
-        FC.pos = cf.Position
-        FC.pitchDeg = 0; FC.yawDeg = 0; FC.rollDeg = 0
+        FC.pos = cf.Position; FC.pitchDeg = 0; FC.yawDeg = 0; FC.rollDeg = 0
         I_CamVel = Vector3.zero; I_YawVel = 0; I_PitchVel = 0; I_RollVel = 0
         heightVelocity = 0; fcJoy = Vector2.zero
-        local hum = getHum()
-        local hrp = getRoot()
+        local hum = getHum(); local hrp = getRoot()
         if hum then
-            FC.savedWalkSpeed = hum.WalkSpeed
-            FC.savedJumpPower = hum.JumpPower
-            hum.WalkSpeed = 0
-            hum.JumpPower = 0
-            hum.AutoRotate = false
+            FC.savedWalkSpeed = hum.WalkSpeed; FC.savedJumpPower = hum.JumpPower
+            hum.WalkSpeed = 0; hum.JumpPower = 0; hum.AutoRotate = false
         end
-        if hrp then
-            hrp.Anchored = true
-            FC.wasAnchored = true
-        end
+        if hrp then hrp.Anchored = true; FC.wasAnchored = true end
         FC.origFov = Camera.FieldOfView
-        startFreecamCapture()
-        startFreecamLoop()
+        startFreecamCapture(); startFreecamLoop()
         if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end
-        FC_UI_Hidden = false
-        eyeBtn.Text = "👁"
-        for _, b in ipairs(fcButtons) do b.Visible = true end
+        FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end
         notify("Freecam", "ON", 2, "video")
     else
         fullCleanupFreecam()
@@ -855,9 +839,7 @@ setOptimalFPS(120)
 task.spawn(function()
     task.wait(0.5); startAFK(); task.wait(2)
     getgenv()._XKID_UI_LOADING = false
-    notify("System", "XKID_HUB V3.3 AKTIF — Ready", 3, "rocket")
+    notify("System", "XKID_HUB V3.4 AKTIF — Ready", 3, "rocket")
     notify("Anti AFK", "AUTO ACTIVATED (Stealth)", 2, "shield-check")
-    addLog("XKID_HUB V3.3 loaded successfully", "INFO")
+    addLog("XKID_HUB V3.4 loaded successfully", "INFO")
 end)
-
-Pake ini cuman perbaiki system drone engine nya doang
