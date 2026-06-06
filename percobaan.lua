@@ -4,7 +4,7 @@
 
 repeat task.wait() until game:IsLoaded()
 
--- ================================ WINDUI ================================
+-- ================================ WINDUI LOADER V2 (MULTI-FALLBACK) ================================
 local WindUI = (function()
     local s,r = pcall(function() return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))() end)
     if s then return r else error("Failed to load WindUI") end
