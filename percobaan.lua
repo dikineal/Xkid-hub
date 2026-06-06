@@ -1,4 +1,3 @@
-```lua
 -- @XKID SCRIPT V3.2 (Custom Theme Color + Anti AFK Stealth + All Fixes)
 -- by @WTF.XKID | Roblox Build For Mobile/PC | Ready for All Executors
 -- Changelog V3.2:
