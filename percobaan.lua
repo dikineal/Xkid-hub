@@ -1,16 +1,10 @@
--- @XKID SCRIPT V3.6 (FINAL FIX: Freecam + Conflict + UI + AntiAFK + AutoLike + HardFling + FPSBoost)
+-- @XKID SCRIPT V3.8 (FINAL: Lock Position + Emote Ready)
 -- by @WTF.XKID | Roblox Build For Mobile/PC | Tested on Delta X
--- Changelog V3.6:
--- - FIX #1: Freecam karakter DIAM TOTAL (Physics state disabled)
--- - FIX #2: Freecam matikan Self-Spectate juga (konflik resolved)
--- - FIX #4: Hide UI cinematic sekarang sembunyikan tombol freecam
--- - FIX #5: AntiAFK tidak gerakin kamera saat freecam aktif
--- - FIX #6: Auto Like berhenti loop saat karakter mati
--- - FIX #7: Hard Fling otomatis mati saat respawn
--- - FIX #8: FPS Boost restore material lebih aman
--- - REMOVED: First Person View (Spectator & Self-Spectate)
--- - REMOVED: Top Down mode (Self-Spectate)
--- - ADDED: Orbit Steady & Tilt Drift mode
+-- Changelog V3.8:
+-- - FIX: Karakter LOCK posisi (tidak turun/tidak terbang) saat freecam ON
+-- - FIX: Emote/Dance TETAP BISA dilakukan saat freecam aktif
+-- - FIX: Tidak pakai PlatformStand (biar animasi tetap jalan)
+-- - Debug Log tetap hanya mencatat ERROR/BUG
 
 repeat task.wait() until game:IsLoaded()
 
@@ -128,6 +122,7 @@ if getgenv()._XKID_LOADED then
     pcall(function() RunService:UnbindFromRenderStep("XKIDSelfSpec") end)
     pcall(function() RunService:UnbindFromRenderStep("XKIDShiftLock") end)
     pcall(function() RunService:UnbindFromRenderStep("XKIDAutoWalk") end)
+    pcall(function() RunService:UnbindFromRenderStep("XKIDFreecamLock") end)
 end
 
 getgenv()._XKID_LOADED = true
@@ -136,14 +131,18 @@ getgenv()._XKID_CONNS = {}
 
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
--- ================================ DEBUG LOG SYSTEM ================================
+-- ================================ DEBUG LOG SYSTEM (ERROR ONLY) ================================
 local DebugLog = {}
-local function addLog(msg, lt) lt = lt or "INFO"; local e = string.format("[%s] [%s] %s", os.date("%H:%M:%S"), lt, msg); table.insert(DebugLog, e); if #DebugLog > 100 then table.remove(DebugLog, 1) end end
+local function addLog(msg, level)
+    if level ~= "ERROR" and level ~= "BUG" then return end
+    local e = string.format("[%s] [%s] %s", os.date("%H:%M:%S"), level, msg)
+    table.insert(DebugLog, e)
+    if #DebugLog > 100 then table.remove(DebugLog, 1) end
+end
+
 local function notify(title, content, duration, icon)
     pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) end)
-    addLog(content, "INFO")
 end
-addLog("Script starting...", "INFO")
 
 -- ================================ STATE ================================
 local State = {
@@ -257,14 +256,12 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectga
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
 TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
 
--- ================================ ANTI AFK (STEALTH) - FIX #5 ================================
+-- ================================ ANTI AFK (STEALTH) ================================
 local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
 local AFKSystem = { active = false, thread = nil, lastActive = 0 }
 
 local function sendStealthAntiAFK()
-    -- FIX #5: Jangan gerakin kamera kalau freecam aktif
     if FC and FC.active then return end
-    
     if VirtualUser and VirtualUser.ClickButton2 then pcall(function() local vp = Camera.ViewportSize; VirtualUser:ClickButton2(Vector2.new(vp.X - 5, vp.Y - 5)) end); return end
     if VIM and VIM.SendMouseButtonEvent then pcall(function() local vp = Camera.ViewportSize; VIM:SendMouseButtonEvent(vp.X - 5, vp.Y - 5, 0, true, game, 0); task.wait(0.05); VIM:SendMouseButtonEvent(vp.X - 5, vp.Y - 5, 0, false, game, 0) end); return end
     pcall(function() local remotes = ReplicatedStorage:FindFirstChild("Remotes"); if remotes then local sr = remotes:FindFirstChild("Ping") or remotes:FindFirstChild("Heartbeat"); if sr and sr.FireServer then sr:FireServer(); return end end end)
@@ -490,12 +487,19 @@ local function toggleFly(v)
     end)
 end
 
--- ================================ FREECAM ENGINE (FIXED V3.6) ================================
-local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, origFov = 70, savedWalkSpeed = 16, savedJumpPower = 50, wasAnchored = false }
+-- ================================ FREECAM ENGINE (V3.8 - LOCK POSITION + EMOTE READY) ================================
+local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, origFov = 70, savedWalkSpeed = 16, savedJumpPower = 50 }
 local I_CamVel, I_YawVel, I_PitchVel, I_RollVel, heightVelocity = Vector3.zero, 0, 0, 0, 0
 local fcMoveTouch, fcMoveSt, fcJoy, fcRotTouch, fcRotLast, fcKeysHeld, fcConns = nil, nil, Vector2.zero, nil, nil, {}, {}
 local FC_UI_Btns = { up = false, down = false, rollLeft = false, rollRight = false, zoomIn = false, zoomOut = false }
 local FC_UI_Hidden = false; local fcButtons = {}
+
+-- Lock position variables
+local freecamLockBP = nil
+local freecamLockBG = nil
+local lockedPos = nil
+local lockedCF = nil
+local lockRenderStepConnected = false
 
 local FCUI = Instance.new("ScreenGui"); FCUI.Name = "XKID_FreecamUI"; FCUI.ResetOnSpawn = false; FCUI.ZIndexBehavior = Enum.ZIndexBehavior.Global; FCUI.Enabled = false; FCUI.Parent = CoreGui; getgenv()._XKID_FCUI = FCUI
 
@@ -531,51 +535,104 @@ end
 
 local function stopFreecamCapture() for _, c in ipairs(fcConns) do c:Disconnect() end; fcConns = {}; fcKeysHeld = {}; FC._mr = false; UserInputService.MouseBehavior = Enum.MouseBehavior.Default end
 
--- FIX #1: Force character to stay COMPLETELY still
-local function freezeCharacterForFreecam(freeze)
-    local hum = getHum()
+-- V3.8: Lock position WITHOUT breaking emote
+local function lockCharacterPosition(lock)
     local hrp = getRoot()
-    if freeze then
+    local hum = getHum()
+    
+    if lock then
+        if hrp then
+            -- Simpan posisi dan rotasi AWAL
+            lockedPos = hrp.Position
+            lockedCF = hrp.CFrame
+            
+            -- BodyPosition untuk lock posisi (cegah turun/terbang)
+            freecamLockBP = Instance.new("BodyPosition", hrp)
+            freecamLockBP.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            freecamLockBP.P = 50000
+            freecamLockBP.D = 5000
+            freecamLockBP.Position = lockedPos
+            
+            -- BodyGyro untuk lock rotasi (biar tidak muter sendiri)
+            freecamLockBG = Instance.new("BodyGyro", hrp)
+            freecamLockBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            freecamLockBG.P = 50000
+            freecamLockBG.CFrame = lockedCF
+            
+            -- Zero-kan velocity
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end
+        
         if hum then
+            -- SIMPAN setting asli
             FC.savedWalkSpeed = hum.WalkSpeed
             FC.savedJumpPower = hum.JumpPower
+            
+            -- JANGAN set PlatformStand = true (biar emote jalan)
+            -- JANGAN set AutoRotate = false
+            -- Cuma kecilkan walk speed (tapi posisi tetap lock karena BodyPosition)
             hum.WalkSpeed = 0
             hum.JumpPower = 0
-            hum.AutoRotate = false
-            hum.PlatformStand = true
-            -- Disable physics states
-            pcall(function()
-                hum:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
-                hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            -- Biarkan AutoRotate tetap true agar emote bisa rotate
+        end
+        
+        -- Render step untuk menjaga posisi tetap
+        if not lockRenderStepConnected then
+            RunService:BindToRenderStep("XKIDFreecamLock", Enum.RenderPriority.Last.Value, function()
+                if not FC.active then return end
+                local currentHrp = getRoot()
+                if currentHrp and lockedPos then
+                    -- Refresh posisi BodyPosition
+                    if freecamLockBP then
+                        freecamLockBP.Position = lockedPos
+                    end
+                    if freecamLockBG and lockedCF then
+                        freecamLockBG.CFrame = lockedCF
+                    end
+                    -- Zero-kan velocity setiap frame (cegah drift)
+                    currentHrp.AssemblyLinearVelocity = Vector3.zero
+                    currentHrp.AssemblyAngularVelocity = Vector3.zero
+                    -- Cek posisi Y, kalau meleset sedikit, koreksi
+                    local currentPos = currentHrp.Position
+                    if math.abs(currentPos.Y - lockedPos.Y) > 0.05 then
+                        currentHrp.CFrame = CFrame.new(lockedPos.X, lockedPos.Y, lockedPos.Z) * CFrame.Angles(0, currentHrp.Orientation.Y, 0)
+                    end
+                end
             end)
-        end
-        if hrp and not hrp.Anchored then
-            hrp.Anchored = true
-            FC.wasAnchored = true
-        end
-        if hrp then
-            hrp.AssemblyLinearVelocity = Vector3.zero
-            hrp.AssemblyAngularVelocity = Vector3.zero
+            lockRenderStepConnected = true
         end
     else
-        if hum then
-            hum.WalkSpeed = FC.savedWalkSpeed
-            hum.JumpPower = FC.savedJumpPower
-            hum.AutoRotate = true
-            hum.PlatformStand = false
-            pcall(function()
-                hum:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
-                hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
-            end)
+        -- UNLOCK: hapus semua
+        if freecamLockBP then
+            freecamLockBP:Destroy()
+            freecamLockBP = nil
         end
-        if FC.wasAnchored and hrp then
-            hrp.Anchored = false
-            FC.wasAnchored = false
+        if freecamLockBG then
+            freecamLockBG:Destroy()
+            freecamLockBG = nil
         end
-        if hrp then
-            hrp.AssemblyLinearVelocity = Vector3.zero
-            hrp.AssemblyAngularVelocity = Vector3.zero
+        if lockRenderStepConnected then
+            RunService:UnbindFromRenderStep("XKIDFreecamLock")
+            lockRenderStepConnected = false
         end
+        
+        local currentHrp = getRoot()
+        local currentHum = getHum()
+        
+        if currentHum then
+            currentHum.WalkSpeed = FC.savedWalkSpeed
+            currentHum.JumpPower = FC.savedJumpPower
+            -- AutoRotate sudah true dari awal
+        end
+        
+        if currentHrp then
+            currentHrp.AssemblyLinearVelocity = Vector3.zero
+            currentHrp.AssemblyAngularVelocity = Vector3.zero
+        end
+        
+        lockedPos = nil
+        lockedCF = nil
     end
 end
 
@@ -583,87 +640,57 @@ local function startFreecamLoop()
     RunService:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt) 
         if not FC.active then return end
         
-        -- FORCE freeze setiap frame
-        local hum = getHum()
-        local hrp = getRoot()
-        if hum then
-            hum.WalkSpeed = 0
-            hum.JumpPower = 0
-            hum.AutoRotate = false
-            hum.PlatformStand = true
+        Camera.CameraType = Enum.CameraType.Scriptable
+        local safeDt = math.clamp(dt, 0.001, 0.05)
+        I_YawVel = I_YawVel * math.max(0, 1 - safeDt * 14)
+        I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14)
+        FC.yawDeg = FC.yawDeg + I_YawVel * safeDt
+        FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80)
+        local rollTarget = 0
+        if FC_UI_Btns.rollLeft then rollTarget = -100 elseif FC_UI_Btns.rollRight then rollTarget = 100 end
+        I_RollVel = I_RollVel + (rollTarget - I_RollVel) * math.clamp(safeDt * 5, 0, 1)
+        FC.rollDeg = math.clamp(FC.rollDeg + I_RollVel * safeDt, -100, 100)
+        local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0)
+        local joyX, joyY = fcJoy.X, fcJoy.Y
+        if not onMobile then
+            if fcKeysHeld[Enum.KeyCode.W] then joyY = joyY - 1 end
+            if fcKeysHeld[Enum.KeyCode.S] then joyY = joyY + 1 end
+            if fcKeysHeld[Enum.KeyCode.D] then joyX = joyX + 1 end
+            if fcKeysHeld[Enum.KeyCode.A] then joyX = joyX - 1 end
         end
-        if hrp then
-            if not hrp.Anchored then
-                hrp.Anchored = true
-                FC.wasAnchored = true
-            end
-            hrp.AssemblyLinearVelocity = Vector3.zero
-            hrp.AssemblyAngularVelocity = Vector3.zero
+        local rawMove = Vector2.new(joyX, joyY)
+        if rawMove.Magnitude > 1 then rawMove = rawMove.Unit end
+        I_CamVel = I_CamVel:Lerp((camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X) * (FC.speed * 60), math.clamp(safeDt * 3.5, 0, 1))
+        local heightTarget = 0
+        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then heightTarget = FC.speed * 60 end
+        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end
+        if heightTarget == 0 then
+            heightVelocity = heightVelocity * math.max(0, 1 - safeDt * 10)
+        else
+            heightVelocity = heightVelocity + (heightTarget - heightVelocity) * math.clamp(safeDt * 3, 0, 1)
         end
-        
-        Camera.CameraType = Enum.CameraType.Scriptable; 
-        local safeDt = math.clamp(dt, 0.001, 0.05); 
-        I_YawVel = I_YawVel * math.max(0, 1 - safeDt * 14); 
-        I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14); 
-        FC.yawDeg = FC.yawDeg + I_YawVel * safeDt; 
-        FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80); 
-        local rollTarget = 0; 
-        if FC_UI_Btns.rollLeft then rollTarget = -100 elseif FC_UI_Btns.rollRight then rollTarget = 100 end; 
-        I_RollVel = I_RollVel + (rollTarget - I_RollVel) * math.clamp(safeDt * 5, 0, 1); 
-        FC.rollDeg = math.clamp(FC.rollDeg + I_RollVel * safeDt, -100, 100); 
-        local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0); 
-        local joyX, joyY = fcJoy.X, fcJoy.Y; 
-        if not onMobile then 
-            if fcKeysHeld[Enum.KeyCode.W] then joyY = joyY - 1 end; 
-            if fcKeysHeld[Enum.KeyCode.S] then joyY = joyY + 1 end; 
-            if fcKeysHeld[Enum.KeyCode.D] then joyX = joyX + 1 end; 
-            if fcKeysHeld[Enum.KeyCode.A] then joyX = joyX - 1 end 
-        end; 
-        local rawMove = Vector2.new(joyX, joyY); 
-        if rawMove.Magnitude > 1 then rawMove = rawMove.Unit end; 
-        I_CamVel = I_CamVel:Lerp((camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X) * (FC.speed * 60), math.clamp(safeDt * 3.5, 0, 1)); 
-        local heightTarget = 0; 
-        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then heightTarget = FC.speed * 60 end; 
-        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end; 
-        if heightTarget == 0 then 
-            heightVelocity = heightVelocity * math.max(0, 1 - safeDt * 10) 
-        else 
-            heightVelocity = heightVelocity + (heightTarget - heightVelocity) * math.clamp(safeDt * 3, 0, 1) 
-        end; 
-        if FC_UI_Btns.zoomIn then Camera.FieldOfView = math.clamp(Camera.FieldOfView - 1.2, 10, 120) end; 
-        if FC_UI_Btns.zoomOut then Camera.FieldOfView = math.clamp(Camera.FieldOfView + 1.2, 10, 120) end; 
-        FC.pos = FC.pos + (I_CamVel + Vector3.new(0, heightVelocity, 0)) * safeDt; 
+        if FC_UI_Btns.zoomIn then Camera.FieldOfView = math.clamp(Camera.FieldOfView - 1.2, 10, 120) end
+        if FC_UI_Btns.zoomOut then Camera.FieldOfView = math.clamp(Camera.FieldOfView + 1.2, 10, 120) end
+        FC.pos = FC.pos + (I_CamVel + Vector3.new(0, heightVelocity, 0)) * safeDt
         Camera.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0) * CFrame.Angles(0, 0, math.rad(FC.rollDeg))
     end)
 end
 
-local function stopFreecamLoop() 
-    RunService:UnbindFromRenderStep("XKIDFreecam") 
+local function stopFreecamLoop()
+    RunService:UnbindFromRenderStep("XKIDFreecam")
 end
 
 local function fullCleanupFreecam()
-    stopFreecamLoop(); 
-    stopFreecamCapture(); 
-    local hum = getHum(); 
+    stopFreecamLoop()
+    stopFreecamCapture()
+    lockCharacterPosition(false)
+    local hum = getHum()
     local hrp = getRoot()
-    if hum then 
+    if hum then
         hum.WalkSpeed = FC.savedWalkSpeed
         hum.UseJumpPower = true
         hum.JumpPower = FC.savedJumpPower
         hum.AutoRotate = true
-        hum.PlatformStand = false
-        pcall(function()
-            hum:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
-            hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
-        end)
-    end
-    if FC.wasAnchored and hrp then 
-        hrp.Anchored = false
-        FC.wasAnchored = false
-    end
-    if hrp then
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
     end
     Camera.CameraType = Enum.CameraType.Custom
     Camera.FieldOfView = FC.origFov
@@ -674,20 +701,19 @@ local function fullCleanupFreecam()
     for _, b in ipairs(fcButtons) do b.Visible = true end
 end
 
--- FIX #2 & #4: toggle freecam dengan matikan self-spec dan sembunyikan UI
 local function toggleFreecam(v)
     if v then
-        -- Matikan SEMUA fitur yang bisa menggerakkan karakter atau bentrok kamera
+        -- Matikan semua fitur yang bisa konflik
         if State.Fly.active then toggleFly(false) end
         if State.Security.shiftLock then toggleShiftLock(false) end
         if State.Move.autoWalk then stopAutoWalk() end
         if State.SelfSpec.active then toggleSelfSpec(false) end
-        if State.Spec.active then 
+        if State.Spec.active then
             State.Spec.active = false
             stopSpecLoop()
             stopSpecCapture()
         end
-        if Teleport.clickConn then 
+        if Teleport.clickConn then
             Teleport.clickConn:Disconnect()
             Teleport.clickConn = nil
         end
@@ -705,7 +731,8 @@ local function toggleFreecam(v)
         heightVelocity = 0
         fcJoy = Vector2.zero
         
-        freezeCharacterForFreecam(true)
+        -- Lock karakter di posisi saat ini
+        lockCharacterPosition(true)
         
         FC.origFov = Camera.FieldOfView
         startFreecamCapture()
@@ -715,12 +742,11 @@ local function toggleFreecam(v)
         eyeBtn.Text = "👁"
         for _, b in ipairs(fcButtons) do b.Visible = true end
         
-        -- FIX #4: Kalau cinematic hide UI aktif, sembunyikan juga freecam UI
         if State.Cinema.hideUI then
             FCUI.Enabled = false
         end
         
-        notify("Freecam", "ON (Karakter DIAM)", 2, "video")
+        notify("Freecam", "ON (Karakter LOCK, Bisa Emote)", 2, "video")
     else
         FC.active = false
         fullCleanupFreecam()
@@ -728,7 +754,7 @@ local function toggleFreecam(v)
     end
 end
 
--- ================================ SELF-SPECTATE (NO FIRST PERSON, NO TOP DOWN) ================================
+-- ================================ SELF-SPECTATE ================================
 local SS = State.SelfSpec
 local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
 
@@ -742,32 +768,32 @@ end
 local function stopSSGesture() for _, c in ipairs(ssConns) do c:Disconnect() end; ssConns = {}; ssTM = nil; ssPinch = {}; ssPinchD = nil; ssPan = Vector2.zero end
 
 local function startSelfSpecLoop()
-    RunService:UnbindFromRenderStep("XKIDSelfSpec"); RunService:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function() if not SS.active then return end; pcall(function() local targetChar = LP.Character; local targetHrp = getCharRoot(targetChar); if not targetHrp then return end; Camera.CameraType = Enum.CameraType.Scriptable; local pan, sens = ssPan, onMobile and 0.2 or 0.3; ssPan = Vector2.zero; 
-        if #ssPinch == 0 and pan.Magnitude < 0.01 then 
-            local dt = 0.016; 
-            if SS.mode == "Slow Orbit" then 
-                SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed 
-            elseif SS.mode == "Vertical Swing" then 
-                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.5) * 40; 
-                SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed 
-            elseif SS.mode == "Figure 8" then 
-                SS.orbitYaw = math.sin(tick() * SS.speed * 0.8) * 80; 
-                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.2) * 35 
-            elseif SS.mode == "Cinematic Drift" then 
-                SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed; 
-                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.7) * 15 
-            elseif SS.mode == "Orbit Steady" then 
-                SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed;
+    RunService:UnbindFromRenderStep("XKIDSelfSpec"); RunService:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function() if not SS.active then return end; pcall(function() local targetChar = LP.Character; local targetHrp = getCharRoot(targetChar); if not targetHrp then return end; Camera.CameraType = Enum.CameraType.Scriptable; local pan, sens = ssPan, onMobile and 0.2 or 0.3; ssPan = Vector2.zero
+        if #ssPinch == 0 and pan.Magnitude < 0.01 then
+            local dt = 0.016
+            if SS.mode == "Slow Orbit" then
+                SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
+            elseif SS.mode == "Vertical Swing" then
+                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.5) * 40
+                SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed
+            elseif SS.mode == "Figure 8" then
+                SS.orbitYaw = math.sin(tick() * SS.speed * 0.8) * 80
+                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.2) * 35
+            elseif SS.mode == "Cinematic Drift" then
+                SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed
+                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.7) * 15
+            elseif SS.mode == "Orbit Steady" then
+                SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
                 SS.orbitPitch = 20
-            elseif SS.mode == "Tilt Drift" then 
-                SS.orbitYaw = SS.orbitYaw + dt * 30 * SS.speed;
-                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.5) * 10;
+            elseif SS.mode == "Tilt Drift" then
+                SS.orbitYaw = SS.orbitYaw + dt * 30 * SS.speed
+                SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.5) * 10
                 SS.roll = math.sin(tick() * SS.speed * 0.8) * 5
-            end 
-        end; 
-        SS.orbitYaw = SS.orbitYaw + pan.X * sens; 
-        SS.orbitPitch = math.clamp(SS.orbitPitch + pan.Y * sens, -75, 75); 
-        local h = SS.height or 3;
+            end
+        end
+        SS.orbitYaw = SS.orbitYaw + pan.X * sens
+        SS.orbitPitch = math.clamp(SS.orbitPitch + pan.Y * sens, -75, 75)
+        local h = SS.height or 3
         local camCF = CFrame.new((CFrame.new(targetHrp.Position + Vector3.new(0, h, 0)) * CFrame.Angles(0, math.rad(-SS.orbitYaw), 0) * CFrame.Angles(math.rad(-SS.orbitPitch), 0, 0) * CFrame.new(0, 0, SS.radius)).Position, targetHrp.Position + Vector3.new(0, h, 0))
         if SS.mode == "Tilt Drift" then
             camCF = camCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0))
@@ -779,10 +805,10 @@ end
 local function stopSelfSpecLoop() RunService:UnbindFromRenderStep("XKIDSelfSpec"); Camera.CameraType = Enum.CameraType.Custom; Camera.FieldOfView = SS.origFov; SS.active = false; SS.orbitYaw = 0; SS.orbitPitch = 20; SS.radius = 8; SS.height = 3; ssPan = Vector2.zero end
 
 local function toggleSelfSpec(v)
-    if v then 
+    if v then
         if FC.active then toggleFreecam(false) end
         if State.Fly.active then toggleFly(false) end
-        if State.Spec.active then 
+        if State.Spec.active then
             State.Spec.active = false
             stopSpecLoop()
             stopSpecCapture()
@@ -797,7 +823,7 @@ local function toggleSelfSpec(v)
         startSSGesture()
         startSelfSpecLoop()
         notify("Self-Spectate", "ON — " .. (SS.mode or "Manual"), 2, "camera")
-    else 
+    else
         SS.active = false
         stopSSGesture()
         stopSelfSpecLoop()
@@ -805,7 +831,7 @@ local function toggleSelfSpec(v)
     end
 end
 
--- ================================ SPECTATE (NO FIRST PERSON) ================================
+-- ================================ SPECTATE ================================
 local specTM, specPinch, specPinchD, specPan, specConns = nil, {}, nil, Vector2.zero, {}
 
 local function startSpecCapture()
@@ -817,22 +843,20 @@ end
 local function stopSpecCapture() for _, c in ipairs(specConns) do c:Disconnect() end; specConns = {}; specTM = nil; specPinch = {}; specPinchD = nil; specPan = Vector2.zero end
 
 local function startSpecLoop()
-    RunService:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value + 1, function() if not State.Spec.active then return end; pcall(function() local targetChar, targetHrp; if State.Spec.isSelf then targetChar = LP.Character; targetHrp = getCharRoot(targetChar) else if not State.Spec.target or not State.Spec.target.Character then State.Spec.active = false; stopSpecLoop(); stopSpecCapture(); Camera.CameraType = Enum.CameraType.Custom; Camera.FieldOfView = State.Spec.origFov; return end; targetChar = State.Spec.target.Character; targetHrp = targetChar:FindFirstChild("HumanoidRootPart") end; if not targetHrp then if not State.Spec.isSelf then State.Spec.active = false; stopSpecLoop(); stopSpecCapture(); Camera.CameraType = Enum.CameraType.Custom; Camera.FieldOfView = State.Spec.origFov end; return end; Camera.CameraType = Enum.CameraType.Scriptable; local pan, sens = specPan, 0.3; specPan = Vector2.zero; 
-        State.Spec.orbitYaw = State.Spec.orbitYaw + pan.X * sens; 
-        State.Spec.orbitPitch = math.clamp(State.Spec.orbitPitch + pan.Y * sens, -75, 75); 
+    RunService:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value + 1, function() if not State.Spec.active then return end; pcall(function() local targetChar, targetHrp; if State.Spec.isSelf then targetChar = LP.Character; targetHrp = getCharRoot(targetChar) else if not State.Spec.target or not State.Spec.target.Character then State.Spec.active = false; stopSpecLoop(); stopSpecCapture(); Camera.CameraType = Enum.CameraType.Custom; Camera.FieldOfView = State.Spec.origFov; return end; targetChar = State.Spec.target.Character; targetHrp = targetChar:FindFirstChild("HumanoidRootPart") end; if not targetHrp then if not State.Spec.isSelf then State.Spec.active = false; stopSpecLoop(); stopSpecCapture(); Camera.CameraType = Enum.CameraType.Custom; Camera.FieldOfView = State.Spec.origFov end; return end; Camera.CameraType = Enum.CameraType.Scriptable; local pan, sens = specPan, 0.3; specPan = Vector2.zero
+        State.Spec.orbitYaw = State.Spec.orbitYaw + pan.X * sens
+        State.Spec.orbitPitch = math.clamp(State.Spec.orbitPitch + pan.Y * sens, -75, 75)
         Camera.CFrame = CFrame.new((CFrame.new(targetHrp.Position) * CFrame.Angles(0, math.rad(-State.Spec.orbitYaw), 0) * CFrame.Angles(math.rad(-State.Spec.orbitPitch), 0, 0) * CFrame.new(0, 0, State.Spec.dist)).Position, targetHrp.Position + Vector3.new(0, 1, 0))
     end) end)
 end
 
 local function stopSpecLoop() RunService:UnbindFromRenderStep("XKIDSpec") end
 
--- ================================ AUTO LIKE (FIX #6) ================================
+-- ================================ AUTO LIKE ================================
 local function getLikeRemotes() local remotes = ReplicatedStorage:FindFirstChild("Remotes"); if not remotes then return nil, nil end; return remotes:FindFirstChild("GetLikeDataRemote"), remotes:FindFirstChild("LikePlayerEvent") end
 
 local function likeRandomPlayer()
-    -- FIX #6: Cek karakter masih hidup
     if not LP.Character or not getRoot() then return false, "No character" end
-    
     local _, likePlayer = getLikeRemotes(); if not likePlayer then return false, "Remote not found" end
     local myRoot = getRoot(); local targets = {}; for _, p in pairs(Players:GetPlayers()) do if p ~= LP then if State.AutoLike.radius > 0 and myRoot then local theirRoot = p.Character and p.Character:FindFirstChild("HumanoidRootPart"); if theirRoot then local dist = (theirRoot.Position - myRoot.Position).Magnitude; if dist <= State.AutoLike.radius then table.insert(targets, p) end end else table.insert(targets, p) end end end
     if #targets == 0 then return false, "No players in range" end
@@ -842,15 +866,15 @@ local function likeRandomPlayer()
     return false, "Failed"
 end
 
-local function startAutoLike() if State.AutoLike.active then return end; State.AutoLike.active = true; State.AutoLike.thread = task.spawn(function() while State.AutoLike.active and getgenv()._XKID_RUNNING do 
-    local ok, result = likeRandomPlayer(); 
+local function startAutoLike() if State.AutoLike.active then return end; State.AutoLike.active = true; State.AutoLike.thread = task.spawn(function() while State.AutoLike.active and getgenv()._XKID_RUNNING do
+    local ok, result = likeRandomPlayer()
     if ok then notify("Auto Like", result .. " | Total: " .. State.AutoLike.count, 1.5, "heart") end
-    local cd = math.random(State.AutoLike.minCD * 10, State.AutoLike.maxCD * 10) / 10; 
-    task.wait(cd) 
+    local cd = math.random(State.AutoLike.minCD * 10, State.AutoLike.maxCD * 10) / 10
+    task.wait(cd)
 end; State.AutoLike.thread = nil end); notify("Auto Like", "ON", 2, "heart") end
 local function stopAutoLike() State.AutoLike.active = false; if State.AutoLike.thread then task.cancel(State.AutoLike.thread); State.AutoLike.thread = nil end; notify("Auto Like", "OFF", 1.5, "heart") end
 
--- ================================ HARD FLING (FIX #7) ================================
+-- ================================ HARD FLING ================================
 local hardFlingConn, hardFlingRampConn, hardFlingBAV = nil, nil, nil
 
 local function stopHardFlingInternal()
@@ -919,7 +943,6 @@ local function stopHardFling()
     notify("Hard Fling", "OFF", 1.5, "zap")
 end
 
--- FIX #7: Matikan Hard Fling otomatis saat respawn
 TrackC(LP.CharacterAdded:Connect(function()
     if State.HardFling.active then
         stopHardFlingInternal()
@@ -963,7 +986,7 @@ end
 
 -- ================================ MAIN WINDOW UI ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.6", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.8", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -979,7 +1002,7 @@ Window:EditOpenButton({
 })
 
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255, 215, 0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.6", Color = Color3.fromRGB(255, 215, 0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.8", Color = Color3.fromRGB(255, 215, 0), Icon = "tag" })
 
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
@@ -1046,7 +1069,7 @@ for i = 1, 3 do local idx = i; local hc = secCache:HStack({ Columns = 2 })
     hc:Button({ Title = "📍 Load " .. idx, Callback = function() if not SavedLocs[idx] then notify("Slot " .. idx, "Empty", 1.5, "save"); return end; local r = getRoot(); if not r then return end; r.CFrame = SavedLocs[idx]; notify("Slot " .. idx, "Loaded", 1.5, "map-pin") end })
 end
 
--- ================================ TAB: SPECTATOR (NO FIRST PERSON) ================================
+-- ================================ TAB: SPECTATOR ================================
 local TabSpec = Window:Tab({ Title = "Spectator", Icon = "cctv" })
 local secZoom = TabSpec:Section({ Title = "Zoom Override", Icon = "zoom-in", Box = true })
 secZoom:Toggle({ Title = "Max Zoom Out", Default = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Zoom", v and "Max" or "Default", 1.5, "zoom-in") end })
@@ -1057,7 +1080,7 @@ secSP:Button({ Title = "Refresh Target List", Callback = function() notify("Spec
 secSP:Toggle({ Title = "Enable Spectate", Default = false, Callback = function(v) if SS.active then toggleSelfSpec(false) end; State.Spec.active = v; if v then if not State.Spec.target or not State.Spec.target.Character then if State.Spec.isSelf and LP.Character then else State.Spec.active = false; notify("Error", "No target", 2, "circle-alert"); return end end; State.Spec.origFov = Camera.FieldOfView; startSpecCapture(); startSpecLoop(); notify("Spectator", "ON", 2, "eye") else stopSpecLoop(); stopSpecCapture(); Camera.CameraType = Enum.CameraType.Custom; Camera.FieldOfView = State.Spec.origFov; notify("Spectator", "OFF", 1.5, "eye") end end })
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) State.Spec.dist = v end })
 
--- ================================ TAB: CINEMATIC (NO FIRST PERSON, NO TOP DOWN) ================================
+-- ================================ TAB: CINEMATIC ================================
 local TabCine = Window:Tab({ Title = "Cinematic", Icon = "aperture" })
 local secSelfSpec = TabCine:Section({ Title = "🎥 Self-Spectate", Icon = "camera", Box = true })
 secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "1-finger orbit | 2-finger zoom | Mouse right-drag", Default = false, Callback = toggleSelfSpec })
@@ -1067,14 +1090,13 @@ secSelfSpec:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20
 secSelfSpec:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, Default = 1 }, Callback = function(v) SS.speed = v end })
 
 local secFC = TabCine:Section({ Title = "Drone Engine", Icon = "video", Box = true })
-secFC:Toggle({ Title = "Enable Freecam", Desc = "Karakter DIAM total saat aktif", Default = false, Callback = toggleFreecam })
+secFC:Toggle({ Title = "Enable Freecam", Desc = "Karakter LOCK posisi + Bisa Emote/Dance", Default = false, Callback = toggleFreecam })
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 
--- FIX #4: Hide UI cinematic sekarang sembunyikan juga freecam UI
 local cinematicHideActive = false
 secFC:Toggle({ Title = "Hide All UI (Cinematic)", Default = false, Callback = function(v) if getgenv()._XKID_UI_LOADING then return end; cinematicHideActive = v
-    if v then 
+    if v then
         State.Cinema.hideUI = true
         State.Cinema.cachedGuis = {}
         for _, gui in pairs(LP.PlayerGui:GetChildren()) do
@@ -1084,16 +1106,14 @@ secFC:Toggle({ Title = "Hide All UI (Cinematic)", Default = false, Callback = fu
             end
         end
         pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
-        -- Sembunyikan freecam UI juga
         if FCUI then FCUI.Enabled = false end
-    else 
+    else
         State.Cinema.hideUI = false
         for _, gui in pairs(State.Cinema.cachedGuis) do
             if gui and gui.Parent then gui.Enabled = true end
         end
         State.Cinema.cachedGuis = {}
         pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
-        -- Tampilkan kembali freecam UI jika freecam aktif
         if FC.active and FCUI then FCUI.Enabled = true end
     end
     notify("Cinematic", v and "UI Hidden" or "UI Shown", 1.5, "film") end })
@@ -1155,7 +1175,6 @@ local gfxMap = { [1] = "Level01", [2] = "Level02", [3] = "Level03", [4] = "Level
 secPerf:Slider({ Title = "Quality Level", Step = 1, Value = { Min = 1, Max = 10, Default = 2 }, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end; notify("Graphics", gfxMap[v], 1.5, "gauge") end })
 secPerf:Dropdown({ Title = "FPS Cap", Values = { "30", "60", "120", "144", "240", "Unlimited" }, Default = "120", Callback = function(v) if v == "Unlimited" then setOptimalFPS(9999); State.FPS.cap = 9999 else setOptimalFPS(tonumber(v)); State.FPS.cap = tonumber(v) end; notify("Graphics", v .. " FPS", 1.5, "gauge") end })
 
--- FIX #8: FPS Boost restore material lebih aman
 local advCache = { level = nil, shadows = true, brightness = 5, clockTime = 14, fogEnd = 100000, mats = {}, texs = {} }
 secPerf:Toggle({ Title = "FPS Boost", Default = false, Callback = function(v) State.Security.antiLag = v; if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end); advCache.shadows = Lighting.GlobalShadows; advCache.brightness = Lighting.Brightness; advCache.clockTime = Lighting.ClockTime; advCache.fogEnd = Lighting.FogEnd; pcall(function() settings().Rendering.QualityLevel = 1 end); Lighting.GlobalShadows = false; Lighting.Brightness = 1; Lighting.FogEnd = 100000; for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material; obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled; obj.Enabled = false end end; notify("Performance", "FPS Boost ON", 2, "zap") else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end); Lighting.GlobalShadows = advCache.shadows; Lighting.Brightness = advCache.brightness; Lighting.ClockTime = advCache.clockTime; Lighting.FogEnd = advCache.fogEnd; for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then pcall(function() obj.Material = mat end) end end; for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then pcall(function() obj.Enabled = enb end) end end; advCache.mats = {}; advCache.texs = {}; notify("Performance", "Graphics restored", 2, "zap") end end })
 
@@ -1168,27 +1187,27 @@ local TabSet = Window:Tab({ Title = "Settings", Icon = "panels-top-left" })
 local secTheme = TabSet:Section({ Title = "🎨 Theme", Icon = "palette", Box = true })
 secTheme:Dropdown({ Title = "UI Theme", Values = { "Dark", "Light", "Rose", "Sky", "Emerald", "Violet", "Red", "Amber", "Indigo", "Midnight", "Crimson" }, Default = "Crimson", Callback = function(v) WindUI:SetTheme(v) end })
 
-local secDebug = TabSet:Section({ Title = "🐛 Debug Log", Icon = "bug", Box = true })
-local debugPara = secDebug:Paragraph({ Title = "Log", Desc = "No entries yet..." })
+local secDebug = TabSet:Section({ Title = "🐛 Debug Log (Error Only)", Icon = "bug", Box = true })
+local debugPara = secDebug:Paragraph({ Title = "Log", Desc = "No errors yet..." })
 secDebug:Button({ Title = "📋 Copy Log", Callback = function() local t = table.concat(DebugLog, "\n"); pcall(function() setclipboard(t) end); notify("Debug", "Log copied to clipboard", 2, "copy") end })
-secDebug:Button({ Title = "🗑 Clear Log", Callback = function() DebugLog = {}; pcall(function() debugPara:SetDesc("No entries yet...") end); notify("Debug", "Log cleared", 1.5, "trash-2") end })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); if debugPara then pcall(function() local t = table.concat(DebugLog, "\n"); if #t == 0 then t = "No entries yet..." elseif #t > 2000 then t = t:sub(-2000) end; debugPara:SetDesc(t) end) end end end)
+secDebug:Button({ Title = "🗑 Clear Log", Callback = function() DebugLog = {}; pcall(function() debugPara:SetDesc("No errors yet...") end); notify("Debug", "Log cleared", 1.5, "trash-2") end })
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); if debugPara then pcall(function() local t = table.concat(DebugLog, "\n"); if #t == 0 then t = "No errors yet..." elseif #t > 2000 then t = t:sub(-2000) end; debugPara:SetDesc(t) end) end end end)
 
 local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box = true })
 local cfgName = "XKID_Config_V3"; local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config_V3", Callback = function(v) cfgName = v end })
 
 local function saveConfig()
-    if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime } }; writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)); notify("Config", "Saved: " .. cfgName, 2, "save"); addLog("Config saved: " .. cfgName, "INFO") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert"); addLog("Config save failed: no writefile", "ERROR") end
+    if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime } }; writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)); notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end
 end
 
 local function loadConfig(selected)
-    if selected == "No config" then return end; pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if d then if d.Move then State.Move.ws = d.Move.ws or 16; State.Move.jp = d.Move.jp or 50; State.Move.flyS = d.Move.flyS or 60; State.Move.autoWalkSpeed = d.Move.autoWalkSpeed or 16; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300; State.ESP.highlightMode = d.ESP.highlightMode or false end; if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end; if d.AutoLike then State.AutoLike.radius = d.AutoLike.radius or 100; State.AutoLike.minCD = d.AutoLike.minCD or 2; State.AutoLike.maxCD = d.AutoLike.maxCD or 6 end; if d.HardFling then State.HardFling.power = d.HardFling.power or 5000; State.HardFling.mode = d.HardFling.mode or "Spin" end; if d.SelfSpec then SS.mode = d.SelfSpec.mode or "Manual"; SS.radius = d.SelfSpec.radius or 8; SS.height = d.SelfSpec.height or 3; SS.speed = d.SelfSpec.speed or 1 end; if d.CustomFilter then for k, v in pairs(d.CustomFilter) do State.CustomFilter[k] = v end; applyCustomFilter() end; notify("Config", "Loaded: " .. selected, 2, "folder-open"); addLog("Config loaded: " .. selected, "INFO") end end end)
+    if selected == "No config" then return end; pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if d then if d.Move then State.Move.ws = d.Move.ws or 16; State.Move.jp = d.Move.jp or 50; State.Move.flyS = d.Move.flyS or 60; State.Move.autoWalkSpeed = d.Move.autoWalkSpeed or 16; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300; State.ESP.highlightMode = d.ESP.highlightMode or false end; if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end; if d.AutoLike then State.AutoLike.radius = d.AutoLike.radius or 100; State.AutoLike.minCD = d.AutoLike.minCD or 2; State.AutoLike.maxCD = d.AutoLike.maxCD or 6 end; if d.HardFling then State.HardFling.power = d.HardFling.power or 5000; State.HardFling.mode = d.HardFling.mode or "Spin" end; if d.SelfSpec then SS.mode = d.SelfSpec.mode or "Manual"; SS.radius = d.SelfSpec.radius or 8; SS.height = d.SelfSpec.height or 3; SS.speed = d.SelfSpec.speed or 1 end; if d.CustomFilter then for k, v in pairs(d.CustomFilter) do State.CustomFilter[k] = v end; applyCustomFilter() end; notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end)
 end
 
 secFile:Button({ Title = "Save Config", Callback = saveConfig })
 local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected; loadConfig(selected) end })
-secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" and executor.has_listfiles then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json"); pcall(function() configDrop:Refresh(getConfigList(), true) end); currentConfig = "No config"; notify("Config", "Deleted", 2, "trash-2"); addLog("Config deleted: " .. currentConfig, "INFO") end end) end end })
+secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" and executor.has_listfiles then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json"); pcall(function() configDrop:Refresh(getConfigList(), true) end); currentConfig = "No config"; notify("Config", "Deleted", 2, "trash-2") end end) end end })
 secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end); notify("Config", "Files refreshed", 1.5, "folder") end })
 
 local secLike = TabSet:Section({ Title = "Auto Like (Smart)", Icon = "heart", Box = true })
@@ -1208,7 +1227,6 @@ setOptimalFPS(120)
 task.spawn(function()
     task.wait(0.5); startAFK(); task.wait(2)
     getgenv()._XKID_UI_LOADING = false
-    notify("System", "XKID_HUB V3.6 AKTIF — All FIXED", 3, "rocket")
+    notify("System", "XKID_HUB V3.8 AKTIF — Lock Position + Emote Ready", 3, "rocket")
     notify("Anti AFK", "AUTO ACTIVATED (Stealth)", 2, "shield-check")
-    addLog("XKID_HUB V3.6 loaded successfully — All bugs fixed", "INFO")
 end)
