@@ -1,9 +1,10 @@
--- @XKID SCRIPT V3.4 (Drone Fix + Debug Log + ESP Fix)
+-- @XKID SCRIPT V3.5 (Drone Engine FIX + Full Stability)
 -- by @WTF.XKID | Roblox Build For Mobile/PC | Tested on Delta X
--- Changelog V3.4:
--- - Fix Drone Engine: hapus repeat loop, karakter diam (AutoRotate false)
--- - Debug Log + Version Tag + ESP Fix + FPS Cap info
--- - Semua fitur V3.3 tetap work
+-- Changelog V3.5:
+-- - FIX: Drone Engine sekarang karakter DIAM total saat freecam aktif
+-- - FIX: Konflik dengan Fly, Shift Lock, Auto Walk saat freecam
+-- - FIX: Reset sempurna setelah freecam dimatikan
+-- - FIX: BodyGyro/BodyVelocity tidak lagi override posisi
 
 repeat task.wait() until game:IsLoaded()
 
@@ -422,14 +423,65 @@ end
 local function stopFlyCapture() for _, c in ipairs(flyConns) do c:Disconnect() end; flyConns = {}; flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero; State.Fly._keys = {} end
 
 local function toggleFly(v)
-    if not v then State.Fly.active = false; stopFlyCapture(); RunService:UnbindFromRenderStep("XKIDFly"); pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end); pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end); State.Fly.bv = nil; State.Fly.bg = nil; flyVel = Vector3.zero; local hum = getHum(); if hum then hum.PlatformStand = false; hum:ChangeState(Enum.HumanoidStateType.GettingUp); hum.WalkSpeed = State.Move.ws; hum.UseJumpPower = true; hum.JumpPower = State.Move.jp; hum.AutoRotate = true end; notify("Fly", "OFF", 1.5, "bird"); return end
-    local hrp, hum = getRoot(), getHum(); if not hrp or not hum then return end; State.Fly.active = true; hum.PlatformStand = true; flyVel = Vector3.zero; hum.AutoRotate = false
-    State.Fly.bv = Instance.new("BodyVelocity", hrp); State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9); State.Fly.bg = Instance.new("BodyGyro", hrp); State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9); State.Fly.bg.P = 50000
-    startFlyCapture(); notify("Fly", "ON", 2, "bird")
-    RunService:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function() if not State.Fly.active then return end; local r = getRoot(); if not r then return end; local camCF = Camera.CFrame; local spd = State.Move.flyS; local move = Vector3.zero; local keys = State.Fly._keys or {}; if onMobile then move = camCF.LookVector * (-flyJoy.Y) + camCF.RightVector * flyJoy.X else if keys[Enum.KeyCode.W] then move = move + camCF.LookVector end; if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end; if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end; if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end; if keys[Enum.KeyCode.E] then move = move + Vector3.new(0, 1, 0) end; if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0, 1, 0) end end; if move.Magnitude > 0 then flyVel = flyVel:Lerp(move.Unit * spd, 0.15) else flyVel = flyVel:Lerp(isOnGround() and Vector3.zero or Vector3.new(0, -0.8, 0), 0.08) end; if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity = flyVel end; if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector) end end)
+    if not v then 
+        State.Fly.active = false; stopFlyCapture(); RunService:UnbindFromRenderStep("XKIDFly"); 
+        pcall(function() if State.Fly.bv then State.Fly.bv:Destroy() end end); 
+        pcall(function() if State.Fly.bg then State.Fly.bg:Destroy() end end); 
+        State.Fly.bv = nil; State.Fly.bg = nil; flyVel = Vector3.zero; 
+        local hum = getHum(); 
+        if hum then 
+            hum.PlatformStand = false; 
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp); 
+            hum.WalkSpeed = State.Move.ws; 
+            hum.UseJumpPower = true; 
+            hum.JumpPower = State.Move.jp; 
+            hum.AutoRotate = true 
+        end; 
+        notify("Fly", "OFF", 1.5, "bird"); 
+        return 
+    end
+    local hrp, hum = getRoot(), getHum(); 
+    if not hrp or not hum then return end; 
+    State.Fly.active = true; 
+    hum.PlatformStand = true; 
+    flyVel = Vector3.zero; 
+    hum.AutoRotate = false
+    State.Fly.bv = Instance.new("BodyVelocity", hrp); 
+    State.Fly.bv.MaxForce = Vector3.new(9e9, 9e9, 9e9); 
+    State.Fly.bg = Instance.new("BodyGyro", hrp); 
+    State.Fly.bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9); 
+    State.Fly.bg.P = 50000
+    startFlyCapture(); 
+    notify("Fly", "ON", 2, "bird")
+    RunService:BindToRenderStep("XKIDFly", Enum.RenderPriority.Camera.Value + 1, function() 
+        if not State.Fly.active then return end; 
+        local r = getRoot(); 
+        if not r then return end; 
+        local camCF = Camera.CFrame; 
+        local spd = State.Move.flyS; 
+        local move = Vector3.zero; 
+        local keys = State.Fly._keys or {}; 
+        if onMobile then 
+            move = camCF.LookVector * (-flyJoy.Y) + camCF.RightVector * flyJoy.X 
+        else 
+            if keys[Enum.KeyCode.W] then move = move + camCF.LookVector end; 
+            if keys[Enum.KeyCode.S] then move = move - camCF.LookVector end; 
+            if keys[Enum.KeyCode.D] then move = move + camCF.RightVector end; 
+            if keys[Enum.KeyCode.A] then move = move - camCF.RightVector end; 
+            if keys[Enum.KeyCode.E] then move = move + Vector3.new(0, 1, 0) end; 
+            if keys[Enum.KeyCode.Q] then move = move - Vector3.new(0, 1, 0) end 
+        end; 
+        if move.Magnitude > 0 then 
+            flyVel = flyVel:Lerp(move.Unit * spd, 0.15) 
+        else 
+            flyVel = flyVel:Lerp(isOnGround() and Vector3.zero or Vector3.new(0, -0.8, 0), 0.08) 
+        end; 
+        if State.Fly.bv and State.Fly.bv.Parent then State.Fly.bv.Velocity = flyVel end; 
+        if State.Fly.bg and State.Fly.bg.Parent then State.Fly.bg.CFrame = CFrame.new(r.Position, r.Position + camCF.LookVector) end 
+    end)
 end
 
--- ================================ FREECAM ENGINE ================================
+-- ================================ FREECAM ENGINE (FIXED) ================================
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, origFov = 70, savedWalkSpeed = 16, savedJumpPower = 50, wasAnchored = false }
 local I_CamVel, I_YawVel, I_PitchVel, I_RollVel, heightVelocity = Vector3.zero, 0, 0, 0, 0
 local fcMoveTouch, fcMoveSt, fcJoy, fcRotTouch, fcRotLast, fcKeysHeld, fcConns = nil, nil, Vector2.zero, nil, nil, {}, {}
@@ -470,19 +522,184 @@ end
 
 local function stopFreecamCapture() for _, c in ipairs(fcConns) do c:Disconnect() end; fcConns = {}; fcKeysHeld = {}; FC._mr = false; UserInputService.MouseBehavior = Enum.MouseBehavior.Default end
 
-local function startFreecamLoop()
-    RunService:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt) if not FC.active then return end; Camera.CameraType = Enum.CameraType.Scriptable; local safeDt = math.clamp(dt, 0.001, 0.05); I_YawVel = I_YawVel * math.max(0, 1 - safeDt * 14); I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14); FC.yawDeg = FC.yawDeg + I_YawVel * safeDt; FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80); local rollTarget = 0; if FC_UI_Btns.rollLeft then rollTarget = -100 elseif FC_UI_Btns.rollRight then rollTarget = 100 end; I_RollVel = I_RollVel + (rollTarget - I_RollVel) * math.clamp(safeDt * 5, 0, 1); FC.rollDeg = math.clamp(FC.rollDeg + I_RollVel * safeDt, -100, 100); local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0); local joyX, joyY = fcJoy.X, fcJoy.Y; if not onMobile then if fcKeysHeld[Enum.KeyCode.W] then joyY = joyY - 1 end; if fcKeysHeld[Enum.KeyCode.S] then joyY = joyY + 1 end; if fcKeysHeld[Enum.KeyCode.D] then joyX = joyX + 1 end; if fcKeysHeld[Enum.KeyCode.A] then joyX = joyX - 1 end end; local rawMove = Vector2.new(joyX, joyY); if rawMove.Magnitude > 1 then rawMove = rawMove.Unit end; I_CamVel = I_CamVel:Lerp((camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X) * (FC.speed * 60), math.clamp(safeDt * 3.5, 0, 1)); local heightTarget = 0; if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then heightTarget = FC.speed * 60 end; if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end; if heightTarget == 0 then heightVelocity = heightVelocity * math.max(0, 1 - safeDt * 10) else heightVelocity = heightVelocity + (heightTarget - heightVelocity) * math.clamp(safeDt * 3, 0, 1) end; if FC_UI_Btns.zoomIn then Camera.FieldOfView = math.clamp(Camera.FieldOfView - 1.2, 10, 120) end; if FC_UI_Btns.zoomOut then Camera.FieldOfView = math.clamp(Camera.FieldOfView + 1.2, 10, 120) end; FC.pos = FC.pos + (I_CamVel + Vector3.new(0, heightVelocity, 0)) * safeDt; Camera.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0) * CFrame.Angles(0, 0, math.rad(FC.rollDeg)) end)
+-- ========== FIX: Force character to stay still during freecam ==========
+local function freezeCharacterForFreecam(freeze)
+    local hum = getHum()
+    local hrp = getRoot()
+    if freeze then
+        if hum then
+            FC.savedWalkSpeed = hum.WalkSpeed
+            FC.savedJumpPower = hum.JumpPower
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+            hum.AutoRotate = false
+            hum.PlatformStand = true
+        end
+        if hrp and not hrp.Anchored then
+            hrp.Anchored = true
+            FC.wasAnchored = true
+        end
+        -- Matikan semua velocity
+        if hrp then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end
+    else
+        if hum then
+            hum.WalkSpeed = FC.savedWalkSpeed
+            hum.JumpPower = FC.savedJumpPower
+            hum.AutoRotate = true
+            hum.PlatformStand = false
+        end
+        if FC.wasAnchored and hrp then
+            hrp.Anchored = false
+            FC.wasAnchored = false
+        end
+        if hrp then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end
+    end
 end
 
-local function stopFreecamLoop() RunService:UnbindFromRenderStep("XKIDFreecam") end
+local function startFreecamLoop()
+    RunService:BindToRenderStep("XKIDFreecam", Enum.RenderPriority.Camera.Value + 1, function(dt) 
+        if not FC.active then return end
+        
+        -- FORCE freeze setiap frame
+        local hum = getHum()
+        local hrp = getRoot()
+        if hum then
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+            hum.AutoRotate = false
+            hum.PlatformStand = true
+        end
+        if hrp then
+            if not hrp.Anchored then
+                hrp.Anchored = true
+                FC.wasAnchored = true
+            end
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end
+        
+        Camera.CameraType = Enum.CameraType.Scriptable; 
+        local safeDt = math.clamp(dt, 0.001, 0.05); 
+        I_YawVel = I_YawVel * math.max(0, 1 - safeDt * 14); 
+        I_PitchVel = I_PitchVel * math.max(0, 1 - safeDt * 14); 
+        FC.yawDeg = FC.yawDeg + I_YawVel * safeDt; 
+        FC.pitchDeg = math.clamp(FC.pitchDeg + I_PitchVel * safeDt, -80, 80); 
+        local rollTarget = 0; 
+        if FC_UI_Btns.rollLeft then rollTarget = -100 elseif FC_UI_Btns.rollRight then rollTarget = 100 end; 
+        I_RollVel = I_RollVel + (rollTarget - I_RollVel) * math.clamp(safeDt * 5, 0, 1); 
+        FC.rollDeg = math.clamp(FC.rollDeg + I_RollVel * safeDt, -100, 100); 
+        local camCF = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0); 
+        local joyX, joyY = fcJoy.X, fcJoy.Y; 
+        if not onMobile then 
+            if fcKeysHeld[Enum.KeyCode.W] then joyY = joyY - 1 end; 
+            if fcKeysHeld[Enum.KeyCode.S] then joyY = joyY + 1 end; 
+            if fcKeysHeld[Enum.KeyCode.D] then joyX = joyX + 1 end; 
+            if fcKeysHeld[Enum.KeyCode.A] then joyX = joyX - 1 end 
+        end; 
+        local rawMove = Vector2.new(joyX, joyY); 
+        if rawMove.Magnitude > 1 then rawMove = rawMove.Unit end; 
+        I_CamVel = I_CamVel:Lerp((camCF.LookVector * (-rawMove.Y) + camCF.RightVector * rawMove.X) * (FC.speed * 60), math.clamp(safeDt * 3.5, 0, 1)); 
+        local heightTarget = 0; 
+        if fcKeysHeld[Enum.KeyCode.E] or FC_UI_Btns.up then heightTarget = FC.speed * 60 end; 
+        if fcKeysHeld[Enum.KeyCode.Q] or FC_UI_Btns.down then heightTarget = -FC.speed * 60 end; 
+        if heightTarget == 0 then 
+            heightVelocity = heightVelocity * math.max(0, 1 - safeDt * 10) 
+        else 
+            heightVelocity = heightVelocity + (heightTarget - heightVelocity) * math.clamp(safeDt * 3, 0, 1) 
+        end; 
+        if FC_UI_Btns.zoomIn then Camera.FieldOfView = math.clamp(Camera.FieldOfView - 1.2, 10, 120) end; 
+        if FC_UI_Btns.zoomOut then Camera.FieldOfView = math.clamp(Camera.FieldOfView + 1.2, 10, 120) end; 
+        FC.pos = FC.pos + (I_CamVel + Vector3.new(0, heightVelocity, 0)) * safeDt; 
+        Camera.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0) * CFrame.Angles(0, 0, math.rad(FC.rollDeg))
+    end)
+end
+
+local function stopFreecamLoop() 
+    RunService:UnbindFromRenderStep("XKIDFreecam") 
+end
 
 local function fullCleanupFreecam()
-    stopFreecamLoop(); stopFreecamCapture(); local hum = getHum(); local hrp = getRoot()
-    if hum then hum.WalkSpeed = FC.savedWalkSpeed; hum.UseJumpPower = true; hum.JumpPower = FC.savedJumpPower; hum.AutoRotate = true end
-    if FC.wasAnchored and hrp then hrp.Anchored = false; FC.wasAnchored = false end
-    Camera.CameraType = Enum.CameraType.Custom; Camera.FieldOfView = FC.origFov
+    stopFreecamLoop(); 
+    stopFreecamCapture(); 
+    local hum = getHum(); 
+    local hrp = getRoot()
+    if hum then 
+        hum.WalkSpeed = FC.savedWalkSpeed
+        hum.UseJumpPower = true
+        hum.JumpPower = FC.savedJumpPower
+        hum.AutoRotate = true
+        hum.PlatformStand = false
+    end
+    if FC.wasAnchored and hrp then 
+        hrp.Anchored = false
+        FC.wasAnchored = false
+    end
+    if hrp then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end
+    Camera.CameraType = Enum.CameraType.Custom
+    Camera.FieldOfView = FC.origFov
     if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = false end
-    for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end; FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end
+    for k in pairs(FC_UI_Btns) do FC_UI_Btns[k] = false end
+    FC_UI_Hidden = false
+    eyeBtn.Text = "👁"
+    for _, b in ipairs(fcButtons) do b.Visible = true end
+end
+
+-- ========== FIXED TOGGLE FREECAM ==========
+local function toggleFreecam(v)
+    if v then
+        -- MATIKAN SEMUA FITUR YANG BISA MENGGERAKKAN KARAKTER
+        if State.Fly.active then toggleFly(false) end
+        if State.Security.shiftLock then toggleShiftLock(false) end
+        if State.Move.autoWalk then stopAutoWalk() end
+        if State.SelfSpec.active then toggleSelfSpec(false) end
+        if State.Spec.active then 
+            State.Spec.active = false
+            stopSpecLoop()
+            stopSpecCapture()
+        end
+        if Teleport.clickConn then 
+            Teleport.clickConn:Disconnect()
+            Teleport.clickConn = nil
+        end
+        
+        FC.active = true
+        local cf = Camera.CFrame
+        FC.pos = cf.Position
+        FC.pitchDeg = 0
+        FC.yawDeg = 0
+        FC.rollDeg = 0
+        I_CamVel = Vector3.zero
+        I_YawVel = 0
+        I_PitchVel = 0
+        I_RollVel = 0
+        heightVelocity = 0
+        fcJoy = Vector2.zero
+        
+        -- Force freeze karakter
+        freezeCharacterForFreecam(true)
+        
+        FC.origFov = Camera.FieldOfView
+        startFreecamCapture()
+        startFreecamLoop()
+        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end
+        FC_UI_Hidden = false
+        eyeBtn.Text = "👁"
+        for _, b in ipairs(fcButtons) do b.Visible = true end
+        notify("Freecam", "ON (Karakter DIAM)", 2, "video")
+    else
+        FC.active = false
+        fullCleanupFreecam()
+        notify("Freecam", "OFF", 1.5, "video")
+    end
 end
 
 -- ================================ SELF-SPECTATE ================================
@@ -505,7 +722,32 @@ end
 local function stopSelfSpecLoop() RunService:UnbindFromRenderStep("XKIDSelfSpec"); Camera.CameraType = Enum.CameraType.Custom; Camera.FieldOfView = SS.origFov; SS.active = false; SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.radius = 8; SS.height = 3; ssPan = Vector2.zero end
 
 local function toggleSelfSpec(v)
-    if v then if FC.active then fullCleanupFreecam() end; if State.Fly.active then stopFlyCapture() end; if State.Spec.active then stopSpecCapture() end; if Teleport.clickConn then Teleport.clickConn:Disconnect(); Teleport.clickConn = nil end; SS.active = true; SS.origFov = Camera.FieldOfView; SS.orbitYaw = 0; SS.orbitPitch = 20; SS.fpYaw = 0; SS.fpPitch = 0; SS.radius = SS.radius or 8; SS.height = SS.height or 3; startSSGesture(); startSelfSpecLoop(); notify("Self-Spectate", "ON — " .. (SS.mode or "Manual"), 2, "camera") else SS.active = false; stopSSGesture(); stopSelfSpecLoop(); notify("Self-Spectate", "OFF", 1.5, "camera") end
+    if v then 
+        if FC.active then toggleFreecam(false) end
+        if State.Fly.active then toggleFly(false) end
+        if State.Spec.active then 
+            State.Spec.active = false
+            stopSpecLoop()
+            stopSpecCapture()
+        end
+        if Teleport.clickConn then Teleport.clickConn:Disconnect(); Teleport.clickConn = nil end
+        SS.active = true
+        SS.origFov = Camera.FieldOfView
+        SS.orbitYaw = 0
+        SS.orbitPitch = 20
+        SS.fpYaw = 0
+        SS.fpPitch = 0
+        SS.radius = SS.radius or 8
+        SS.height = SS.height or 3
+        startSSGesture()
+        startSelfSpecLoop()
+        notify("Self-Spectate", "ON — " .. (SS.mode or "Manual"), 2, "camera")
+    else 
+        SS.active = false
+        stopSSGesture()
+        stopSelfSpecLoop()
+        notify("Self-Spectate", "OFF", 1.5, "camera")
+    end
 end
 
 -- ================================ SPECTATE (OTHERS) ================================
@@ -597,7 +839,7 @@ end
 
 -- ================================ MAIN WINDOW UI ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.5", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -613,7 +855,7 @@ Window:EditOpenButton({
 })
 
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255, 215, 0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.4", Color = Color3.fromRGB(255, 215, 0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.5", Color = Color3.fromRGB(255, 215, 0), Icon = "tag" })
 
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
@@ -702,30 +944,7 @@ secSelfSpec:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20
 secSelfSpec:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, Default = 1 }, Callback = function(v) SS.speed = v end })
 
 local secFC = TabCine:Section({ Title = "Drone Engine", Icon = "video", Box = true })
-secFC:Toggle({ Title = "Enable Freecam", Default = false, Callback = function(v)
-    if v and SS.active then toggleSelfSpec(false) end
-    FC.active = v
-    if v then
-        local cf = Camera.CFrame
-        FC.pos = cf.Position; FC.pitchDeg = 0; FC.yawDeg = 0; FC.rollDeg = 0
-        I_CamVel = Vector3.zero; I_YawVel = 0; I_PitchVel = 0; I_RollVel = 0
-        heightVelocity = 0; fcJoy = Vector2.zero
-        local hum = getHum(); local hrp = getRoot()
-        if hum then
-            FC.savedWalkSpeed = hum.WalkSpeed; FC.savedJumpPower = hum.JumpPower
-            hum.WalkSpeed = 0; hum.JumpPower = 0; hum.AutoRotate = false
-        end
-        if hrp then hrp.Anchored = true; FC.wasAnchored = true end
-        FC.origFov = Camera.FieldOfView
-        startFreecamCapture(); startFreecamLoop()
-        if getgenv()._XKID_FCUI then getgenv()._XKID_FCUI.Enabled = true end
-        FC_UI_Hidden = false; eyeBtn.Text = "👁"; for _, b in ipairs(fcButtons) do b.Visible = true end
-        notify("Freecam", "ON", 2, "video")
-    else
-        fullCleanupFreecam()
-        notify("Freecam", "OFF", 1.5, "video")
-    end
-end })
+secFC:Toggle({ Title = "Enable Freecam", Desc = "Karakter DIAM total saat aktif", Default = false, Callback = toggleFreecam })
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
 secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 secFC:Toggle({ Title = "Hide All UI (Cinematic)", Default = false, Callback = function(v) if getgenv()._XKID_UI_LOADING then return end; if v then State.Cinema.hideUI = true; State.Cinema.cachedGuis = {}; for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui); gui.Enabled = false end end; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end) else State.Cinema.hideUI = false; for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end; State.Cinema.cachedGuis = {}; pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end) end; notify("Cinematic", v and "UI Hidden" or "UI Shown", 1.5, "film") end })
@@ -839,7 +1058,7 @@ setOptimalFPS(120)
 task.spawn(function()
     task.wait(0.5); startAFK(); task.wait(2)
     getgenv()._XKID_UI_LOADING = false
-    notify("System", "XKID_HUB V3.4 AKTIF — Ready", 3, "rocket")
+    notify("System", "XKID_HUB V3.5 AKTIF — Drone Engine FIXED", 3, "rocket")
     notify("Anti AFK", "AUTO ACTIVATED (Stealth)", 2, "shield-check")
-    addLog("XKID_HUB V3.4 loaded successfully", "INFO")
+    addLog("XKID_HUB V3.5 loaded successfully — Freecam character freeze fixed", "INFO")
 end)
