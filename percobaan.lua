@@ -1,6 +1,7 @@
--- @XKID SCRIPT V3.10 (FINAL: Anti AFK Real-time Status + Progress Bar)
+-- @XKID SCRIPT V3.11 (FINAL: Anti AFK Real-time Status + No Flicker)
 -- by @WTF.XKID | Roblox Build For Mobile/PC | Tested on Delta X
--- Changelog V3.10:
+-- Changelog V3.11:
+-- - FIX: UI kedip-kedip (single loop update)
 -- - Anti AFK pakai LP.Idled (SUKSES tidak kena kick)
 -- - Status real-time di tab Informasi (ACTIVE/INACTIVE + Progress Bar)
 -- - Uptime counter real-time
@@ -260,45 +261,17 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectga
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
 TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
 
--- ================================ ANTI AFK V3.10 (IDLED METHOD + REAL-TIME STATUS) ================================
+-- ================================ ANTI AFK V3.11 (IDLED METHOD + NO FLICKER) ================================
 local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
 local AFKSystem = { active = true, idleConn = nil, backupThread = nil, lastInput = tick() }
-local afkInfoParagraph = nil -- akan diisi dari UI nanti
-local afkProgress = 0
 
 local function updateActivity()
     AFKSystem.lastInput = tick()
-    if AFKSystem.active then
-        afkProgress = 0
-    end
 end
 
 UserInputService.InputBegan:Connect(updateActivity)
 UserInputService.InputChanged:Connect(updateActivity)
 UserInputService.TouchStarted:Connect(updateActivity)
-
-local function updateAFKDisplay()
-    if not afkInfoParagraph then return end
-    local elapsed = os.difftime(os.time(), START_TIME)
-    local uptime = formatTime(elapsed)
-    
-    if AFKSystem.active then
-        local timeSinceLastInput = tick() - AFKSystem.lastInput
-        local percent = math.clamp((timeSinceLastInput / 60) * 100, 0, 100)
-        local remaining = math.max(0, 60 - timeSinceLastInput)
-        local bar = makeBar(percent, 100, 20)
-        
-        afkInfoParagraph:SetDesc(string.format(
-            "Anti AFK: ACTIVE ✅\nUptime: %s\n%s %d%% (%ds to next kick)",
-            uptime, bar, math.floor(percent), math.floor(remaining)
-        ))
-    else
-        afkInfoParagraph:SetDesc(string.format(
-            "Anti AFK: INACTIVE ❌\nUptime: %s\n[ DISABLED ]",
-            uptime
-        ))
-    end
-end
 
 local function performAntiAFK()
     if not AFKSystem.active then return end
@@ -330,8 +303,6 @@ local function performAntiAFK()
     end)
     
     AFKSystem.lastInput = tick()
-    afkProgress = 0
-    updateAFKDisplay()
 end
 
 local function startAFKSystem()
@@ -372,27 +343,12 @@ local function toggleAntiAFK(v)
         AFKSystem.idleConn = nil
         notify("Anti AFK", "OFF", 1.5, "shield-check")
     end
-    updateAFKDisplay()
 end
 
 task.spawn(function()
     task.wait(0.5)
     startAFKSystem()
     startBackup()
-    updateAFKDisplay()
-end)
-
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        task.wait(1)
-        if afkInfoParagraph then
-            updateAFKDisplay()
-            if AFKSystem.active then
-                local timeSinceLastInput = tick() - AFKSystem.lastInput
-                afkProgress = math.clamp((timeSinceLastInput / 60) * 100, 0, 100)
-            end
-        end
-    end
 end)
 
 -- ================================ SHIFT LOCK ================================
@@ -911,7 +867,8 @@ local function stopSpecCapture() for _, c in ipairs(specConns) do c:Disconnect()
 
 local function startSpecLoop()
     RunService:BindToRenderStep("XKIDSpec", Enum.RenderPriority.Camera.Value + 1, function()
-        if not State.Spec.active then return end        pcall(function()
+        if not State.Spec.active then return end
+        pcall(function()
             local targetChar, targetHrp
             if State.Spec.isSelf then
                 targetChar = LP.Character
@@ -1107,7 +1064,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.10", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.11", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1116,7 +1073,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.10", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.11", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- Tab Informasi
@@ -1128,15 +1085,14 @@ local avatarImage = "rbxthumb://type=AvatarHeadShot&id=" .. LP.UserId .. "&w=420
 local afkStatusParagraph = TabInfo:Paragraph({ Title = "YooWssp!!, " .. LP.DisplayName, Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal") .. "\nFPS Cap: " .. State.FPS.cap, Image = avatarImage, ImageSize = 80 })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) pcall(function() afkStatusParagraph:SetDesc("Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal") .. "\nFPS Cap: " .. State.FPS.cap) end) end end)
 
--- Info tambahan untuk Anti AFK real-time
+-- Single loop update (no flicker)
 local infoParagraph = TabInfo:Paragraph({ Title = "💀 " .. LP.DisplayName, Desc = "Loading..." })
-afkInfoParagraph = infoParagraph
-
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(1)
         local elapsed = os.difftime(os.time(), START_TIME)
         local uptime = formatTime(elapsed)
+        local currentExecName = getExecutor()
         
         if AFKSystem.active then
             local timeSinceLastInput = tick() - AFKSystem.lastInput
@@ -1148,7 +1104,7 @@ task.spawn(function()
             infoParagraph:SetDesc(string.format(
                 "Anti AFK: ACTIVE ✅\nUptime: %s\n%s %d%% (%ds to next kick)\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
                 uptime, bar, math.floor(percent), math.floor(remaining),
-                (onMobile and "Mobile" or "PC"), execName,
+                (onMobile and "Mobile" or "PC"), currentExecName,
                 (cachedMapName or "Loading..."),
                 #Players:GetPlayers(), Players.MaxPlayers
             ))
@@ -1157,7 +1113,7 @@ task.spawn(function()
             infoParagraph:SetDesc(string.format(
                 "Anti AFK: INACTIVE ❌\nUptime: %s\n[ DISABLED ]\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
                 uptime,
-                (onMobile and "Mobile" or "PC"), execName,
+                (onMobile and "Mobile" or "PC"), currentExecName,
                 (cachedMapName or "Loading..."),
                 #Players:GetPlayers(), Players.MaxPlayers
             ))
@@ -1328,4 +1284,4 @@ pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 e
 setOptimalFPS(120)
 
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.10 AKTIF — Anti AFK Real-time Status", 3, "rocket")
+notify("System", "XKID_HUB V3.11 AKTIF — Anti AFK Real-time + No Flicker", 3, "rocket")
