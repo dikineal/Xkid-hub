@@ -1,4 +1,4 @@
--- @XKID SCRIPT V3.13 (Anti AFK Micro Move - No Asset Tracker)
+-- @XKID SCRIPT V3.15 (Anti AFK dari komunitas + Semua fitur XKID)
 repeat task.wait() until game:IsLoaded()
 
 local WindUI = (function()
@@ -146,29 +146,22 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120) collectgar
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30) setOptimalFPS(State.FPS.cap) end end)
 TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5) setOptimalFPS(State.FPS.cap) end))
 
--- ================================ ANTI AFK V3.13 (MICRO MOVE - PROVEN WORKING) ================================
-local AFKSystem = { active = true, idleConn = nil, lastInput = tick() }
-
-local function updateActivity() AFKSystem.lastInput = tick() end
-UserInputService.InputBegan:Connect(updateActivity)
-UserInputService.InputChanged:Connect(updateActivity)
-UserInputService.TouchStarted:Connect(updateActivity)
-
-local function performAntiAFK()
-    if not AFKSystem.active then return end
-    pcall(function()
-        if VIM then
-            VIM:SendKeyEvent(true, Enum.KeyCode.W, false, game)
-            task.wait(0.03)
-            VIM:SendKeyEvent(false, Enum.KeyCode.W, false, game)
-        end
-    end)
-    AFKSystem.lastInput = tick()
-end
+-- ================================ ANTI AFK V3.15 (Metode Komunitas - Terbukti Work) ================================
+local AFKVal = nil
+local AFKSystem = { active = true }
 
 local function startAFKSystem()
-    if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect() end
-    AFKSystem.idleConn = LP.Idled:Connect(performAntiAFK)
+    if AFKVal then AFKVal:Disconnect() end
+    AFKVal = LP.Idled:connect(function()
+        if not AFKSystem.active then return end
+        pcall(function()
+            if VIM then
+                VIM:SendKeyEvent(true, "W", false, game)
+                task.wait(0.03)
+                VIM:SendKeyEvent(false, "W", false, game)
+            end
+        end)
+    end)
 end
 
 local function toggleAntiAFK(v)
@@ -178,13 +171,15 @@ local function toggleAntiAFK(v)
         startAFKSystem()
         notify("Anti AFK", "ON", 1.5, "shield-check")
     else
-        if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect() end
-        AFKSystem.idleConn = nil
+        if AFKVal then AFKVal:Disconnect() AFKVal = nil end
         notify("Anti AFK", "OFF", 1.5, "shield-check")
     end
 end
 
-task.spawn(function() task.wait(0.5) startAFKSystem() end)
+task.spawn(function()
+    task.wait(0.5)
+    startAFKSystem()
+end)
 
 -- ================================ SHIFT LOCK ================================
 TrackC(LP.CharacterAdded:Connect(function(char)
@@ -581,7 +576,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.13", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.15", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -590,7 +585,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.13", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.15", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -784,4 +779,4 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2) pcall(functi
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
 setOptimalFPS(120)
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.13 AKTIF — Anti AFK Micro Move", 3, "rocket")
+notify("System", "XKID_HUB V3.15 AKTIF — Anti AFK Metode Komunitas", 3, "rocket")
