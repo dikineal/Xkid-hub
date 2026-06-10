@@ -1,5 +1,10 @@
--- @XKID SCRIPT V3.12 (Jump Anti AFK - No Asset Tracker)
--- by @WTF.XKID | Anti AFK: Lompat setiap 10 menit (tidak geser posisi)
+-- @XKID SCRIPT V3.13 (FINAL: Micro Move Anti AFK + Real-time Status)
+-- by @WTF.XKID | Roblox Build For Mobile/PC
+-- Changelog V3.13:
+-- - Anti AFK pakai Idled + W micro 0.03 detik (ampuh & tidak terasa)
+-- - Interval tergantung server (otomatis)
+-- - Status real-time di tab Informasi
+-- - Toggle ON/OFF dengan notifikasi
 
 repeat task.wait() until game:IsLoaded()
 
@@ -67,6 +72,7 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
 local VirtualUser = pcall(function() return game:GetService("VirtualUser") end) and game:GetService("VirtualUser") or nil
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
@@ -75,6 +81,7 @@ local CoreGui = game:GetService("CoreGui")
 local TextChatService = game:GetService("TextChatService")
 local StarterGui = game:GetService("StarterGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ContentProvider = game:GetService("ContentProvider")
 
 local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -253,8 +260,14 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectga
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
 TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
 
--- ================================ ANTI AFK V3.12 (JUMP ONLY - 10 MINUTES) ================================
-local AFKSystem = { active = true, idleConn = nil, backupThread = nil, lastInput = tick() }
+-- ================================ ASSET TRACKER ================================
+local assetsDownloaded = 0
+ContentProvider.AssetDownloaded:Connect(function()
+    assetsDownloaded = assetsDownloaded + 1
+end)
+
+-- ================================ ANTI AFK V3.13 (MICRO MOVE - PROVEN WORKING) ================================
+local AFKSystem = { active = true, idleConn = nil, lastInput = tick() }
 
 local function updateActivity()
     AFKSystem.lastInput = tick()
@@ -266,56 +279,19 @@ UserInputService.TouchStarted:Connect(updateActivity)
 
 local function performAntiAFK()
     if not AFKSystem.active then return end
-    if tick() - AFKSystem.lastInput < 600 then return end  -- 10 menit = 600 detik
-    
     pcall(function()
-        -- Lompat kecil (tidak menggeser posisi)
-        local hum = getHum()
-        if hum then
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            task.wait(0.1)
-        end
-        
-        -- Backup: remote heartbeat
-        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-        if remotes then
-            for _, name in ipairs({"Heartbeat", "Ping", "ClientAlive", "KeepAlive"}) do
-                local remote = remotes:FindFirstChild(name)
-                if remote and remote.FireServer then
-                    remote:FireServer()
-                    break
-                end
-            end
+        if VIM then
+            VIM:SendKeyEvent(true, Enum.KeyCode.W, false, game)
+            task.wait(0.03)
+            VIM:SendKeyEvent(false, Enum.KeyCode.W, false, game)
         end
     end)
-    
     AFKSystem.lastInput = tick()
 end
 
 local function startAFKSystem()
     if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect() end
-    
-    AFKSystem.idleConn = LP.Idled:Connect(function()
-        if not AFKSystem.active then return end
-        if tick() - AFKSystem.lastInput < 600 then return end
-        performAntiAFK()
-    end)
-end
-
-local function startBackup()
-    if AFKSystem.backupThread then task.cancel(AFKSystem.backupThread) end
-    AFKSystem.backupThread = task.spawn(function()
-        while getgenv()._XKID_RUNNING do
-            task.wait(60)
-            if not AFKSystem.active then
-                task.wait()
-            else
-                if tick() - AFKSystem.lastInput >= 600 then
-                    performAntiAFK()
-                end
-            end
-        end
-    end)
+    AFKSystem.idleConn = LP.Idled:Connect(performAntiAFK)
 end
 
 local function toggleAntiAFK(v)
@@ -323,8 +299,7 @@ local function toggleAntiAFK(v)
     State.Security.afkActive = v
     if v then
         startAFKSystem()
-        if not AFKSystem.backupThread then startBackup() end
-        notify("Anti AFK", "ON (Jump every 10 min)", 1.5, "shield-check")
+        notify("Anti AFK", "ON", 1.5, "shield-check")
     else
         if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect() end
         AFKSystem.idleConn = nil
@@ -335,7 +310,6 @@ end
 task.spawn(function()
     task.wait(0.5)
     startAFKSystem()
-    startBackup()
 end)
 
 -- ================================ SHIFT LOCK ================================
@@ -1051,7 +1025,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.12", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.13", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1060,7 +1034,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.12", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.13", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -1080,19 +1054,14 @@ task.spawn(function()
         local elapsed = os.difftime(os.time(), START_TIME)
         local uptime = formatTime(elapsed)
         local currentExecName = getExecutor()
+        local queueSize = ContentProvider.RequestQueueSize
+        local loadingStatus = (queueSize == 0 and "READY ✅" or string.format("LOADING... (%d)", queueSize))
         
         if AFKSystem.active then
-            local timeSinceLastInput = tick() - AFKSystem.lastInput
-            local percent = math.clamp((timeSinceLastInput / 600) * 100, 0, 100)
-            local remaining = math.max(0, 600 - timeSinceLastInput)
-            local bar = makeBar(percent, 100, 20)
-            local remainingMin = math.floor(remaining / 60)
-            local remainingSec = remaining % 60
-            
             infoParagraph:SetTitle("💀 " .. LP.DisplayName)
             infoParagraph:SetDesc(string.format(
-                "Anti AFK: ACTIVE ✅\nUptime: %s\n%s %d%% (%dmin %ds to next jump)\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
-                uptime, bar, math.floor(percent), remainingMin, remainingSec,
+                "Anti AFK: ACTIVE ✅\nUptime: %s\nAssets: %d | Queue: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
+                uptime, assetsDownloaded, loadingStatus,
                 (onMobile and "Mobile" or "PC"), currentExecName,
                 (cachedMapName or "Loading..."),
                 #Players:GetPlayers(), Players.MaxPlayers
@@ -1100,8 +1069,8 @@ task.spawn(function()
         else
             infoParagraph:SetTitle("💀 " .. LP.DisplayName)
             infoParagraph:SetDesc(string.format(
-                "Anti AFK: INACTIVE ❌\nUptime: %s\n[ DISABLED ]\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
-                uptime,
+                "Anti AFK: INACTIVE ❌\nUptime: %s\nAssets: %d | Queue: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
+                uptime, assetsDownloaded, loadingStatus,
                 (onMobile and "Mobile" or "PC"), currentExecName,
                 (cachedMapName or "Loading..."),
                 #Players:GetPlayers(), Players.MaxPlayers
@@ -1273,4 +1242,4 @@ pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 e
 setOptimalFPS(120)
 
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.12 AKTIF — Anti AFK Jump Only", 3, "rocket")
+notify("System", "XKID_HUB V3.13 AKTIF — Anti AFK Micro Move", 3, "rocket")
