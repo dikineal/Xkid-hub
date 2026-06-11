@@ -1,6 +1,6 @@
--- @XKID SCRIPT V3.18 (W Micro Anti AFK - VIM Method - WORKING)
+-- @XKID SCRIPT V3.19 FINAL (VirtualUser Anti AFK - No Camera Move)
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Anti AFK: W mikro 0.03 detik (sudah test berhasil)
+-- Anti AFK: VirtualUser klik di luar layar (tidak ganggu kamera, tidak geser karakter)
 
 repeat task.wait() until game:IsLoaded()
 
@@ -254,16 +254,19 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectga
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
 TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
 
--- ================================ ANTI AFK V3.18 (W MIKRO - VIM METHOD - WORKING) ================================
-local VIM = game:GetService("VirtualInputManager")
-local AFKSystem = { active = true, idleConn = nil }
+-- ================================ ANTI AFK V3.19 FINAL (VIRTUALUSER - NO CAMERA MOVE) ================================
+local AFKSystem = { active = true, idleConn = nil, triggerCount = 0 }
 
 local function performAntiAFK()
     if not AFKSystem.active then return end
+    AFKSystem.triggerCount = AFKSystem.triggerCount + 1
+    
     pcall(function()
-        VIM:SendKeyEvent(true, "W", false, game)
-        task.wait(0.03)
-        VIM:SendKeyEvent(false, "W", false, game)
+        if VirtualUser then
+            VirtualUser:CaptureController()
+            -- Klik di luar layar (tidak ganggu kamera, tidak ganggu karakter)
+            VirtualUser:ClickButton2(Vector2.new(-9999, -9999))
+        end
     end)
 end
 
@@ -1003,7 +1006,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.18", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.19", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1012,7 +1015,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.18", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.19", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -1035,8 +1038,8 @@ task.spawn(function()
         if AFKSystem.active then
             infoParagraph:SetTitle("💀 " .. LP.DisplayName)
             infoParagraph:SetDesc(string.format(
-                "Anti AFK: ACTIVE ✅\nUptime: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
-                uptime,
+                "Anti AFK: ACTIVE ✅\nTriggers: %d\nUptime: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
+                AFKSystem.triggerCount, uptime,
                 (onMobile and "Mobile" or "PC"), currentExecName,
                 (cachedMapName or "Loading..."),
                 #Players:GetPlayers(), Players.MaxPlayers
@@ -1217,4 +1220,4 @@ pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 e
 setOptimalFPS(120)
 
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.18 AKTIF — Anti AFK W Micro (WORKING)", 3, "rocket")
+notify("System", "XKID_HUB V3.19 AKTIF — VirtualUser Anti AFK (No Camera Move)", 3, "rocket")
