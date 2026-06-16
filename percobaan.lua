@@ -1,6 +1,10 @@
--- @XKID SCRIPT V3.19 FINAL (VirtualUser Anti AFK - No Camera Move)
+-- @XKID SCRIPT V3.21 (Warmth Fix + Reset to Default Roblox)
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Anti AFK: VirtualUser klik di luar layar (tidak ganggu kamera, tidak geser karakter)
+-- Changelog V3.21:
+-- - FIX: Warmth slider tidak bikin layar gelap
+-- - FIX: Reset Custom FX sekarang benar-benar reset ke default Roblox
+-- - ADD: Tombol "Reset to Default Roblox" di tab Visuals
+-- - Range Warmth diubah -0.5 sampai 0.5 (lebih aman)
 
 repeat task.wait() until game:IsLoaded()
 
@@ -83,11 +87,26 @@ local onMobile = not UserInputService.KeyboardEnabled
 
 getgenv()._XKID_UI_LOADING = true
 
--- ================================ ORIGINAL LIGHTING ================================
+-- ================================ ORIGINAL LIGHTING (DEFAULT ROBLOX) ================================
 local originalLighting = {
-    ClockTime = Lighting.ClockTime, Brightness = Lighting.Brightness, Ambient = Lighting.Ambient,
-    OutdoorAmbient = Lighting.OutdoorAmbient, GlobalShadows = Lighting.GlobalShadows,
-    ExposureCompensation = Lighting.ExposureCompensation, FogEnd = Lighting.FogEnd,
+    ClockTime = Lighting.ClockTime,
+    Brightness = Lighting.Brightness,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    GlobalShadows = Lighting.GlobalShadows,
+    ExposureCompensation = Lighting.ExposureCompensation,
+    FogEnd = Lighting.FogEnd,
+}
+
+-- backup default roblox
+local defaultLighting = {
+    ClockTime = 14,
+    Brightness = 1,
+    Ambient = Color3.fromRGB(127, 127, 127),
+    OutdoorAmbient = Color3.fromRGB(127, 127, 127),
+    GlobalShadows = true,
+    ExposureCompensation = 0,
+    FogEnd = 100000,
 }
 
 -- ================================ CLEANUP OLD INSTANCE ================================
@@ -108,7 +127,7 @@ getgenv()._XKID_ESP_CACHE = {}
 if getgenv()._XKID_LOADED then
     pcall(function()
         for _, v in pairs(CoreGui:GetChildren()) do if v.Name == "WindUI" or v.Name == "XKID_FreecamUI" then v:Destroy() end end
-        for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end
+        for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" or v.Name == "_XKID_SHADE" or v.Name == "_XKID_WARMTH" or v.Name == "_XKID_VIGNETTE" then v:Destroy() end end
         if getgenv()._XKID_CONNS then for _, c in pairs(getgenv()._XKID_CONNS) do pcall(function() c:Disconnect() end) end end
     end)
     pcall(function() RunService:UnbindFromRenderStep("XKIDFreecam") end)
@@ -149,7 +168,15 @@ local State = {
     Avatar = { isRefreshing = false },
     Utility = { chatLog = false, chatTargets = {}, chatHistory = {} },
     AutoLike = { active = false, thread = nil, lastTarget = nil, count = 0, radius = 100, minCD = 2, maxCD = 6 },
-    CustomFilter = { tintR = 255, tintG = 255, tintB = 255, saturation = 0, contrast = 0, brightness = 0, exposure = 0, bloomIntensity = 0, bloomSize = 24, clockTime = 14 },
+    CustomFilter = { 
+        tintR = 255, tintG = 255, tintB = 255, 
+        saturation = 0, contrast = 0, brightness = 0, 
+        exposure = 0, bloomIntensity = 0, bloomSize = 24, 
+        clockTime = 14,
+        shade = 0,
+        warmth = 0,
+        vignette = 0
+    },
     SelfSpec = { active = false, mode = "Manual", dist = 8, height = 3, orbitYaw = 0, orbitPitch = 20, fov = 70, origFov = 70, roll = 0, radius = 8, speed = 1 },
     ESP = {
         active = false, cache = getgenv()._XKID_ESP_CACHE, maxDrawDistance = 300, highlightMode = false,
@@ -254,7 +281,7 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectga
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
 TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
 
--- ================================ ANTI AFK V3.19 FINAL (VIRTUALUSER - NO CAMERA MOVE) ================================
+-- ================================ ANTI AFK V3.19 (VIRTUALUSER - NO CAMERA MOVE) ================================
 local AFKSystem = { active = true, idleConn = nil, triggerCount = 0 }
 
 local function performAntiAFK()
@@ -264,7 +291,6 @@ local function performAntiAFK()
     pcall(function()
         if VirtualUser then
             VirtualUser:CaptureController()
-            -- Klik di luar layar (tidak ganggu kamera, tidak ganggu karakter)
             VirtualUser:ClickButton2(Vector2.new(-9999, -9999))
         end
     end)
@@ -705,7 +731,7 @@ local function toggleFreecam(v)
     end
 end
 
--- ================================ SELF-SPECTATE ================================
+-- ================================ SELF-SPECTATE V3.20 (VIDEOGRAPHY PRESETS) ================================
 local SS = State.SelfSpec
 local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
 
@@ -729,10 +755,65 @@ local function startSelfSpecLoop()
             Camera.CameraType = Enum.CameraType.Scriptable
             local pan, sens = ssPan, onMobile and 0.2 or 0.3
             ssPan = Vector2.zero
+            local dt = 0.016
+            
             if #ssPinch == 0 and pan.Magnitude < 0.01 then
-                local dt = 0.016
-                if SS.mode == "Slow Orbit" then
+                if SS.mode == "Cinematic Pan R" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 12 * SS.speed
+                    SS.orbitPitch = 0
+                elseif SS.mode == "Cinematic Pan L" then
+                    SS.orbitYaw = SS.orbitYaw - dt * 12 * SS.speed
+                    SS.orbitPitch = 0
+                elseif SS.mode == "Dolly Zoom In" then
+                    SS.radius = math.max(3, SS.radius - dt * 3 * SS.speed)
+                    SS.orbitPitch = 0
+                elseif SS.mode == "Dolly Zoom Out" then
+                    SS.radius = math.min(30, SS.radius + dt * 3 * SS.speed)
+                    SS.orbitPitch = 0
+                elseif SS.mode == "Orbit 360" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 45 * SS.speed
+                    SS.orbitPitch = 15
+                elseif SS.mode == "Orbit Slow" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed
+                    SS.orbitPitch = 20
+                elseif SS.mode == "Top Down View" then
+                    SS.orbitPitch = -85
+                    SS.orbitYaw = SS.orbitYaw + dt * 8 * SS.speed
+                    SS.height = 15
+                elseif SS.mode == "Floating" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed
+                    SS.orbitPitch = 20 + math.sin(tick() * 0.5 * SS.speed) * 10
+                    SS.height = 3 + math.sin(tick() * 0.4 * SS.speed) * 1.5
+                elseif SS.mode == "Hyperlapse" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 120 * SS.speed
+                    SS.orbitPitch = 10 + math.sin(tick() * 2 * SS.speed) * 5
+                    SS.radius = 8 + math.sin(tick() * 1.5 * SS.speed) * 2
+                elseif SS.mode == "Portrait Mode" then
+                    SS.orbitYaw = SS.orbitYaw + pan.X * 0.3
+                    SS.orbitPitch = -10
+                    SS.radius = 4
+                    SS.height = 1
+                elseif SS.mode == "Orbit Vertical" then
                     SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
+                    SS.orbitPitch = 20 + math.sin(tick() * 0.8 * SS.speed) * 30
+                elseif SS.mode == "Fisheye" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 30 * SS.speed
+                    SS.orbitPitch = 10
+                    SS.radius = 3
+                    Camera.FieldOfView = math.clamp(Camera.FieldOfView + dt * 5, 70, 120)
+                elseif SS.mode == "Wave Orbit" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 20 * SS.speed
+                    SS.orbitPitch = 20 + math.sin(tick() * 0.6 * SS.speed) * 15
+                    SS.radius = 8 + math.sin(tick() * 0.5 * SS.speed) * 3
+                elseif SS.mode == "Dual Axis" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
+                    SS.orbitPitch = 15 + math.sin(tick() * 0.7 * SS.speed) * 20
+                    SS.roll = math.sin(tick() * 0.5 * SS.speed) * 10
+                elseif SS.mode == "Static Tripod" then
+                    -- diam
+                elseif SS.mode == "Slow Orbit" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
+                    SS.orbitPitch = 20
                 elseif SS.mode == "Vertical Swing" then
                     SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.5) * 40
                     SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed
@@ -751,11 +832,17 @@ local function startSelfSpecLoop()
                     SS.roll = math.sin(tick() * SS.speed * 0.8) * 5
                 end
             end
+            
             SS.orbitYaw = SS.orbitYaw + pan.X * sens
-            SS.orbitPitch = math.clamp(SS.orbitPitch + pan.Y * sens, -75, 75)
+            SS.orbitPitch = math.clamp(SS.orbitPitch + pan.Y * sens, -85, 85)
+            
             local h = SS.height or 3
             local camCF = CFrame.new((CFrame.new(targetHrp.Position + Vector3.new(0, h, 0)) * CFrame.Angles(0, math.rad(-SS.orbitYaw), 0) * CFrame.Angles(math.rad(-SS.orbitPitch), 0, 0) * CFrame.new(0, 0, SS.radius)).Position, targetHrp.Position + Vector3.new(0, h, 0))
-            if SS.mode == "Tilt Drift" then camCF = camCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0)) end
+            
+            if SS.mode == "Tilt Drift" or SS.mode == "Dual Axis" then
+                camCF = camCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0))
+            end
+            
             Camera.CFrame = camCF
         end)
     end)
@@ -785,6 +872,7 @@ local function toggleSelfSpec(v)
         SS.orbitPitch = 20
         SS.radius = SS.radius or 8
         SS.height = SS.height or 3
+        SS.roll = 0
         startSSGesture()
         startSelfSpecLoop()
         notify("Self-Spectate", "ON — " .. (SS.mode or "Manual"), 2, "camera")
@@ -919,25 +1007,68 @@ end
 local function stopHardFling() stopHardFlingInternal() notify("Hard Fling", "OFF", 1.5, "zap") end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
 
--- ================================ FILTERS ================================
+-- ================================ FILTERS V3.21 (WARMFIX + RESET DEFAULT) ================================
 local FILTER_PRESETS = {
-    Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7 },
-    Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2 },
-    Soft_Fade_HD = { tint = Color3.fromRGB(255,240,235), sat = -0.1, con = -0.05, bri = 0.1, bloomI = 0.4, bloomS = 35, time = 15, lightB = 1.3 },
-    Adaptif_Langit_HD = { tint = Color3.new(1,1,1), sat = 0.15, con = 0.2, bri = 0.05, bloomI = 0.15, bloomS = 24, time = 13, lightB = 1.5 },
-    Edgy_HD = { tint = Color3.fromRGB(200,195,210), sat = -0.5, con = 0.4, bri = -0.1, bloomI = 0.3, bloomS = 20, time = 8, lightB = 0.8 },
-    Full_Bright_HD = { tint = Color3.new(1,1,1), sat = 0, con = 0, bri = 0, bloomI = 0, bloomS = 24, time = 12, lightB = 3, shadow = false, ambient = Color3.new(1,1,1), outdoor = Color3.new(1,1,1) },
-    Soft_Pastel_HD = { tint = Color3.fromRGB(255,240,245), sat = -0.05, con = 0.05, bri = 0, bloomI = 0.3, bloomS = 24, time = 8, lightB = 1 },
-    Cinematic_Soft = { tint = Color3.new(1,1,1), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 17, lightB = 1 },
-    Ultra_HD = { tint = Color3.new(1,1,1), sat = 0.2, con = 0.3, bri = 0, bloomI = 0.2, bloomS = 24, time = 14, lightB = 1 },
-    Realistic = { tint = Color3.new(1,1,1), sat = 0.1, con = 0.2, bri = 0, bloomI = 0.15, bloomS = 24, time = 15, lightB = 1 },
-    Night_HD = { tint = Color3.fromRGB(200,200,255), sat = 0.1, con = 0.2, bri = 0, bloomI = 0.15, bloomS = 24, time = 1, lightB = 1 },
-    Senja = { tint = Color3.fromRGB(255,180,120), sat = 0.2, con = 0.1, bri = 0.05, bloomI = 0.5, bloomS = 40, time = 17.5, lightB = 1 },
-    Cinematic_Film = { tint = Color3.fromRGB(200,210,230), sat = -0.15, con = 0.25, bri = -0.05, bloomI = 0.15, bloomS = 20, time = 16, lightB = 1 },
-    Golden_Hour = { tint = Color3.fromRGB(255,200,100), sat = 0.1, con = 0.15, bri = 0.1, bloomI = 0.4, bloomS = 35, time = 17.5, lightB = 1 },
-    Moody_Blue = { tint = Color3.fromRGB(150,170,255), sat = 0.05, con = 0.2, bri = -0.1, bloomI = 0.1, bloomS = 24, time = 2, lightB = 1 },
+    Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7, shade = 0, warmth = -0.1 },
+    Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2, shade = 0.1, warmth = -0.3 },
+    Soft_Fade_HD = { tint = Color3.fromRGB(255,240,235), sat = -0.1, con = -0.05, bri = 0.1, bloomI = 0.4, bloomS = 35, time = 15, lightB = 1.3, shade = 0.05, warmth = 0.2 },
+    Adaptif_Langit_HD = { tint = Color3.new(1,1,1), sat = 0.15, con = 0.2, bri = 0.05, bloomI = 0.15, bloomS = 24, time = 13, lightB = 1.5, shade = 0, warmth = 0 },
+    Edgy_HD = { tint = Color3.fromRGB(200,195,210), sat = -0.5, con = 0.4, bri = -0.1, bloomI = 0.3, bloomS = 20, time = 8, lightB = 0.8, shade = 0.2, warmth = -0.2 },
+    Full_Bright_HD = { tint = Color3.new(1,1,1), sat = 0, con = 0, bri = 0, bloomI = 0, bloomS = 24, time = 12, lightB = 3, shadow = false, ambient = Color3.new(1,1,1), outdoor = Color3.new(1,1,1), shade = 0, warmth = 0 },
+    Soft_Pastel_HD = { tint = Color3.fromRGB(255,240,245), sat = -0.05, con = 0.05, bri = 0, bloomI = 0.3, bloomS = 24, time = 8, lightB = 1, shade = 0.05, warmth = 0.15 },
+    Cinematic_Soft = { tint = Color3.new(1,1,1), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 17, lightB = 1, shade = 0.1, warmth = 0.1 },
+    Ultra_HD = { tint = Color3.new(1,1,1), sat = 0.2, con = 0.3, bri = 0, bloomI = 0.2, bloomS = 24, time = 14, lightB = 1, shade = 0, warmth = 0 },
+    Realistic = { tint = Color3.new(1,1,1), sat = 0.1, con = 0.2, bri = 0, bloomI = 0.15, bloomS = 24, time = 15, lightB = 1, shade = 0.05, warmth = 0 },
+    Night_HD = { tint = Color3.fromRGB(200,200,255), sat = 0.1, con = 0.2, bri = 0, bloomI = 0.15, bloomS = 24, time = 1, lightB = 1, shade = 0.3, warmth = -0.2 },
+    Senja = { tint = Color3.fromRGB(255,180,120), sat = 0.2, con = 0.1, bri = 0.05, bloomI = 0.5, bloomS = 40, time = 17.5, lightB = 1, shade = 0.1, warmth = 0.4 },
+    Cinematic_Film = { tint = Color3.fromRGB(200,210,230), sat = -0.15, con = 0.25, bri = -0.05, bloomI = 0.15, bloomS = 20, time = 16, lightB = 1, shade = 0.15, warmth = -0.1 },
+    Golden_Hour = { tint = Color3.fromRGB(255,200,100), sat = 0.1, con = 0.15, bri = 0.1, bloomI = 0.4, bloomS = 35, time = 17.5, lightB = 1, shade = 0.05, warmth = 0.5 },
+    Moody_Blue = { tint = Color3.fromRGB(150,170,255), sat = 0.05, con = 0.2, bri = -0.1, bloomI = 0.1, bloomS = 24, time = 2, lightB = 1, shade = 0.2, warmth = -0.3 },
+    Vintage = { tint = Color3.fromRGB(210,180,140), sat = -0.2, con = 0.15, bri = -0.05, bloomI = 0.1, bloomS = 20, time = 16, lightB = 1.1, shade = 0.2, warmth = 0.3 },
+    Cyberpunk = { tint = Color3.fromRGB(255,80,200), sat = 0.4, con = 0.3, bri = 0.05, bloomI = 0.8, bloomS = 40, time = 2, lightB = 1.5, shade = 0.1, warmth = -0.2 },
+    Sunset = { tint = Color3.fromRGB(255,150,80), sat = 0.3, con = 0.1, bri = 0.05, bloomI = 0.6, bloomS = 35, time = 18, lightB = 1.2, shade = 0.05, warmth = 0.5 },
+    Pastel = { tint = Color3.fromRGB(255,220,240), sat = -0.1, con = 0.05, bri = 0.05, bloomI = 0.3, bloomS = 30, time = 13, lightB = 1.2, shade = 0.05, warmth = 0.1 },
+    Noir = { tint = Color3.fromRGB(200,200,200), sat = -0.5, con = 0.4, bri = -0.1, bloomI = 0, bloomS = 24, time = 10, lightB = 0.8, shade = 0.3, warmth = -0.1 },
+    Shade_Soft = { tint = Color3.fromRGB(180,190,210), sat = -0.1, con = 0.1, bri = -0.05, bloomI = 0.1, bloomS = 24, time = 12, lightB = 0.9, shade = 0.15, warmth = -0.1 },
 }
-local function resetFilterOnly() for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" then v:Destroy() end end end
+
+local function resetFilterOnly()
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v.Name == "_XKID_FILTER" or v.Name == "_XKID_SHADE" or v.Name == "_XKID_WARMTH" or v.Name == "_XKID_VIGNETTE" then
+            v:Destroy()
+        end
+    end
+end
+
+-- RESET KE DEFAULT ROBLOX (bukan default custom)
+local function resetToDefaultRoblox()
+    resetFilterOnly()
+    Lighting.ClockTime = defaultLighting.ClockTime
+    Lighting.Brightness = defaultLighting.Brightness
+    Lighting.Ambient = defaultLighting.Ambient
+    Lighting.OutdoorAmbient = defaultLighting.OutdoorAmbient
+    Lighting.GlobalShadows = defaultLighting.GlobalShadows
+    Lighting.ExposureCompensation = defaultLighting.ExposureCompensation
+    Lighting.FogEnd = defaultLighting.FogEnd
+    
+    -- Reset state CustomFilter ke default
+    State.CustomFilter.tintR = 255
+    State.CustomFilter.tintG = 255
+    State.CustomFilter.tintB = 255
+    State.CustomFilter.saturation = 0
+    State.CustomFilter.contrast = 0
+    State.CustomFilter.brightness = 0
+    State.CustomFilter.exposure = 0
+    State.CustomFilter.bloomIntensity = 0
+    State.CustomFilter.bloomSize = 24
+    State.CustomFilter.clockTime = 14
+    State.CustomFilter.shade = 0
+    State.CustomFilter.warmth = 0
+    State.CustomFilter.vignette = 0
+    
+    notify("Visuals", "Reset to Default Roblox", 1.5, "rotate-ccw")
+end
+
 local function applyCustomFilter()
     resetFilterOnly()
     Lighting.Brightness = originalLighting.Brightness
@@ -946,18 +1077,60 @@ local function applyCustomFilter()
     Lighting.GlobalShadows = originalLighting.GlobalShadows
     Lighting.FogEnd = originalLighting.FogEnd
     Lighting.ExposureCompensation = State.CustomFilter.exposure
+    
+    -- Main color correction
     local cc = Instance.new("ColorCorrectionEffect", Lighting)
     cc.Name = "_XKID_FILTER"
     cc.TintColor = Color3.fromRGB(State.CustomFilter.tintR, State.CustomFilter.tintG, State.CustomFilter.tintB)
     cc.Saturation = State.CustomFilter.saturation
     cc.Contrast = State.CustomFilter.contrast
     cc.Brightness = State.CustomFilter.brightness
-    local bloom = Instance.new("BloomEffect", Lighting)
-    bloom.Name = "_XKID_FILTER"
-    bloom.Intensity = State.CustomFilter.bloomIntensity
-    bloom.Size = State.CustomFilter.bloomSize
+    
+    -- Shade effect
+    if State.CustomFilter.shade > 0 then
+        local shade = Instance.new("ColorCorrectionEffect", Lighting)
+        shade.Name = "_XKID_SHADE"
+        local shadeVal = 1 - State.CustomFilter.shade
+        shade.TintColor = Color3.fromRGB(shadeVal * 255, shadeVal * 255, shadeVal * 255)
+        shade.Brightness = -State.CustomFilter.shade * 0.3
+        shade.Contrast = State.CustomFilter.shade * 0.2
+    end
+    
+    -- WARMTH FIX V3.21: Range aman -0.5 sampai 0.5, tidak bikin gelap
+    if State.CustomFilter.warmth ~= 0 then
+        local warmth = Instance.new("ColorCorrectionEffect", Lighting)
+        warmth.Name = "_XKID_WARMTH"
+        local w = math.clamp(State.CustomFilter.warmth, -0.5, 0.5)
+        if w > 0 then
+            warmth.TintColor = Color3.fromRGB(255, 255 - w*150, 255 - w*200)
+            warmth.Brightness = w * 0.05
+        else
+            local w2 = -w
+            warmth.TintColor = Color3.fromRGB(255 - w2*150, 255 - w2*50, 255)
+            warmth.Brightness = -w2 * 0.03
+        end
+    end
+    
+    -- Vignette effect
+    if State.CustomFilter.vignette > 0 then
+        local vignette = Instance.new("BloomEffect", Lighting)
+        vignette.Name = "_XKID_VIGNETTE"
+        vignette.Intensity = State.CustomFilter.vignette * 0.3
+        vignette.Size = 10
+        vignette.Threshold = 0.5
+    end
+    
+    -- Bloom
+    if State.CustomFilter.bloomIntensity > 0 then
+        local bloom = Instance.new("BloomEffect", Lighting)
+        bloom.Name = "_XKID_FILTER"
+        bloom.Intensity = State.CustomFilter.bloomIntensity
+        bloom.Size = State.CustomFilter.bloomSize
+    end
+    
     Lighting.ClockTime = State.CustomFilter.clockTime
 end
+
 local function applyFilter(filterName)
     resetFilterOnly()
     Lighting.ClockTime = originalLighting.ClockTime
@@ -967,37 +1140,81 @@ local function applyFilter(filterName)
     Lighting.GlobalShadows = originalLighting.GlobalShadows
     Lighting.FogEnd = originalLighting.FogEnd
     Lighting.ExposureCompensation = originalLighting.ExposureCompensation
+    
     if filterName == "Default" then
-        State.CustomFilter.tintR = 255; State.CustomFilter.tintG = 255; State.CustomFilter.tintB = 255
-        State.CustomFilter.saturation = 0; State.CustomFilter.contrast = 0; State.CustomFilter.brightness = 0
-        State.CustomFilter.exposure = 0; State.CustomFilter.bloomIntensity = 0; State.CustomFilter.bloomSize = 24; State.CustomFilter.clockTime = 14
-        notify("Visuals", "Default", 1.5, "palette")
+        resetToDefaultRoblox()
         return
     end
-    if filterName == "Custom" then applyCustomFilter() notify("Visuals", "Custom FX", 1.5, "palette") return end
+    
+    if filterName == "Custom" then
+        applyCustomFilter()
+        notify("Visuals", "Custom FX", 1.5, "palette")
+        return
+    end
+    
     local key = filterName:gsub(" ", "_"):gsub(" HD", "_HD")
     local preset = FILTER_PRESETS[key]
+    
     if preset then
         Lighting.ClockTime = preset.time or 14
         Lighting.Brightness = preset.lightB or 1
         Lighting.ExposureCompensation = preset.exp or 0
         Lighting.GlobalShadows = preset.shadow ~= false
+        
         if preset.ambient then Lighting.Ambient = preset.ambient end
         if preset.outdoor then Lighting.OutdoorAmbient = preset.outdoor end
+        
         local cc = Instance.new("ColorCorrectionEffect", Lighting)
         cc.Name = "_XKID_FILTER"
         cc.TintColor = preset.tint
         cc.Saturation = preset.sat or 0
         cc.Contrast = preset.con or 0
         cc.Brightness = preset.bri or 0
-        local bloom = Instance.new("BloomEffect", Lighting)
-        bloom.Name = "_XKID_FILTER"
-        bloom.Intensity = preset.bloomI or 0
-        bloom.Size = preset.bloomS or 24
+        
+        if preset.shade and preset.shade > 0 then
+            local shade = Instance.new("ColorCorrectionEffect", Lighting)
+            shade.Name = "_XKID_SHADE"
+            local sh = 1 - preset.shade
+            shade.TintColor = Color3.fromRGB(sh * 255, sh * 255, sh * 255)
+            shade.Brightness = -preset.shade * 0.3
+            shade.Contrast = preset.shade * 0.2
+        end
+        
+        if preset.warmth and preset.warmth ~= 0 then
+            local warmth = Instance.new("ColorCorrectionEffect", Lighting)
+            warmth.Name = "_XKID_WARMTH"
+            local w = math.clamp(preset.warmth, -0.5, 0.5)
+            if w > 0 then
+                warmth.TintColor = Color3.fromRGB(255, 255 - w*150, 255 - w*200)
+                warmth.Brightness = w * 0.05
+            else
+                local w2 = -w
+                warmth.TintColor = Color3.fromRGB(255 - w2*150, 255 - w2*50, 255)
+                warmth.Brightness = -w2 * 0.03
+            end
+        end
+        
+        if preset.bloomI and preset.bloomI > 0 then
+            local bloom = Instance.new("BloomEffect", Lighting)
+            bloom.Name = "_XKID_FILTER"
+            bloom.Intensity = preset.bloomI
+            bloom.Size = preset.bloomS or 24
+        end
+        
         State.CustomFilter.tintR = preset.tint.R * 255
         State.CustomFilter.tintG = preset.tint.G * 255
         State.CustomFilter.tintB = preset.tint.B * 255
-        for k, v in pairs(preset) do if State.CustomFilter[k] ~= nil then State.CustomFilter[k] = v end end
+        State.CustomFilter.saturation = preset.sat or 0
+        State.CustomFilter.contrast = preset.con or 0
+        State.CustomFilter.brightness = preset.bri or 0
+        State.CustomFilter.exposure = preset.exp or 0
+        State.CustomFilter.bloomIntensity = preset.bloomI or 0
+        State.CustomFilter.bloomSize = preset.bloomS or 24
+        State.CustomFilter.clockTime = preset.time or 14
+        State.CustomFilter.shade = preset.shade or 0
+        State.CustomFilter.warmth = preset.warmth or 0
+        State.CustomFilter.vignette = preset.vignette or 0
+        
         notify("Visuals", filterName, 2, "palette")
     else
         notify("Visuals", "Filter not found: " .. filterName, 2, "circle-alert")
@@ -1006,7 +1223,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.19", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.21", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1015,7 +1232,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.19", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.21", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -1119,7 +1336,17 @@ secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Defaul
 local TabCine = Window:Tab({ Title = "Cinematic", Icon = "aperture" })
 local secSelfSpec = TabCine:Section({ Title = "🎥 Self-Spectate", Icon = "camera", Box = true })
 secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "1-finger orbit | 2-finger zoom | Mouse right-drag", Default = false, Callback = toggleSelfSpec })
-secSelfSpec:Dropdown({ Title = "Preset Mode", Values = { "Manual", "Slow Orbit", "Vertical Swing", "Figure 8", "Cinematic Drift", "Orbit Steady", "Tilt Drift" }, Default = "Manual", Callback = function(v) SS.mode = v notify("Self-Spec", "Mode: " .. v, 1.5, "camera") end })
+secSelfSpec:Dropdown({ Title = "Preset Mode", Values = { 
+    "Manual", 
+    "Cinematic Pan R", "Cinematic Pan L", 
+    "Dolly Zoom In", "Dolly Zoom Out",
+    "Orbit 360", "Orbit Slow", 
+    "Top Down View", "Floating", 
+    "Hyperlapse", "Portrait Mode", 
+    "Orbit Vertical", "Fisheye", 
+    "Wave Orbit", "Dual Axis", "Static Tripod",
+    "Slow Orbit", "Vertical Swing", "Figure 8", "Cinematic Drift", "Orbit Steady", "Tilt Drift" 
+}, Default = "Manual", Callback = function(v) SS.mode = v notify("Self-Spec", "Mode: " .. v, 1.5, "camera") end })
 secSelfSpec:Slider({ Title = "Distance / Radius", Step = 0.5, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) SS.radius = v SS.dist = v end })
 secSelfSpec:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20, Default = 3 }, Callback = function(v) SS.height = v end })
 secSelfSpec:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, Default = 1 }, Callback = function(v) SS.speed = v end })
@@ -1137,7 +1364,14 @@ secFC:Toggle({ Title = "Hide All UI (Cinematic)", Default = false, Callback = fu
 -- ================================ TAB: VISUALS ================================
 local TabVis = Window:Tab({ Title = "Visuals", Icon = "moon-star" })
 local secPresets = TabVis:Section({ Title = "Presets", Icon = "palette", Box = true })
-secPresets:Dropdown({ Title = "Select Filter", Values = { "Default", "Custom", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue" }, Default = "Default", Callback = applyFilter })
+secPresets:Dropdown({ Title = "Select Filter", Values = { 
+    "Default", "Custom", 
+    "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", 
+    "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", 
+    "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue",
+    "Vintage", "Cyberpunk", "Sunset", "Pastel", "Noir", "Shade Soft"
+}, Default = "Default", Callback = applyFilter })
+
 local secFX = TabVis:Section({ Title = "Custom FX", Icon = "sliders", Box = true })
 secFX:Slider({ Title = "Saturation", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.saturation = v applyCustomFilter() end })
 secFX:Slider({ Title = "Contrast", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.contrast = v applyCustomFilter() end })
@@ -1145,7 +1379,30 @@ secFX:Slider({ Title = "Brightness", Step = 0.05, Value = { Min = -1, Max = 1, D
 secFX:Slider({ Title = "Exposure", Step = 0.1, Value = { Min = -5, Max = 5, Default = 0 }, Callback = function(v) State.CustomFilter.exposure = v applyCustomFilter() end })
 secFX:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = { Min = 0, Max = 2, Default = 0 }, Callback = function(v) State.CustomFilter.bloomIntensity = v applyCustomFilter() end })
 secFX:Slider({ Title = "ClockTime", Step = 0.5, Value = { Min = 0, Max = 24, Default = 14 }, Callback = function(v) State.CustomFilter.clockTime = v applyCustomFilter() end })
-secFX:Button({ Title = "Reset Custom FX", Callback = function() State.CustomFilter.saturation = 0 State.CustomFilter.contrast = 0 State.CustomFilter.brightness = 0 State.CustomFilter.exposure = 0 State.CustomFilter.bloomIntensity = 0 State.CustomFilter.clockTime = 14 applyCustomFilter() notify("Visuals", "FX Reset", 2, "rotate-ccw") end })
+-- V3.21: Range Warmth lebih aman (-0.5 sampai 0.5)
+secFX:Slider({ Title = "Shade (Bayangan)", Step = 0.05, Value = { Min = 0, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.shade = v applyCustomFilter() end })
+secFX:Slider({ Title = "Warmth (Suhu Warna)", Step = 0.05, Value = { Min = -0.5, Max = 0.5, Default = 0 }, Callback = function(v) State.CustomFilter.warmth = v applyCustomFilter() end })
+secFX:Slider({ Title = "Vignette (Pinggiran Gelap)", Step = 0.05, Value = { Min = 0, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.vignette = v applyCustomFilter() end })
+
+-- Tombol Reset Custom FX
+secFX:Button({ Title = "Reset Custom FX", Callback = function() 
+    State.CustomFilter.saturation = 0
+    State.CustomFilter.contrast = 0
+    State.CustomFilter.brightness = 0
+    State.CustomFilter.exposure = 0
+    State.CustomFilter.bloomIntensity = 0
+    State.CustomFilter.clockTime = 14
+    State.CustomFilter.shade = 0
+    State.CustomFilter.warmth = 0
+    State.CustomFilter.vignette = 0
+    applyCustomFilter()
+    notify("Visuals", "Custom FX Reset", 2, "rotate-ccw") 
+end })
+
+-- V3.21: Tombol Reset ke Default Roblox (bersih total)
+secFX:Button({ Title = "Reset to Default Roblox", Desc = "Kembalikan lighting ke bawaan Roblox", Callback = function() 
+    resetToDefaultRoblox()
+end })
 
 -- ================================ TAB: ESP ================================
 local TabESP = Window:Tab({ Title = "ESP", Icon = "scan-search" })
@@ -1201,7 +1458,7 @@ local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box
 local cfgName = "XKID_Config_V3"
 local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config_V3", Callback = function(v) cfgName = v end })
-local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime } } writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)) notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
+local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime, shade = State.CustomFilter.shade, warmth = State.CustomFilter.warmth, vignette = State.CustomFilter.vignette } } writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)) notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
 local function loadConfig(selected) if selected == "No config" then return end pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")) if d then if d.Move then State.Move.ws = d.Move.ws or 16 State.Move.jp = d.Move.jp or 50 State.Move.flyS = d.Move.flyS or 60 State.Move.autoWalkSpeed = d.Move.autoWalkSpeed or 16 local h = getHum() if h then h.WalkSpeed = State.Move.ws h.UseJumpPower = true h.JumpPower = State.Move.jp end end if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300 State.ESP.highlightMode = d.ESP.highlightMode or false end if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end if d.AutoLike then State.AutoLike.radius = d.AutoLike.radius or 100 State.AutoLike.minCD = d.AutoLike.minCD or 2 State.AutoLike.maxCD = d.AutoLike.maxCD or 6 end if d.HardFling then State.HardFling.power = d.HardFling.power or 5000 State.HardFling.mode = d.HardFling.mode or "Spin" end if d.SelfSpec then SS.mode = d.SelfSpec.mode or "Manual" SS.radius = d.SelfSpec.radius or 8 SS.height = d.SelfSpec.height or 3 SS.speed = d.SelfSpec.speed or 1 end if d.CustomFilter then for k, v in pairs(d.CustomFilter) do State.CustomFilter[k] = v end applyCustomFilter() end notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
 secFile:Button({ Title = "Save Config", Callback = saveConfig })
 local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected loadConfig(selected) end })
@@ -1220,4 +1477,4 @@ pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 e
 setOptimalFPS(120)
 
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.19 AKTIF — VirtualUser Anti AFK (No Camera Move)", 3, "rocket")
+notify("System", "XKID_HUB V3.21 AKTIF — Warmth Fix + Reset Default Roblox", 3, "rocket")
