@@ -1,10 +1,15 @@
--- @XKID SCRIPT V3.21 (Warmth Fix + Reset to Default Roblox)
+-- @XKID SCRIPT V3.23 (Cinematic Director + Drone Split)
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.21:
--- - FIX: Warmth slider tidak bikin layar gelap
--- - FIX: Reset Custom FX sekarang benar-benar reset ke default Roblox
--- - ADD: Tombol "Reset to Default Roblox" di tab Visuals
--- - Range Warmth diubah -0.5 sampai 0.5 (lebih aman)
+-- Changelog V3.23:
+-- - TAB CINEMATIC DIRECTOR (pisah dari Drone)
+-- - Settings: Master POV Smoothness, Master Speed, Distance Mult, Height Offset, Follow Smooth
+-- - Current Mode: Radius, Height, Speed, POV
+-- - Target Mode: Self, Center, Nearest Player, Multi Target, Clear Multi
+-- - Camera Angle: Follow Player Facing, Star Angle (Front/Back/Left/Right)
+-- - MODE: Intro (Reveal Push In, Drone Swoop, Helix Rise, Through Crowd)
+-- - PRESET: FPV Drone, Crash Zoom, Smear Cam, Whip Snap, Stobe Cut, Bounce Beat, Glitch Cam, Speed Ramp, Vertigo Effect
+-- - CLUB MODE: Head Static, Body Static, Side Static, High Right, Foot Static, Such Tilt
+-- - TAB DRONE terpisah (Freecam)
 
 repeat task.wait() until game:IsLoaded()
 
@@ -87,7 +92,7 @@ local onMobile = not UserInputService.KeyboardEnabled
 
 getgenv()._XKID_UI_LOADING = true
 
--- ================================ ORIGINAL LIGHTING (DEFAULT ROBLOX) ================================
+-- ================================ ORIGINAL LIGHTING ================================
 local originalLighting = {
     ClockTime = Lighting.ClockTime,
     Brightness = Lighting.Brightness,
@@ -98,7 +103,6 @@ local originalLighting = {
     FogEnd = Lighting.FogEnd,
 }
 
--- backup default roblox
 local defaultLighting = {
     ClockTime = 14,
     Brightness = 1,
@@ -145,7 +149,7 @@ getgenv()._XKID_CONNS = {}
 
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
--- ================================ DEBUG LOG (ERROR ONLY) ================================
+-- ================================ DEBUG LOG ================================
 local DebugLog = {}
 local function addLog(msg, level)
     if level ~= "ERROR" and level ~= "BUG" then return end
@@ -177,7 +181,30 @@ local State = {
         warmth = 0,
         vignette = 0
     },
-    SelfSpec = { active = false, mode = "Manual", dist = 8, height = 3, orbitYaw = 0, orbitPitch = 20, fov = 70, origFov = 70, roll = 0, radius = 8, speed = 1 },
+    SelfSpec = { 
+        active = false, 
+        mode = "Manual", 
+        dist = 8, height = 3, 
+        orbitYaw = 0, orbitPitch = 20, 
+        fov = 70, origFov = 70, 
+        roll = 0, radius = 8, speed = 1,
+        -- NEW V3.23
+        masterPOVSmooth = 0.5,
+        masterSpeed = 1,
+        distanceMult = 1,
+        heightOffset = 0,
+        followSmooth = 0.3,
+        currentRadius = 8,
+        currentHeight = 3,
+        currentSpeed = 1,
+        currentPOV = 70,
+        targetMode = "Self",
+        followPlayerFacing = false,
+        starAngle = "Front",
+        multiTargets = {},
+        presetMode = "Orbit 360",
+        clubMode = "Head Static"
+    },
     ESP = {
         active = false, cache = getgenv()._XKID_ESP_CACHE, maxDrawDistance = 300, highlightMode = false,
         boxColor_N = Color3.fromRGB(255,0,0), boxColor_S = Color3.fromRGB(220,20,60), boxColor_G = Color3.fromRGB(255,165,0),
@@ -200,6 +227,7 @@ local colorMap = {
 -- ================================ HELPER FUNCTIONS ================================
 local function getRoot() return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
 local function getHum() return LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end
+local function getHead() return LP.Character and LP.Character:FindFirstChild("Head") end
 
 local function getDisplayNames()
     local t = {}; for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(t, p.DisplayName) end end
@@ -281,7 +309,7 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectga
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
 TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
 
--- ================================ ANTI AFK V3.19 (VIRTUALUSER - NO CAMERA MOVE) ================================
+-- ================================ ANTI AFK ================================
 local AFKSystem = { active = true, idleConn = nil, triggerCount = 0 }
 
 local function performAntiAFK()
@@ -524,7 +552,7 @@ local function toggleFly(v)
     end)
 end
 
--- ================================ FREECAM ENGINE ================================
+-- ================================ FREECAM ENGINE (DRONE) ================================
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, origFov = 70, savedWalkSpeed = 16, savedJumpPower = 50 }
 local I_CamVel, I_YawVel, I_PitchVel, I_RollVel, heightVelocity = Vector3.zero, 0, 0, 0, 0
 local fcMoveTouch, fcMoveSt, fcJoy, fcRotTouch, fcRotLast, fcKeysHeld, fcConns = nil, nil, Vector2.zero, nil, nil, {}, {}
@@ -723,7 +751,7 @@ local function toggleFreecam(v)
         eyeBtn.Text = "👁"
         for _, b in ipairs(fcButtons) do b.Visible = true end
         if State.Cinema.hideUI then FCUI.Enabled = false end
-        notify("Freecam", "ON (Lock + Emote)", 2, "video")
+        notify("Freecam", "ON (Drone Mode)", 2, "video")
     else
         FC.active = false
         fullCleanupFreecam()
@@ -731,133 +759,325 @@ local function toggleFreecam(v)
     end
 end
 
--- ================================ SELF-SPECTATE V3.20 (VIDEOGRAPHY PRESETS) ================================
-local SS = State.SelfSpec
+-- ================================ CINEMATIC DIRECTOR (V3.23) ================================
+local CD = State.SelfSpec
 local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
+local followSmoothCurrent = nil
 
-local function startSSGesture()
+local function startCDGesture()
     ssConns = {}
-    table.insert(ssConns, UserInputService.InputBegan:Connect(function(inp,gp) if gp or not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end table.insert(ssPinch, inp) ssTM = #ssPinch == 1 and inp or nil end))
-    table.insert(ssConns, UserInputService.InputChanged:Connect(function(inp) if not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end if #ssPinch == 1 and inp == ssTM then ssPan = ssPan + Vector2.new(inp.Delta.X, inp.Delta.Y) elseif #ssPinch >= 2 then local d = (ssPinch[1].Position - ssPinch[2].Position).Magnitude if ssPinchD then local diff = d - ssPinchD Camera.FieldOfView = math.clamp(Camera.FieldOfView - diff * 0.15, 10, 120) SS.radius = math.clamp(SS.radius - diff * 0.03, 3, 30) end ssPinchD = d end end))
+    table.insert(ssConns, UserInputService.InputBegan:Connect(function(inp,gp) if gp or not CD.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end table.insert(ssPinch, inp) ssTM = #ssPinch == 1 and inp or nil end))
+    table.insert(ssConns, UserInputService.InputChanged:Connect(function(inp) if not CD.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end if #ssPinch == 1 and inp == ssTM then ssPan = ssPan + Vector2.new(inp.Delta.X, inp.Delta.Y) elseif #ssPinch >= 2 then local d = (ssPinch[1].Position - ssPinch[2].Position).Magnitude if ssPinchD then local diff = d - ssPinchD Camera.FieldOfView = math.clamp(Camera.FieldOfView - diff * 0.15, 10, 120) CD.currentRadius = math.clamp(CD.currentRadius - diff * 0.03, 3, 30) end ssPinchD = d end end))
     table.insert(ssConns, UserInputService.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end for i, v in ipairs(ssPinch) do if v == inp then table.remove(ssPinch, i) break end end ssPinchD = nil ssTM = #ssPinch == 1 and ssPinch[1] or nil end))
 end
 
-local function stopSSGesture() for _, c in ipairs(ssConns) do c:Disconnect() end; ssConns = {}; ssTM = nil; ssPinch = {}; ssPinchD = nil; ssPan = Vector2.zero end
+local function stopCDGesture() for _, c in ipairs(ssConns) do c:Disconnect() end; ssConns = {}; ssTM = nil; ssPinch = {}; ssPinchD = nil; ssPan = Vector2.zero end
 
-local function startSelfSpecLoop()
-    RunService:UnbindFromRenderStep("XKIDSelfSpec")
-    RunService:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function()
-        if not SS.active then return end
+-- Target management
+local directorTargets = {}
+local function getTargetPosition()
+    local targetMode = CD.targetMode or "Self"
+    local char = LP.Character
+    if not char then return nil end
+    
+    local targetPos = nil
+    local targetHrp = char:FindFirstChild("HumanoidRootPart")
+    if not targetHrp then return nil end
+    
+    if targetMode == "Self" then
+        targetPos = targetHrp.Position
+    elseif targetMode == "Center" then
+        targetPos = Vector3.new(0, 3, 0)
+    elseif targetMode == "Nearest Player" then
+        local nearest = nil
+        local nearestDist = math.huge
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LP and p.Character then
+                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local dist = (hrp.Position - targetHrp.Position).Magnitude
+                    if dist < nearestDist then
+                        nearestDist = dist
+                        nearest = hrp.Position
+                    end
+                end
+            end
+        end
+        if nearest then targetPos = nearest else targetPos = targetHrp.Position end
+    elseif targetMode == "Multi Target" then
+        if #directorTargets > 0 then
+            local avg = Vector3.zero
+            for _, p in pairs(directorTargets) do
+                if p and p.Character then
+                    local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then avg = avg + hrp.Position end
+                end
+            end
+            if #directorTargets > 0 then targetPos = avg / #directorTargets end
+        end
+        if not targetPos then targetPos = targetHrp.Position end
+    else
+        targetPos = targetHrp.Position
+    end
+    
+    return targetPos + Vector3.new(0, CD.currentHeight or 3, 0)
+end
+
+local function startCDLoop()
+    RunService:UnbindFromRenderStep("XKIDDirector")
+    RunService:BindToRenderStep("XKIDDirector", Enum.RenderPriority.Camera.Value + 1, function()
+        if not CD.active then return end
         pcall(function()
-            local targetChar = LP.Character
-            local targetHrp = getCharRoot(targetChar)
-            if not targetHrp then return end
+            local targetPos = getTargetPosition()
+            if not targetPos then return end
+            
+            local char = LP.Character
+            if not char then return end
+            
             Camera.CameraType = Enum.CameraType.Scriptable
+            
             local pan, sens = ssPan, onMobile and 0.2 or 0.3
             ssPan = Vector2.zero
-            local dt = 0.016
             
-            if #ssPinch == 0 and pan.Magnitude < 0.01 then
-                if SS.mode == "Cinematic Pan R" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 12 * SS.speed
-                    SS.orbitPitch = 0
-                elseif SS.mode == "Cinematic Pan L" then
-                    SS.orbitYaw = SS.orbitYaw - dt * 12 * SS.speed
-                    SS.orbitPitch = 0
-                elseif SS.mode == "Dolly Zoom In" then
-                    SS.radius = math.max(3, SS.radius - dt * 3 * SS.speed)
-                    SS.orbitPitch = 0
-                elseif SS.mode == "Dolly Zoom Out" then
-                    SS.radius = math.min(30, SS.radius + dt * 3 * SS.speed)
-                    SS.orbitPitch = 0
-                elseif SS.mode == "Orbit 360" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 45 * SS.speed
-                    SS.orbitPitch = 15
-                elseif SS.mode == "Orbit Slow" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed
-                    SS.orbitPitch = 20
-                elseif SS.mode == "Top Down View" then
-                    SS.orbitPitch = -85
-                    SS.orbitYaw = SS.orbitYaw + dt * 8 * SS.speed
-                    SS.height = 15
-                elseif SS.mode == "Floating" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * 0.5 * SS.speed) * 10
-                    SS.height = 3 + math.sin(tick() * 0.4 * SS.speed) * 1.5
-                elseif SS.mode == "Hyperlapse" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 120 * SS.speed
-                    SS.orbitPitch = 10 + math.sin(tick() * 2 * SS.speed) * 5
-                    SS.radius = 8 + math.sin(tick() * 1.5 * SS.speed) * 2
-                elseif SS.mode == "Portrait Mode" then
-                    SS.orbitYaw = SS.orbitYaw + pan.X * 0.3
-                    SS.orbitPitch = -10
-                    SS.radius = 4
-                    SS.height = 1
-                elseif SS.mode == "Orbit Vertical" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * 0.8 * SS.speed) * 30
-                elseif SS.mode == "Fisheye" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 30 * SS.speed
-                    SS.orbitPitch = 10
-                    SS.radius = 3
-                    Camera.FieldOfView = math.clamp(Camera.FieldOfView + dt * 5, 70, 120)
-                elseif SS.mode == "Wave Orbit" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 20 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * 0.6 * SS.speed) * 15
-                    SS.radius = 8 + math.sin(tick() * 0.5 * SS.speed) * 3
-                elseif SS.mode == "Dual Axis" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
-                    SS.orbitPitch = 15 + math.sin(tick() * 0.7 * SS.speed) * 20
-                    SS.roll = math.sin(tick() * 0.5 * SS.speed) * 10
-                elseif SS.mode == "Static Tripod" then
-                    -- diam
-                elseif SS.mode == "Slow Orbit" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
-                    SS.orbitPitch = 20
-                elseif SS.mode == "Vertical Swing" then
-                    SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.5) * 40
-                    SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed
-                elseif SS.mode == "Figure 8" then
-                    SS.orbitYaw = math.sin(tick() * SS.speed * 0.8) * 80
-                    SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 1.2) * 35
-                elseif SS.mode == "Cinematic Drift" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.7) * 15
-                elseif SS.mode == "Orbit Steady" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
-                    SS.orbitPitch = 20
-                elseif SS.mode == "Tilt Drift" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 30 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.5) * 10
-                    SS.roll = math.sin(tick() * SS.speed * 0.8) * 5
+            local dt = 0.016
+            local masterSpeed = CD.masterSpeed or 1
+            local smoothness = CD.masterPOVSmooth or 0.5
+            local distMult = CD.distanceMult or 1
+            local heightOff = CD.heightOffset or 0
+            local followSmoothVal = CD.followSmooth or 0.3
+            
+            local radius = (CD.currentRadius or 8) * distMult
+            local height = (CD.currentHeight or 3) + heightOff
+            local speed = (CD.currentSpeed or 1) * masterSpeed
+            local pov = CD.currentPOV or 70
+            local starAngle = CD.starAngle or "Front"
+            
+            -- Update FOV
+            Camera.FieldOfView = pov
+            
+            -- HEAD LOCK / BODY LOCK / FOLLOW (Club modes)
+            local targetHead = char:FindFirstChild("Head")
+            local targetHrp = char:FindFirstChild("HumanoidRootPart")
+            local targetHum = char:FindFirstChildOfClass("Humanoid")
+            
+            local headPos = targetHead and targetHead.Position or (targetHrp and targetHrp.Position + Vector3.new(0, 1.8, 0)) or targetPos + Vector3.new(0, 1.8, 0)
+            local bodyPos = targetHrp and targetHrp.Position + Vector3.new(0, 1.5, 0) or targetPos + Vector3.new(0, 1.5, 0)
+            
+            -- CLUB MODE
+            local clubMode = CD.clubMode or "Manual"
+            if clubMode == "Head Static" then
+                local offset = CFrame.new(headPos) * CFrame.Angles(0, math.rad(CD.orbitYaw), 0) * CFrame.Angles(math.rad(CD.orbitPitch), 0, 0) * CFrame.new(0, 0, radius)
+                Camera.CFrame = CFrame.new(offset.Position, headPos)
+                return
+            elseif clubMode == "Body Static" then
+                local offset = CFrame.new(bodyPos) * CFrame.Angles(0, math.rad(CD.orbitYaw), 0) * CFrame.Angles(math.rad(CD.orbitPitch), 0, 0) * CFrame.new(0, 0, radius)
+                Camera.CFrame = CFrame.new(offset.Position, bodyPos)
+                return
+            elseif clubMode == "Side Static" then
+                local offset = CFrame.new(bodyPos) * CFrame.Angles(0, math.rad(CD.orbitYaw + 90), 0) * CFrame.Angles(math.rad(CD.orbitPitch), 0, 0) * CFrame.new(0, 0, radius)
+                Camera.CFrame = CFrame.new(offset.Position, bodyPos)
+                return
+            elseif clubMode == "High Right" then
+                local offset = CFrame.new(bodyPos + Vector3.new(2, 4, 0)) * CFrame.Angles(0, math.rad(CD.orbitYaw + 45), 0) * CFrame.Angles(math.rad(-20), 0, 0) * CFrame.new(0, 0, radius)
+                Camera.CFrame = CFrame.new(offset.Position, bodyPos + Vector3.new(0, 2, 0))
+                return
+            elseif clubMode == "Foot Static" then
+                local footPos = targetHrp and targetHrp.Position + Vector3.new(0, 0.5, 0) or bodyPos + Vector3.new(0, -1, 0)
+                local offset = CFrame.new(footPos) * CFrame.Angles(0, math.rad(CD.orbitYaw), 0) * CFrame.Angles(math.rad(-10), 0, 0) * CFrame.new(0, 0, radius)
+                Camera.CFrame = CFrame.new(offset.Position, footPos)
+                return
+            elseif clubMode == "Such Tilt" then
+                local offset = CFrame.new(bodyPos) * CFrame.Angles(0, math.rad(CD.orbitYaw), 0) * CFrame.Angles(math.rad(CD.orbitPitch), 0, 0) * CFrame.new(0, 0, radius)
+                local tiltAngle = math.sin(tick() * 1.5) * 15
+                Camera.CFrame = CFrame.new(offset.Position, bodyPos) * CFrame.Angles(0, 0, math.rad(tiltAngle))
+                return
+            end
+            
+            -- FOLLOW PLAYER FACING
+            local facingOffset = 0
+            if CD.followPlayerFacing and targetHrp then
+                local lookVec = targetHrp.CFrame.LookVector
+                local angle = math.atan2(lookVec.X, lookVec.Z)
+                facingOffset = math.deg(angle)
+            end
+            
+            -- STAR ANGLE
+            local starOffset = 0
+            if starAngle == "Front" then starOffset = 0
+            elseif starAngle == "Back" then starOffset = 180
+            elseif starAngle == "Left" then starOffset = 90
+            elseif starAngle == "Right" then starOffset = -90
+            end
+            
+            -- MODE / PRESET
+            local mode = CD.presetMode or "Orbit 360"
+            local yawSpeed = 25
+            local pitchSpeed = 0
+            local radiusSpeed = 0
+            local heightSpeed = 0
+            
+            if mode == "Orbit 360" then
+                yawSpeed = 45
+                pitchSpeed = 0
+            elseif mode == "Orbit Slow" then
+                yawSpeed = 10
+                pitchSpeed = 0
+            elseif mode == "Floating" then
+                yawSpeed = 15
+                pitchSpeed = 10
+                heightSpeed = 0.4
+            elseif mode == "Hyperlapse" then
+                yawSpeed = 120
+                pitchSpeed = 5
+                radiusSpeed = 1.5
+            elseif mode == "Portrait" then
+                yawSpeed = 5
+                pitchSpeed = -10
+            elseif mode == "Orbit Vertical" then
+                yawSpeed = 25
+                pitchSpeed = 30
+            elseif mode == "Fisheye" then
+                yawSpeed = 30
+                pitchSpeed = 0
+                radius = 3
+                Camera.FieldOfView = math.clamp(Camera.FieldOfView + dt * 5, 70, 120)
+            elseif mode == "Wave Orbit" then
+                yawSpeed = 20
+                pitchSpeed = 15
+                radiusSpeed = 3
+            elseif mode == "Dual Axis" then
+                yawSpeed = 25
+                pitchSpeed = 20
+            elseif mode == "Static Tripod" then
+                yawSpeed = 0
+                pitchSpeed = 0
+            elseif mode == "Helicopter" then
+                yawSpeed = 60
+                pitchSpeed = 5
+            elseif mode == "Spiral" then
+                yawSpeed = 35
+                pitchSpeed = 15
+                radiusSpeed = 4
+            elseif mode == "Action Cam" then
+                yawSpeed = 80
+                pitchSpeed = 15
+                radiusSpeed = 2
+            elseif mode == "Cinematic Drift" then
+                yawSpeed = 15
+                pitchSpeed = 15
+            elseif mode == "FPV Drone" then
+                yawSpeed = 50
+                pitchSpeed = 5
+                radius = 4
+            elseif mode == "Crash Zoom" then
+                yawSpeed = 0
+                pitchSpeed = 0
+                radius = math.max(3, radius - dt * 10 * speed)
+            elseif mode == "Smear Cam" then
+                yawSpeed = 40
+                pitchSpeed = 10
+            elseif mode == "Whip Snap" then
+                yawSpeed = 120 * (1 + math.sin(tick() * 0.5))
+                pitchSpeed = 20 * (1 + math.sin(tick() * 0.3))
+            elseif mode == "Stobe Cut" then
+                yawSpeed = 0
+                pitchSpeed = 0
+                if math.sin(tick() * 4) > 0.5 then
+                    Camera.CFrame = Camera.CFrame * CFrame.new(0, 0, -radius * 0.5)
+                end
+            elseif mode == "Bounce Beat" then
+                yawSpeed = 30
+                pitchSpeed = 5
+                height = height + math.sin(tick() * 2 * speed) * 2
+            elseif mode == "Glitch Cam" then
+                yawSpeed = 40
+                pitchSpeed = 20
+                if math.sin(tick() * 3) > 0.7 then
+                    Camera.CFrame = Camera.CFrame * CFrame.new(math.random(-3,3), math.random(-3,3), math.random(-3,3))
+                end
+            elseif mode == "Speed Ramp" then
+                local ramp = 1 + math.sin(tick() * 0.3) * 2
+                yawSpeed = 25 * ramp
+                pitchSpeed = 10 * ramp
+            elseif mode == "Vertigo Effect" then
+                yawSpeed = 20
+                pitchSpeed = 5
+                Camera.FieldOfView = 70 + math.sin(tick() * 0.5) * 20
+            elseif mode == "Reveal Push In" then
+                radius = math.max(3, radius - dt * 5 * speed)
+                yawSpeed = 0
+                pitchSpeed = 0
+            elseif mode == "Drone Swoop" then
+                yawSpeed = 30
+                pitchSpeed = 10
+                height = height + math.sin(tick() * 0.8 * speed) * 3
+            elseif mode == "Helix Rise" then
+                yawSpeed = 40
+                pitchSpeed = 5
+                height = height + dt * 2 * speed
+            elseif mode == "Through Crowd" then
+                yawSpeed = 20
+                pitchSpeed = 0
+                radius = 3 + math.sin(tick() * 0.5 * speed) * 2
+            else -- Manual
+                yawSpeed = 0
+                pitchSpeed = 0
+            end
+            
+            -- Apply speed
+            yawSpeed = yawSpeed * speed * 0.5
+            pitchSpeed = pitchSpeed * speed * 0.5
+            
+            -- Update angles
+            if CD.mode ~= "Manual" then
+                CD.orbitYaw = CD.orbitYaw + dt * yawSpeed + starOffset + facingOffset
+                CD.orbitPitch = CD.orbitPitch + dt * pitchSpeed
+                if radiusSpeed > 0 then
+                    radius = radius + math.sin(tick() * 0.5 * speed) * radiusSpeed * 0.1
+                end
+                if heightSpeed > 0 then
+                    height = height + math.sin(tick() * 0.6 * speed) * heightSpeed
                 end
             end
             
-            SS.orbitYaw = SS.orbitYaw + pan.X * sens
-            SS.orbitPitch = math.clamp(SS.orbitPitch + pan.Y * sens, -85, 85)
+            CD.orbitYaw = CD.orbitYaw + pan.X * sens
+            CD.orbitPitch = math.clamp(CD.orbitPitch + pan.Y * sens, -85, 85)
             
-            local h = SS.height or 3
-            local camCF = CFrame.new((CFrame.new(targetHrp.Position + Vector3.new(0, h, 0)) * CFrame.Angles(0, math.rad(-SS.orbitYaw), 0) * CFrame.Angles(math.rad(-SS.orbitPitch), 0, 0) * CFrame.new(0, 0, SS.radius)).Position, targetHrp.Position + Vector3.new(0, h, 0))
+            -- Build CFrame
+            local targetFinal = targetPos or Vector3.zero
+            local camCF = CFrame.new((CFrame.new(targetFinal + Vector3.new(0, height, 0)) * CFrame.Angles(0, math.rad(-CD.orbitYaw), 0) * CFrame.Angles(math.rad(-CD.orbitPitch), 0, 0) * CFrame.new(0, 0, radius)).Position, targetFinal)
             
-            if SS.mode == "Tilt Drift" or SS.mode == "Dual Axis" then
-                camCF = camCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0))
+            -- Smooth follow
+            if followSmoothCurrent == nil then
+                followSmoothCurrent = camCF
             end
             
-            Camera.CFrame = camCF
+            local lerpFactor = 1 - math.exp(-dt * (10 + followSmoothVal * 20))
+            followSmoothCurrent = followSmoothCurrent:Lerp(camCF, lerpFactor)
+            
+            if followSmoothVal > 0.1 then
+                Camera.CFrame = followSmoothCurrent
+            else
+                Camera.CFrame = camCF
+            end
+            
+            -- Store current values for UI display
+            CD.currentRadius = radius
+            CD.currentHeight = height
+            CD.currentSpeed = speed
+            CD.currentPOV = Camera.FieldOfView
         end)
     end)
 end
 
-local function stopSelfSpecLoop()
-    RunService:UnbindFromRenderStep("XKIDSelfSpec")
+local function stopCDLoop()
+    RunService:UnbindFromRenderStep("XKIDDirector")
     Camera.CameraType = Enum.CameraType.Custom
-    Camera.FieldOfView = SS.origFov
-    SS.active = false
-    SS.orbitYaw = 0
-    SS.orbitPitch = 20
-    SS.radius = 8
-    SS.height = 3
-    ssPan = Vector2.zero
+    Camera.FieldOfView = CD.origFov or 70
+    CD.active = false
+    CD.orbitYaw = 0
+    CD.orbitPitch = 20
+    followSmoothCurrent = nil
 end
 
 local function toggleSelfSpec(v)
@@ -866,21 +1086,19 @@ local function toggleSelfSpec(v)
         if State.Fly.active then toggleFly(false) end
         if State.Spec.active then State.Spec.active = false stopSpecLoop() stopSpecCapture() end
         if Teleport.clickConn then Teleport.clickConn:Disconnect() Teleport.clickConn = nil end
-        SS.active = true
-        SS.origFov = Camera.FieldOfView
-        SS.orbitYaw = 0
-        SS.orbitPitch = 20
-        SS.radius = SS.radius or 8
-        SS.height = SS.height or 3
-        SS.roll = 0
-        startSSGesture()
-        startSelfSpecLoop()
-        notify("Self-Spectate", "ON — " .. (SS.mode or "Manual"), 2, "camera")
+        CD.active = true
+        CD.origFov = Camera.FieldOfView
+        CD.orbitYaw = 0
+        CD.orbitPitch = 20
+        followSmoothCurrent = nil
+        startCDGesture()
+        startCDLoop()
+        notify("Director", "ON — " .. (CD.presetMode or "Manual"), 2, "camera")
     else
-        SS.active = false
-        stopSSGesture()
-        stopSelfSpecLoop()
-        notify("Self-Spectate", "OFF", 1.5, "camera")
+        CD.active = false
+        stopCDGesture()
+        stopCDLoop()
+        notify("Director", "OFF", 1.5, "camera")
     end
 end
 
@@ -1007,7 +1225,7 @@ end
 local function stopHardFling() stopHardFlingInternal() notify("Hard Fling", "OFF", 1.5, "zap") end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
 
--- ================================ FILTERS V3.21 (WARMFIX + RESET DEFAULT) ================================
+-- ================================ FILTERS ================================
 local FILTER_PRESETS = {
     Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7, shade = 0, warmth = -0.1 },
     Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2, shade = 0.1, warmth = -0.3 },
@@ -1040,7 +1258,6 @@ local function resetFilterOnly()
     end
 end
 
--- RESET KE DEFAULT ROBLOX (bukan default custom)
 local function resetToDefaultRoblox()
     resetFilterOnly()
     Lighting.ClockTime = defaultLighting.ClockTime
@@ -1051,7 +1268,6 @@ local function resetToDefaultRoblox()
     Lighting.ExposureCompensation = defaultLighting.ExposureCompensation
     Lighting.FogEnd = defaultLighting.FogEnd
     
-    -- Reset state CustomFilter ke default
     State.CustomFilter.tintR = 255
     State.CustomFilter.tintG = 255
     State.CustomFilter.tintB = 255
@@ -1078,7 +1294,6 @@ local function applyCustomFilter()
     Lighting.FogEnd = originalLighting.FogEnd
     Lighting.ExposureCompensation = State.CustomFilter.exposure
     
-    -- Main color correction
     local cc = Instance.new("ColorCorrectionEffect", Lighting)
     cc.Name = "_XKID_FILTER"
     cc.TintColor = Color3.fromRGB(State.CustomFilter.tintR, State.CustomFilter.tintG, State.CustomFilter.tintB)
@@ -1086,7 +1301,6 @@ local function applyCustomFilter()
     cc.Contrast = State.CustomFilter.contrast
     cc.Brightness = State.CustomFilter.brightness
     
-    -- Shade effect
     if State.CustomFilter.shade > 0 then
         local shade = Instance.new("ColorCorrectionEffect", Lighting)
         shade.Name = "_XKID_SHADE"
@@ -1096,7 +1310,6 @@ local function applyCustomFilter()
         shade.Contrast = State.CustomFilter.shade * 0.2
     end
     
-    -- WARMTH FIX V3.21: Range aman -0.5 sampai 0.5, tidak bikin gelap
     if State.CustomFilter.warmth ~= 0 then
         local warmth = Instance.new("ColorCorrectionEffect", Lighting)
         warmth.Name = "_XKID_WARMTH"
@@ -1111,7 +1324,6 @@ local function applyCustomFilter()
         end
     end
     
-    -- Vignette effect
     if State.CustomFilter.vignette > 0 then
         local vignette = Instance.new("BloomEffect", Lighting)
         vignette.Name = "_XKID_VIGNETTE"
@@ -1120,7 +1332,6 @@ local function applyCustomFilter()
         vignette.Threshold = 0.5
     end
     
-    -- Bloom
     if State.CustomFilter.bloomIntensity > 0 then
         local bloom = Instance.new("BloomEffect", Lighting)
         bloom.Name = "_XKID_FILTER"
@@ -1223,7 +1434,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.21", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.23", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1232,7 +1443,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.21", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.23", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -1329,35 +1540,79 @@ secZoom:Toggle({ Title = "Max Zoom Out", Default = false, Callback = function(v)
 local secSP = TabSpec:Section({ Title = "Spectator Mode", Icon = "eye", Box = true })
 secSP:Dropdown({ Title = "Select Target", Values = getDisplayNamesWithSelf(), Callback = function(v) local s = tostring(v) if s == "[Self]" then State.Spec.target = LP State.Spec.isSelf = true State.Spec.orbitYaw = 0 State.Spec.orbitPitch = 20 notify("Spectator", "Self", 1.5, "eye") else local p = findPlayerByDisplay(s) if p then State.Spec.target = p State.Spec.isSelf = false if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local _, ry, _ = p.Character.HumanoidRootPart.CFrame:ToEulerAnglesYXZ() State.Spec.orbitYaw = math.deg(ry) State.Spec.orbitPitch = 20 end notify("Spectator", p.DisplayName, 1.5, "eye") end end end })
 secSP:Button({ Title = "Refresh Target List", Callback = function() notify("Spectator", "List refreshed", 1.5, "eye") end })
-secSP:Toggle({ Title = "Enable Spectate", Default = false, Callback = function(v) if SS.active then toggleSelfSpec(false) end State.Spec.active = v if v then if not State.Spec.target or not State.Spec.target.Character then if State.Spec.isSelf and LP.Character then else State.Spec.active = false notify("Error", "No target", 2, "circle-alert") return end end State.Spec.origFov = Camera.FieldOfView startSpecCapture() startSpecLoop() notify("Spectator", "ON", 2, "eye") else stopSpecLoop() stopSpecCapture() Camera.CameraType = Enum.CameraType.Custom Camera.FieldOfView = State.Spec.origFov notify("Spectator", "OFF", 1.5, "eye") end end })
+secSP:Toggle({ Title = "Enable Spectate", Default = false, Callback = function(v) if CD.active then toggleSelfSpec(false) end State.Spec.active = v if v then if not State.Spec.target or not State.Spec.target.Character then if State.Spec.isSelf and LP.Character then else State.Spec.active = false notify("Error", "No target", 2, "circle-alert") return end end State.Spec.origFov = Camera.FieldOfView startSpecCapture() startSpecLoop() notify("Spectator", "ON", 2, "eye") else stopSpecLoop() stopSpecCapture() Camera.CameraType = Enum.CameraType.Custom Camera.FieldOfView = State.Spec.origFov notify("Spectator", "OFF", 1.5, "eye") end end })
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) State.Spec.dist = v end })
 
--- ================================ TAB: CINEMATIC ================================
-local TabCine = Window:Tab({ Title = "Cinematic", Icon = "aperture" })
-local secSelfSpec = TabCine:Section({ Title = "🎥 Self-Spectate", Icon = "camera", Box = true })
-secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "1-finger orbit | 2-finger zoom | Mouse right-drag", Default = false, Callback = toggleSelfSpec })
-secSelfSpec:Dropdown({ Title = "Preset Mode", Values = { 
-    "Manual", 
-    "Cinematic Pan R", "Cinematic Pan L", 
-    "Dolly Zoom In", "Dolly Zoom Out",
-    "Orbit 360", "Orbit Slow", 
-    "Top Down View", "Floating", 
-    "Hyperlapse", "Portrait Mode", 
-    "Orbit Vertical", "Fisheye", 
-    "Wave Orbit", "Dual Axis", "Static Tripod",
-    "Slow Orbit", "Vertical Swing", "Figure 8", "Cinematic Drift", "Orbit Steady", "Tilt Drift" 
-}, Default = "Manual", Callback = function(v) SS.mode = v notify("Self-Spec", "Mode: " .. v, 1.5, "camera") end })
-secSelfSpec:Slider({ Title = "Distance / Radius", Step = 0.5, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) SS.radius = v SS.dist = v end })
-secSelfSpec:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20, Default = 3 }, Callback = function(v) SS.height = v end })
-secSelfSpec:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, Default = 1 }, Callback = function(v) SS.speed = v end })
+-- ================================ TAB: CINEMATIC DIRECTOR ================================
+local TabDirector = Window:Tab({ Title = "Director", Icon = "camera" })
 
-local secFC = TabCine:Section({ Title = "Drone Engine", Icon = "video", Box = true })
-secFC:Toggle({ Title = "Enable Freecam", Desc = "Karakter LOCK posisi + Bisa Emote/Dance", Default = false, Callback = toggleFreecam })
-secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
-secFC:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
+local secCD = TabDirector:Section({ Title = "🎬 Cinematic Director", Icon = "clapperboard", Box = true })
+secCD:Toggle({ Title = "Enable Director", Desc = "Aktifkan kamera sinematik", Default = false, Callback = function(v) toggleSelfSpec(v) end })
+
+-- SETTINGS
+local secSettings = TabDirector:Section({ Title = "⚙️ Settings", Icon = "sliders", Box = true })
+secSettings:Slider({ Title = "Master POV Smoothness", Step = 0.05, Value = { Min = 0, Max = 1, Default = 0.5 }, Callback = function(v) CD.masterPOVSmooth = v end })
+secSettings:Slider({ Title = "Master Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, Default = 1 }, Callback = function(v) CD.masterSpeed = v end })
+secSettings:Slider({ Title = "Distance Mult", Step = 0.1, Value = { Min = 0.5, Max = 3, Default = 1 }, Callback = function(v) CD.distanceMult = v end })
+secSettings:Slider({ Title = "Height Offset", Step = 0.5, Value = { Min = -5, Max = 10, Default = 0 }, Callback = function(v) CD.heightOffset = v end })
+secSettings:Slider({ Title = "Follow Smooth", Step = 0.05, Value = { Min = 0, Max = 1, Default = 0.3 }, Callback = function(v) CD.followSmooth = v end })
+
+-- CURRENT MODE
+local secCurrent = TabDirector:Section({ Title = "🎯 Current Mode", Icon = "target", Box = true })
+secCurrent:Slider({ Title = "Radius", Step = 0.5, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) CD.currentRadius = v end })
+secCurrent:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20, Default = 3 }, Callback = function(v) CD.currentHeight = v end })
+secCurrent:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, Default = 1 }, Callback = function(v) CD.currentSpeed = v end })
+secCurrent:Slider({ Title = "POV (FOV)", Step = 1, Value = { Min = 10, Max = 120, Default = 70 }, Callback = function(v) CD.currentPOV = v end })
+
+-- TARGET MODE
+local secTarget = TabDirector:Section({ Title = "🎯 Target Mode", Icon = "crosshair", Box = true })
+local targetDropdown = secTarget:Dropdown({ Title = "Target Mode", Values = { "Self", "Center", "Nearest Player", "Multi Target" }, Default = "Self", Callback = function(v) CD.targetMode = v end })
+secTarget:Button({ Title = "➕ Add Multi Target", Desc = "Tambahkan player ke multi target", Callback = function() 
+    -- akan diisi dengan dropdown player nanti
+    notify("Target", "Pilih player dari dropdown", 1.5, "user") 
+end })
+secTarget:Button({ Title = "🗑 Clear Multi Target", Desc = "Hapus semua multi target", Callback = function() 
+    directorTargets = {}
+    notify("Target", "Multi target cleared", 1.5, "trash-2") 
+end })
+
+-- CAMERA ANGLE
+local secAngle = TabDirector:Section({ Title = "📐 Camera Angle", Icon = "rotate-cw", Box = true })
+secAngle:Toggle({ Title = "Follow Player Facing", Desc = "Kamera ikut arah hadap player", Default = false, Callback = function(v) CD.followPlayerFacing = v end })
+secAngle:Dropdown({ Title = "Star Angle", Values = { "Front", "Back", "Left", "Right" }, Default = "Front", Callback = function(v) CD.starAngle = v end })
+
+-- MODE
+local secMode = TabDirector:Section({ Title = "🎬 Mode", Icon = "film", Box = true })
+secMode:Dropdown({ Title = "Intro Mode", Values = { "Manual", "Reveal Push In", "Drone Swoop", "Helix Rise", "Through Crowd" }, Default = "Manual", Callback = function(v) CD.presetMode = v end })
+
+-- PRESET
+local secPreset = TabDirector:Section({ Title = "🎞️ Preset", Icon = "layout-grid", Box = true })
+secPreset:Dropdown({ Title = "Preset Mode", Values = { 
+    "Orbit 360", "Orbit Slow", "Floating", "Hyperlapse", 
+    "Portrait", "Orbit Vertical", "Fisheye", "Wave Orbit", 
+    "Dual Axis", "Static Tripod", "Helicopter", "Spiral", 
+    "Action Cam", "Cinematic Drift", 
+    "FPV Drone", "Crash Zoom", "Smear Cam", "Whip Snap", 
+    "Stobe Cut", "Bounce Beat", "Glitch Cam", "Speed Ramp", "Vertigo Effect"
+}, Default = "Orbit 360", Callback = function(v) CD.presetMode = v end })
+
+-- CLUB MODE
+local secClub = TabDirector:Section({ Title = "🪩 Club Mode", Icon = "music", Box = true })
+secClub:Dropdown({ Title = "Club Preset", Values = { 
+    "Manual", "Head Static", "Body Static", "Side Static", 
+    "High Right", "Foot Static", "Such Tilt" 
+}, Default = "Manual", Callback = function(v) CD.clubMode = v end })
+
+-- ================================ TAB: DRONE (FREECAM) ================================
+local TabDrone = Window:Tab({ Title = "Drone", Icon = "video" })
+
+local secDrone = TabDrone:Section({ Title = "🚁 Drone Engine", Icon = "drone", Box = true })
+secDrone:Toggle({ Title = "Enable Freecam", Desc = "Karakter LOCK posisi + Bisa Emote/Dance", Default = false, Callback = toggleFreecam })
+secDrone:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
+secDrone:Slider({ Title = "Sensitivity", Step = 0.05, Value = { Min = 0.1, Max = 1.0, Default = 0.25 }, Callback = function(v) FC.sens = v end })
 
 local cinematicHideActive = false
-secFC:Toggle({ Title = "Hide All UI (Cinematic)", Default = false, Callback = function(v) if getgenv()._XKID_UI_LOADING then return end cinematicHideActive = v
+secDrone:Toggle({ Title = "Hide All UI (Cinematic)", Default = false, Callback = function(v) if getgenv()._XKID_UI_LOADING then return end cinematicHideActive = v
     if v then State.Cinema.hideUI = true State.Cinema.cachedGuis = {} for _, gui in pairs(LP.PlayerGui:GetChildren()) do if gui:IsA("ScreenGui") and gui.Enabled then table.insert(State.Cinema.cachedGuis, gui) gui.Enabled = false end end pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end) if FCUI then FCUI.Enabled = false end
     else State.Cinema.hideUI = false for _, gui in pairs(State.Cinema.cachedGuis) do if gui and gui.Parent then gui.Enabled = true end end State.Cinema.cachedGuis = {} pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end) if FC.active and FCUI then FCUI.Enabled = true end end notify("Cinematic", v and "UI Hidden" or "UI Shown", 1.5, "film") end })
 
@@ -1379,12 +1634,10 @@ secFX:Slider({ Title = "Brightness", Step = 0.05, Value = { Min = -1, Max = 1, D
 secFX:Slider({ Title = "Exposure", Step = 0.1, Value = { Min = -5, Max = 5, Default = 0 }, Callback = function(v) State.CustomFilter.exposure = v applyCustomFilter() end })
 secFX:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = { Min = 0, Max = 2, Default = 0 }, Callback = function(v) State.CustomFilter.bloomIntensity = v applyCustomFilter() end })
 secFX:Slider({ Title = "ClockTime", Step = 0.5, Value = { Min = 0, Max = 24, Default = 14 }, Callback = function(v) State.CustomFilter.clockTime = v applyCustomFilter() end })
--- V3.21: Range Warmth lebih aman (-0.5 sampai 0.5)
 secFX:Slider({ Title = "Shade (Bayangan)", Step = 0.05, Value = { Min = 0, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.shade = v applyCustomFilter() end })
 secFX:Slider({ Title = "Warmth (Suhu Warna)", Step = 0.05, Value = { Min = -0.5, Max = 0.5, Default = 0 }, Callback = function(v) State.CustomFilter.warmth = v applyCustomFilter() end })
 secFX:Slider({ Title = "Vignette (Pinggiran Gelap)", Step = 0.05, Value = { Min = 0, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.vignette = v applyCustomFilter() end })
 
--- Tombol Reset Custom FX
 secFX:Button({ Title = "Reset Custom FX", Callback = function() 
     State.CustomFilter.saturation = 0
     State.CustomFilter.contrast = 0
@@ -1399,7 +1652,6 @@ secFX:Button({ Title = "Reset Custom FX", Callback = function()
     notify("Visuals", "Custom FX Reset", 2, "rotate-ccw") 
 end })
 
--- V3.21: Tombol Reset ke Default Roblox (bersih total)
 secFX:Button({ Title = "Reset to Default Roblox", Desc = "Kembalikan lighting ke bawaan Roblox", Callback = function() 
     resetToDefaultRoblox()
 end })
@@ -1437,8 +1689,6 @@ local secSrv = TabProt:Section({ Title = "Server Control", Icon = "server", Box 
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Callback = function() pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) notify("Server", "Rejoining...", 2, "log-in") end })
 secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Callback = function() pcall(function() local req = getgenv()._XKID_REQUEST or httpRequest if not req then notify("Error", "HTTP not supported", 2, "circle-alert") return end local res = req({ Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100", Method = "GET" }) if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body) if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, LP) notify("Server", "Hopping...", 2, "shuffle") return end end end end end) end })
 local secPerf = TabProt:Section({ Title = "Performance", Icon = "gauge", Box = true })
-local gfxMap = { [1] = "Level01", [2] = "Level02", [3] = "Level03", [4] = "Level04", [5] = "Level05", [6] = "Level06", [7] = "Level07", [8] = "Level08", [9] = "Level09", [10] = "Level10" }
-secPerf:Slider({ Title = "Quality Level", Step = 1, Value = { Min = 1, Max = 10, Default = 2 }, Callback = function(v) if gfxMap[v] then pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel[gfxMap[v]] end) end notify("Graphics", gfxMap[v], 1.5, "gauge") end })
 secPerf:Dropdown({ Title = "FPS Cap", Values = { "30", "60", "120", "144", "240", "Unlimited" }, Default = "120", Callback = function(v) if v == "Unlimited" then setOptimalFPS(9999) State.FPS.cap = 9999 else setOptimalFPS(tonumber(v)) State.FPS.cap = tonumber(v) end notify("Graphics", v .. " FPS", 1.5, "gauge") end })
 local advCache = { level = nil, shadows = true, brightness = 5, clockTime = 14, fogEnd = 100000, mats = {}, texs = {} }
 secPerf:Toggle({ Title = "FPS Boost", Default = false, Callback = function(v) State.Security.antiLag = v if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end) advCache.shadows = Lighting.GlobalShadows advCache.brightness = Lighting.Brightness advCache.clockTime = Lighting.ClockTime advCache.fogEnd = Lighting.FogEnd pcall(function() settings().Rendering.QualityLevel = 1 end) Lighting.GlobalShadows = false Lighting.Brightness = 1 Lighting.FogEnd = 100000 for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled obj.Enabled = false end end notify("Performance", "FPS Boost ON", 2, "zap") else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end) Lighting.GlobalShadows = advCache.shadows Lighting.Brightness = advCache.brightness Lighting.ClockTime = advCache.clockTime Lighting.FogEnd = advCache.fogEnd for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then pcall(function() obj.Material = mat end) end end for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then pcall(function() obj.Enabled = enb end) end end advCache.mats = {} advCache.texs = {} notify("Performance", "Graphics restored", 2, "zap") end end })
@@ -1458,8 +1708,8 @@ local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box
 local cfgName = "XKID_Config_V3"
 local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config_V3", Callback = function(v) cfgName = v end })
-local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime, shade = State.CustomFilter.shade, warmth = State.CustomFilter.warmth, vignette = State.CustomFilter.vignette } } writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)) notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
-local function loadConfig(selected) if selected == "No config" then return end pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")) if d then if d.Move then State.Move.ws = d.Move.ws or 16 State.Move.jp = d.Move.jp or 50 State.Move.flyS = d.Move.flyS or 60 State.Move.autoWalkSpeed = d.Move.autoWalkSpeed or 16 local h = getHum() if h then h.WalkSpeed = State.Move.ws h.UseJumpPower = true h.JumpPower = State.Move.jp end end if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300 State.ESP.highlightMode = d.ESP.highlightMode or false end if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end if d.AutoLike then State.AutoLike.radius = d.AutoLike.radius or 100 State.AutoLike.minCD = d.AutoLike.minCD or 2 State.AutoLike.maxCD = d.AutoLike.maxCD or 6 end if d.HardFling then State.HardFling.power = d.HardFling.power or 5000 State.HardFling.mode = d.HardFling.mode or "Spin" end if d.SelfSpec then SS.mode = d.SelfSpec.mode or "Manual" SS.radius = d.SelfSpec.radius or 8 SS.height = d.SelfSpec.height or 3 SS.speed = d.SelfSpec.speed or 1 end if d.CustomFilter then for k, v in pairs(d.CustomFilter) do State.CustomFilter[k] = v end applyCustomFilter() end notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
+local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = CD.presetMode, radius = CD.currentRadius, height = CD.currentHeight, speed = CD.currentSpeed, masterPOVSmooth = CD.masterPOVSmooth, masterSpeed = CD.masterSpeed, distanceMult = CD.distanceMult, heightOffset = CD.heightOffset, followSmooth = CD.followSmooth, targetMode = CD.targetMode, followPlayerFacing = CD.followPlayerFacing, starAngle = CD.starAngle, clubMode = CD.clubMode }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime, shade = State.CustomFilter.shade, warmth = State.CustomFilter.warmth, vignette = State.CustomFilter.vignette } } writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)) notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
+local function loadConfig(selected) if selected == "No config" then return end pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")) if d then if d.Move then State.Move.ws = d.Move.ws or 16 State.Move.jp = d.Move.jp or 50 State.Move.flyS = d.Move.flyS or 60 State.Move.autoWalkSpeed = d.Move.autoWalkSpeed or 16 local h = getHum() if h then h.WalkSpeed = State.Move.ws h.UseJumpPower = true h.JumpPower = State.Move.jp end end if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300 State.ESP.highlightMode = d.ESP.highlightMode or false end if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end if d.AutoLike then State.AutoLike.radius = d.AutoLike.radius or 100 State.AutoLike.minCD = d.AutoLike.minCD or 2 State.AutoLike.maxCD = d.AutoLike.maxCD or 6 end if d.HardFling then State.HardFling.power = d.HardFling.power or 5000 State.HardFling.mode = d.HardFling.mode or "Spin" end if d.SelfSpec then CD.presetMode = d.SelfSpec.mode or "Orbit 360" CD.currentRadius = d.SelfSpec.radius or 8 CD.currentHeight = d.SelfSpec.height or 3 CD.currentSpeed = d.SelfSpec.speed or 1 CD.masterPOVSmooth = d.SelfSpec.masterPOVSmooth or 0.5 CD.masterSpeed = d.SelfSpec.masterSpeed or 1 CD.distanceMult = d.SelfSpec.distanceMult or 1 CD.heightOffset = d.SelfSpec.heightOffset or 0 CD.followSmooth = d.SelfSpec.followSmooth or 0.3 CD.targetMode = d.SelfSpec.targetMode or "Self" CD.followPlayerFacing = d.SelfSpec.followPlayerFacing or false CD.starAngle = d.SelfSpec.starAngle or "Front" CD.clubMode = d.SelfSpec.clubMode or "Manual" end if d.CustomFilter then for k, v in pairs(d.CustomFilter) do State.CustomFilter[k] = v end applyCustomFilter() end notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
 secFile:Button({ Title = "Save Config", Callback = saveConfig })
 local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected loadConfig(selected) end })
 secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" and executor.has_listfiles then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json") pcall(function() configDrop:Refresh(getConfigList(), true) end) currentConfig = "No config" notify("Config", "Deleted", 2, "trash-2") end end) end end })
@@ -1477,4 +1727,4 @@ pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 e
 setOptimalFPS(120)
 
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.21 AKTIF — Warmth Fix + Reset Default Roblox", 3, "rocket")
+notify("System", "XKID_HUB V3.23 AKTIF — Cinematic Director + Drone Split", 3, "rocket")
