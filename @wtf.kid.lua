@@ -1,10 +1,11 @@
--- @XKID SCRIPT V3.22 (Videography Presets + Quality Removed + Head/Body Lock)
+-- @XKID SCRIPT V3.27 (Clean Graphics)
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.22:
--- - REMOVED: Quality Level slider (pakai pengaturan Roblox default)
--- - REMOVED: Cinematic Pan R/L, Dolly Zoom, Top Down (kurang berguna)
--- - ADDED: Head Lock, Body Lock, Follow mode
--- - TOTAL: 18 Self-Spectate presets (rapi, no duplicate)
+-- Changelog V3.27:
+-- - REMOVED: FPS Boost toggle (no more forced low quality)
+-- - REMOVED: FPS Cap dropdown (auto max FPS)
+-- - REMOVED: QualityLevel override di init
+-- - REMOVED: setOptimalFPS function (no render tampering)
+-- - ADDED: Simple max FPS unlock tanpa sentuh render settings
 
 repeat task.wait() until game:IsLoaded()
 
@@ -52,20 +53,8 @@ local function httpRequest(options)
 end
 getgenv()._XKID_REQUEST = httpRequest
 
--- ================================ FPS UNLOCKER ================================
-local function setOptimalFPS(targetFPS)
-    targetFPS = targetFPS or 120
-    pcall(function() if setfpscap then setfpscap(targetFPS) end end)
-    pcall(function()
-        local rs = settings():GetService("Rendering")
-        if rs and rs.SetTargetFrameRate then rs:SetTargetFrameRate(targetFPS) end
-    end)
-    pcall(function()
-        local ws = game:GetService("Workspace")
-        if ws and ws.SetTargetFrameRate then ws:SetTargetFrameRate(targetFPS) end
-    end)
-end
-setOptimalFPS(120)
+-- ================================ MAX FPS UNLOCK ================================
+pcall(function() if setfpscap then setfpscap(9999) end end)
 
 -- ================================ SERVICES ================================
 local RunService = game:GetService("RunService")
@@ -87,7 +76,7 @@ local onMobile = not UserInputService.KeyboardEnabled
 
 getgenv()._XKID_UI_LOADING = true
 
--- ================================ ORIGINAL LIGHTING (DEFAULT ROBLOX) ================================
+-- ================================ ORIGINAL LIGHTING ================================
 local originalLighting = {
     ClockTime = Lighting.ClockTime,
     Brightness = Lighting.Brightness,
@@ -144,15 +133,7 @@ getgenv()._XKID_CONNS = {}
 
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
--- ================================ DEBUG LOG (ERROR ONLY) ================================
-local DebugLog = {}
-local function addLog(msg, level)
-    if level ~= "ERROR" and level ~= "BUG" then return end
-    local e = string.format("[%s] [%s] %s", os.date("%H:%M:%S"), level, msg)
-    table.insert(DebugLog, e)
-    if #DebugLog > 100 then table.remove(DebugLog, 1) end
-end
-
+-- ================================ NOTIFY ================================
 local function notify(title, content, duration, icon)
     pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) end)
 end
@@ -162,11 +143,9 @@ local State = {
     Move = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60, autoWalk = false, autoWalkSpeed = 16 },
     Fly = { active = false, bv = nil, bg = nil, _keys = {} },
     HardFling = { active = false, power = 10000, mode = "Spin", currentPower = 0, rampUpActive = false },
-    Security = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false },
+    Security = { afkActive = false, shiftLock = false, shiftLockGyro = nil },
     Cinema = { hideUI = false, cachedGuis = {} },
     Avatar = { isRefreshing = false },
-    Utility = { chatLog = false, chatTargets = {}, chatHistory = {} },
-    AutoLike = { active = false, thread = nil, lastTarget = nil, count = 0, radius = 100, minCD = 2, maxCD = 6 },
     CustomFilter = { 
         tintR = 255, tintG = 255, tintB = 255, 
         saturation = 0, contrast = 0, brightness = 0, 
@@ -176,15 +155,22 @@ local State = {
         warmth = 0,
         vignette = 0
     },
-    SelfSpec = { active = false, mode = "Manual", dist = 8, height = 3, orbitYaw = 0, orbitPitch = 20, fov = 70, origFov = 70, roll = 0, radius = 8, speed = 1 },
+    SelfSpec = { 
+        active = false, mode = "Orbit 360", dist = 8, height = 3, 
+        orbitYaw = 0, orbitPitch = 20, fov = 70, origFov = 70, 
+        roll = 0, radius = 8, speed = 1,
+        distanceMult = 1,
+        heightOffset = 0,
+        _crashInit = nil,
+        _crashStartRadius = 8
+    },
     ESP = {
         active = false, cache = getgenv()._XKID_ESP_CACHE, maxDrawDistance = 300, highlightMode = false,
         boxColor_N = Color3.fromRGB(255,0,0), boxColor_S = Color3.fromRGB(220,20,60), boxColor_G = Color3.fromRGB(255,165,0),
         tracerColor_N = Color3.fromRGB(255,0,0), tracerColor_S = Color3.fromRGB(220,20,60), tracerColor_G = Color3.fromRGB(255,165,0),
         nameColor = Color3.fromRGB(255,255,255)
     },
-    Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, isSelf = false },
-    FPS = { cap = 120 }
+    Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, isSelf = false }
 }
 
 local colorMap = {
@@ -233,11 +219,6 @@ local function formatTime(seconds)
     end
 end
 
-local function makeBar(val, maxVal, len)
-    local fill = math.clamp(math.floor((val / maxVal) * len), 0, len)
-    return string.rep("█", fill) .. string.rep("░", len - fill)
-end
-
 local function getConfigList()
     local list = {}
     if executor.has_isfolder and executor.has_listfiles then
@@ -278,10 +259,8 @@ task.spawn(function()
 end)
 
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
-TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
 
--- ================================ ANTI AFK V3.19 (VIRTUALUSER - NO CAMERA MOVE) ================================
+-- ================================ ANTI AFK ================================
 local AFKSystem = { active = true, idleConn = nil, triggerCount = 0 }
 
 local function performAntiAFK()
@@ -731,10 +710,9 @@ local function toggleFreecam(v)
     end
 end
 
--- ================================ SELF-SPECTATE V3.22 (18 PRESETS + HEAD/BODY LOCK + FOLLOW) ================================
+-- ================================ CINEMATIC DIRECTOR ================================
 local SS = State.SelfSpec
 local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
-local followOffset = CFrame.new(0, 3, 8)
 
 local function startSSGesture()
     ssConns = {}
@@ -751,12 +729,7 @@ local function startSelfSpecLoop()
         if not SS.active then return end
         pcall(function()
             local targetChar = LP.Character
-            if not targetChar then return end
-            
             local targetHrp = getCharRoot(targetChar)
-            local targetHead = targetChar:FindFirstChild("Head")
-            local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-            
             if not targetHrp then return end
             
             Camera.CameraType = Enum.CameraType.Scriptable
@@ -764,101 +737,97 @@ local function startSelfSpecLoop()
             ssPan = Vector2.zero
             local dt = 0.016
             
-            -- HEAD LOCK: kamera ikutin gerakan kepala
-            if SS.mode == "Head Lock" then
-                local headPos = targetHead and targetHead.Position or targetHrp.Position + Vector3.new(0, 1.8, 0)
-                local offset = CFrame.new(headPos) * CFrame.Angles(0, math.rad(SS.orbitYaw), 0) * CFrame.Angles(math.rad(SS.orbitPitch), 0, 0) * CFrame.new(0, 0, SS.radius)
-                Camera.CFrame = CFrame.new(offset.Position, headPos)
-                return
-            end
+            local distMult = SS.distanceMult or 1
+            local heightOff = SS.heightOffset or 0
             
-            -- BODY LOCK: kamera ikutin gerakan badan
-            if SS.mode == "Body Lock" then
-                local bodyPos = targetHrp.Position + Vector3.new(0, 1.5, 0)
-                local offset = CFrame.new(bodyPos) * CFrame.Angles(0, math.rad(SS.orbitYaw), 0) * CFrame.Angles(math.rad(SS.orbitPitch), 0, 0) * CFrame.new(0, 0, SS.radius)
-                Camera.CFrame = CFrame.new(offset.Position, bodyPos)
-                return
-            end
+            local radius = (SS.radius or 8) * distMult
+            local height = (SS.height or 3) + heightOff
+            local speed = SS.speed or 1
+            local mode = SS.mode or "Manual"
             
-            -- FOLLOW: kamera mengikuti karakter bergerak (bukan orbit)
-            if SS.mode == "Follow" then
-                local charPos = targetHrp.Position + Vector3.new(0, 3, 0)
-                local lookAt = targetHrp.Position + Vector3.new(0, 1.5, 0)
-                local followCF = CFrame.new(charPos + Vector3.new(0, 0, SS.radius)) * CFrame.Angles(0, math.rad(SS.orbitYaw), 0)
-                Camera.CFrame = CFrame.new(followCF.Position, lookAt)
-                return
-            end
-            
-            -- Preset videography lainnya
+            -- PRESET MODE
             if #ssPinch == 0 and pan.Magnitude < 0.01 then
-                if SS.mode == "Orbit 360" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 45 * SS.speed
-                    SS.orbitPitch = 15
-                elseif SS.mode == "Orbit Slow" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 10 * SS.speed
-                    SS.orbitPitch = 20
-                elseif SS.mode == "Floating" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * 0.5 * SS.speed) * 10
-                    SS.height = 3 + math.sin(tick() * 0.4 * SS.speed) * 1.5
-                elseif SS.mode == "Hyperlapse" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 120 * SS.speed
-                    SS.orbitPitch = 10 + math.sin(tick() * 2 * SS.speed) * 5
-                    SS.radius = 8 + math.sin(tick() * 1.5 * SS.speed) * 2
-                elseif SS.mode == "Portrait" then
-                    SS.orbitYaw = SS.orbitYaw + pan.X * 0.3
-                    SS.orbitPitch = -10
-                    SS.radius = 4
-                    SS.height = 1
-                elseif SS.mode == "Orbit Vertical" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * 0.8 * SS.speed) * 30
-                elseif SS.mode == "Fisheye" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 30 * SS.speed
-                    SS.orbitPitch = 10
-                    SS.radius = 3
+                if mode == "Orbit 360" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 45 * speed
+                    SS.orbitPitch = SS.orbitPitch + (15 - SS.orbitPitch) * dt * 2
+                elseif mode == "Floating" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 15 * speed
+                    SS.orbitPitch = SS.orbitPitch + (20 + math.sin(tick() * 0.5 * speed) * 10 - SS.orbitPitch) * dt * 2
+                    height = height + math.sin(tick() * 0.4 * speed) * 1.5
+                elseif mode == "Hyperlapse" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 120 * speed
+                    SS.orbitPitch = SS.orbitPitch + (10 + math.sin(tick() * 2 * speed) * 5 - SS.orbitPitch) * dt * 2
+                    radius = radius + math.sin(tick() * 1.5 * speed) * 2
+                elseif mode == "Orbit Vertical" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 25 * speed
+                    SS.orbitPitch = SS.orbitPitch + (20 + math.sin(tick() * 0.8 * speed) * 30 - SS.orbitPitch) * dt * 2
+                elseif mode == "Fisheye" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 30 * speed
+                    SS.orbitPitch = SS.orbitPitch + (10 - SS.orbitPitch) * dt * 2
+                    radius = 3
                     Camera.FieldOfView = math.clamp(Camera.FieldOfView + dt * 5, 70, 120)
-                elseif SS.mode == "Wave Orbit" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 20 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * 0.6 * SS.speed) * 15
-                    SS.radius = 8 + math.sin(tick() * 0.5 * SS.speed) * 3
-                elseif SS.mode == "Dual Axis" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 25 * SS.speed
-                    SS.orbitPitch = 15 + math.sin(tick() * 0.7 * SS.speed) * 20
-                    SS.roll = math.sin(tick() * 0.5 * SS.speed) * 10
-                elseif SS.mode == "Static Tripod" then
-                    -- diam
-                elseif SS.mode == "Helicopter" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 60 * SS.speed
-                    SS.orbitPitch = 15 + math.sin(tick() * 1.2 * SS.speed) * 5
-                    SS.roll = math.sin(tick() * 0.8 * SS.speed) * 3
-                elseif SS.mode == "Spiral" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 35 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * 0.4 * SS.speed) * 15
-                    SS.radius = 5 + math.sin(tick() * 0.3 * SS.speed) * 4
-                elseif SS.mode == "Action Cam" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 80 * SS.speed
-                    SS.orbitPitch = 10 + math.sin(tick() * 2.5 * SS.speed) * 15
-                    SS.radius = 5 + math.sin(tick() * 2 * SS.speed) * 2
-                elseif SS.mode == "Cinematic Drift" then
-                    SS.orbitYaw = SS.orbitYaw + dt * 15 * SS.speed
-                    SS.orbitPitch = 20 + math.sin(tick() * SS.speed * 0.7) * 15
-                elseif SS.mode == "Manual" then
-                    -- manual control via drag
+                elseif mode == "Wave Orbit" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 20 * speed
+                    SS.orbitPitch = SS.orbitPitch + (20 + math.sin(tick() * 0.6 * speed) * 15 - SS.orbitPitch) * dt * 2
+                    radius = radius + math.sin(tick() * 0.5 * speed) * 3
+                elseif mode == "Dual Axis" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 25 * speed
+                    SS.orbitPitch = SS.orbitPitch + (15 + math.sin(tick() * 0.7 * speed) * 20 - SS.orbitPitch) * dt * 2
+                    SS.roll = math.sin(tick() * 0.5 * speed) * 10
+                elseif mode == "Action Cam" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 80 * speed
+                    SS.orbitPitch = SS.orbitPitch + (10 + math.sin(tick() * 2.5 * speed) * 15 - SS.orbitPitch) * dt * 2
+                    radius = 5 + math.sin(tick() * 2 * speed) * 2
+                elseif mode == "Cinematic Drift" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 15 * speed
+                    SS.orbitPitch = SS.orbitPitch + (20 + math.sin(tick() * speed * 0.7) * 15 - SS.orbitPitch) * dt * 2
+                elseif mode == "FPV Drone" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 50 * speed
+                    SS.orbitPitch = SS.orbitPitch + (5 - SS.orbitPitch) * dt * 3
+                    radius = SS.radius + (4 - SS.radius) * dt * 3
+                elseif mode == "Crash Zoom" then
+                    if SS._crashInit == nil then
+                        SS._crashInit = tick()
+                        SS._crashStartRadius = radius
+                    end
+                    local elapsed = tick() - SS._crashInit
+                    radius = math.max(1.5, SS._crashStartRadius - elapsed * 8 * speed)
+                    SS.orbitPitch = SS.orbitPitch + (0 - SS.orbitPitch) * dt * 3
+                    Camera.FieldOfView = math.clamp(70 + elapsed * 15 * speed, 70, 110)
+                    if radius <= 1.5 then
+                        SS._crashInit = nil
+                    end
+                elseif mode == "Smear Cam" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 40 * speed
+                    SS.orbitPitch = SS.orbitPitch + (10 - SS.orbitPitch) * dt * 2
+                elseif mode == "Whip Snap" then
+                    local whip = math.sin(tick() * 0.5) * 0.5 + 0.5
+                    SS.orbitYaw = SS.orbitYaw + dt * (40 + whip * 80) * speed
+                    SS.orbitPitch = SS.orbitPitch + (10 + whip * 20 - SS.orbitPitch) * dt * 2
+                elseif mode == "Bounce Beat" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 30 * speed
+                    SS.orbitPitch = SS.orbitPitch + (5 - SS.orbitPitch) * dt * 2
+                    height = height + math.sin(tick() * 2 * speed) * 2
+                elseif mode == "Vertigo Effect" then
+                    SS.orbitYaw = SS.orbitYaw + dt * 20 * speed
+                    SS.orbitPitch = SS.orbitPitch + (5 - SS.orbitPitch) * dt * 2
+                    Camera.FieldOfView = 70 + math.sin(tick() * 0.5) * 20
                 end
+            else
+                SS._crashInit = nil
             end
             
             SS.orbitYaw = SS.orbitYaw + pan.X * sens
             SS.orbitPitch = math.clamp(SS.orbitPitch + pan.Y * sens, -85, 85)
             
-            local h = SS.height or 3
-            local camCF = CFrame.new((CFrame.new(targetHrp.Position + Vector3.new(0, h, 0)) * CFrame.Angles(0, math.rad(-SS.orbitYaw), 0) * CFrame.Angles(math.rad(-SS.orbitPitch), 0, 0) * CFrame.new(0, 0, SS.radius)).Position, targetHrp.Position + Vector3.new(0, h, 0))
-            
-            if SS.mode == "Tilt Drift" or SS.mode == "Dual Axis" then
-                camCF = camCF * CFrame.Angles(0, 0, math.rad(SS.roll or 0))
-            end
+            local targetFinal = targetHrp.Position + Vector3.new(0, height, 0)
+            local camCF = CFrame.new((CFrame.new(targetFinal) * CFrame.Angles(0, math.rad(-SS.orbitYaw), 0) * CFrame.Angles(math.rad(-SS.orbitPitch), 0, 0) * CFrame.new(0, 0, radius)).Position, targetFinal)
             
             Camera.CFrame = camCF
+            
+            if SS.roll and (mode == "Dual Axis" or mode == "Tilt Drift") then
+                Camera.CFrame = Camera.CFrame * CFrame.Angles(0, 0, math.rad(SS.roll))
+            end
         end)
     end)
 end
@@ -873,6 +842,7 @@ local function stopSelfSpecLoop()
     SS.radius = 8
     SS.height = 3
     ssPan = Vector2.zero
+    SS._crashInit = nil
 end
 
 local function toggleSelfSpec(v)
@@ -888,14 +858,15 @@ local function toggleSelfSpec(v)
         SS.radius = SS.radius or 8
         SS.height = SS.height or 3
         SS.roll = 0
+        SS._crashInit = nil
         startSSGesture()
         startSelfSpecLoop()
-        notify("Self-Spectate", "ON — " .. (SS.mode or "Manual"), 2, "camera")
+        notify("Cinematic Director", "ON — " .. (SS.mode or "Manual"), 2, "camera")
     else
         SS.active = false
         stopSSGesture()
         stopSelfSpecLoop()
-        notify("Self-Spectate", "OFF", 1.5, "camera")
+        notify("Cinematic Director", "OFF", 1.5, "camera")
     end
 end
 
@@ -938,37 +909,6 @@ local function startSpecLoop()
 end
 
 local function stopSpecLoop() RunService:UnbindFromRenderStep("XKIDSpec") end
-
--- ================================ AUTO LIKE ================================
-local function getLikeRemotes() local remotes = ReplicatedStorage:FindFirstChild("Remotes") if not remotes then return nil, nil end return remotes:FindFirstChild("GetLikeDataRemote"), remotes:FindFirstChild("LikePlayerEvent") end
-local function likeRandomPlayer()
-    if not LP.Character or not getRoot() then return false, "No character" end
-    local _, likePlayer = getLikeRemotes() if not likePlayer then return false, "Remote not found" end
-    local myRoot = getRoot()
-    local targets = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP then
-            if State.AutoLike.radius > 0 and myRoot then
-                local theirRoot = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-                if theirRoot then
-                    local dist = (theirRoot.Position - myRoot.Position).Magnitude
-                    if dist <= State.AutoLike.radius then table.insert(targets, p) end
-                end
-            else
-                table.insert(targets, p)
-            end
-        end
-    end
-    if #targets == 0 then return false, "No players in range" end
-    local target
-    if #targets == 1 then target = targets[1] else repeat target = targets[math.random(1, #targets)] until target ~= State.AutoLike.lastTarget or #targets <= 1 end
-    State.AutoLike.lastTarget = target
-    local success = pcall(function() likePlayer:FireServer(target) end)
-    if success then State.AutoLike.count = State.AutoLike.count + 1 return true, target.DisplayName end
-    return false, "Failed"
-end
-local function startAutoLike() if State.AutoLike.active then return end State.AutoLike.active = true State.AutoLike.thread = task.spawn(function() while State.AutoLike.active and getgenv()._XKID_RUNNING do local ok, result = likeRandomPlayer() if ok then notify("Auto Like", result .. " | Total: " .. State.AutoLike.count, 1.5, "heart") end local cd = math.random(State.AutoLike.minCD * 10, State.AutoLike.maxCD * 10) / 10 task.wait(cd) end State.AutoLike.thread = nil end) notify("Auto Like", "ON", 2, "heart") end
-local function stopAutoLike() State.AutoLike.active = false if State.AutoLike.thread then task.cancel(State.AutoLike.thread) State.AutoLike.thread = nil end notify("Auto Like", "OFF", 1.5, "heart") end
 
 -- ================================ HARD FLING ================================
 local hardFlingConn, hardFlingRampConn, hardFlingBAV = nil, nil, nil
@@ -1022,7 +962,7 @@ end
 local function stopHardFling() stopHardFlingInternal() notify("Hard Fling", "OFF", 1.5, "zap") end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
 
--- ================================ FILTERS V3.21 ================================
+-- ================================ FILTERS ================================
 local FILTER_PRESETS = {
     Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7, shade = 0, warmth = -0.1 },
     Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2, shade = 0.1, warmth = -0.3 },
@@ -1231,7 +1171,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.22", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.27", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1240,7 +1180,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.22", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.27", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -1249,8 +1189,8 @@ local function getExecutor() pcall(function() local e = identifyexecutor() if e 
 local execName = getExecutor()
 local accountAge = LP.AccountAge .. " days"
 local avatarImage = "rbxthumb://type=AvatarHeadShot&id=" .. LP.UserId .. "&w=420&h=420"
-local afkStatusParagraph = TabInfo:Paragraph({ Title = "YooWssp!!, " .. LP.DisplayName, Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal") .. "\nFPS Cap: " .. State.FPS.cap, Image = avatarImage, ImageSize = 80 })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) pcall(function() afkStatusParagraph:SetDesc("Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal") .. "\nFPS Cap: " .. State.FPS.cap) end) end end)
+local afkStatusParagraph = TabInfo:Paragraph({ Title = "YooWssp!!, " .. LP.DisplayName, Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal"), Image = avatarImage, ImageSize = 80 })
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) pcall(function() afkStatusParagraph:SetDesc("Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal")) end) end end)
 
 local infoParagraph = TabInfo:Paragraph({ Title = "💀 " .. LP.DisplayName, Desc = "Loading..." })
 task.spawn(function()
@@ -1342,22 +1282,26 @@ secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Defaul
 
 -- ================================ TAB: CINEMATIC ================================
 local TabCine = Window:Tab({ Title = "Cinematic", Icon = "aperture" })
-local secSelfSpec = TabCine:Section({ Title = "🎥 Self-Spectate", Icon = "camera", Box = true })
-secSelfSpec:Toggle({ Title = "Enable Self-Spectate", Desc = "1-finger orbit | 2-finger zoom | Mouse right-drag", Default = false, Callback = toggleSelfSpec })
-secSelfSpec:Dropdown({ Title = "Preset Mode", Values = { 
+
+local secDirector = TabCine:Section({ Title = "Cinematic Director", Icon = "clapperboard", Box = true })
+secDirector:Toggle({ Title = "Enable Cinematic Director", Desc = "Aktifkan kamera sinematik", Default = false, Callback = function(v) toggleSelfSpec(v) end })
+
+local secPreset = TabCine:Section({ Title = "Preset Mode", Icon = "layout-grid", Box = true })
+secPreset:Dropdown({ Title = "Preset", Values = { 
     "Manual", 
-    "Orbit 360", "Orbit Slow", 
-    "Floating", "Hyperlapse", 
-    "Portrait", "Orbit Vertical", 
-    "Fisheye", "Wave Orbit", 
-    "Dual Axis", "Static Tripod", 
-    "Helicopter", "Spiral", 
-    "Action Cam", "Cinematic Drift",
-    "Head Lock", "Body Lock", "Follow"
-}, Default = "Manual", Callback = function(v) SS.mode = v notify("Self-Spec", "Mode: " .. v, 1.5, "camera") end })
-secSelfSpec:Slider({ Title = "Distance / Radius", Step = 0.5, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) SS.radius = v SS.dist = v end })
-secSelfSpec:Slider({ Title = "Height", Step = 0.5, Value = { Min = -10, Max = 20, Default = 3 }, Callback = function(v) SS.height = v end })
-secSelfSpec:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, Default = 1 }, Callback = function(v) SS.speed = v end })
+    "Orbit 360", "Floating", "Hyperlapse", 
+    "Orbit Vertical", "Fisheye", "Wave Orbit", 
+    "Dual Axis", "Action Cam", "Cinematic Drift",
+    "FPV Drone", "Crash Zoom", "Smear Cam", 
+    "Whip Snap", "Bounce Beat", "Vertigo Effect"
+}, Default = "Orbit 360", Callback = function(v) 
+    SS.mode = v 
+    SS._crashInit = nil
+    notify("Cinematic", "Preset: " .. v, 1.5, "camera") 
+end })
+secPreset:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, Default = 1 }, Callback = function(v) SS.speed = v end })
+secPreset:Slider({ Title = "Distance Mult", Step = 0.1, Value = { Min = 0.5, Max = 3, Default = 1 }, Callback = function(v) SS.distanceMult = v end })
+secPreset:Slider({ Title = "Height Offset", Step = 0.5, Value = { Min = -5, Max = 10, Default = 0 }, Callback = function(v) SS.heightOffset = v end })
 
 local secFC = TabCine:Section({ Title = "Drone Engine", Icon = "video", Box = true })
 secFC:Toggle({ Title = "Enable Freecam", Desc = "Karakter LOCK posisi + Bisa Emote/Dance", Default = false, Callback = toggleFreecam })
@@ -1420,19 +1364,6 @@ secESPCol:Dropdown({ Title = "Normal Color", Values = { "Merah", "Hijau", "Biru"
 secESPCol:Dropdown({ Title = "Suspect Color", Values = { "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam", "Crimson" }, Default = "Crimson", Callback = function(v) if colorMap[v] then State.ESP.tracerColor_S = colorMap[v] State.ESP.boxColor_S = colorMap[v] end notify("ESP", "Suspect: " .. v, 1.5, "palette") end })
 secESPCol:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Pink", "Putih", "Hitam" }, Default = "Orange", Callback = function(v) if colorMap[v] then State.ESP.tracerColor_G = colorMap[v] State.ESP.boxColor_G = colorMap[v] end notify("ESP", "Glitch: " .. v, 1.5, "palette") end })
 
--- ================================ TAB: LOGGER ================================
-local TabLog = Window:Tab({ Title = "Logger", Icon = "square-terminal" })
-local secChat = TabLog:Section({ Title = "Chat Logger", Icon = "message-square", Box = true })
-secChat:Toggle({ Title = "Enable Logger", Default = false, Callback = function(v) State.Utility.chatLog = v if not v then pcall(function() chatLogPanel:SetDesc("Logger disabled") end) end notify("Logger", v and "ON" or "OFF", 1.5, "terminal") end })
-local chatTargetLabel = secChat:Paragraph({ Title = "Targets", Desc = "None" })
-local chatTargetDrop = secChat:Dropdown({ Title = "Select Targets", Multi = true, AllowNone = true, Values = getDisplayNames(), Callback = function(selected) State.Utility.chatTargets = {} if selected and typeof(selected) == "table" then for _, name in ipairs(selected) do table.insert(State.Utility.chatTargets, tostring(name)) end end if #State.Utility.chatTargets > 0 then pcall(function() chatTargetLabel:SetDesc("Tracking: " .. table.concat(State.Utility.chatTargets, ", ")) end) else pcall(function() chatTargetLabel:SetDesc("None") end) end end })
-secChat:Button({ Title = "Clear Targets", Callback = function() State.Utility.chatTargets = {} pcall(function() chatTargetLabel:SetDesc("None") end) pcall(function() chatTargetDrop:SetValues({}) task.wait(0.05) chatTargetDrop:SetValues(getDisplayNames()) end) notify("Logger", "Targets cleared", 1.5, "terminal") end })
-secChat:Button({ Title = "Refresh List", Callback = function() pcall(function() chatTargetDrop:Refresh(getDisplayNames(), true) end) notify("Logger", "List refreshed", 1.5, "terminal") end })
-local chatLogPanel = secChat:Paragraph({ Title = "Console", Desc = "Belum ada chat..." })
-secChat:Button({ Title = "Clear Log", Callback = function() State.Utility.chatHistory = {} pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end) notify("Logger", "Log cleared", 1.5, "terminal") end })
-task.spawn(function() local function OC(sn, msg) if not State.Utility.chatLog then return end if #State.Utility.chatTargets == 0 then return end local cs = sn:lower():match("^%s*(.-)%s*$") for _, t in ipairs(State.Utility.chatTargets) do local ct = t:lower():match("^%s*(.-)%s*$") if cs == ct then local e = string.format("[%s] %s: %s", os.date("%H:%M:%S"), sn, msg) table.insert(State.Utility.chatHistory, e) if #State.Utility.chatHistory > 50 then table.remove(State.Utility.chatHistory, 1) end notify("Chat", sn .. ": " .. msg, 2, "message-circle") break end end end if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then pcall(function() TrackC(TextChatService.MessageReceived:Connect(function(m) if m.TextSource then OC(m.TextSource.Name, m.Text) end end)) end) end local function CLC(p) pcall(function() TrackC(p.Chatted:Connect(function(m) OC(p.DisplayName, m) end)) end) end for _, p in pairs(Players:GetPlayers()) do if p ~= LP then CLC(p) end end TrackC(Players.PlayerAdded:Connect(function(p) if p ~= LP then CLC(p) end end)) end)
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5) if chatLogPanel and State.Utility.chatLog then pcall(function() local t = table.concat(State.Utility.chatHistory, "\n") if #t > 2000 then t = t:sub(-2000) end if #t == 0 then t = "Belum ada chat..." end chatLogPanel:SetDesc(t) end) end end end)
-
 -- ================================ TAB: PROTECTION ================================
 local TabProt = Window:Tab({ Title = "Protection", Icon = "shield-half" })
 local secProt = TabProt:Section({ Title = "Protection Protocols", Icon = "shield-check", Box = true })
@@ -1441,11 +1372,6 @@ secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Ca
 local secSrv = TabProt:Section({ Title = "Server Control", Icon = "server", Box = true })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Callback = function() pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) notify("Server", "Rejoining...", 2, "log-in") end })
 secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Callback = function() pcall(function() local req = getgenv()._XKID_REQUEST or httpRequest if not req then notify("Error", "HTTP not supported", 2, "circle-alert") return end local res = req({ Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100", Method = "GET" }) if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body) if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, LP) notify("Server", "Hopping...", 2, "shuffle") return end end end end end) end })
-local secPerf = TabProt:Section({ Title = "Performance", Icon = "gauge", Box = true })
--- QUALITY LEVEL SLIDER DIHAPUS (pakai pengaturan Roblox default)
-secPerf:Dropdown({ Title = "FPS Cap", Values = { "30", "60", "120", "144", "240", "Unlimited" }, Default = "120", Callback = function(v) if v == "Unlimited" then setOptimalFPS(9999) State.FPS.cap = 9999 else setOptimalFPS(tonumber(v)) State.FPS.cap = tonumber(v) end notify("Graphics", v .. " FPS", 1.5, "gauge") end })
-local advCache = { level = nil, shadows = true, brightness = 5, clockTime = 14, fogEnd = 100000, mats = {}, texs = {} }
-secPerf:Toggle({ Title = "FPS Boost", Default = false, Callback = function(v) State.Security.antiLag = v if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end) advCache.shadows = Lighting.GlobalShadows advCache.brightness = Lighting.Brightness advCache.clockTime = Lighting.ClockTime advCache.fogEnd = Lighting.FogEnd pcall(function() settings().Rendering.QualityLevel = 1 end) Lighting.GlobalShadows = false Lighting.Brightness = 1 Lighting.FogEnd = 100000 for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled obj.Enabled = false end end notify("Performance", "FPS Boost ON", 2, "zap") else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end) Lighting.GlobalShadows = advCache.shadows Lighting.Brightness = advCache.brightness Lighting.ClockTime = advCache.clockTime Lighting.FogEnd = advCache.fogEnd for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then pcall(function() obj.Material = mat end) end end for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then pcall(function() obj.Enabled = enb end) end end advCache.mats = {} advCache.texs = {} notify("Performance", "Graphics restored", 2, "zap") end end })
 local secCam = TabProt:Section({ Title = "Camera Lock", Icon = "lock", Box = true })
 secCam:Toggle({ Title = "Force Shift Lock", Default = false, Callback = function(v) toggleShiftLock(v) end })
 
@@ -1453,32 +1379,17 @@ secCam:Toggle({ Title = "Force Shift Lock", Default = false, Callback = function
 local TabSet = Window:Tab({ Title = "Settings", Icon = "panels-top-left" })
 local secTheme = TabSet:Section({ Title = "🎨 Theme", Icon = "palette", Box = true })
 secTheme:Dropdown({ Title = "UI Theme", Values = { "Dark", "Light", "Rose", "Sky", "Emerald", "Violet", "Red", "Amber", "Indigo", "Midnight", "Crimson" }, Default = "Crimson", Callback = function(v) WindUI:SetTheme(v) end })
-local secDebug = TabSet:Section({ Title = "🐛 Debug Log (Error Only)", Icon = "bug", Box = true })
-local debugPara = secDebug:Paragraph({ Title = "Log", Desc = "No errors yet..." })
-secDebug:Button({ Title = "📋 Copy Log", Callback = function() local t = table.concat(DebugLog, "\n") pcall(function() setclipboard(t) end) notify("Debug", "Log copied to clipboard", 2, "copy") end })
-secDebug:Button({ Title = "🗑 Clear Log", Callback = function() DebugLog = {} pcall(function() debugPara:SetDesc("No errors yet...") end) notify("Debug", "Log cleared", 1.5, "trash-2") end })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5) if debugPara then pcall(function() local t = table.concat(DebugLog, "\n") if #t == 0 then t = "No errors yet..." elseif #t > 2000 then t = t:sub(-2000) end debugPara:SetDesc(t) end) end end end)
 local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box = true })
 local cfgName = "XKID_Config_V3"
 local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config_V3", Callback = function(v) cfgName = v end })
-local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime, shade = State.CustomFilter.shade, warmth = State.CustomFilter.warmth, vignette = State.CustomFilter.vignette } } writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)) notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
-local function loadConfig(selected) if selected == "No config" then return end pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")) if d then if d.Move then State.Move.ws = d.Move.ws or 16 State.Move.jp = d.Move.jp or 50 State.Move.flyS = d.Move.flyS or 60 State.Move.autoWalkSpeed = d.Move.autoWalkSpeed or 16 local h = getHum() if h then h.WalkSpeed = State.Move.ws h.UseJumpPower = true h.JumpPower = State.Move.jp end end if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300 State.ESP.highlightMode = d.ESP.highlightMode or false end if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end if d.AutoLike then State.AutoLike.radius = d.AutoLike.radius or 100 State.AutoLike.minCD = d.AutoLike.minCD or 2 State.AutoLike.maxCD = d.AutoLike.maxCD or 6 end if d.HardFling then State.HardFling.power = d.HardFling.power or 5000 State.HardFling.mode = d.HardFling.mode or "Spin" end if d.SelfSpec then SS.mode = d.SelfSpec.mode or "Manual" SS.radius = d.SelfSpec.radius or 8 SS.height = d.SelfSpec.height or 3 SS.speed = d.SelfSpec.speed or 1 end if d.CustomFilter then for k, v in pairs(d.CustomFilter) do State.CustomFilter[k] = v end applyCustomFilter() end notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
+local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed, distanceMult = SS.distanceMult, heightOffset = SS.heightOffset }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime, shade = State.CustomFilter.shade, warmth = State.CustomFilter.warmth, vignette = State.CustomFilter.vignette } } writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)) notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
+local function loadConfig(selected) if selected == "No config" then return end pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")) if d then if d.Move then State.Move.ws = d.Move.ws or 16 State.Move.jp = d.Move.jp or 50 State.Move.flyS = d.Move.flyS or 60 State.Move.autoWalkSpeed = d.Move.autoWalkSpeed or 16 local h = getHum() if h then h.WalkSpeed = State.Move.ws h.UseJumpPower = true h.JumpPower = State.Move.jp end end if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300 State.ESP.highlightMode = d.ESP.highlightMode or false end if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end if d.HardFling then State.HardFling.power = d.HardFling.power or 5000 State.HardFling.mode = d.HardFling.mode or "Spin" end if d.SelfSpec then SS.mode = d.SelfSpec.mode or "Orbit 360" SS.radius = d.SelfSpec.radius or 8 SS.height = d.SelfSpec.height or 3 SS.speed = d.SelfSpec.speed or 1 SS.distanceMult = d.SelfSpec.distanceMult or 1 SS.heightOffset = d.SelfSpec.heightOffset or 0 end if d.CustomFilter then for k, v in pairs(d.CustomFilter) do State.CustomFilter[k] = v end applyCustomFilter() end notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
 secFile:Button({ Title = "Save Config", Callback = saveConfig })
 local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected loadConfig(selected) end })
 secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" and executor.has_listfiles then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json") pcall(function() configDrop:Refresh(getConfigList(), true) end) currentConfig = "No config" notify("Config", "Deleted", 2, "trash-2") end end) end end })
 secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end) notify("Config", "Files refreshed", 1.5, "folder") end })
-local secLike = TabSet:Section({ Title = "Auto Like (Smart)", Icon = "heart", Box = true })
-secLike:Toggle({ Title = "Auto Like", Default = false, Callback = function(v) if v then startAutoLike() else stopAutoLike() end end })
-secLike:Slider({ Title = "Like Radius", Desc = "0 = all", Step = 10, Value = { Min = 0, Max = 500, Default = 100 }, Callback = function(v) State.AutoLike.radius = v end })
-secLike:Slider({ Title = "Min Cooldown", Step = 0.5, Value = { Min = 0.5, Max = 10, Default = 2 }, Callback = function(v) State.AutoLike.minCD = v end })
-secLike:Slider({ Title = "Max Cooldown", Step = 0.5, Value = { Min = 1, Max = 15, Default = 6 }, Callback = function(v) State.AutoLike.maxCD = v end })
-local autoLikeInfo = secLike:Paragraph({ Title = "Info", Desc = "Total likes sent: 0" })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2) pcall(function() autoLikeInfo:SetDesc("Total likes sent: " .. State.AutoLike.count) end) end end)
 
 -- ================================ INIT ================================
-pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
-setOptimalFPS(120)
-
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.22 AKTIF — 18 Presets + Head/Body Lock + Follow", 3, "rocket")
+notify("System", "XKID_HUB V3.27 AKTIF — Clean Graphics", 3, "rocket")
