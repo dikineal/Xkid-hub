@@ -1,11 +1,11 @@
--- @XKID SCRIPT V3.26 (Cinematic Director Clean)
+-- @XKID SCRIPT V3.27 (Clean Graphics)
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.26:
--- - REMOVED: Club Mode (bentrok, tidak berguna)
--- - REMOVED: Master POV Smoothness & Follow Smooth (tidak berguna)
--- - MERGED: Settings (Distance Mult, Height Offset) ke Preset Mode section
--- - REMOVED: Emoji di tab Cinematic
--- - CLEAN: Self-spec loop tanpa lerp, kamera langsung snap
+-- Changelog V3.27:
+-- - REMOVED: FPS Boost toggle (no more forced low quality)
+-- - REMOVED: FPS Cap dropdown (auto max FPS)
+-- - REMOVED: QualityLevel override di init
+-- - REMOVED: setOptimalFPS function (no render tampering)
+-- - ADDED: Simple max FPS unlock tanpa sentuh render settings
 
 repeat task.wait() until game:IsLoaded()
 
@@ -53,20 +53,8 @@ local function httpRequest(options)
 end
 getgenv()._XKID_REQUEST = httpRequest
 
--- ================================ FPS UNLOCKER ================================
-local function setOptimalFPS(targetFPS)
-    targetFPS = targetFPS or 120
-    pcall(function() if setfpscap then setfpscap(targetFPS) end end)
-    pcall(function()
-        local rs = settings():GetService("Rendering")
-        if rs and rs.SetTargetFrameRate then rs:SetTargetFrameRate(targetFPS) end
-    end)
-    pcall(function()
-        local ws = game:GetService("Workspace")
-        if ws and ws.SetTargetFrameRate then ws:SetTargetFrameRate(targetFPS) end
-    end)
-end
-setOptimalFPS(120)
+-- ================================ MAX FPS UNLOCK ================================
+pcall(function() if setfpscap then setfpscap(9999) end end)
 
 -- ================================ SERVICES ================================
 local RunService = game:GetService("RunService")
@@ -155,7 +143,7 @@ local State = {
     Move = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60, autoWalk = false, autoWalkSpeed = 16 },
     Fly = { active = false, bv = nil, bg = nil, _keys = {} },
     HardFling = { active = false, power = 10000, mode = "Spin", currentPower = 0, rampUpActive = false },
-    Security = { afkActive = false, shiftLock = false, shiftLockGyro = nil, antiLag = false },
+    Security = { afkActive = false, shiftLock = false, shiftLockGyro = nil },
     Cinema = { hideUI = false, cachedGuis = {} },
     Avatar = { isRefreshing = false },
     CustomFilter = { 
@@ -182,8 +170,7 @@ local State = {
         tracerColor_N = Color3.fromRGB(255,0,0), tracerColor_S = Color3.fromRGB(220,20,60), tracerColor_G = Color3.fromRGB(255,165,0),
         nameColor = Color3.fromRGB(255,255,255)
     },
-    Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, isSelf = false },
-    FPS = { cap = 120 }
+    Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, isSelf = false }
 }
 
 local colorMap = {
@@ -272,8 +259,6 @@ task.spawn(function()
 end)
 
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
-TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
 
 -- ================================ ANTI AFK ================================
 local AFKSystem = { active = true, idleConn = nil, triggerCount = 0 }
@@ -725,7 +710,7 @@ local function toggleFreecam(v)
     end
 end
 
--- ================================ CINEMATIC DIRECTOR V3.26 CLEAN ================================
+-- ================================ CINEMATIC DIRECTOR ================================
 local SS = State.SelfSpec
 local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
 
@@ -838,7 +823,6 @@ local function startSelfSpecLoop()
             local targetFinal = targetHrp.Position + Vector3.new(0, height, 0)
             local camCF = CFrame.new((CFrame.new(targetFinal) * CFrame.Angles(0, math.rad(-SS.orbitYaw), 0) * CFrame.Angles(math.rad(-SS.orbitPitch), 0, 0) * CFrame.new(0, 0, radius)).Position, targetFinal)
             
-            -- Langsung snap, tanpa lerp
             Camera.CFrame = camCF
             
             if SS.roll and (mode == "Dual Axis" or mode == "Tilt Drift") then
@@ -1187,7 +1171,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.26", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.27", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1196,7 +1180,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.26", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.27", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -1205,8 +1189,8 @@ local function getExecutor() pcall(function() local e = identifyexecutor() if e 
 local execName = getExecutor()
 local accountAge = LP.AccountAge .. " days"
 local avatarImage = "rbxthumb://type=AvatarHeadShot&id=" .. LP.UserId .. "&w=420&h=420"
-local afkStatusParagraph = TabInfo:Paragraph({ Title = "YooWssp!!, " .. LP.DisplayName, Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal") .. "\nFPS Cap: " .. State.FPS.cap, Image = avatarImage, ImageSize = 80 })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) pcall(function() afkStatusParagraph:SetDesc("Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal") .. "\nFPS Cap: " .. State.FPS.cap) end) end end)
+local afkStatusParagraph = TabInfo:Paragraph({ Title = "YooWssp!!, " .. LP.DisplayName, Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal"), Image = avatarImage, ImageSize = 80 })
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) pcall(function() afkStatusParagraph:SetDesc("Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal")) end) end end)
 
 local infoParagraph = TabInfo:Paragraph({ Title = "💀 " .. LP.DisplayName, Desc = "Loading..." })
 task.spawn(function()
@@ -1296,14 +1280,12 @@ secSP:Button({ Title = "Refresh Target List", Callback = function() notify("Spec
 secSP:Toggle({ Title = "Enable Spectate", Default = false, Callback = function(v) if SS.active then toggleSelfSpec(false) end State.Spec.active = v if v then if not State.Spec.target or not State.Spec.target.Character then if State.Spec.isSelf and LP.Character then else State.Spec.active = false notify("Error", "No target", 2, "circle-alert") return end end State.Spec.origFov = Camera.FieldOfView startSpecCapture() startSpecLoop() notify("Spectator", "ON", 2, "eye") else stopSpecLoop() stopSpecCapture() Camera.CameraType = Enum.CameraType.Custom Camera.FieldOfView = State.Spec.origFov notify("Spectator", "OFF", 1.5, "eye") end end })
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) State.Spec.dist = v end })
 
--- ================================ TAB: CINEMATIC V3.26 CLEAN ================================
+-- ================================ TAB: CINEMATIC ================================
 local TabCine = Window:Tab({ Title = "Cinematic", Icon = "aperture" })
 
--- Cinematic Director
 local secDirector = TabCine:Section({ Title = "Cinematic Director", Icon = "clapperboard", Box = true })
 secDirector:Toggle({ Title = "Enable Cinematic Director", Desc = "Aktifkan kamera sinematik", Default = false, Callback = function(v) toggleSelfSpec(v) end })
 
--- Preset Mode (Settings gabung di sini)
 local secPreset = TabCine:Section({ Title = "Preset Mode", Icon = "layout-grid", Box = true })
 secPreset:Dropdown({ Title = "Preset", Values = { 
     "Manual", 
@@ -1321,7 +1303,6 @@ secPreset:Slider({ Title = "Speed", Step = 0.1, Value = { Min = 0.1, Max = 5, De
 secPreset:Slider({ Title = "Distance Mult", Step = 0.1, Value = { Min = 0.5, Max = 3, Default = 1 }, Callback = function(v) SS.distanceMult = v end })
 secPreset:Slider({ Title = "Height Offset", Step = 0.5, Value = { Min = -5, Max = 10, Default = 0 }, Callback = function(v) SS.heightOffset = v end })
 
--- Drone Engine
 local secFC = TabCine:Section({ Title = "Drone Engine", Icon = "video", Box = true })
 secFC:Toggle({ Title = "Enable Freecam", Desc = "Karakter LOCK posisi + Bisa Emote/Dance", Default = false, Callback = toggleFreecam })
 secFC:Slider({ Title = "Camera Speed", Step = 0.5, Value = { Min = 1, Max = 20, Default = 3 }, Callback = function(v) FC.speed = v end })
@@ -1391,10 +1372,6 @@ secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Ca
 local secSrv = TabProt:Section({ Title = "Server Control", Icon = "server", Box = true })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Callback = function() pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) notify("Server", "Rejoining...", 2, "log-in") end })
 secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Callback = function() pcall(function() local req = getgenv()._XKID_REQUEST or httpRequest if not req then notify("Error", "HTTP not supported", 2, "circle-alert") return end local res = req({ Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100", Method = "GET" }) if res.StatusCode == 200 then local body = HttpService:JSONDecode(res.Body) if body and body.data then for _, v in ipairs(body.data) do if v.playing > 0 and v.playing < v.maxPlayers and v.id ~= game.JobId then TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, LP) notify("Server", "Hopping...", 2, "shuffle") return end end end end end) end })
-local secPerf = TabProt:Section({ Title = "Performance", Icon = "gauge", Box = true })
-secPerf:Dropdown({ Title = "FPS Cap", Values = { "30", "60", "120", "144", "240", "Unlimited" }, Default = "120", Callback = function(v) if v == "Unlimited" then setOptimalFPS(9999) State.FPS.cap = 9999 else setOptimalFPS(tonumber(v)) State.FPS.cap = tonumber(v) end notify("Graphics", v .. " FPS", 1.5, "gauge") end })
-local advCache = { level = nil, shadows = true, brightness = 5, clockTime = 14, fogEnd = 100000, mats = {}, texs = {} }
-secPerf:Toggle({ Title = "FPS Boost", Default = false, Callback = function(v) State.Security.antiLag = v if v then pcall(function() advCache.level = settings().Rendering.QualityLevel end) advCache.shadows = Lighting.GlobalShadows advCache.brightness = Lighting.Brightness advCache.clockTime = Lighting.ClockTime advCache.fogEnd = Lighting.FogEnd pcall(function() settings().Rendering.QualityLevel = 1 end) Lighting.GlobalShadows = false Lighting.Brightness = 1 Lighting.FogEnd = 100000 for _, obj in pairs(workspace:GetDescendants()) do if obj:IsA("BasePart") then advCache.mats[obj] = obj.Material obj.Material = Enum.Material.SmoothPlastic elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") or obj:IsA("Trail") then advCache.texs[obj] = obj.Enabled obj.Enabled = false end end notify("Performance", "FPS Boost ON", 2, "zap") else pcall(function() if advCache.level then settings().Rendering.QualityLevel = advCache.level end end) Lighting.GlobalShadows = advCache.shadows Lighting.Brightness = advCache.brightness Lighting.ClockTime = advCache.clockTime Lighting.FogEnd = advCache.fogEnd for obj, mat in pairs(advCache.mats) do if obj and obj.Parent then pcall(function() obj.Material = mat end) end end for obj, enb in pairs(advCache.texs) do if obj and obj.Parent then pcall(function() obj.Enabled = enb end) end end advCache.mats = {} advCache.texs = {} notify("Performance", "Graphics restored", 2, "zap") end end })
 local secCam = TabProt:Section({ Title = "Camera Lock", Icon = "lock", Box = true })
 secCam:Toggle({ Title = "Force Shift Lock", Default = false, Callback = function(v) toggleShiftLock(v) end })
 
@@ -1406,7 +1383,7 @@ local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box
 local cfgName = "XKID_Config_V3"
 local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config_V3", Callback = function(v) cfgName = v end })
-local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiLag = State.Security.antiLag }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed, distanceMult = SS.distanceMult, heightOffset = SS.heightOffset }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime, shade = State.CustomFilter.shade, warmth = State.CustomFilter.warmth, vignette = State.CustomFilter.vignette } } writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)) notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
+local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS, autoWalkSpeed = State.Move.autoWalkSpeed }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock }, HardFling = { power = State.HardFling.power, mode = State.HardFling.mode }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed, distanceMult = SS.distanceMult, heightOffset = SS.heightOffset }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime, shade = State.CustomFilter.shade, warmth = State.CustomFilter.warmth, vignette = State.CustomFilter.vignette } } writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)) notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
 local function loadConfig(selected) if selected == "No config" then return end pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")) if d then if d.Move then State.Move.ws = d.Move.ws or 16 State.Move.jp = d.Move.jp or 50 State.Move.flyS = d.Move.flyS or 60 State.Move.autoWalkSpeed = d.Move.autoWalkSpeed or 16 local h = getHum() if h then h.WalkSpeed = State.Move.ws h.UseJumpPower = true h.JumpPower = State.Move.jp end end if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300 State.ESP.highlightMode = d.ESP.highlightMode or false end if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end if d.HardFling then State.HardFling.power = d.HardFling.power or 5000 State.HardFling.mode = d.HardFling.mode or "Spin" end if d.SelfSpec then SS.mode = d.SelfSpec.mode or "Orbit 360" SS.radius = d.SelfSpec.radius or 8 SS.height = d.SelfSpec.height or 3 SS.speed = d.SelfSpec.speed or 1 SS.distanceMult = d.SelfSpec.distanceMult or 1 SS.heightOffset = d.SelfSpec.heightOffset or 0 end if d.CustomFilter then for k, v in pairs(d.CustomFilter) do State.CustomFilter[k] = v end applyCustomFilter() end notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
 secFile:Button({ Title = "Save Config", Callback = saveConfig })
 local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected loadConfig(selected) end })
@@ -1414,8 +1391,5 @@ secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig
 secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end) notify("Config", "Files refreshed", 1.5, "folder") end })
 
 -- ================================ INIT ================================
-pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
-setOptimalFPS(120)
-
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.26 AKTIF — Cinematic Clean", 3, "rocket")
+notify("System", "XKID_HUB V3.27 AKTIF — Clean Graphics", 3, "rocket")
