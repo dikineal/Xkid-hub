@@ -1,11 +1,11 @@
--- @XKID SCRIPT V3.27 (Clean Graphics)
+-- @XKID SCRIPT V3.27 FINAL
 -- by @WTF.XKID | Roblox Build For Mobile/PC
 -- Changelog V3.27:
--- - REMOVED: FPS Boost toggle (no more forced low quality)
--- - REMOVED: FPS Cap dropdown (auto max FPS)
--- - REMOVED: QualityLevel override di init
--- - REMOVED: setOptimalFPS function (no render tampering)
--- - ADDED: Simple max FPS unlock tanpa sentuh render settings
+-- - REMOVED: Club Mode, Master POV Smoothness, Follow Smooth
+-- - REMOVED: FPS Boost, FPS Cap dropdown, QualityLevel override
+-- - REMOVED: Emoji di tab Cinematic, Membership di Info
+-- - ADDED: AFK ProgressBar di tab Informasi (WindUI terbaru)
+-- - FIXED: Toggle AFK langsung ON, FPS display di Info
 
 repeat task.wait() until game:IsLoaded()
 
@@ -143,7 +143,7 @@ local State = {
     Move = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60, autoWalk = false, autoWalkSpeed = 16 },
     Fly = { active = false, bv = nil, bg = nil, _keys = {} },
     HardFling = { active = false, power = 10000, mode = "Spin", currentPower = 0, rampUpActive = false },
-    Security = { afkActive = false, shiftLock = false, shiftLockGyro = nil },
+    Security = { afkActive = true, shiftLock = false, shiftLockGyro = nil },
     Cinema = { hideUI = false, cachedGuis = {} },
     Avatar = { isRefreshing = false },
     CustomFilter = { 
@@ -1189,36 +1189,58 @@ local function getExecutor() pcall(function() local e = identifyexecutor() if e 
 local execName = getExecutor()
 local accountAge = LP.AccountAge .. " days"
 local avatarImage = "rbxthumb://type=AvatarHeadShot&id=" .. LP.UserId .. "&w=420&h=420"
-local afkStatusParagraph = TabInfo:Paragraph({ Title = "YooWssp!!, " .. LP.DisplayName, Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal"), Image = avatarImage, ImageSize = 80 })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) pcall(function() afkStatusParagraph:SetDesc("Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nStatus: " .. (LP.MembershipType == Enum.MembershipType.Premium and "Premium" or "Normal")) end) end end)
 
+-- Panel atas: info user + FPS
+local afkStatusParagraph = TabInfo:Paragraph({ 
+    Title = "YooWssp!!, " .. LP.DisplayName, 
+    Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nFPS: " .. sharedFPS, 
+    Image = avatarImage, ImageSize = 80 
+})
+task.spawn(function() 
+    while getgenv()._XKID_RUNNING do 
+        task.wait(1) 
+        pcall(function() 
+            afkStatusParagraph:SetDesc("Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nFPS: " .. sharedFPS) 
+        end) 
+    end 
+end)
+
+-- Panel bawah: info server
 local infoParagraph = TabInfo:Paragraph({ Title = "💀 " .. LP.DisplayName, Desc = "Loading..." })
+
+-- AFK ProgressBar (WindUI terbaru)
+local afkProgressBar = TabInfo:ProgressBar({
+    Title = "AFK Triggers",
+    Value = 0,
+    Max = 100,
+    Color = Color3.fromRGB(220, 20, 60),
+    Desc = "Triggers: 0 | Status: ACTIVE ✅"
+})
+
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(1)
         local elapsed = os.difftime(os.time(), START_TIME)
         local uptime = formatTime(elapsed)
         local currentExecName = getExecutor()
+        local afkStatus = AFKSystem.active and "ACTIVE ✅" or "INACTIVE ❌"
+        local triggerMod = AFKSystem.triggerCount % 100
         
-        if AFKSystem.active then
-            infoParagraph:SetTitle("💀 " .. LP.DisplayName)
-            infoParagraph:SetDesc(string.format(
-                "Anti AFK: ACTIVE ✅\nTriggers: %d\nUptime: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
-                AFKSystem.triggerCount, uptime,
-                (onMobile and "Mobile" or "PC"), currentExecName,
-                (cachedMapName or "Loading..."),
-                #Players:GetPlayers(), Players.MaxPlayers
-            ))
-        else
-            infoParagraph:SetTitle("💀 " .. LP.DisplayName)
-            infoParagraph:SetDesc(string.format(
-                "Anti AFK: INACTIVE ❌\nUptime: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
-                uptime,
-                (onMobile and "Mobile" or "PC"), currentExecName,
-                (cachedMapName or "Loading..."),
-                #Players:GetPlayers(), Players.MaxPlayers
-            ))
-        end
+        infoParagraph:SetTitle("💀 " .. LP.DisplayName)
+        infoParagraph:SetDesc(string.format(
+            "Uptime: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players",
+            uptime,
+            (onMobile and "Mobile" or "PC"), currentExecName,
+            (cachedMapName or "Loading..."),
+            #Players:GetPlayers(), Players.MaxPlayers
+        ))
+        
+        pcall(function()
+            afkProgressBar:SetTitle("AFK Triggers")
+            afkProgressBar:SetValue(triggerMod)
+            afkProgressBar:SetDesc("Triggers: " .. AFKSystem.triggerCount .. " | Status: " .. afkStatus)
+            afkProgressBar:SetColor(AFKSystem.active and Color3.fromRGB(220, 20, 60) or Color3.fromRGB(100, 100, 100))
+        end)
     end
 end)
 
@@ -1392,4 +1414,4 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.27 AKTIF — Clean Graphics", 3, "rocket")
+notify("System", "XKID_HUB V3.27 FINAL — WindUI ProgressBar", 3, "rocket")
