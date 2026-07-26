@@ -926,12 +926,17 @@ task.spawn(function()
         local descStr = string.format("Uptime: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players", uptime, (onMobile and "Mobile" or "PC"), currentExecName, (cachedMapName or "Loading..."), #Players:GetPlayers(), Players.MaxPlayers)
         pcall(function() infoParagraph:SetTitle("💀 " .. LP.DisplayName) end)
         pcall(function() infoParagraph:SetDesc(descStr) end)
-        pcall(function() afkProgressBar:SetTitle("AFK Triggers") end)
-        pcall(function() afkProgressBar:SetValue(triggerMod) end)
-        pcall(function() afkProgressBar:SetProgress(triggerMod / 100) end)
-        pcall(function() afkProgressBar:SetDesc("Triggers: " .. AFKSystem.triggerCount .. " | Status: " .. afkStatus) end)
-        pcall(function() afkProgressBar:SetColor(AFKSystem.active and Color3.fromRGB(220, 20, 60) or Color3.fromRGB(100, 100, 100)) end)
-    end
+        pcall(function() 
+    afkProgressBar:Update({
+        Title = "AFK Triggers",
+        Desc = "Triggers: " .. AFKSystem.triggerCount .. " | Status: " .. afkStatus,
+        Value = {
+            Min = 0,
+            Max = 100,
+            Default = triggerMod,
+        },
+        Color = AFKSystem.active and Color3.fromRGB(220, 20, 60) or Color3.fromRGB(100, 100, 100),
+    }) 
 end)
 
 TabInfo:Section({ Title = "🔗 Discord", Icon = "message-circle", Box = true }):Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end) notify("System", "Link copied", 2, "copy") end })
