@@ -1,11 +1,10 @@
--- @XKID SCRIPT V3.27 FINAL
+-- @XKID SCRIPT V3.28
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.27:
--- - REMOVED: Club Mode, Master POV Smoothness, Follow Smooth
--- - REMOVED: FPS Boost, FPS Cap dropdown, QualityLevel override
--- - REMOVED: Emoji di tab Cinematic, Membership di Info
--- - ADDED: AFK ProgressBar di tab Informasi (WindUI terbaru)
--- - FIXED: Toggle AFK langsung ON, FPS display di Info
+-- Changelog V3.28:
+-- - FIXED: Anti AFK backup timer 15 detik + input detection (gak ngandelin Idled doang)
+-- - FIXED: Toggle AFK langsung ON saat script load
+-- - FIXED: ProgressBar tanpa pcall, update real-time sesuai trigger asli
+-- - FIXED: Stop AFK system bersih, semua koneksi terputus
 
 repeat task.wait() until game:IsLoaded()
 
@@ -260,8 +259,8 @@ end)
 
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
--- ================================ ANTI AFK ================================
-local AFKSystem = { active = true, idleConn = nil, triggerCount = 0 }
+-- ================================ ANTI AFK V3.28 ================================
+local AFKSystem = { active = true, idleConn = nil, backupTimer = nil, inputBegan = nil, inputChanged = nil, triggerCount = 0, _lastInput = nil }
 
 local function performAntiAFK()
     if not AFKSystem.active then return end
@@ -276,8 +275,39 @@ local function performAntiAFK()
 end
 
 local function startAFKSystem()
-    if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect() end
+    -- Stop dulu yang lama
+    if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect(); AFKSystem.idleConn = nil end
+    if AFKSystem.backupTimer then AFKSystem.backupTimer:Disconnect(); AFKSystem.backupTimer = nil end
+    if AFKSystem.inputBegan then AFKSystem.inputBegan:Disconnect(); AFKSystem.inputBegan = nil end
+    if AFKSystem.inputChanged then AFKSystem.inputChanged:Disconnect(); AFKSystem.inputChanged = nil end
+
+    -- Idled event (bawaan Roblox)
     AFKSystem.idleConn = LP.Idled:Connect(performAntiAFK)
+
+    -- Reset timer input
+    local function resetInput()
+        AFKSystem._lastInput = tick()
+    end
+    AFKSystem.inputBegan = UserInputService.InputBegan:Connect(resetInput)
+    AFKSystem.inputChanged = UserInputService.InputChanged:Connect(resetInput)
+    AFKSystem._lastInput = tick()
+
+    -- Backup timer tiap 15 detik
+    AFKSystem.backupTimer = RunService.Heartbeat:Connect(function()
+        if not AFKSystem.active then return end
+        if AFKSystem._lastInput and tick() - AFKSystem._lastInput > 15 then
+            performAntiAFK()
+            AFKSystem._lastInput = tick()
+        end
+    end)
+end
+
+local function stopAFKSystem()
+    if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect(); AFKSystem.idleConn = nil end
+    if AFKSystem.backupTimer then AFKSystem.backupTimer:Disconnect(); AFKSystem.backupTimer = nil end
+    if AFKSystem.inputBegan then AFKSystem.inputBegan:Disconnect(); AFKSystem.inputBegan = nil end
+    if AFKSystem.inputChanged then AFKSystem.inputChanged:Disconnect(); AFKSystem.inputChanged = nil end
+    AFKSystem._lastInput = nil
 end
 
 local function toggleAntiAFK(v)
@@ -287,8 +317,7 @@ local function toggleAntiAFK(v)
         startAFKSystem()
         notify("Anti AFK", "ON", 1.5, "shield-check")
     else
-        if AFKSystem.idleConn then AFKSystem.idleConn:Disconnect() end
-        AFKSystem.idleConn = nil
+        stopAFKSystem()
         notify("Anti AFK", "OFF", 1.5, "shield-check")
     end
 end
@@ -1171,7 +1200,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.27", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.28", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1180,7 +1209,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.27", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.28", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -1235,12 +1264,10 @@ task.spawn(function()
             #Players:GetPlayers(), Players.MaxPlayers
         ))
         
-        pcall(function()
-            afkProgressBar:SetTitle("AFK Triggers")
-            afkProgressBar:SetValue(triggerMod)
-            afkProgressBar:SetDesc("Triggers: " .. AFKSystem.triggerCount .. " | Status: " .. afkStatus)
-            afkProgressBar:SetColor(AFKSystem.active and Color3.fromRGB(220, 20, 60) or Color3.fromRGB(100, 100, 100))
-        end)
+        afkProgressBar:SetTitle("AFK Triggers")
+        afkProgressBar:SetValue(triggerMod)
+        afkProgressBar:SetDesc("Triggers: " .. AFKSystem.triggerCount .. " | Status: " .. afkStatus)
+        afkProgressBar:SetColor(AFKSystem.active and Color3.fromRGB(220, 20, 60) or Color3.fromRGB(100, 100, 100))
     end
 end)
 
@@ -1389,7 +1416,11 @@ secESPCol:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "
 -- ================================ TAB: PROTECTION ================================
 local TabProt = Window:Tab({ Title = "Protection", Icon = "shield-half" })
 local secProt = TabProt:Section({ Title = "Protection Protocols", Icon = "shield-check", Box = true })
-secProt:Toggle({ Title = "Anti AFK", Default = true, Callback = function(v) toggleAntiAFK(v) end })
+local afkToggle = secProt:Toggle({ Title = "Anti AFK", Default = true, Callback = function(v) toggleAntiAFK(v) end })
+task.spawn(function()
+    task.wait(0.5)
+    pcall(function() afkToggle:SetValue(true) end)
+end)
 secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Callback = function() local r, h = getRoot(), getHum() if r then r.Anchored = false r.CFrame = r.CFrame + Vector3.new(0,3,0) end if h then h.Sit = false h:ChangeState(Enum.HumanoidStateType.Jumping) end notify("Protection", "Stuck fix applied", 2, "wrench") end })
 local secSrv = TabProt:Section({ Title = "Server Control", Icon = "server", Box = true })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Callback = function() pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end) notify("Server", "Rejoining...", 2, "log-in") end })
@@ -1414,4 +1445,4 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.27 FINAL — WindUI ProgressBar", 3, "rocket")
+notify("System", "XKID_HUB V3.28 AKTIF — AFK Fixed", 3, "rocket")
