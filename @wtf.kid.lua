@@ -1,11 +1,9 @@
--- @XKID SCRIPT V3.32
+-- @XKID SCRIPT V3.34
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.32:
--- - ADDED: 2 Mode AFK (Safe & Lite) via toggle, pilih salah satu
--- - Safe Mode: klik + gerak + loncat (cuma saat diem 10 detik)
--- - Lite Mode: klik + gerak dikit + loncat jarang (cuma saat diem 5 detik)
--- - Info AFK bar tampilkan mode yang aktif
--- - Backup timer Safe 10 detik, Lite 5 detik
+-- Changelog V3.34:
+-- - ADDED: 2 Mode AFK - Original (klik doang, kayak V3.27) & Lite (klik + gerak + balik)
+-- - Original Mode: VirtualUser klik doang, timer 10 detik
+-- - Lite Mode: klik + gerak dikit + balik posisi + loncat jarang, timer 5 detik
 
 repeat task.wait() until game:IsLoaded()
 
@@ -236,56 +234,43 @@ end)
 
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
--- ================================ ANTI AFK V3.32 ================================
+-- ================================ ANTI AFK V3.34 ================================
 local AFKSystem = { 
-    active = true, mode = "Safe",
+    active = true, mode = "Original",
     idleConn = nil, backupTimer = nil, inputBegan = nil, inputChanged = nil,
-    safeTriggers = 0, liteTriggers = 0, _lastInput = nil, _liteJumpCounter = 0
+    origTriggers = 0, liteTriggers = 0, _lastInput = nil, _liteJumpCounter = 0
 }
 
 local function performAntiAFK()
     if not AFKSystem.active then return end
     
-    local hrp = getRoot()
-    local hum = getHum()
-    local isMoving = hum and hum.MoveDirection.Magnitude > 1
-    local inputAge = AFKSystem._lastInput and (tick() - AFKSystem._lastInput) or 999
-    local isIdle = inputAge > 5 and not isMoving
-    
-    if AFKSystem.mode == "Safe" then
-        AFKSystem.safeTriggers = AFKSystem.safeTriggers + 1
-        
-        -- VirtualUser klik selalu
+    if AFKSystem.mode == "Original" then
+        AFKSystem.origTriggers = AFKSystem.origTriggers + 1
         pcall(function()
             if VirtualUser then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new(-9999, -9999)) end
         end)
         
-        -- Gerak + loncat HANYA kalau beneran diem 10+ detik
-        if inputAge > 10 and isIdle then
-            pcall(function()
-                if hrp and hum and hum.Health > 0 then
-                    hrp.CFrame = hrp.CFrame + Vector3.new(math.random(-2, 2), 0, math.random(-2, 2))
-                    hum.Jump = true
-                end
-            end)
-        end
-        
     elseif AFKSystem.mode == "Lite" then
+        local hrp = getRoot()
+        local hum = getHum()
+        local isMoving = hum and hum.MoveDirection.Magnitude > 1
+        local inputAge = AFKSystem._lastInput and (tick() - AFKSystem._lastInput) or 999
+        local isIdle = inputAge > 5 and not isMoving
+        
         AFKSystem.liteTriggers = AFKSystem.liteTriggers + 1
         AFKSystem._liteJumpCounter = (AFKSystem._liteJumpCounter or 0) + 1
         
-        -- VirtualUser klik selalu
         pcall(function()
             if VirtualUser then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new(-9999, -9999)) end
         end)
         
-        -- Gerak dikit + loncat jarang HANYA kalau diem 5+ detik
         if inputAge > 5 and isIdle then
             pcall(function()
                 if hrp and hum and hum.Health > 0 then
-                    -- Gerak dikit aja (1 stud)
+                    local originalPos = hrp.Position
                     hrp.CFrame = hrp.CFrame + Vector3.new(math.random(-1, 1), 0, math.random(-1, 1))
-                    -- Loncat cuma tiap 4 trigger (jarang)
+                    task.wait(0.3)
+                    pcall(function() hrp.CFrame = CFrame.new(originalPos) end)
                     if AFKSystem._liteJumpCounter % 4 == 0 then
                         hum.Jump = true
                     end
@@ -786,7 +771,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.32", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.34", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -795,7 +780,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.32", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.34", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -821,7 +806,7 @@ task.spawn(function()
             local uptime = formatTime(elapsed)
             local currentExecName = getExecutor()
             local afkStatus = AFKSystem.active and ("✅ " .. AFKSystem.mode) or "❌ INACTIVE"
-            local triggerCount = (AFKSystem.mode == "Safe") and AFKSystem.safeTriggers or AFKSystem.liteTriggers
+            local triggerCount = (AFKSystem.mode == "Original") and AFKSystem.origTriggers or AFKSystem.liteTriggers
             local triggerMod = triggerCount % 100
             local fill = math.floor(triggerMod / 5)
             local bar = string.rep("█", fill) .. string.rep("░", 20 - fill)
@@ -934,7 +919,6 @@ secESPCol:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "
 local TabProt = Window:Tab({ Title = "Protection", Icon = "shield-half" })
 local secProt = TabProt:Section({ Title = "Protection Protocols", Icon = "shield-check", Box = true })
 
--- AFK Main Toggle
 local afkMainToggle = secProt:Toggle({ Title = "Anti AFK", Default = true, Callback = function(v) 
     toggleAntiAFK(v)
     task.wait(0.2)
@@ -947,35 +931,28 @@ task.spawn(function()
     pcall(function() afkMainToggle:SetValue(true) end) 
 end)
 
--- AFK Mode: Safe
-local safeToggle = secProt:Toggle({ Title = "AFK Safe Mode", Default = true, Callback = function(v) 
+local origToggle = secProt:Toggle({ Title = "AFK Original Mode", Default = true, Callback = function(v) 
     if v then 
-        setAFKMode("Safe")
+        setAFKMode("Original")
         pcall(function() liteToggle:SetState(false) end)
         pcall(function() liteToggle:SetValue(false) end)
-    elseif not AFKSystem.ghostActive then
-        -- jangan matiin kalau Lite yang aktif
     end
-    notify("AFK Mode", v and "Safe" or "Lite", 1.5, "shield-check")
+    notify("AFK Mode", v and "Original" or "Lite", 1.5, "shield-check")
 end })
 
--- AFK Mode: Lite
 local liteToggle = secProt:Toggle({ Title = "AFK Lite Mode", Default = false, Callback = function(v) 
     if v then 
         setAFKMode("Lite")
-        pcall(function() safeToggle:SetState(false) end)
-        pcall(function() safeToggle:SetValue(false) end)
-    elseif not AFKSystem.safeActive then
-        -- jangan matiin kalau Safe yang aktif
+        pcall(function() origToggle:SetState(false) end)
+        pcall(function() origToggle:SetValue(false) end)
     end
-    notify("AFK Mode", v and "Lite" or "Safe", 1.5, "zap")
+    notify("AFK Mode", v and "Lite" or "Original", 1.5, "zap")
 end })
 
--- Set initial toggle states
 task.spawn(function()
     task.wait(1.2)
-    pcall(function() safeToggle:SetState(true) end)
-    pcall(function() safeToggle:SetValue(true) end)
+    pcall(function() origToggle:SetState(true) end)
+    pcall(function() origToggle:SetValue(true) end)
     pcall(function() liteToggle:SetState(false) end)
     pcall(function() liteToggle:SetValue(false) end)
 end)
@@ -1001,4 +978,4 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.32 AKTIF — Safe & Lite Mode", 3, "rocket")
+notify("System", "XKID_HUB V3.34 AKTIF — Original + Lite Mode", 3, "rocket")
