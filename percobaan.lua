@@ -906,15 +906,6 @@ local afkStatusParagraph = TabInfo:Paragraph({
     Desc = "Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nFPS: " .. sharedFPS, 
     Image = avatarImage, ImageSize = 80 
 })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); pcall(function() afkStatusParagraph:SetDesc("Executor: " .. execName .. "\nAccount Age: " .. accountAge .. "\nUserID: " .. LP.UserId .. "\nFPS: " .. sharedFPS) end) end end)
-
-local infoParagraph = TabInfo:Paragraph({ Title = "💀 " .. LP.DisplayName, Desc = "Loading..." })
-
-local afkProgressBar = TabInfo:ProgressBar({
-    Title = "AFK Triggers", Value = 0, Max = 100,
-    Color = Color3.fromRGB(220, 20, 60), Desc = "Triggers: 0 | Status: ACTIVE ✅"
-})
-
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(1)
@@ -924,19 +915,22 @@ task.spawn(function()
         local afkStatus = AFKSystem.active and "ACTIVE ✅" or "INACTIVE ❌"
         local triggerMod = AFKSystem.triggerCount % 100
         local descStr = string.format("Uptime: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players", uptime, (onMobile and "Mobile" or "PC"), currentExecName, (cachedMapName or "Loading..."), #Players:GetPlayers(), Players.MaxPlayers)
+        
         pcall(function() infoParagraph:SetTitle("💀 " .. LP.DisplayName) end)
         pcall(function() infoParagraph:SetDesc(descStr) end)
-        pcall(function() 
-    afkProgressBar:Update({
-        Title = "AFK Triggers",
-        Desc = "Triggers: " .. AFKSystem.triggerCount .. " | Status: " .. afkStatus,
-        Value = {
-            Min = 0,
-            Max = 100,
-            Default = triggerMod,
-        },
-        Color = AFKSystem.active and Color3.fromRGB(220, 20, 60) or Color3.fromRGB(100, 100, 100),
-    }) 
+        
+        -- ProgressBar update cara baru
+        pcall(function() afkProgressBar:UpdateTitle("AFK Triggers") end)
+        pcall(function() afkProgressBar:UpdateDesc("Triggers: " .. AFKSystem.triggerCount .. " | Status: " .. afkStatus) end)
+        pcall(function() afkProgressBar:Set({
+            Value = {
+                Min = 0,
+                Max = 100,
+                Default = triggerMod,
+            },
+            Color = AFKSystem.active and Color3.fromRGB(220, 20, 60) or Color3.fromRGB(100, 100, 100),
+        }) end)
+    end
 end)
 
 TabInfo:Section({ Title = "🔗 Discord", Icon = "message-circle", Box = true }):Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end) notify("System", "Link copied", 2, "copy") end })
