@@ -1,10 +1,10 @@
--- @XKID SCRIPT V3.30
+-- @XKID SCRIPT V3.31
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.30:
+-- Changelog V3.31:
 -- - FIXED: Anti AFK backup timer 15 detik + input detection
--- - FIXED: Toggle AFK langsung ON
--- - FIXED: ProgressBar update via Value.Default + Set() fallback + Format callback
--- - FIXED: Info loop anti-mati dengan pcall
+-- - FIXED: Toggle AFK langsung ON + paksa update UI
+-- - FIXED: AFK text bar real-time (tanpa ProgressBar)
+-- - FIXED: Semua info real-time (FPS, Uptime, AFK, Players)
 
 repeat task.wait() until game:IsLoaded()
 
@@ -325,9 +325,7 @@ end))
 
 -- ================================ SMART TP ================================
 local Teleport = { clickConn = nil, clickActive = false, toolActive = false, tool = nil }
-
 local function executeTP() local hrp = getRoot(); if not hrp then return end; local m = LP:GetMouse(); if m.Hit then hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0,3.5,0)); hrp.AssemblyLinearVelocity = Vector3.zero end end
-
 local function toggleSmartTP(v)
     Teleport.clickActive = v
     if v then pcall(function() local t = Instance.new("Tool"); t.Name = "TP Tool"; t.RequiresHandle = false; t.Parent = LP.Backpack; Teleport.tool = t; Teleport.toolActive = false; t.Activated:Connect(function() Teleport.toolActive = not Teleport.toolActive end) end)
@@ -342,7 +340,6 @@ local function startAutoWalk()
     RunService:BindToRenderStep("XKIDAutoWalk", Enum.RenderPriority.Character.Value + 1, function() if not State.Move.autoWalk then return end; local hrp, hum2 = getRoot(), getHum(); if not hrp or not hum2 then return end; if hum2.MoveDirection.Magnitude > 0.1 then return end; local camDir = Camera.CFrame.LookVector; local moveDir = Vector3.new(camDir.X, 0, camDir.Z).Unit; hrp.CFrame = hrp.CFrame + moveDir * (State.Move.autoWalkSpeed / 60) end)
     notify("Auto Walk", "ON", 1.5, "play")
 end
-
 local function stopAutoWalk() RunService:UnbindFromRenderStep("XKIDAutoWalk"); State.Move.autoWalk = false; local hum = getHum(); if hum then hum.WalkSpeed = State.Move.ws end; notify("Auto Walk", "OFF", 1.5, "play") end
 
 -- ================================ ESP ENGINE ================================
@@ -420,7 +417,6 @@ local function startFlyCapture()
     table.insert(flyConns, UserInputService.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp == flyMoveTouch then flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero end end))
     State.Fly._keys = keysHeld
 end
-
 local function stopFlyCapture() for _, c in ipairs(flyConns) do c:Disconnect() end; flyConns = {}; flyMoveTouch = nil; flyMoveSt = nil; flyJoy = Vector2.zero; State.Fly._keys = {} end
 
 local function toggleFly(v)
@@ -480,7 +476,6 @@ local function startFreecamCapture()
     table.insert(fcConns, UserInputService.TouchMoved:Connect(function(inp) if inp == fcRotTouch and fcRotLast then local dx = inp.Position.X - fcRotLast.X; local dy = inp.Position.Y - fcRotLast.Y; fcRotLast = inp.Position; I_YawVel = I_YawVel - dx * FC.sens * 80; I_PitchVel = I_PitchVel - dy * FC.sens * 80 end; if inp == fcMoveTouch and fcMoveSt then local dx = inp.Position.X - fcMoveSt.X; local dy = inp.Position.Y - fcMoveSt.Y; local function ad(v,d,m) if math.abs(v) < d then return 0 end; return math.clamp((v - math.sign(v) * d) / (m - d), -1, 1) end; fcJoy = Vector2.new(ad(dx,15,70), ad(dy,15,70)) end end))
     table.insert(fcConns, UserInputService.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end; if inp == fcRotTouch then fcRotTouch = nil; fcRotLast = nil end; if inp == fcMoveTouch then fcMoveTouch = nil; fcMoveSt = nil; fcJoy = Vector2.zero end end))
 end
-
 local function stopFreecamCapture() for _, c in ipairs(fcConns) do c:Disconnect() end; fcConns = {}; fcKeysHeld = {}; FC._mr = false; UserInputService.MouseBehavior = Enum.MouseBehavior.Default end
 
 local function lockCharacterPosition(lock)
@@ -517,7 +512,6 @@ local function startFreecamLoop()
         Camera.CFrame = CFrame.new(FC.pos) * CFrame.Angles(0, math.rad(FC.yawDeg), 0) * CFrame.Angles(math.rad(FC.pitchDeg), 0, 0) * CFrame.Angles(0, 0, math.rad(FC.rollDeg))
     end)
 end
-
 local function stopFreecamLoop() RunService:UnbindFromRenderStep("XKIDFreecam") end
 
 local function fullCleanupFreecam()
@@ -554,7 +548,6 @@ local function startSSGesture()
     table.insert(ssConns, UserInputService.InputChanged:Connect(function(inp) if not SS.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end if #ssPinch == 1 and inp == ssTM then ssPan = ssPan + Vector2.new(inp.Delta.X, inp.Delta.Y) elseif #ssPinch >= 2 then local d = (ssPinch[1].Position - ssPinch[2].Position).Magnitude; if ssPinchD then local diff = d - ssPinchD; Camera.FieldOfView = math.clamp(Camera.FieldOfView - diff * 0.15, 10, 120); SS.radius = math.clamp(SS.radius - diff * 0.03, 3, 30) end; ssPinchD = d end end))
     table.insert(ssConns, UserInputService.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end for i, v in ipairs(ssPinch) do if v == inp then table.remove(ssPinch, i) break end end ssPinchD = nil; ssTM = #ssPinch == 1 and ssPinch[1] or nil end))
 end
-
 local function stopSSGesture() for _, c in ipairs(ssConns) do c:Disconnect() end; ssConns = {}; ssTM = nil; ssPinch = {}; ssPinchD = nil; ssPan = Vector2.zero end
 
 local function startSelfSpecLoop()
@@ -610,13 +603,11 @@ end
 
 -- ================================ SPECTATE ================================
 local specTM, specPinch, specPinchD, specPan, specConns = nil, {}, nil, Vector2.zero, {}
-
 local function startSpecCapture()
     table.insert(specConns, UserInputService.InputBegan:Connect(function(inp,gp) if gp or not State.Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end table.insert(specPinch, inp) specTM = #specPinch == 1 and inp or nil end))
     table.insert(specConns, UserInputService.InputChanged:Connect(function(inp) if not State.Spec.active or inp.UserInputType ~= Enum.UserInputType.Touch then return end if #specPinch == 1 and inp == specTM then specPan = specPan + Vector2.new(inp.Delta.X, inp.Delta.Y) elseif #specPinch >= 2 then local d = (specPinch[1].Position - specPinch[2].Position).Magnitude; if specPinchD then local diff = d - specPinchD; Camera.FieldOfView = math.clamp(Camera.FieldOfView - diff * 0.15, 10, 120); if State.Spec.mode == "third" then State.Spec.dist = math.clamp(State.Spec.dist - diff * 0.03, 3, 30) end end; specPinchD = d end end))
     table.insert(specConns, UserInputService.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end for i, v in ipairs(specPinch) do if v == inp then table.remove(specPinch, i) break end end specPinchD = nil; specTM = #specPinch == 1 and specPinch[1] or nil end))
 end
-
 local function stopSpecCapture() for _, c in ipairs(specConns) do c:Disconnect() end; specConns = {}; specTM = nil; specPinch = {}; specPinchD = nil; specPan = Vector2.zero end
 
 local function startSpecLoop()
@@ -634,7 +625,6 @@ local function startSpecLoop()
         end)
     end)
 end
-
 local function stopSpecLoop() RunService:UnbindFromRenderStep("XKIDSpec") end
 
 -- ================================ HARD FLING ================================
@@ -728,7 +718,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.30", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.31", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -737,7 +727,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.30", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.31", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -755,17 +745,6 @@ task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); pcall(funct
 
 local infoParagraph = TabInfo:Paragraph({ Title = "💀 " .. LP.DisplayName, Desc = "Loading..." })
 
-local afkProgressBar = TabInfo:ProgressBar({
-    Title = "AFK Triggers",
-    Desc = "Triggers: 0 | Status: ACTIVE ✅",
-    Value = { Min = 0, Max = 100, Default = 0 },
-    DisplayMode = "Percentage",
-    Format = function(value, percentage, min, max)
-        local afkStatus = AFKSystem.active and "ACTIVE ✅" or "INACTIVE ❌"
-        return "Triggers: " .. AFKSystem.triggerCount .. " | " .. afkStatus
-    end,
-})
-
 task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(1)
@@ -773,13 +752,20 @@ task.spawn(function()
             local elapsed = os.difftime(os.time(), START_TIME)
             local uptime = formatTime(elapsed)
             local currentExecName = getExecutor()
+            local afkStatus = AFKSystem.active and "✅ ACTIVE" or "❌ INACTIVE"
             local triggerMod = AFKSystem.triggerCount % 100
+            local fill = math.floor(triggerMod / 5)
+            local bar = string.rep("█", fill) .. string.rep("░", 20 - fill)
             
             infoParagraph:SetTitle("💀 " .. LP.DisplayName)
-            infoParagraph:SetDesc(string.format("Uptime: %s\n\n📱 %s | 🚀 %s\n\n🎮 %s\n👥 %d/%d Players", uptime, (onMobile and "Mobile" or "PC"), currentExecName, (cachedMapName or "Loading..."), #Players:GetPlayers(), Players.MaxPlayers))
-            
-            pcall(function() afkProgressBar.Value.Default = triggerMod end)
-            pcall(function() afkProgressBar:Set({ Value = { Min = 0, Max = 100, Default = triggerMod } }) end)
+            infoParagraph:SetDesc(string.format(
+                "⏳ AFK Triggers\n%s %d%%\nTriggers: %d | Status: %s\n\n⏱ Uptime: %s\n📱 %s | 🚀 %s\n🎮 %s\n👥 %d/%d Players",
+                bar, triggerMod, AFKSystem.triggerCount, afkStatus,
+                uptime,
+                (onMobile and "Mobile" or "PC"), currentExecName,
+                (cachedMapName or "Loading..."),
+                #Players:GetPlayers(), Players.MaxPlayers
+            ))
         end)
     end
 end)
@@ -878,8 +864,17 @@ secESPCol:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "
 -- ================================ TAB: PROTECTION ================================
 local TabProt = Window:Tab({ Title = "Protection", Icon = "shield-half" })
 local secProt = TabProt:Section({ Title = "Protection Protocols", Icon = "shield-check", Box = true })
-local afkToggle = secProt:Toggle({ Title = "Anti AFK", Default = true, Callback = function(v) toggleAntiAFK(v) end })
-task.spawn(function() task.wait(0.8); pcall(function() afkToggle:SetState(true) end); pcall(function() afkToggle:SetValue(true) end) end)
+local afkToggle = secProt:Toggle({ Title = "Anti AFK", Default = true, Callback = function(v) 
+    toggleAntiAFK(v)
+    task.wait(0.2)
+    pcall(function() afkToggle:SetState(v) end)
+    pcall(function() afkToggle:SetValue(v) end)
+end })
+task.spawn(function() 
+    task.wait(1) 
+    pcall(function() afkToggle:SetState(true) end) 
+    pcall(function() afkToggle:SetValue(true) end) 
+end)
 secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Callback = function() local r, h = getRoot(), getHum(); if r then r.Anchored = false; r.CFrame = r.CFrame + Vector3.new(0,3,0) end; if h then h.Sit = false; h:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Protection", "Stuck fix applied", 2, "wrench") end })
 local secSrv = TabProt:Section({ Title = "Server Control", Icon = "server", Box = true })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Callback = function() pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end); notify("Server", "Rejoining...", 2, "log-in") end })
@@ -901,4 +896,4 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.30 AKTIF — ProgressBar + Format", 3, "rocket")
+notify("System", "XKID_HUB V3.31 AKTIF — All Real-time", 3, "rocket")
