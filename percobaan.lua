@@ -1,10 +1,9 @@
--- @XKID SCRIPT V3.31
+-- @XKID SCRIPT V3.34
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.31:
--- - FIXED: Anti AFK backup timer 15 detik + input detection
--- - FIXED: Toggle AFK langsung ON + paksa update UI
--- - FIXED: AFK text bar real-time (tanpa ProgressBar)
--- - FIXED: Semua info real-time (FPS, Uptime, AFK, Players)
+-- Changelog V3.34:
+-- - ADDED: 2 Mode AFK - Original (klik doang, kayak V3.27) & Lite (klik + gerak + balik)
+-- - Original Mode: VirtualUser klik doang, timer 10 detik
+-- - Lite Mode: klik + gerak dikit + balik posisi + loncat jarang, timer 5 detik
 
 repeat task.wait() until game:IsLoaded()
 
@@ -235,15 +234,50 @@ end)
 
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
--- ================================ ANTI AFK ================================
-local AFKSystem = { active = true, idleConn = nil, backupTimer = nil, inputBegan = nil, inputChanged = nil, triggerCount = 0, _lastInput = nil }
+-- ================================ ANTI AFK V3.34 ================================
+local AFKSystem = { 
+    active = true, mode = "Original",
+    idleConn = nil, backupTimer = nil, inputBegan = nil, inputChanged = nil,
+    origTriggers = 0, liteTriggers = 0, _lastInput = nil, _liteJumpCounter = 0
+}
 
 local function performAntiAFK()
     if not AFKSystem.active then return end
-    AFKSystem.triggerCount = AFKSystem.triggerCount + 1
-    pcall(function()
-        if VirtualUser then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new(-9999, -9999)) end
-    end)
+    
+    if AFKSystem.mode == "Original" then
+        AFKSystem.origTriggers = AFKSystem.origTriggers + 1
+        pcall(function()
+            if VirtualUser then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new(-9999, -9999)) end
+        end)
+        
+    elseif AFKSystem.mode == "Lite" then
+        local hrp = getRoot()
+        local hum = getHum()
+        local isMoving = hum and hum.MoveDirection.Magnitude > 1
+        local inputAge = AFKSystem._lastInput and (tick() - AFKSystem._lastInput) or 999
+        local isIdle = inputAge > 5 and not isMoving
+        
+        AFKSystem.liteTriggers = AFKSystem.liteTriggers + 1
+        AFKSystem._liteJumpCounter = (AFKSystem._liteJumpCounter or 0) + 1
+        
+        pcall(function()
+            if VirtualUser then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new(-9999, -9999)) end
+        end)
+        
+        if inputAge > 5 and isIdle then
+            pcall(function()
+                if hrp and hum and hum.Health > 0 then
+                    local originalPos = hrp.Position
+                    hrp.CFrame = hrp.CFrame + Vector3.new(math.random(-1, 1), 0, math.random(-1, 1))
+                    task.wait(0.3)
+                    pcall(function() hrp.CFrame = CFrame.new(originalPos) end)
+                    if AFKSystem._liteJumpCounter % 4 == 0 then
+                        hum.Jump = true
+                    end
+                end
+            end)
+        end
+    end
 end
 
 local function startAFKSystem()
@@ -251,14 +285,24 @@ local function startAFKSystem()
     if AFKSystem.backupTimer then AFKSystem.backupTimer:Disconnect(); AFKSystem.backupTimer = nil end
     if AFKSystem.inputBegan then AFKSystem.inputBegan:Disconnect(); AFKSystem.inputBegan = nil end
     if AFKSystem.inputChanged then AFKSystem.inputChanged:Disconnect(); AFKSystem.inputChanged = nil end
+    
     AFKSystem.idleConn = LP.Idled:Connect(performAntiAFK)
-    local function resetInput() AFKSystem._lastInput = tick() end
+    
+    local function resetInput()
+        AFKSystem._lastInput = tick()
+    end
     AFKSystem.inputBegan = UserInputService.InputBegan:Connect(resetInput)
     AFKSystem.inputChanged = UserInputService.InputChanged:Connect(resetInput)
     AFKSystem._lastInput = tick()
+    
+    local backupDelay = (AFKSystem.mode == "Lite") and 5 or 10
+    
     AFKSystem.backupTimer = RunService.Heartbeat:Connect(function()
         if not AFKSystem.active then return end
-        if AFKSystem._lastInput and tick() - AFKSystem._lastInput > 15 then performAntiAFK(); AFKSystem._lastInput = tick() end
+        if AFKSystem._lastInput and tick() - AFKSystem._lastInput > backupDelay then
+            performAntiAFK()
+            AFKSystem._lastInput = tick()
+        end
     end)
 end
 
@@ -270,8 +314,17 @@ local function stopAFKSystem()
     AFKSystem._lastInput = nil
 end
 
+local function setAFKMode(mode)
+    AFKSystem.mode = mode
+    if AFKSystem.active then
+        stopAFKSystem()
+        startAFKSystem()
+    end
+end
+
 local function toggleAntiAFK(v)
-    AFKSystem.active = v; State.Security.afkActive = v
+    AFKSystem.active = v
+    State.Security.afkActive = v
     if v then startAFKSystem(); notify("Anti AFK", "ON", 1.5, "shield-check")
     else stopAFKSystem(); notify("Anti AFK", "OFF", 1.5, "shield-check") end
 end
@@ -718,7 +771,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.31", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.34", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -727,7 +780,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.31", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.34", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -752,15 +805,16 @@ task.spawn(function()
             local elapsed = os.difftime(os.time(), START_TIME)
             local uptime = formatTime(elapsed)
             local currentExecName = getExecutor()
-            local afkStatus = AFKSystem.active and "✅ ACTIVE" or "❌ INACTIVE"
-            local triggerMod = AFKSystem.triggerCount % 100
+            local afkStatus = AFKSystem.active and ("✅ " .. AFKSystem.mode) or "❌ INACTIVE"
+            local triggerCount = (AFKSystem.mode == "Original") and AFKSystem.origTriggers or AFKSystem.liteTriggers
+            local triggerMod = triggerCount % 100
             local fill = math.floor(triggerMod / 5)
             local bar = string.rep("█", fill) .. string.rep("░", 20 - fill)
             
             infoParagraph:SetTitle("💀 " .. LP.DisplayName)
             infoParagraph:SetDesc(string.format(
-                "⏳ AFK Triggers\n%s %d%%\nTriggers: %d | Status: %s\n\n⏱ Uptime: %s\n📱 %s | 🚀 %s\n🎮 %s\n👥 %d/%d Players",
-                bar, triggerMod, AFKSystem.triggerCount, afkStatus,
+                "⏳ AFK Triggers [%s]\n%s %d%%\nTriggers: %d | Status: %s\n\n⏱ Uptime: %s\n📱 %s | 🚀 %s\n🎮 %s\n👥 %d/%d Players",
+                AFKSystem.mode, bar, triggerMod, triggerCount, afkStatus,
                 uptime,
                 (onMobile and "Mobile" or "PC"), currentExecName,
                 (cachedMapName or "Loading..."),
@@ -864,17 +918,45 @@ secESPCol:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "
 -- ================================ TAB: PROTECTION ================================
 local TabProt = Window:Tab({ Title = "Protection", Icon = "shield-half" })
 local secProt = TabProt:Section({ Title = "Protection Protocols", Icon = "shield-check", Box = true })
-local afkToggle = secProt:Toggle({ Title = "Anti AFK", Default = true, Callback = function(v) 
+
+local afkMainToggle = secProt:Toggle({ Title = "Anti AFK", Default = true, Callback = function(v) 
     toggleAntiAFK(v)
     task.wait(0.2)
-    pcall(function() afkToggle:SetState(v) end)
-    pcall(function() afkToggle:SetValue(v) end)
+    pcall(function() afkMainToggle:SetState(v) end)
+    pcall(function() afkMainToggle:SetValue(v) end)
 end })
 task.spawn(function() 
     task.wait(1) 
-    pcall(function() afkToggle:SetState(true) end) 
-    pcall(function() afkToggle:SetValue(true) end) 
+    pcall(function() afkMainToggle:SetState(true) end) 
+    pcall(function() afkMainToggle:SetValue(true) end) 
 end)
+
+local origToggle = secProt:Toggle({ Title = "AFK Original Mode", Default = true, Callback = function(v) 
+    if v then 
+        setAFKMode("Original")
+        pcall(function() liteToggle:SetState(false) end)
+        pcall(function() liteToggle:SetValue(false) end)
+    end
+    notify("AFK Mode", v and "Original" or "Lite", 1.5, "shield-check")
+end })
+
+local liteToggle = secProt:Toggle({ Title = "AFK Lite Mode", Default = false, Callback = function(v) 
+    if v then 
+        setAFKMode("Lite")
+        pcall(function() origToggle:SetState(false) end)
+        pcall(function() origToggle:SetValue(false) end)
+    end
+    notify("AFK Mode", v and "Lite" or "Original", 1.5, "zap")
+end })
+
+task.spawn(function()
+    task.wait(1.2)
+    pcall(function() origToggle:SetState(true) end)
+    pcall(function() origToggle:SetValue(true) end)
+    pcall(function() liteToggle:SetState(false) end)
+    pcall(function() liteToggle:SetValue(false) end)
+end)
+
 secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Callback = function() local r, h = getRoot(), getHum(); if r then r.Anchored = false; r.CFrame = r.CFrame + Vector3.new(0,3,0) end; if h then h.Sit = false; h:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Protection", "Stuck fix applied", 2, "wrench") end })
 local secSrv = TabProt:Section({ Title = "Server Control", Icon = "server", Box = true })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Callback = function() pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end); notify("Server", "Rejoining...", 2, "log-in") end })
@@ -896,4 +978,4 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.31 AKTIF — All Real-time", 3, "rocket")
+notify("System", "XKID_HUB V3.34 AKTIF — Original + Lite Mode", 3, "rocket")
