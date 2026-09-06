@@ -1,13 +1,8 @@
--- @XKID SCRIPT V3.25 (Cinematic Director + Club Mode + New Presets + CHAT LOGGER FIX)
+-- @XKID SCRIPT V3.26 (Cinematic Director + Club Mode + New Presets + CHAT LOGGER FIX)
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.25:
--- - REMOVED: Extra Controls (Star Angle, Follow Player Facing, Intro Mode) - bentrok
--- - ADDED: Settings: Master POV Smoothness, Distance Mult, Follow Smooth, Height Offset
--- - ADDED PRESET: FPV Drone, Crash Zoom, Smear Cam, Whip Snap, Bounce Beat, Vertigo Effect
--- - REMOVED PRESET: Orbit Slow, Portrait, Static Tripod, Helicopter, Spiral, Head Lock, Body Lock, Follow
--- - RENAMED: Enable Self-Spectate → Cinematic Director
--- - ADDED: Club Mode (Head Static, Body Static, Side Static, High Right, Foot Static, Such Tilt, My Director)
--- - FIXED: Chat Logger (Multiple Target, Filter Keyword, Auto-save, Console Only)
+-- Changelog V3.26:
+-- - FIXED: Chat Logger (Single Target, Filter Keyword, Auto-save, Console Output)
+-- - All features from V3.25 tetap utuh
 
 repeat task.wait() until game:IsLoaded()
 
@@ -186,15 +181,6 @@ local State = {
     },
     Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, isSelf = false },
     FPS = { cap = 120 },
-    ChatLogger = {
-        enabled = false,
-        targets = {},
-        filter = "",
-        history = {},
-        maxHistory = 100,
-        autoSave = false,
-        saveInterval = nil,
-    }
 }
 
 local colorMap = {
@@ -269,55 +255,74 @@ local function isOnGround()
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
 
--- ================================ CHAT LOGGER ENGINE ================================
-local ChatLogger = State.ChatLogger
-local chatLogPanel = nil
-local chatTargetInput = nil
-local chatFilterInput = nil
-local chatStatusLabel = nil
+-- ================================ XKID CHAT LOGGER - STANDALONE ================================
+-- ============================================================
+--  XKID CHAT LOGGER - STANDALONE (TERINTEGRASI DENGAN WINDUI)
+--  Log chat target ke console & notification
+-- ============================================================
 
--- Fungsi log ke console
+local TextChatService = game:GetService("TextChatService")
+local LP = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+
+-- STATE
+local ChatLog = {
+    enabled = false,
+    target = nil,
+    silent = false,
+    history = {},
+    maxHistory = 50,
+    autoSave = false,
+    filter = "",
+}
+
+-- Core log function
 local function consoleLog(msg)
-    print("[CHAT LOGGER] " .. msg)
-    warn("[CHAT LOGGER] " .. msg)
+    print("[CHAT LOG] " .. msg)
+    warn("[CHAT LOG] " .. msg)
 end
 
--- Fungsi utama log chat
-local function logChatMessage(playerName, message)
-    if not ChatLogger.enabled then return end
-    
-    -- Cek target
-    local isTarget = false
-    for _, target in ipairs(ChatLogger.targets) do
-        if string.lower(playerName) == string.lower(target) then
-            isTarget = true
-            break
-        end
-    end
-    if not isTarget then return end
+local function logMessage(displayName, msg)
+    if not ChatLog.enabled then return end
+    if not ChatLog.target then return end
+    if displayName ~= ChatLog.target.DisplayName then return end
     
     -- Filter keyword
-    if ChatLogger.filter and ChatLogger.filter ~= "" then
-        if not string.find(string.lower(message), string.lower(ChatLogger.filter)) then
+    if ChatLog.filter and ChatLog.filter ~= "" then
+        if not string.find(string.lower(msg), string.lower(ChatLog.filter)) then
             return
         end
     end
-    
-    local time = os.date("%H:%M:%S")
-    local entry = string.format("[%s] %s: %s", time, playerName, message)
-    
-    table.insert(ChatLogger.history, entry)
-    if #ChatLogger.history > ChatLogger.maxHistory then
-        table.remove(ChatLogger.history, 1)
+
+    local entry = string.format("[%s] %s: %s", os.date("%H:%M:%S"), displayName, msg)
+    table.insert(ChatLog.history, entry)
+
+    if #ChatLog.history > ChatLog.maxHistory then
+        table.remove(ChatLog.history, 1)
+    end
+
+    -- Print ke console
+    print(entry)
+    warn(entry)
+
+    -- Notifikasi popup (kecuali silent mode)
+    if not ChatLog.silent then
+        pcall(function()
+            if WindUI and WindUI.Notify then
+                WindUI:Notify({ 
+                    Title = "💬 Chat", 
+                    Content = displayName .. ": " .. msg, 
+                    Duration = 2,
+                    Icon = "message-circle"
+                })
+            end
+        end)
     end
     
-    -- Tampilkan di console
-    consoleLog(entry)
-    
-    -- Auto-save
-    if ChatLogger.autoSave then
+    -- Auto-save ke file
+    if ChatLog.autoSave then
         pcall(function()
-            if executor.has_writefile and executor.has_makefolder then
+            if writefile and isfolder then
                 if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end
                 local fileName = "XKID_HUB/chat_log_" .. os.date("%Y-%m-%d") .. ".txt"
                 local existing = isfile(fileName) and readfile(fileName) or ""
@@ -326,10 +331,10 @@ local function logChatMessage(playerName, message)
         end)
     end
     
-    -- Update UI
+    -- Update UI Console
     pcall(function()
         if chatLogPanel then
-            local display = table.concat(ChatLogger.history, "\n")
+            local display = table.concat(ChatLog.history, "\n")
             if #display > 2000 then display = display:sub(-2000) end
             if #display == 0 then display = "Belum ada chat..." end
             chatLogPanel:SetDesc(display)
@@ -337,34 +342,113 @@ local function logChatMessage(playerName, message)
     end)
 end
 
--- Setup chat hook
+-- Hook chat system
 local function setupChatHook()
     if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        TextChatService.MessageReceived:Connect(function(msg)
-            if msg.TextSource then
-                logChatMessage(msg.TextSource.Name, msg.Text)
+        TextChatService.MessageReceived:Connect(function(message)
+            if message.TextSource then
+                local sender = Players:GetPlayerByUserId(message.TextSource.UserId)
+                local displayName = sender and sender.DisplayName or message.TextSource.Name
+                logMessage(displayName, message.Text)
             end
         end)
     else
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LP then
-                pcall(function()
-                    p.Chatted:Connect(function(msg)
-                        logChatMessage(p.Name, msg)
-                    end)
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LP then
+                player.Chatted:Connect(function(msg)
+                    logMessage(player.DisplayName, msg)
                 end)
             end
         end
-        Players.PlayerAdded:Connect(function(p)
-            pcall(function()
-                p.Chatted:Connect(function(msg)
-                    logChatMessage(p.Name, msg)
-                end)
+
+        Players.PlayerAdded:Connect(function(player)
+            player.Chatted:Connect(function(msg)
+                logMessage(player.DisplayName, msg)
             end)
         end)
     end
 end
+
 setupChatHook()
+
+-- Utility functions
+function ChatLog.setTarget(playerName)
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.DisplayName == playerName or p.Name == playerName then
+            ChatLog.target = p
+            consoleLog("Target set to: " .. p.DisplayName)
+            return true
+        end
+    end
+    consoleLog("Player not found: " .. playerName)
+    return false
+end
+
+function ChatLog.toggle(state)
+    ChatLog.enabled = (state ~= nil) and state or not ChatLog.enabled
+    consoleLog(ChatLog.enabled and "ENABLED" or "DISABLED")
+end
+
+function ChatLog.setSilent(state)
+    ChatLog.silent = (state ~= nil) and state or not ChatLog.silent
+    consoleLog("Silent mode: " .. (ChatLog.silent and "ON" or "OFF"))
+end
+
+function ChatLog.showHistory()
+    consoleLog("=== CHAT LOG HISTORY ===")
+    for _, entry in ipairs(ChatLog.history) do
+        print(entry)
+    end
+    consoleLog("=== END ===")
+end
+
+function ChatLog.clearHistory()
+    ChatLog.history = {}
+    consoleLog("History cleared")
+    pcall(function()
+        if chatLogPanel then chatLogPanel:SetDesc("Belum ada chat...") end
+    end)
+end
+
+function ChatLog.setFilter(keyword)
+    ChatLog.filter = keyword or ""
+    consoleLog("Filter: " .. (keyword ~= "" and keyword or "removed"))
+end
+
+function ChatLog.setAutoSave(state)
+    ChatLog.autoSave = (state ~= nil) and state or not ChatLog.autoSave
+    consoleLog("Auto-save: " .. (ChatLog.autoSave and "ON" or "OFF"))
+end
+
+consoleLog("✅ XKID Chat Logger loaded!")
+
+-- UI Chat Logger variables
+local chatLogPanel = nil
+local targetDropdown = nil
+local statusLabel = nil
+local chatLogStatus = nil
+
+-- ================================ GLOBAL VARS ================================
+local START_TIME = os.time()
+local cachedMapName = nil
+local lastMapCheck = 0
+local sharedFPS = 60
+local sharedPing = 0
+
+-- ================================ FPS & PING TRACKER ================================
+TrackC(RunService.RenderStepped:Connect(function(dt) if dt > 0 then sharedFPS = math.floor(1 / dt) end end))
+
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(function() local item = StatsService.Network.ServerStatsItem["Data Ping"]; if item then sharedPing = math.floor(item:GetValue()) end end) end
+end)
+
+task.spawn(function()
+    while getgenv()._XKID_RUNNING do pcall(function() if tick() - lastMapCheck > 30 or not cachedMapName then cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name; lastMapCheck = tick() end end); task.wait(5) end
+end)
+
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
+TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
 
 -- ================================ ANTI AFK ================================
 local AFKSystem = { active = true, idleConn = nil, triggerCount = 0 }
@@ -1319,7 +1403,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.25", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.26", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(380, 340), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1328,7 +1412,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.25", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.26", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -1528,46 +1612,90 @@ local TabChat = Window:Tab({ Title = "Chat Logger", Icon = "message-square" })
 
 local secChat = TabChat:Section({ Title = "📝 Chat Logger", Icon = "message-square", Box = true })
 
+-- Status
+local statusLabel = secChat:Paragraph({ 
+    Title = "📊 Status", 
+    Desc = "Logger: OFF | Target: None | Silent: OFF" 
+})
+
 -- Enable Logger
 secChat:Toggle({ 
     Title = "Enable Logger", 
     Desc = "Aktifkan pencatatan chat (output ke console)",
     Default = false, 
     Callback = function(v) 
-        ChatLogger.enabled = v
-        if v then
-            consoleLog("Logger DIACTIVE")
-        else
-            consoleLog("Logger DINONACTIVE")
-            pcall(function() 
-                if chatLogPanel then chatLogPanel:SetDesc("Logger disabled") end 
-            end)
-        end
-        notify("Chat Logger", v and "ON ✅" or "OFF ❌", 1.5, "message-square") 
+        ChatLog.toggle(v)
+        pcall(function()
+            statusLabel:SetDesc(string.format(
+                "Logger: %s | Target: %s | Silent: %s",
+                ChatLog.enabled and "ON ✅" or "OFF ❌",
+                ChatLog.target and ChatLog.target.DisplayName or "None",
+                ChatLog.silent and "ON 🔇" or "OFF 🔊"
+            ))
+        end)
     end 
 })
 
--- Target Input (multiple targets dipisahkan koma)
-secChat:Input({ 
-    Title = "🎯 Targets (pisahkan dengan koma)", 
-    Desc = "Contoh: Player1, Player2, Player3",
-    Placeholder = "Masukkan nama target...",
+-- Silent Mode
+secChat:Toggle({ 
+    Title = "Silent Mode", 
+    Desc = "ON = chat tidak muncul sebagai notifikasi popup",
+    Default = false, 
     Callback = function(v) 
-        if v and v ~= "" then
-            local targets = {}
-            for _, name in ipairs(string.split(v, ",")) do
-                local trimmed = name:gsub("^%s+", ""):gsub("%s+$", "")
-                if trimmed ~= "" then
-                    table.insert(targets, trimmed)
-                end
-            end
-            ChatLogger.targets = targets
-            consoleLog("Target diupdate: " .. table.concat(targets, ", "))
-            notify("Chat Logger", "Targets: " .. #targets .. " player(s)", 1.5, "users")
-        else
-            ChatLogger.targets = {}
-            consoleLog("Target dikosongkan")
+        ChatLog.setSilent(v)
+        pcall(function()
+            statusLabel:SetDesc(string.format(
+                "Logger: %s | Target: %s | Silent: %s",
+                ChatLog.enabled and "ON ✅" or "OFF ❌",
+                ChatLog.target and ChatLog.target.DisplayName or "None",
+                ChatLog.silent and "ON 🔇" or "OFF 🔊"
+            ))
+        end)
+    end 
+})
+
+-- Target Dropdown
+secChat:Paragraph({ Title = "🎯 Target", Desc = "Pilih player yang chat-nya ingin dipantau" })
+targetDropdown = secChat:Dropdown({ 
+    Title = "Select Target", 
+    Values = getDisplayNames(), 
+    Callback = function(v) 
+        local success = ChatLog.setTarget(v)
+        if success then
+            pcall(function()
+                statusLabel:SetDesc(string.format(
+                    "Logger: %s | Target: %s | Silent: %s",
+                    ChatLog.enabled and "ON ✅" or "OFF ❌",
+                    ChatLog.target and ChatLog.target.DisplayName or "None",
+                    ChatLog.silent and "ON 🔇" or "OFF 🔊"
+                ))
+            end)
         end
+    end 
+})
+
+secChat:Button({ 
+    Title = "Clear Target", 
+    Callback = function()
+        ChatLog.target = nil
+        pcall(function()
+            targetDropdown:Refresh(getDisplayNames(), true)
+            statusLabel:SetDesc(string.format(
+                "Logger: %s | Target: %s | Silent: %s",
+                ChatLog.enabled and "ON ✅" or "OFF ❌",
+                "None",
+                ChatLog.silent and "ON 🔇" or "OFF 🔊"
+            ))
+        end)
+        consoleLog("Target cleared")
+    end 
+})
+
+secChat:Button({ 
+    Title = "🔄 Refresh Player List", 
+    Callback = function()
+        pcall(function() targetDropdown:Refresh(getDisplayNames(), true) end)
+        consoleLog("Player list refreshed")
     end 
 })
 
@@ -1577,9 +1705,16 @@ secChat:Input({
     Desc = "Hanya catat chat yang mengandung kata ini (kosongkan untuk semua)",
     Placeholder = "Kata kunci...",
     Callback = function(v) 
-        ChatLogger.filter = v or ""
-        consoleLog(v and v ~= "" and "Filter: " .. v or "Filter dihapus")
-        notify("Chat Logger", v and v ~= "" and "Filter: " .. v or "Filter removed", 1.5, "filter")
+        ChatLog.setFilter(v or "")
+        pcall(function()
+            statusLabel:SetDesc(string.format(
+                "Logger: %s | Target: %s | Silent: %s | Filter: %s",
+                ChatLog.enabled and "ON ✅" or "OFF ❌",
+                ChatLog.target and ChatLog.target.DisplayName or "None",
+                ChatLog.silent and "ON 🔇" or "OFF 🔊",
+                ChatLog.filter ~= "" and ChatLog.filter or "None"
+            ))
+        end)
     end 
 })
 
@@ -1589,44 +1724,52 @@ secChat:Toggle({
     Desc = "Simpan chat ke file XKID_HUB/chat_log_YYYY-MM-DD.txt",
     Default = false, 
     Callback = function(v) 
-        ChatLogger.autoSave = v
-        consoleLog(v and "Auto-save ON" or "Auto-save OFF")
-        notify("Chat Logger", v and "Auto-save ON 💾" or "Auto-save OFF ❌", 1.5, "save") 
+        ChatLog.setAutoSave(v)
     end 
 })
 
--- Clear Log
-secChat:Button({ 
-    Title = "🗑️ Clear Log", 
-    Callback = function()
-        ChatLogger.history = {}
-        pcall(function() 
-            if chatLogPanel then chatLogPanel:SetDesc("Belum ada chat...") end 
-        end)
-        consoleLog("Log dibersihkan")
-        notify("Chat Logger", "Log cleared ❌", 1.5, "trash-2")
-    end 
-})
-
--- Console Panel (menampilkan riwayat chat)
+-- Console Panel
 chatLogPanel = secChat:Paragraph({ 
-    Title = "📋 Console (Output)", 
+    Title = "📋 Console Output", 
     Desc = "Belum ada chat..." 
 })
 
--- Refresh Panel
 secChat:Button({ 
     Title = "🔄 Refresh Console", 
     Callback = function()
         pcall(function()
             if chatLogPanel then
-                local display = table.concat(ChatLogger.history, "\n")
+                local display = table.concat(ChatLog.history, "\n")
                 if #display > 2000 then display = display:sub(-2000) end
                 if #display == 0 then display = "Belum ada chat..." end
                 chatLogPanel:SetDesc(display)
             end
         end)
-        notify("Chat Logger", "Console refreshed ✅", 1.5, "refresh-cw")
+        consoleLog("Console refreshed")
+    end 
+})
+
+secChat:Button({ 
+    Title = "🗑️ Clear Log", 
+    Callback = function()
+        ChatLog.clearHistory()
+        pcall(function()
+            statusLabel:SetDesc(string.format(
+                "Logger: %s | Target: %s | Silent: %s | Filter: %s",
+                ChatLog.enabled and "ON ✅" or "OFF ❌",
+                ChatLog.target and ChatLog.target.DisplayName or "None",
+                ChatLog.silent and "ON 🔇" or "OFF 🔊",
+                ChatLog.filter ~= "" and ChatLog.filter or "None"
+            ))
+        end)
+    end 
+})
+
+secChat:Button({ 
+    Title = "📊 Show History (Console)", 
+    Callback = function()
+        ChatLog.showHistory()
+        consoleLog("Check console for history!")
     end 
 })
 
@@ -1660,32 +1803,19 @@ local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigL
 secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" and executor.has_listfiles then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json") pcall(function() configDrop:Refresh(getConfigList(), true) end) currentConfig = "No config" notify("Config", "Deleted", 2, "trash-2") end end) end end })
 secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList(), true) end) notify("Config", "Files refreshed", 1.5, "folder") end })
 
--- ================================ GLOBAL VARS ================================
-local START_TIME = os.time()
-local cachedMapName = nil
-local lastMapCheck = 0
-local sharedFPS = 60
-local sharedPing = 0
-
--- ================================ FPS & PING TRACKER ================================
-TrackC(RunService.RenderStepped:Connect(function(dt) if dt > 0 then sharedFPS = math.floor(1 / dt) end end))
-
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(function() local item = StatsService.Network.ServerStatsItem["Data Ping"]; if item then sharedPing = math.floor(item:GetValue()) end end) end
-end)
-
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do pcall(function() if tick() - lastMapCheck > 30 or not cachedMapName then cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name; lastMapCheck = tick() end end); task.wait(5) end
-end)
-
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(30); setOptimalFPS(State.FPS.cap) end end)
-TrackC(LP.CharacterAdded:Connect(function() task.wait(0.5); setOptimalFPS(State.FPS.cap) end))
-
 -- ================================ INIT ================================
 pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level02 end)
 setOptimalFPS(120)
 
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.25 AKTIF — Cinematic Director + Club Mode + New Presets + CHAT LOGGER", 3, "rocket")
-consoleLog("XKID_HUB V3.25 LOADED - Chat Logger Ready")
+notify("System", "XKID_HUB V3.26 AKTIF — Cinematic Director + Club Mode + New Presets + CHAT LOGGER FIX", 3, "rocket")
+consoleLog("XKID_HUB V3.26 LOADED - Chat Logger Ready")
+
+-- Welcome message di console
+print("")
+print("╔══════════════════════════════════════════════════════════════╗")
+print("║              XKID HUB V3.26 - LOADED                        ║")
+print("║         Chat Logger: Use UI or ChatLog commands             ║")
+print("║   Commands: ChatLog.setTarget('Name') | ChatLog.toggle()    ║")
+print("╚══════════════════════════════════════════════════════════════╝")
+print("")
