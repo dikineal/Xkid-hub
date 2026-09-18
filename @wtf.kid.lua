@@ -116,32 +116,65 @@ local function formatTime(sec) local h = math.floor(sec/3600); local m = math.fl
 local function getConfigList() local list = {}; if executor.has_isfolder and executor.has_listfiles then pcall(function() if isfolder and isfolder("XKID_HUB") then for _, f in ipairs(listfiles("XKID_HUB")) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n then table.insert(list, n) end end end end end) end; if #list == 0 then table.insert(list, "No config") end; return list end
 local function isOnGround() local r = getRoot(); if not r then return false end; local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude; params.FilterDescendantsInstances = { LP.Character }; return workspace:Raycast(r.Position, Vector3.new(0,-5,0), params) ~= nil end
 
--- ================================ NOCLIP (SIMPLE) ================================
+-- ================================ NOCLIP V3.40 FINAL ================================
+local Noclip = false
 local NoclipConnection = nil
-local NoclipEnabled = false
-local function SetNoclip(state)
-    NoclipEnabled = state
-    State.Move.ncp = state
-    if NoclipConnection then NoclipConnection:Disconnect(); NoclipConnection = nil end
-    if state then
-        NoclipConnection = RunService.Stepped:Connect(function()
-            local Character = LP.Character
-            if not Character then return end
-            for _, obj in ipairs(Character:GetDescendants()) do
-                if obj:IsA("BasePart") then obj.CanCollide = false end
-            end
-        end)
-    else
-        local Character = LP.Character
-        if not Character then return end
-        for _, obj in ipairs(Character:GetDescendants()) do
-            if obj:IsA("BasePart") then obj.CanCollide = true end
+local SavedCollision = {}
+
+local function getCharacter()
+    return LP.Character or LP.CharacterAdded:Wait()
+end
+
+local function enableNoclip()
+    local Character = getCharacter()
+    SavedCollision = {}
+    for _, v in ipairs(Character:GetDescendants()) do
+        if v:IsA("BasePart") then
+            SavedCollision[v] = v.CanCollide
+            v.CanCollide = false
         end
     end
+    if NoclipConnection then NoclipConnection:Disconnect() end
+    NoclipConnection = RunService.Stepped:Connect(function()
+        local Char = LP.Character
+        if not Char or not Noclip then return end
+        for _, v in ipairs(Char:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.CanCollide = false
+            end
+        end
+    end)
 end
+
+local function disableNoclip()
+    Noclip = false
+    if NoclipConnection then NoclipConnection:Disconnect(); NoclipConnection = nil end
+    local Character = LP.Character
+    if not Character then return end
+    for _, v in ipairs(Character:GetDescendants()) do
+        if v:IsA("BasePart") then
+            if SavedCollision[v] ~= nil then
+                v.CanCollide = SavedCollision[v]
+            end
+        end
+    end
+    SavedCollision = {}
+end
+
+-- Wrapper untuk UI toggle
+local function SetNoclip(state)
+    if state then
+        Noclip = true
+        enableNoclip()
+    else
+        disableNoclip()
+    end
+    State.Move.ncp = state
+end
+
 TrackC(LP.CharacterAdded:Connect(function()
-    task.wait(0.5)
-    if NoclipEnabled then SetNoclip(true) end
+    task.wait(1)
+    if Noclip then enableNoclip() end
 end))
 
 -- ================================ FREEZE MODE (STATUE) ================================
