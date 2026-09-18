@@ -1,16 +1,10 @@
--- @XKID SCRIPT V3.36
+-- @XKID SCRIPT V3.37
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.36:
--- - FIXED: NoClip getar (whitelist part + reset velocity + delay 2 frame)
--- - FIXED: Server Hop error di executor tanpa request
--- - FIXED: Filter "Default" sekarang reset ke Roblox default lighting
--- - MERGED: Tab Visual digabung ke Cinematic (Camera & Visual)
--- - MOVED: Camera Lock pindah ke tab Character
--- - REMOVED: Auto Walk
--- - CHANGED: Hard Fling hanya mode Spin
--- - ADDED: Auto Like Back (Blind Loop + Event-Based + Notif Hook)
--- - ADDED: UI Auto-Scale (tablet 11" = 0.75x, HP 6" = 0.9x, PC = 1.0x)
--- - UPDATED: Version tag to V3.36
+-- Changelog V3.37:
+-- - FIXED: NoClip getar (aggressive: clear BodyMover + 3-frame delay + state restore)
+-- - ADDED: UI Size slider live (min 0.3x)
+-- - CHANGED: ESP scan distance max 2000
+-- - KEPT: Semua fitur V3.36
 
 repeat task.wait() until game:IsLoaded()
 
@@ -89,9 +83,9 @@ getgenv()._XKID_UI_LOADING = true
 -- ================================ UI SCALE AUTO-DETECT ================================
 local vpX = Camera.ViewportSize.X
 local UI_SCALE = 1.0
-if vpX < 900 then UI_SCALE = 0.75          -- Tablet 11"
-elseif vpX < 1200 then UI_SCALE = 0.9      -- HP 6"
-else UI_SCALE = 1.0 end                     -- PC / Tablet besar
+if vpX < 900 then UI_SCALE = 0.75
+elseif vpX < 1200 then UI_SCALE = 0.9
+else UI_SCALE = 1.0 end
 getgenv()._XKID_UI_SCALE = UI_SCALE
 
 -- ================================ ORIGINAL LIGHTING ================================
@@ -237,25 +231,35 @@ local function isOnGround()
     return workspace:Raycast(r.Position, Vector3.new(0, -5, 0), params) ~= nil
 end
 
--- ================================ NOCLIP WHITELIST ================================
-local COLLIDE_WHITELIST = {
-    Head = true, Torso = true, UpperTorso = true, LowerTorso = true,
-    LeftFoot = true, RightFoot = true, LeftHand = true, RightHand = true,
-    LeftUpperArm = true, LeftLowerArm = true,
-    RightUpperArm = true, RightLowerArm = true,
-    LeftUpperLeg = true, LeftLowerLeg = true,
-    RightUpperLeg = true, RightLowerLeg = true,
-}
+-- ================================ NOCLIP V3.37 AGGRESSIVE ================================
+local isRestoring = false
 
-local function setCollideState(state)
+local function clearAllPhysicsForces()
+    local hrp = getRoot()
+    if not hrp then return end
+    for _, v in pairs(hrp:GetChildren()) do
+        if v:IsA("BodyVelocity") or v:IsA("BodyGyro") or v:IsA("BodyPosition")
+           or v:IsA("BodyForce") or v:IsA("BodyAngularVelocity") or v:IsA("BodyThrust")
+           or v:IsA("VectorForce") or v:IsA("AngularVelocity") or v:IsA("LinearVelocity")
+           or v:IsA("AlignOrientation") or v:IsA("AlignPosition") then
+            if v.Name ~= "XKID_FlyBV" and v.Name ~= "XKID_FlyBG"
+               and v.Name ~= "XKID_FreecamBP" and v.Name ~= "XKID_FreecamBG" then
+                pcall(function() v:Destroy() end)
+            end
+        end
+    end
+end
+
+local function resetAllVelocity()
     if not LP.Character then return end
     for _, p in pairs(LP.Character:GetDescendants()) do
         if p:IsA("BasePart") then
-            if p.Name == "HumanoidRootPart" then
-                p.CanCollide = false
-            else
-                p.CanCollide = state and (COLLIDE_WHITELIST[p.Name] == true) or false
-            end
+            pcall(function()
+                p.AssemblyLinearVelocity = Vector3.zero
+                p.AssemblyAngularVelocity = Vector3.zero
+                p.Velocity = Vector3.zero
+                p.RotVelocity = Vector3.zero
+            end)
         end
     end
 end
@@ -280,7 +284,7 @@ end)
 
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
--- ================================ ANTI AFK V3.36 ================================
+-- ================================ ANTI AFK V3.37 ================================
 local AFKSystem = {
     active = true, mode = "Original",
     idleConn = nil, backupTimer = nil, inputBegan = nil, inputChanged = nil,
@@ -501,7 +505,8 @@ TrackC(RunService.RenderStepped:Connect(function()
         end
     end
 end))
--- ================================ FILTERS ================================
+-- ================================ FILTERS 
+================================
 local FILTER_PRESETS = {
     Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7 },
     Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2 },
@@ -651,19 +656,21 @@ end
 
 local function hookNotifications()
     pcall(function()
-        local oldNotif = StarterGui.SetCore
-        if not oldNotif then return end
-    end)
-    pcall(function()
         if not StarterGui.SetCore then return end
         if AutoLikeEngine.notifHookConn then return end
         AutoLikeEngine.notifHookConn = true
-        hookfunction(StarterGui.SetCore, newcclosure(function(self, option, value)
-            if option == "SendNotification" and type(value) == "table" then
-                local title = value.Title or ""
-                local text = value.Text or ""
+        local mt = getrawmetatable and getrawmetatable(game)
+        if not mt or not setreadonly then return end
+        local oldNamecall = mt.__namecall
+        setreadonly(mt, false)
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            local args = {...}
+            if self == StarterGui and method == "SetCore" and args[1] == "SendNotification" and type(args[2]) == "table" then
+                local title = args[2].Title or ""
+                local text = args[2].Text or ""
                 local combined = (title .. " " .. text):lower()
-                if combined:find("like") or combined:find("liked you") then
+                if combined:find("like") then
                     task.spawn(function()
                         for _, p in pairs(Players:GetPlayers()) do
                             if p ~= LP and p.Character then
@@ -682,8 +689,9 @@ local function hookNotifications()
                     end)
                 end
             end
-            return oldNotif(self, option, value)
-        end))
+            return oldNamecall(self, ...)
+        end)
+        setreadonly(mt, true)
     end)
 end
 
@@ -695,7 +703,7 @@ local baseHeight = math.floor(320 * UI_SCALE)
 local sidebarWidth = math.floor(160 * UI_SCALE)
 
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.36", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.37", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(baseWidth, baseHeight), Transparent = true, Theme = "Crimson", SideBarWidth = sidebarWidth,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = math.floor(40 * UI_SCALE), ButtonsType = "Default" },
 })
@@ -704,8 +712,31 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName) Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 * UI_SCALE })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.36", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.37", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
+
+-- ================================ UI FORCE RESIZE FUNCTION ================================
+local function forceResizeWindow(scale)
+    local w = math.floor(280 * scale)
+    local h = math.floor(240 * scale)
+    pcall(function()
+        for _, v in pairs(CoreGui:GetChildren()) do
+            if v.Name == "WindUI" or v.Name:lower():find("windui") then
+                for _, frame in pairs(v:GetDescendants()) do
+                    if frame:IsA("Frame") and (frame.Name == "Main" or frame.Name == "Root") then
+                        frame.Size = UDim2.fromOffset(w, h)
+                        for _, c in pairs(frame:GetChildren()) do
+                            if c:IsA("UISizeConstraint") then
+                                c.MinSize = Vector2.new(50, 50)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+getgenv()._XKID_FORCE_RESIZE = forceResizeWindow
 
 -- ================================ TAB: INFORMASI ================================
 local TabInfo = Window:Tab({ Title = "Informasi", Icon = "activity" })
@@ -762,7 +793,7 @@ local secAbi = TabChar:Section({ Title = "Abilities", Icon = "zap", Box = true }
 secAbi:Toggle({ Title = "Fly", Default = false, Callback = function(v) toggleFly(v) end })
 secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = v end })
 
--- ================================ NOCLIP FIX V3.36 ================================
+-- NOCLIP V3.37 AGGRESSIVE
 local noclipConn = nil
 secAbi:Toggle({
     Title = "NoClip",
@@ -771,60 +802,59 @@ secAbi:Toggle({
         State.Move.ncp = v
         if v then
             if not noclipConn then
-                noclipConn = TrackC(RunService.Heartbeat:Connect(function()
+                noclipConn = TrackC(RunService.Stepped:Connect(function()
                     if not State.Move.ncp then return end
-                    setCollideState(false)
+                    if LP.Character then
+                        for _, p in pairs(LP.Character:GetDescendants()) do
+                            if p:IsA("BasePart") then p.CanCollide = false end
+                        end
+                    end
                 end))
             end
             notify("NoClip", "ON", 1.5, "ghost")
         else
             if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
+            if isRestoring then return end
+            isRestoring = true
             task.spawn(function()
                 local hrp = getRoot()
                 local hum = getHum()
                 local savedWS = hum and hum.WalkSpeed or 16
                 local savedJP = hum and hum.JumpPower or 50
-                if hum then hum.WalkSpeed = 0; hum.JumpPower = 0; hum.AutoRotate = false end
-                if hrp then
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                    hrp.AssemblyAngularVelocity = Vector3.zero
-                end
+                if hum then hum.WalkSpeed = 0; hum.JumpPower = 0; hum.AutoRotate = false; hum.PlatformStand = false end
+                clearAllPhysicsForces()
+                resetAllVelocity()
+                RunService.Stepped:Wait()
+                RunService.Stepped:Wait()
+                RunService.Stepped:Wait()
                 if LP.Character then
                     for _, p in pairs(LP.Character:GetDescendants()) do
                         if p:IsA("BasePart") then
-                            p.AssemblyLinearVelocity = Vector3.zero
-                            p.AssemblyAngularVelocity = Vector3.zero
+                            p.CanCollide = (p.Name ~= "HumanoidRootPart")
                         end
                     end
                 end
-                RunService.Heartbeat:Wait()
-                RunService.Heartbeat:Wait()
-                if hrp then
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                    hrp.AssemblyAngularVelocity = Vector3.zero
-                end
-                setCollideState(true)
+                resetAllVelocity()
                 if hum then
                     pcall(function() hum:ChangeState(Enum.HumanoidStateType.Landed) end)
+                    task.wait(0.05)
                     pcall(function() hum:ChangeState(Enum.HumanoidStateType.Running) end)
                 end
-                task.wait(0.1)
-                if hrp then
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                    hrp.AssemblyAngularVelocity = Vector3.zero
-                end
+                task.wait(0.15)
+                resetAllVelocity()
                 if hum then hum.WalkSpeed = savedWS; hum.JumpPower = savedJP; hum.AutoRotate = true end
+                isRestoring = false
+                notify("NoClip", "OFF", 1.5, "ghost")
             end)
-            notify("NoClip", "OFF", 1.5, "ghost")
         end
     end
 })
 
--- ================================ CAMERA LOCK (PINDAH DARI PROTECTION) ================================
+-- CAMERA LOCK (PINDAH DARI PROTECTION)
 local secCamLock = TabChar:Section({ Title = "Camera Lock", Icon = "lock", Box = true })
 secCamLock:Toggle({ Title = "Force Shift Lock", Default = false, Callback = function(v) toggleShiftLock(v) end })
 
--- ================================ HARD FLING (SPIN ONLY) ================================
+-- HARD FLING (SPIN ONLY)
 local secFling = TabChar:Section({ Title = "Hard Fling (Safe)", Icon = "rotate-cw", Box = true })
 secFling:Toggle({ Title = "Hard Fling", Default = false, Callback = function(v) if v then startHardFling() else stopHardFling() end end })
 secFling:Slider({ Title = "Fling Power", Step = 500, Value = { Min = 1000, Max = 50000, Default = 10000 }, Callback = function(v) State.HardFling.power = v end })
@@ -854,7 +884,7 @@ secSP:Button({ Title = "Refresh Target List", Callback = function() notify("Spec
 secSP:Toggle({ Title = "Enable Spectate", Default = false, Callback = function(v) if SS.active then toggleSelfSpec(false) end; State.Spec.active = v; if v then if not State.Spec.target or not State.Spec.target.Character then if State.Spec.isSelf and LP.Character then else State.Spec.active = false; notify("Error", "No target", 2, "circle-alert"); return end end; State.Spec.origFov = Camera.FieldOfView; startSpecCapture(); startSpecLoop(); notify("Spectator", "ON", 2, "eye") else stopSpecLoop(); stopSpecCapture(); Camera.CameraType = Enum.CameraType.Custom; Camera.FieldOfView = State.Spec.origFov; notify("Spectator", "OFF", 1.5, "eye") end end })
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) State.Spec.dist = v end })
 
--- ================================ TAB: CAMERA & VISUAL (GABUNGAN) ================================
+-- ================================ TAB: CAMERA & VISUAL ================================
 local TabCamVis = Window:Tab({ Title = "Camera & Visual", Icon = "aperture" })
 
 local secSelfSpec = TabCamVis:Section({ Title = "Cinematic Director", Icon = "clapperboard", Box = true })
@@ -893,7 +923,7 @@ local TabESP = Window:Tab({ Title = "ESP", Icon = "scan-search" })
 local secDetect = TabESP:Section({ Title = "Detection System", Icon = "radar", Box = true })
 secDetect:Toggle({ Title = "Enable Radar", Default = false, Callback = function(v) State.ESP.active = v; if not v and State.ESP.cache then for _, c in pairs(State.ESP.cache) do pcall(function() if c.texts then c.texts.Visible = false end; if c.tracer then c.tracer.Visible = false end; for _, l in ipairs(c.boxLines) do if l then l.Visible = false end end; if c.hl then c.hl.Enabled = false end end) end end; notify("ESP", v and "ON" or "OFF", 1.5, "radar") end })
 secDetect:Toggle({ Title = "Highlight Entity", Default = false, Callback = function(v) State.ESP.highlightMode = v; notify("ESP", "Highlight " .. (v and "ON" or "OFF"), 1.5, "radar") end })
-secDetect:Slider({ Title = "Scan Distance", Step = 10, Value = { Min = 50, Max = 500, Default = 300 }, Callback = function(v) State.ESP.maxDrawDistance = v end })
+secDetect:Slider({ Title = "Scan Distance", Step = 10, Value = { Min = 50, Max = 2000, Default = 300 }, Callback = function(v) State.ESP.maxDrawDistance = v end })
 local secESPCol = TabESP:Section({ Title = "Color Config", Icon = "palette", Box = true })
 secESPCol:Dropdown({ Title = "Normal Color", Values = { "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam" }, Default = "Merah", Callback = function(v) if colorMap[v] then State.ESP.tracerColor_N = colorMap[v]; State.ESP.boxColor_N = colorMap[v] end; notify("ESP", "Normal: " .. v, 1.5, "palette") end })
 secESPCol:Dropdown({ Title = "Suspect Color", Values = { "Merah", "Hijau", "Biru", "Kuning", "Ungu", "Cyan", "Orange", "Pink", "Putih", "Hitam", "Crimson" }, Default = "Crimson", Callback = function(v) if colorMap[v] then State.ESP.tracerColor_S = colorMap[v]; State.ESP.boxColor_S = colorMap[v] end; notify("ESP", "Suspect: " .. v, 1.5, "palette") end })
@@ -901,7 +931,6 @@ secESPCol:Dropdown({ Title = "Glitch Acc Color", Values = { "Orange", "Merah", "
 
 -- ================================ TAB: LOGGER ================================
 local TabLog = Window:Tab({ Title = "Logger", Icon = "square-terminal" })
-
 local secChat = TabLog:Section({ Title = "Chat Logger", Icon = "message-square", Box = true })
 local chatLogPanel = nil
 secChat:Toggle({ Title = "Enable Logger", Default = false, Callback = function(v)
@@ -1039,7 +1068,7 @@ end)
 
 secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Callback = function() local r, h = getRoot(), getHum(); if r then r.Anchored = false; r.CFrame = r.CFrame + Vector3.new(0,3,0) end; if h then h.Sit = false; h:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Protection", "Stuck fix applied", 2, "wrench") end })
 
--- ================================ AUTO LIKE BACK (PINDAH KE PROTECTION) ================================
+-- AUTO LIKE BACK
 local secAutoLike = TabProt:Section({ Title = "Auto Like Back", Icon = "heart", Box = true })
 secAutoLike:Toggle({ Title = "Enable Auto Like Back", Default = false, Callback = function(v) if v then startAutoLike() else stopAutoLike() end end })
 secAutoLike:Slider({ Title = "Like Radius", Desc = "0 = semua player", Step = 10, Value = { Min = 0, Max = 500, Default = 100 }, Callback = function(v) State.AutoLike.radius = v end })
@@ -1057,7 +1086,7 @@ task.spawn(function()
     end
 end)
 
--- ================================ SERVER CONTROL (FIX V3.36) ================================
+-- SERVER CONTROL
 local secSrv = TabProt:Section({ Title = "Server Control", Icon = "server", Box = true })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Callback = function() pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end); notify("Server", "Rejoining...", 2, "log-in") end })
 
@@ -1103,14 +1132,29 @@ local TabSet = Window:Tab({ Title = "Settings", Icon = "panels-top-left" })
 
 TabSet:Section({ Title = "🎨 Theme", Icon = "palette", Box = true }):Dropdown({ Title = "UI Theme", Values = { "Dark", "Light", "Rose", "Sky", "Emerald", "Violet", "Red", "Amber", "Indigo", "Midnight", "Crimson" }, Default = "Crimson", Callback = function(v) WindUI:SetTheme(v) end })
 
-local secUIScale = TabSet:Section({ Title = "UI Scale", Icon = "maximize-2", Box = true })
-local uiScaleValue = UI_SCALE
-secUIScale:Slider({ Title = "Interface Scale", Desc = "Butuh re-execute untuk apply", Step = 0.05, Value = { Min = 0.5, Max = 1.3, Default = UI_SCALE }, Callback = function(v) uiScaleValue = v end })
-secUIScale:Button({ Title = "Apply Scale", Desc = "Re-execute script dengan scale baru", Callback = function()
-    pcall(function() setclipboard("setgenv UI_SCALE_OVERRIDE = " .. tostring(uiScaleValue)) end)
-    notify("UI Scale", "Saved: " .. tostring(uiScaleValue) .. "x (Copy to clipboard)", 3, "maximize-2")
-end })
+-- UI SIZE LIVE RESIZE
+local secUIScale = TabSet:Section({ Title = "UI Size (Live)", Icon = "maximize-2", Box = true })
+local currentScale = UI_SCALE
+secUIScale:Slider({
+    Title = "UI Scale",
+    Desc = "Live resize — sekecil yang kau mau",
+    Step = 0.05,
+    Value = { Min = 0.3, Max = 1.5, Default = UI_SCALE },
+    Callback = function(v)
+        currentScale = v
+        forceResizeWindow(v)
+    end
+})
+secUIScale:Button({
+    Title = "Reset UI Size",
+    Callback = function()
+        currentScale = UI_SCALE
+        forceResizeWindow(UI_SCALE)
+        notify("UI Scale", "Reset ke " .. UI_SCALE .. "x", 1.5, "maximize-2")
+    end
+})
 
+-- FILE MANAGEMENT
 local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box = true })
 local cfgName = "XKID_Config_V3"; local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config_V3", Callback = function(v) cfgName = v end })
@@ -1123,4 +1167,4 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.36 AKTIF — NoClip Fix + Auto Like + UI Scale", 3, "rocket")
+notify("System", "XKID_HUB V3.37 AKTIF — NoClip Aggressive + UI Live Resize", 3, "rocket")
