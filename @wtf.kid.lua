@@ -1,12 +1,12 @@
--- @XKID SCRIPT V3.39
+-- @XKID SCRIPT V3.40
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.39:
--- - NoClip simple universal
--- - Filter Settings sliders (-10 s/d 10)
--- - Reshade 3 preset (Lite, Ultra, RTX)
--- - Admin Detector (auto + log)
--- - Error wrapper (pcall + notif)
--- - Notif icon Lucide bervariasi
+-- Changelog V3.40:
+-- - REMOVED: Auto Like Back (engine + UI + state)
+-- - REMOVED: Admin Detector
+-- - REMOVED: Auto Refresh Player List
+-- - REMOVED: Anti Pisang (Anti-Ragdoll)
+-- - ADDED: Freeze Mode (Statue) - karakter freeze total
+-- - KEPT: Semua fitur V3.39 lainnya
 
 local ERROR_NOTIFY_OK, ERROR_MSG = pcall(function()
 
@@ -95,11 +95,11 @@ local State = {
     Move = { ws = 16, jp = 50, ncp = false, infJ = false, flyS = 60 },
     Fly = { active = false, bv = nil, bg = nil, _keys = {} },
     HardFling = { active = false, power = 10000, mode = "Spin", currentPower = 0, rampUpActive = false },
-    Security = { afkActive = true, shiftLock = false, shiftLockGyro = nil, antiRagdoll = false },
+    Security = { afkActive = true, shiftLock = false, shiftLockGyro = nil },
+    Freeze = { active = false, conn = nil, anchorBackup = nil, humBackup = nil },
     Cinema = { hideUI = false, cachedGuis = {} },
     Avatar = { isRefreshing = false },
     Utility = { chatLog = false, chatTargets = {}, chatHistory = {} },
-    AutoLike = { active = false, thread = nil, lastTarget = nil, count = 0, radius = 100, minCD = 2, maxCD = 6 },
     FilterSettings = { saturation = 0, contrast = 0, brightness = 0, exposure = 0, shade = 0, warmth = 0, vignette = 0, bloomI = 0, bloomS = 24, lightB = 2, clockTime = 14 },
     SelfSpec = { active = false, mode = "Orbit 360", dist = 8, height = 3, orbitYaw = 0, orbitPitch = 20, fov = 70, origFov = 70, roll = 0, radius = 8, speed = 1, distanceMult = 1, heightOffset = 0, _crashInit = nil, _crashStartRadius = 8 },
     ESP = { active = false, cache = getgenv()._XKID_ESP_CACHE, maxDrawDistance = 300, highlightMode = false, boxColor_N = Color3.fromRGB(255,0,0), boxColor_S = Color3.fromRGB(220,20,60), boxColor_G = Color3.fromRGB(255,165,0), tracerColor_N = Color3.fromRGB(255,0,0), tracerColor_S = Color3.fromRGB(220,20,60), tracerColor_G = Color3.fromRGB(255,165,0), nameColor = Color3.fromRGB(255,255,255) },
@@ -116,70 +116,94 @@ local function formatTime(sec) local h = math.floor(sec/3600); local m = math.fl
 local function getConfigList() local list = {}; if executor.has_isfolder and executor.has_listfiles then pcall(function() if isfolder and isfolder("XKID_HUB") then for _, f in ipairs(listfiles("XKID_HUB")) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n then table.insert(list, n) end end end end end) end; if #list == 0 then table.insert(list, "No config") end; return list end
 local function isOnGround() local r = getRoot(); if not r then return false end; local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude; params.FilterDescendantsInstances = { LP.Character }; return workspace:Raycast(r.Position, Vector3.new(0,-5,0), params) ~= nil end
 
--- ================================ NOCLIP V3.39 (SIMPLE) ================================
+-- ================================ NOCLIP (SIMPLE) ================================
 local NoclipConnection = nil
 local NoclipEnabled = false
-
 local function SetNoclip(state)
     NoclipEnabled = state
     State.Move.ncp = state
-
-    if NoclipConnection then
-        NoclipConnection:Disconnect()
-        NoclipConnection = nil
-    end
-
+    if NoclipConnection then NoclipConnection:Disconnect(); NoclipConnection = nil end
     if state then
         NoclipConnection = RunService.Stepped:Connect(function()
             local Character = LP.Character
             if not Character then return end
             for _, obj in ipairs(Character:GetDescendants()) do
-                if obj:IsA("BasePart") then
-                    obj.CanCollide = false
-                end
+                if obj:IsA("BasePart") then obj.CanCollide = false end
             end
         end)
     else
         local Character = LP.Character
         if not Character then return end
         for _, obj in ipairs(Character:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                obj.CanCollide = true
-            end
+            if obj:IsA("BasePart") then obj.CanCollide = true end
         end
     end
 end
-
 TrackC(LP.CharacterAdded:Connect(function()
     task.wait(0.5)
     if NoclipEnabled then SetNoclip(true) end
 end))
 
--- ================================ ANTI PISANG ================================
-local antiRagdollConn = nil
-local originalStates = {}
-local function enableAntiRagdoll()
-    State.Security.antiRagdoll = true
-    local hum = getHum(); if not hum then return end
-    for _, state in pairs({ Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.Ragdoll, Enum.HumanoidStateType.Physics, Enum.HumanoidStateType.PlatformStanding }) do
-        pcall(function() if originalStates[state] == nil then originalStates[state] = hum:GetStateEnabled(state) end; hum:SetStateEnabled(state, false) end)
-    end
-    antiRagdollConn = TrackC(RunService.Heartbeat:Connect(function()
-        if not State.Security.antiRagdoll then return end
-        local h = getHum(); if not h then return end
-        local cs = h:GetState()
-        if cs == Enum.HumanoidStateType.FallingDown or cs == Enum.HumanoidStateType.Ragdoll or cs == Enum.HumanoidStateType.Physics then pcall(function() h:ChangeState(Enum.HumanoidStateType.Running) end) end
-        if h.PlatformStand then h.PlatformStand = false end
-    end))
-end
-local function disableAntiRagdoll()
-    State.Security.antiRagdoll = false
-    if antiRagdollConn then antiRagdollConn:Disconnect(); antiRagdollConn = nil end
+-- ================================ FREEZE MODE (STATUE) ================================
+local function enableFreeze()
+    State.Freeze.active = true
+    local hrp = getRoot()
     local hum = getHum()
-    if hum then for state, enabled in pairs(originalStates) do pcall(function() hum:SetStateEnabled(state, enabled) end) end end
-    originalStates = {}
+    if not hrp or not hum then return end
+    State.Freeze.anchorBackup = hrp.Anchored
+    State.Freeze.humBackup = { WalkSpeed = hum.WalkSpeed, JumpPower = hum.JumpPower, AutoRotate = hum.AutoRotate }
+    hrp.Anchored = true
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+    hum.WalkSpeed = 0
+    hum.JumpPower = 0
+    hum.AutoRotate = false
+    hum.PlatformStand = false
+    for _, state in pairs({ Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.Ragdoll, Enum.HumanoidStateType.Physics, Enum.HumanoidStateType.PlatformStanding }) do
+        pcall(function() hum:SetStateEnabled(state, false) end)
+    end
+    State.Freeze.conn = TrackC(RunService.Heartbeat:Connect(function()
+        if not State.Freeze.active then return end
+        local h = getHum()
+        local r = getRoot()
+        if not h or not r then return end
+        if not r.Anchored then r.Anchored = true end
+        if r.AssemblyLinearVelocity.Magnitude > 0.1 then
+            r.AssemblyLinearVelocity = Vector3.zero
+            r.AssemblyAngularVelocity = Vector3.zero
+        end
+        if h.WalkSpeed ~= 0 then h.WalkSpeed = 0 end
+        if h.JumpPower ~= 0 then h.JumpPower = 0 end
+        if h.PlatformStand then h.PlatformStand = false end
+        local cs = h:GetState()
+        if cs == Enum.HumanoidStateType.FallingDown or cs == Enum.HumanoidStateType.Ragdoll or cs == Enum.HumanoidStateType.Physics then
+            pcall(function() h:ChangeState(Enum.HumanoidStateType.Running) end)
+        end
+    end))
+    notify("Freeze Mode", "ON — Statue", 2, "snowflake")
 end
-TrackC(LP.CharacterAdded:Connect(function() task.wait(1); if State.Security.antiRagdoll then disableAntiRagdoll(); task.wait(0.2); enableAntiRagdoll() end end))
+local function disableFreeze()
+    State.Freeze.active = false
+    if State.Freeze.conn then State.Freeze.conn:Disconnect(); State.Freeze.conn = nil end
+    local hrp = getRoot()
+    local hum = getHum()
+    if hrp and State.Freeze.anchorBackup ~= nil then hrp.Anchored = State.Freeze.anchorBackup end
+    if hum and State.Freeze.humBackup then
+        hum.WalkSpeed = State.Freeze.humBackup.WalkSpeed
+        hum.JumpPower = State.Freeze.humBackup.JumpPower
+        hum.AutoRotate = State.Freeze.humBackup.AutoRotate
+        for _, state in pairs({ Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.Ragdoll, Enum.HumanoidStateType.Physics, Enum.HumanoidStateType.PlatformStanding }) do
+            pcall(function() hum:SetStateEnabled(state, true) end)
+        end
+    end
+    State.Freeze.anchorBackup = nil
+    State.Freeze.humBackup = nil
+    notify("Freeze Mode", "OFF", 1.5, "snowflake")
+end
+TrackC(LP.CharacterAdded:Connect(function()
+    task.wait(1)
+    if State.Freeze.active then disableFreeze(); task.wait(0.3); enableFreeze() end
+end))
 
 local START_TIME = os.time()
 local cachedMapName = nil
@@ -733,7 +757,7 @@ local function startHardFling()
         if hardFlingBAV and hardFlingBAV.Parent then hardFlingBAV.AngularVelocity = Vector3.new(0, State.HardFling.currentPower, 0) end
         if LP.Character then for _, p in pairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
     end))
-    notify("Hard Fling", "ON — Spin", 2, "rotate-cw")
+    notify("Hard Fling", "ON", 2, "rotate-cw")
 end
 local function stopHardFling() stopHardFlingInternal(); notify("Hard Fling", "OFF", 1.5, "rotate-cw") end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
@@ -806,52 +830,9 @@ local function applyFilter(filterName)
         notify("Visuals", filterName, 2, "palette")
     end
 end
--- ================================ AUTO LIKE ENGINE ================================
-local AutoLikeEngine = { hasRemote = false, likeRemote = nil, getRemote = nil, likedCache = {} }
-local function detectLikeRemotes()
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents") or ReplicatedStorage
-    local getRem = remotes:FindFirstChild("GetLikeDataRemote") or remotes:FindFirstChild("GetLikesRemote")
-    local likeRem = remotes:FindFirstChild("LikePlayerEvent") or remotes:FindFirstChild("LikePlayer") or remotes:FindFirstChild("LikeRemote")
-    if likeRem then AutoLikeEngine.hasRemote = true; AutoLikeEngine.likeRemote = likeRem; AutoLikeEngine.getRemote = getRem; return true end
-    AutoLikeEngine.hasRemote = false; return false
-end
-task.spawn(function() task.wait(2); detectLikeRemotes() end)
-local function likePlayerBlind(target) if AutoLikeEngine.hasRemote and AutoLikeEngine.likeRemote then return pcall(function() AutoLikeEngine.likeRemote:FireServer(target) end) end; return false end
-local function likeRandomPlayer()
-    local myRoot = getRoot(); local targets = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP and not AutoLikeEngine.likedCache[p] then
-            if State.AutoLike.radius > 0 and myRoot then
-                local theirRoot = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-                if theirRoot then local dist = (theirRoot.Position - myRoot.Position).Magnitude; if dist <= State.AutoLike.radius then table.insert(targets, p) end end
-            else table.insert(targets, p) end
-        end
-    end
-    if #targets == 0 then AutoLikeEngine.likedCache = {}; for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(targets, p) end end end
-    if #targets == 0 then return false, "No players" end
-    local target = targets[math.random(1, #targets)]; State.AutoLike.lastTarget = target
-    local ok = likePlayerBlind(target)
-    if ok then AutoLikeEngine.likedCache[target] = true; State.AutoLike.count = State.AutoLike.count + 1; return true, target.DisplayName end
-    return false, "Failed"
-end
-local function startAutoLike()
-    if State.AutoLike.active then return end
-    State.AutoLike.active = true
-    State.AutoLike.thread = task.spawn(function()
-        while State.AutoLike.active and getgenv()._XKID_RUNNING do
-            local ok, result = likeRandomPlayer()
-            if ok then notify("Auto Like", result .. " | Total: " .. State.AutoLike.count, 1.5, "heart") end
-            task.wait(math.random(State.AutoLike.minCD * 10, State.AutoLike.maxCD * 10) / 10)
-        end
-        State.AutoLike.thread = nil
-    end)
-    notify("Auto Like", "ON", 2, "heart")
-end
-local function stopAutoLike() State.AutoLike.active = false; if State.AutoLike.thread then pcall(function() task.cancel(State.AutoLike.thread) end); State.AutoLike.thread = nil end; notify("Auto Like", "OFF", 1.5, "heart") end
-
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.39", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.40", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -860,7 +841,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.39", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.40", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -899,8 +880,12 @@ local secAbi = TabChar:Section({ Title = "Abilities", Icon = "zap", Box = true }
 secAbi:Toggle({ Title = "Fly", Default = false, Callback = function(v) toggleFly(v) end })
 secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = v end })
 secAbi:Toggle({ Title = "NoClip", Default = false, Callback = function(v) SetNoclip(v); notify("NoClip", v and "ON" or "OFF", 1.5, "ghost") end })
-local secAntiPisang = TabChar:Section({ Title = "Anti Pisang / Anti Ragdoll", Icon = "shield-check", Box = true })
-secAntiPisang:Toggle({ Title = "Anti Ragdoll (Universal)", Desc = "Cegah karakter ragdoll", Default = false, Callback = function(v) if v then enableAntiRagdoll(); notify("Anti Pisang", "ON", 1.5, "shield-check") else disableAntiRagdoll(); notify("Anti Pisang", "OFF", 1.5, "shield-check") end end })
+
+-- FREEZE MODE SECTION
+local secFreeze = TabChar:Section({ Title = "Freeze / Statue Mode", Icon = "snowflake", Box = true })
+secFreeze:Toggle({ Title = "Freeze Mode (Statue)", Desc = "Karakter diam seperti patung — tidak bisa di-ragdoll/fling/push", Default = false, Callback = function(v) if v then enableFreeze() else disableFreeze() end end })
+secFreeze:Paragraph({ Title = "Info", Desc = "ON → freeze total.\nOFF → normal." })
+
 local secCamLock = TabChar:Section({ Title = "Camera Lock", Icon = "lock", Box = true })
 secCamLock:Toggle({ Title = "Force Shift Lock", Default = false, Callback = function(v) toggleShiftLock(v) end })
 local secFling = TabChar:Section({ Title = "Hard Fling (Safe)", Icon = "rotate-cw", Box = true })
@@ -1080,16 +1065,6 @@ local liteToggle = secProt:Toggle({ Title = "AFK Lite Mode", Default = false, Ca
 task.spawn(function() task.wait(1.2); pcall(function() origToggle:SetState(true) end); pcall(function() origToggle:SetValue(true) end); pcall(function() liteToggle:SetState(false) end); pcall(function() liteToggle:SetValue(false) end) end)
 secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Callback = function() local r, h = getRoot(), getHum(); if r then r.Anchored = false; r.CFrame = r.CFrame + Vector3.new(0,3,0) end; if h then h.Sit = false; h:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Protection", "Stuck fix applied", 2, "wrench") end })
 
--- AUTO LIKE BACK
-local secAutoLike = TabProt:Section({ Title = "Auto Like Back", Icon = "heart", Box = true })
-secAutoLike:Toggle({ Title = "Enable Auto Like Back", Default = false, Callback = function(v) if v then startAutoLike() else stopAutoLike() end end })
-secAutoLike:Slider({ Title = "Like Radius", Desc = "0 = semua player", Step = 10, Value = { Min = 0, Max = 500, Default = 100 }, Callback = function(v) State.AutoLike.radius = v end })
-secAutoLike:Slider({ Title = "Min Cooldown", Step = 0.5, Value = { Min = 0.5, Max = 10, Default = 2 }, Callback = function(v) State.AutoLike.minCD = v end })
-secAutoLike:Slider({ Title = "Max Cooldown", Step = 0.5, Value = { Min = 1, Max = 15, Default = 6 }, Callback = function(v) State.AutoLike.maxCD = v end })
-local likeStatusParagraph = secAutoLike:Paragraph({ Title = "Status", Desc = "Mode: Blind Loop\nTotal likes sent: 0" })
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(2); pcall(function() local mode = AutoLikeEngine.hasRemote and "Event-Based + Blind" or "Blind Loop"; likeStatusParagraph:SetDesc("Mode: " .. mode .. "\nTotal likes sent: " .. State.AutoLike.count) end) end end)
-
--- SERVER CONTROL
 local secSrv = TabProt:Section({ Title = "Server Control", Icon = "server", Box = true })
 secSrv:Button({ Title = "Force Rejoin", Desc = "Rejoin current server", Callback = function() pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end); notify("Server", "Rejoining...", 2, "server") end })
 secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Callback = function()
@@ -1119,42 +1094,27 @@ TabSet:Section({ Title = "🎨 Theme", Icon = "palette", Box = true }):Dropdown(
 local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box = true })
 local cfgName = "XKID_Config_V3"; local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config_V3", Callback = function(v) cfgName = v end })
-local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiRagdoll = State.Security.antiRagdoll }, HardFling = { power = State.HardFling.power }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD }, FilterSettings = State.FilterSettings }; writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)); notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
-local function loadConfig(selected) if selected == "No config" then return end; pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if d then if d.Move then State.Move.ws = d.Move.ws or 16; State.Move.jp = d.Move.jp or 50; State.Move.flyS = d.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300; State.ESP.highlightMode = d.ESP.highlightMode or false end; if d.HardFling then State.HardFling.power = d.HardFling.power or 10000 end; if d.AutoLike then State.AutoLike.radius = d.AutoLike.radius or 100; State.AutoLike.minCD = d.AutoLike.minCD or 2; State.AutoLike.maxCD = d.AutoLike.maxCD or 6 end; if d.FilterSettings then for k, v in pairs(d.FilterSettings) do State.FilterSettings[k] = v end; applyFilterSettings() end; notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
+local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock }, HardFling = { power = State.HardFling.power }, FilterSettings = State.FilterSettings }; writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)); notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
+local function loadConfig(selected) if selected == "No config" then return end; pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if d then if d.Move then State.Move.ws = d.Move.ws or 16; State.Move.jp = d.Move.jp or 50; State.Move.flyS = d.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300; State.ESP.highlightMode = d.ESP.highlightMode or false end; if d.HardFling then State.HardFling.power = d.HardFling.power or 10000 end; if d.FilterSettings then for k, v in pairs(d.FilterSettings) do State.FilterSettings[k] = v end; applyFilterSettings() end; notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
 secFile:Button({ Title = "Save Config", Callback = saveConfig })
 local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected; loadConfig(selected) end })
 secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" and executor.has_listfiles then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json"); pcall(function() configDrop:Refresh(getConfigList()) end); currentConfig = "No config"; notify("Config", "Deleted", 2, "trash-2") end end) end end })
 secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function() configDrop:Refresh(getConfigList()) end); notify("Config", "Files refreshed", 1.5, "folder-open") end })
 
--- ================================ AUTO REFRESH PLAYER LIST ================================
-task.spawn(function()
-    local lastCount = 0
-    while getgenv()._XKID_RUNNING do
-        task.wait(3)
-        local newCount = #Players:GetPlayers()
-        if newCount ~= lastCount then
-            lastCount = newCount
-            pcall(function() chatTargetDrop:Refresh(getDisplayNames()) end)
-            pcall(function() tpDropdown:Refresh(getDisplayNames()) end)
-            pcall(function() specDropdown:Refresh(getDisplayNamesWithSelf()) end)
-        end
-    end
-end)
-
+-- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.39 AKTIF", 3, "rocket")
+notify("System", "XKID_HUB V3.40 AKTIF", 3, "rocket")
 
 end)  -- CLOSE ERROR WRAPPER
 
--- ================================ ERROR NOTIFICATION FALLBACK ================================
 if not ERROR_NOTIFY_OK and ERROR_MSG then
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "❌ XKID V3.39 ERROR",
+            Title = "❌ XKID V3.40 ERROR",
             Text = tostring(ERROR_MSG):sub(1, 300),
             Duration = 15,
             Icon = "rbxassetid://12187365364"
         })
     end)
-    warn("[XKID V3.39] Script error: " .. tostring(ERROR_MSG))
+    warn("[XKID V3.40] Script error: " .. tostring(ERROR_MSG))
 end
