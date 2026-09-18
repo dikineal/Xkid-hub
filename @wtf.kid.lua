@@ -78,7 +78,7 @@ if getgenv()._XKID_LOADED then
         for _, v in pairs(Lighting:GetChildren()) do if v.Name:find("_XKID_") then v:Destroy() end end
         if getgenv()._XKID_CONNS then for _, c in pairs(getgenv()._XKID_CONNS) do pcall(function() c:Disconnect() end) end end
     end)
-    for _, name in ipairs({"XKIDFreecam","XKIDFly","XKIDSpec","XKIDSelfSpec","XKIDShiftLock","XKIDFreecamLock","XKIDAdminDetect"}) do
+    for _, name in ipairs({"XKIDFreecam","XKIDFly","XKIDSpec","XKIDSelfSpec","XKIDShiftLock","XKIDFreecamLock"}) do
         pcall(function() RunService:UnbindFromRenderStep(name) end)
     end
 end
@@ -738,31 +738,6 @@ end
 local function stopHardFling() stopHardFlingInternal(); notify("Hard Fling", "OFF", 1.5, "rotate-cw") end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
 
--- ================================ ADMIN DETECTOR ================================
-local AdminDetector = { Enabled = false, AdminGroupIDs = { 1200769 }, AdminMinRank = 100, DetectedList = {}, LogParagraph = nil }
-local function showAdminNotif(playerName, role)
-    notify("⚠️ ADMIN DETECTED", playerName .. " (" .. role .. ")", 8, "shield-alert")
-    table.insert(AdminDetector.DetectedList, { name = playerName, role = role, time = os.date("%H:%M:%S") })
-end
-local function checkAdminPlayer(player)
-    if not AdminDetector.Enabled or player == LP then return end
-    pcall(function()
-        if player:GetRankInGroup(1200769) > 0 then
-            showAdminNotif(player.Name, "Roblox Staff")
-            return
-        end
-    end)
-    for _, groupId in ipairs(AdminDetector.AdminGroupIDs) do
-        pcall(function()
-            local rank = player:GetRankInGroup(groupId)
-            if rank >= AdminDetector.AdminMinRank then
-                showAdminNotif(player.Name, "Game Moderator (Rank " .. rank .. ")")
-            end
-        end)
-    end
-end
-TrackC(Players.PlayerAdded:Connect(function(p) checkAdminPlayer(p) end))
-
 -- ================================ FILTERS ================================
 local FILTER_PRESETS = {
     Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7 },
@@ -1104,40 +1079,6 @@ local origToggle = secProt:Toggle({ Title = "AFK Original Mode", Default = true,
 local liteToggle = secProt:Toggle({ Title = "AFK Lite Mode", Default = false, Callback = function(v) if v then setAFKMode("Lite"); pcall(function() origToggle:SetState(false) end); pcall(function() origToggle:SetValue(false) end) end; notify("AFK Mode", v and "Lite" or "Original", 1.5, "shield") end })
 task.spawn(function() task.wait(1.2); pcall(function() origToggle:SetState(true) end); pcall(function() origToggle:SetValue(true) end); pcall(function() liteToggle:SetState(false) end); pcall(function() liteToggle:SetValue(false) end) end)
 secProt:Button({ Title = "Stuck Fix", Desc = "Get unstuck from walls/ground", Callback = function() local r, h = getRoot(), getHum(); if r then r.Anchored = false; r.CFrame = r.CFrame + Vector3.new(0,3,0) end; if h then h.Sit = false; h:ChangeState(Enum.HumanoidStateType.Jumping) end; notify("Protection", "Stuck fix applied", 2, "wrench") end })
-
--- ADMIN DETECTOR
-local secAdminDet = TabProt:Section({ Title = "Admin Detector", Icon = "shield-alert", Box = true })
-AdminDetector.LogParagraph = secAdminDet:Paragraph({ Title = "Detected Admins", Desc = "Belum ada admin terdeteksi" })
-secAdminDet:Toggle({ Title = "Enable Auto-Detect", Desc = "Deteksi admin otomatis di server", Default = false, Callback = function(v)
-    AdminDetector.Enabled = v
-    if v then
-        for _, p in pairs(Players:GetPlayers()) do checkAdminPlayer(p) end
-        notify("Admin Detector", "ON — Auto Detect", 1.5, "shield-alert")
-    else
-        notify("Admin Detector", "OFF", 1.5, "shield-alert")
-    end
-end })
-secAdminDet:Input({ Title = "Group ID Tambahan", Placeholder = "Contoh: 1234567", Callback = function(v) local id = tonumber(v); if id then table.insert(AdminDetector.AdminGroupIDs, id); notify("Admin Detector", "Group ID added: " .. id, 1.5, "shield-alert") end end })
-secAdminDet:Button({ Title = "Refresh Admin List", Callback = function() for _, p in pairs(Players:GetPlayers()) do checkAdminPlayer(p) end; notify("Admin Detector", "List refreshed", 1.5, "shield-alert") end })
-secAdminDet:Button({ Title = "Clear Admin Log", Callback = function() AdminDetector.DetectedList = {}; if AdminDetector.LogParagraph then AdminDetector.LogParagraph:SetDesc("Belum ada admin terdeteksi") end; notify("Admin Detector", "Log cleared", 1.5, "shield-alert") end })
-task.spawn(function()
-    while getgenv()._XKID_RUNNING do
-        task.wait(2)
-        if AdminDetector.LogParagraph then
-            pcall(function()
-                if #AdminDetector.DetectedList == 0 then AdminDetector.LogParagraph:SetDesc("Belum ada admin terdeteksi")
-                else
-                    local lines = {}
-                    for i, entry in ipairs(AdminDetector.DetectedList) do
-                        if i > 10 then break end
-                        table.insert(lines, "🔴 " .. entry.name .. " (" .. entry.role .. ") - " .. entry.time)
-                    end
-                    AdminDetector.LogParagraph:SetDesc(table.concat(lines, "\n"))
-                end
-            end)
-        end
-    end
-end)
 
 -- AUTO LIKE BACK
 local secAutoLike = TabProt:Section({ Title = "Auto Like Back", Icon = "heart", Box = true })
