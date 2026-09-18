@@ -3,9 +3,11 @@
 -- Changelog V3.38:
 -- - CHANGED: Font ID to 127896232205472
 -- - ADDED: Anti Pisang (Anti-Ragdoll universal)
--- - ADDED: Rose Gold Theme
--- - CHANGED: All notifications use "comments-dot" icon
--- - CHANGED: ESP Color → 3 Colorpicker
+-- - ADDED: Preset Shade HD
+-- - FIXED: Filter Default sekarang reset ke Roblox default yang benar
+-- - REMOVED: Filter Custom
+-- - REMOVED: UI Size section
+-- - CHANGED: ESP Color → Colorpicker
 -- - CHANGED: Section collapsed
 -- - KEPT: Semua fitur V3.37
 
@@ -15,12 +17,6 @@ local WindUI = (function()
     local s, r = pcall(function() return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))() end)
     if s then return r else error("Failed to load WindUI") end
 end)()
-
-local XKID_ICON_TYPE = "lucide"
-pcall(function()
-    local Icons = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"))()
-    if Icons and Icons.SetIconsType then Icons.SetIconsType("gravity"); XKID_ICON_TYPE = "gravity"; getgenv()._XKID_ICONS = Icons end
-end)
 
 local executor = { name = "Unknown", has_writefile = false, has_readfile = false, has_listfiles = false, has_isfolder = false, has_makefolder = false, is_mobile_executor = false }
 pcall(function()
@@ -64,13 +60,8 @@ local Camera = workspace.CurrentCamera
 local onMobile = not UserInputService.KeyboardEnabled
 getgenv()._XKID_UI_LOADING = true
 
-local vpX = Camera.ViewportSize.X
-local UI_SCALE = 1.0
-if vpX < 900 then UI_SCALE = 0.75 elseif vpX < 1200 then UI_SCALE = 0.9 else UI_SCALE = 1.0 end
-getgenv()._XKID_UI_SCALE = UI_SCALE
-
 local originalLighting = { ClockTime = Lighting.ClockTime, Brightness = Lighting.Brightness, Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient, GlobalShadows = Lighting.GlobalShadows, ExposureCompensation = Lighting.ExposureCompensation, FogEnd = Lighting.FogEnd }
-local defaultLighting = { ClockTime = 14, Brightness = 1, Ambient = Color3.fromRGB(127,127,127), OutdoorAmbient = Color3.fromRGB(127,127,127), GlobalShadows = true, ExposureCompensation = 0, FogEnd = 100000 }
+local defaultLighting = { ClockTime = 14, Brightness = 2, Ambient = Color3.fromRGB(127,127,127), OutdoorAmbient = Color3.fromRGB(127,127,127), GlobalShadows = false, ExposureCompensation = 0, FogEnd = 100000 }
 
 if getgenv()._XKID_RUNNING then getgenv()._XKID_RUNNING = false; task.wait(0.5) end
 if getgenv()._XKID_ESP_CACHE then
@@ -99,9 +90,8 @@ getgenv()._XKID_RUNNING = true
 getgenv()._XKID_CONNS = {}
 local function TrackC(conn) table.insert(getgenv()._XKID_CONNS, conn); return conn end
 
-local function getNotifIcon() return (XKID_ICON_TYPE == "gravity") and "comments-dot" or "message-circle" end
-local function notify(title, content, duration)
-    pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = getNotifIcon() }) end)
+local function notify(title, content, duration, icon)
+    pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "message-circle" }) end)
 end
 
 local State = {
@@ -462,7 +452,7 @@ local FCUI = Instance.new("ScreenGui"); FCUI.Name = "XKID_FreecamUI"; FCUI.Reset
 local function makeFCBtn(name, txt, pos, actionKey)
     local b = Instance.new("TextButton", FCUI); b.Name = name; b.Size = UDim2.new(0,44,0,44); b.Position = pos; b.BackgroundColor3 = Color3.fromRGB(15,15,15); b.BackgroundTransparency = 0.4; b.Text = txt; b.TextColor3 = Color3.fromRGB(255,255,255); b.TextSize = 18; b.Font = Enum.Font.GothamBold; b.AutoButtonColor = false
     Instance.new("UICorner", b).CornerRadius = UDim.new(0,10)
-    local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(183,110,121); uis.Thickness = 2; uis.Transparency = 0.3
+    local uis = Instance.new("UIStroke", b); uis.Color = Color3.fromRGB(220,20,60); uis.Thickness = 2; uis.Transparency = 0.3
     local ind = Instance.new("Frame", b); ind.Size = UDim2.new(0,6,0,6); ind.Position = UDim2.new(0,4,0,4); ind.BackgroundColor3 = Color3.fromRGB(60,60,60); Instance.new("UICorner", ind).CornerRadius = UDim.new(1,0)
     local function press(down) FC_UI_Btns[actionKey] = down; b.BackgroundTransparency = down and 0.05 or 0.4; ind.BackgroundColor3 = down and Color3.fromRGB(255,60,60) or Color3.fromRGB(60,60,60) end
     b.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then press(true) end end)
@@ -475,7 +465,7 @@ makeFCBtn("BtnZIn","+",UDim2.new(1,-156,0.5,-22),"zoomIn"); makeFCBtn("BtnZOut",
 
 local eyeBtn = Instance.new("TextButton", FCUI); eyeBtn.Size = UDim2.new(0,44,0,44); eyeBtn.Position = UDim2.new(1,-107,0.5,-66); eyeBtn.BackgroundColor3 = Color3.fromRGB(15,15,15); eyeBtn.BackgroundTransparency = 0.6; eyeBtn.Text = "👁"; eyeBtn.TextColor3 = Color3.fromRGB(255,255,255); eyeBtn.TextSize = 18; eyeBtn.Font = Enum.Font.GothamBold; eyeBtn.AutoButtonColor = false
 Instance.new("UICorner", eyeBtn).CornerRadius = UDim.new(0,10)
-local es = Instance.new("UIStroke", eyeBtn); es.Color = Color3.fromRGB(183,110,121); es.Thickness = 2; es.Transparency = 0.5
+local es = Instance.new("UIStroke", eyeBtn); es.Color = Color3.fromRGB(220,20,60); es.Thickness = 2; es.Transparency = 0.5
 local function toggleFCEye() FC_UI_Hidden = not FC_UI_Hidden; eyeBtn.Text = FC_UI_Hidden and "👁‍🗨" or "👁"; for _, b in ipairs(fcButtons) do b.Visible = not FC_UI_Hidden end end
 eyeBtn.MouseButton1Click:Connect(toggleFCEye); eyeBtn.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.Touch then toggleFCEye() end end)
 
@@ -574,7 +564,7 @@ local function toggleFreecam(v)
         FC.active = false; fullCleanupFreecam(); notify("Freecam", "OFF", 1.5)
     end
 end
-
+-- ================================ CINEMATIC DIRECTOR ================================
 local SS = State.SelfSpec
 local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
 local function startSSGesture()
@@ -680,6 +670,7 @@ local function startSpecLoop()
 end
 local function stopSpecLoop() RunService:UnbindFromRenderStep("XKIDSpec") end
 
+-- ================================ HARD FLING ================================
 local hardFlingConn, hardFlingRampConn, hardFlingBAV = nil, nil, nil
 local function stopHardFlingInternal()
     if hardFlingConn then hardFlingConn:Disconnect(); hardFlingConn = nil end
@@ -710,6 +701,7 @@ end
 local function stopHardFling() stopHardFlingInternal(); notify("Hard Fling", "OFF", 1.5) end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
 
+-- ================================ FILTERS ================================
 local FILTER_PRESETS = {
     Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7 },
     Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2 },
@@ -732,6 +724,7 @@ local FILTER_PRESETS = {
     Pastel = { tint = Color3.fromRGB(255,220,240), sat = -0.1, con = 0.05, bri = 0.05, bloomI = 0.3, bloomS = 30, time = 13, lightB = 1.2 },
     Noir = { tint = Color3.fromRGB(200,200,200), sat = -0.5, con = 0.4, bri = -0.1, bloomI = 0, bloomS = 24, time = 10, lightB = 0.8 },
     Shade_Soft = { tint = Color3.fromRGB(180,190,210), sat = -0.1, con = 0.1, bri = -0.05, bloomI = 0.1, bloomS = 24, time = 12, lightB = 0.9 },
+    Shade_HD = { tint = Color3.fromRGB(200,205,220), sat = -0.25, con = 0.25, bri = -0.08, bloomI = 0.15, bloomS = 24, time = 14, lightB = 1.2, shadow = true },
 }
 local function resetFilterOnly() for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" or v.Name == "_XKID_SHADE" or v.Name == "_XKID_WARMTH" or v.Name == "_XKID_VIGNETTE" then v:Destroy() end end end
 local function resetToDefaultRoblox()
@@ -740,7 +733,7 @@ local function resetToDefaultRoblox()
     Lighting.Ambient = defaultLighting.Ambient; Lighting.OutdoorAmbient = defaultLighting.OutdoorAmbient
     Lighting.GlobalShadows = defaultLighting.GlobalShadows; Lighting.ExposureCompensation = defaultLighting.ExposureCompensation; Lighting.FogEnd = defaultLighting.FogEnd
     for k, v in pairs({tintR=255,tintG=255,tintB=255,saturation=0,contrast=0,brightness=0,exposure=0,bloomIntensity=0,bloomSize=24,clockTime=14,shade=0,warmth=0,vignette=0}) do State.CustomFilter[k] = v end
-    notify("Visuals", "Reset to Default Roblox", 1.5)
+    notify("Visuals", "Default Roblox", 1.5)
 end
 local function applyCustomFilter()
     resetFilterOnly()
@@ -756,7 +749,6 @@ local function applyFilter(filterName)
     resetFilterOnly()
     Lighting.ClockTime = originalLighting.ClockTime; Lighting.Brightness = originalLighting.Brightness; Lighting.Ambient = originalLighting.Ambient; Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient; Lighting.GlobalShadows = originalLighting.GlobalShadows; Lighting.FogEnd = originalLighting.FogEnd; Lighting.ExposureCompensation = originalLighting.ExposureCompensation
     if filterName == "Default" then resetToDefaultRoblox(); return end
-    if filterName == "Custom" then applyCustomFilter(); notify("Visuals", "Custom FX", 1.5); return end
     local preset = FILTER_PRESETS[filterName:gsub(" ", "_"):gsub(" HD", "_HD")]
     if preset then
         Lighting.ClockTime = preset.time or 14; Lighting.Brightness = preset.lightB or 1; Lighting.ExposureCompensation = preset.exp or 0; Lighting.GlobalShadows = preset.shadow ~= false
@@ -764,12 +756,12 @@ local function applyFilter(filterName)
         if preset.outdoor then Lighting.OutdoorAmbient = preset.outdoor end
         local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.TintColor = preset.tint; cc.Saturation = preset.sat or 0; cc.Contrast = preset.con or 0; cc.Brightness = preset.bri or 0
         if preset.bloomI and preset.bloomI > 0 then local b = Instance.new("BloomEffect", Lighting); b.Name = "_XKID_FILTER"; b.Intensity = preset.bloomI; b.Size = preset.bloomS or 24 end
-        State.CustomFilter.tintR = preset.tint.R*255; State.CustomFilter.tintG = preset.tint.G*255; State.CustomFilter.tintB = preset.tint.B*255; State.CustomFilter.saturation = preset.sat or 0; State.CustomFilter.contrast = preset.con or 0; State.CustomFilter.brightness = preset.bri or 0; State.CustomFilter.exposure = preset.exp or 0; State.CustomFilter.bloomIntensity = preset.bloomI or 0; State.CustomFilter.bloomSize = preset.bloomS or 24; State.CustomFilter.clockTime = preset.time or 14
         notify("Visuals", filterName, 2)
     end
 end
 
-local AutoLikeEngine = { hasRemote = false, likeRemote = nil, getRemote = nil, notifHookConn = nil, likedCache = {} }
+-- ================================ AUTO LIKE ENGINE ================================
+local AutoLikeEngine = { hasRemote = false, likeRemote = nil, getRemote = nil, likedCache = {} }
 local function detectLikeRemotes()
     local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents") or ReplicatedStorage
     local getRem = remotes:FindFirstChild("GetLikeDataRemote") or remotes:FindFirstChild("GetLikesRemote")
@@ -811,50 +803,24 @@ local function startAutoLike()
 end
 local function stopAutoLike() State.AutoLike.active = false; if State.AutoLike.thread then pcall(function() task.cancel(State.AutoLike.thread) end); State.AutoLike.thread = nil end; notify("Auto Like", "OFF", 1.5) end
 
--- ================================ UI ================================
-WindUI:AddTheme({
-    Name = "XKID Rose Gold",
-    Accent = Color3.fromHex("#B76E79"),
-    Background = Color3.fromHex("#1a0f12"),
-    Outline = Color3.fromHex("#FFB6C1"),
-    Text = Color3.fromHex("#FFF0F5"),
-    Placeholder = Color3.fromHex("#8a5a62"),
-    Button = Color3.fromHex("#FF6B9D"),
-    Icon = Color3.fromHex("#FFB6C1"),
-})
-
-local baseWidth = math.floor(360 * UI_SCALE)
-local baseHeight = math.floor(320 * UI_SCALE)
-local sidebarWidth = math.floor(160 * UI_SCALE)
+-- ================================ UI WINDOW ================================
+local baseWidth = 360
+local baseHeight = 320
+local sidebarWidth = 160
 local Window = WindUI:CreateWindow({
     Title = "XKID_HUB V3.38", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
-    Size = UDim2.fromOffset(baseWidth, baseHeight), Transparent = true, Theme = "XKID Rose Gold", SideBarWidth = sidebarWidth,
-    User = { Enabled = true, Anonymous = false }, Topbar = { Height = math.floor(40 * UI_SCALE), ButtonsType = "Default" },
+    Size = UDim2.fromOffset(baseWidth, baseHeight), Transparent = true, Theme = "Crimson", SideBarWidth = sidebarWidth,
+    User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
 pcall(function() WindUI:SetFont("rbxassetid://127896232205472") end)
 pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
-Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,110,157), Enabled = true, Draggable = true, Scale = 0.72 * UI_SCALE })
+Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
 local VerTag = Window:Tag({ Title = "V3.38", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
-local function forceResizeWindow(scale)
-    local w = math.floor(280 * scale); local h = math.floor(240 * scale)
-    pcall(function()
-        for _, v in pairs(CoreGui:GetChildren()) do
-            if v.Name == "WindUI" or v.Name:lower():find("windui") then
-                for _, frame in pairs(v:GetDescendants()) do
-                    if frame:IsA("Frame") and (frame.Name == "Main" or frame.Name == "Root") then
-                        frame.Size = UDim2.fromOffset(w, h)
-                        for _, c in pairs(frame:GetChildren()) do if c:IsA("UISizeConstraint") then c.MinSize = Vector2.new(50, 50) end end
-                    end
-                end
-            end
-        end
-    end)
-end
-
+-- ================================ TAB: INFORMASI ================================
 local TabInfo = Window:Tab({ Title = "Informasi", Icon = "activity" })
 local function getExecutor() pcall(function() local e = identifyexecutor() if e and e ~= "" then return e end end) pcall(function() local e = getexecutorname() if e and e ~= "" then return e end end) return executor.name end
 local execName = getExecutor(); local accountAge = LP.AccountAge .. " days"
@@ -879,6 +845,7 @@ task.spawn(function()
 end)
 TabInfo:Section({ Title = "🔗 Discord", Icon = "message-circle", Box = true }):Button({ Title = "Copy Discord Link", Desc = "discord.gg/bzumc2u96", Callback = function() pcall(function() setclipboard("https://discord.gg/bzumc2u96") end) notify("System", "Link copied", 2) end })
 
+-- ================================ TAB: CHARACTER ================================
 local TabChar = Window:Tab({ Title = "Character", Icon = "fingerprint" })
 TabChar:Button({ Title = "Refresh Character 🔄", Desc = "Reload character like /re", Callback = refreshCharacter })
 local secMov = TabChar:Section({ Title = "Movement", Icon = "activity", Box = true })
@@ -913,7 +880,7 @@ secAbi:Toggle({ Title = "NoClip", Default = false, Callback = function(v)
         end)
     end
 end })
-local secAntiPisang = TabChar:Section({ Title = "Anti Pisang / Anti Ragdoll", Icon = "shield-check", Box = true, Opened = true })
+local secAntiPisang = TabChar:Section({ Title = "Anti Pisang / Anti Ragdoll", Icon = "shield-check", Box = true })
 secAntiPisang:Toggle({ Title = "Anti Ragdoll (Universal)", Desc = "Cegah karakter ragdoll saat dilempar pisang/projectile", Default = false, Callback = function(v) if v then enableAntiRagdoll(); notify("Anti Pisang", "ON", 1.5) else disableAntiRagdoll(); notify("Anti Pisang", "OFF", 1.5) end end })
 local secCamLock = TabChar:Section({ Title = "Camera Lock", Icon = "lock", Box = true, Opened = false })
 secCamLock:Toggle({ Title = "Force Shift Lock", Default = false, Callback = function(v) toggleShiftLock(v) end })
@@ -921,6 +888,7 @@ local secFling = TabChar:Section({ Title = "Hard Fling (Safe)", Icon = "rotate-c
 secFling:Toggle({ Title = "Hard Fling", Default = false, Callback = function(v) if v then startHardFling() else stopHardFling() end end })
 secFling:Slider({ Title = "Fling Power", Step = 500, Value = { Min = 1000, Max = 50000, Default = 10000 }, Callback = function(v) State.HardFling.power = v end })
 
+-- ================================ TAB: TELEPORT ================================
 local TabTP = Window:Tab({ Title = "Teleport", Icon = "map-pin-x-inside" })
 TabTP:Section({ Title = "Direct Teleport", Icon = "map-pin", Box = true }):Toggle({ Title = "Smart TP", Desc = "Equip tool → tap to toggle mode → tap to TP", Default = false, Callback = toggleSmartTP })
 local secTargetTP = TabTP:Section({ Title = "Target Teleport", Icon = "crosshair", Box = true })
@@ -943,6 +911,7 @@ for i = 1,3 do local idx = i; local hc = secCache:HStack({ Columns = 2 })
     hc:Button({ Title = "📍 Load " .. idx, Callback = function() if not SavedLocs[idx] then notify("Slot " .. idx, "Empty", 1.5); return end; local r = getRoot(); if not r then return end; r.CFrame = SavedLocs[idx]; notify("Slot " .. idx, "Loaded", 1.5) end })
 end
 
+-- ================================ TAB: SPECTATOR ================================
 local TabSpec = Window:Tab({ Title = "Spectator", Icon = "cctv" })
 TabSpec:Section({ Title = "Zoom Override", Icon = "zoom-in", Box = true }):Toggle({ Title = "Max Zoom Out", Default = false, Callback = function(v) pcall(function() LP.CameraMaxZoomDistance = v and 100000 or 400 end); notify("Zoom", v and "Max" or "Default", 1.5) end })
 local secSP = TabSpec:Section({ Title = "Spectator Mode", Icon = "eye", Box = true })
@@ -964,6 +933,7 @@ secSP:Toggle({ Title = "Enable Spectate", Default = false, Callback = function(v
 end })
 secSP:Slider({ Title = "Distance", Step = 1, Value = { Min = 3, Max = 30, Default = 8 }, Callback = function(v) State.Spec.dist = v end })
 
+-- ================================ TAB: CAMERA & VISUAL ================================
 local TabCamVis = Window:Tab({ Title = "Camera & Visual", Icon = "aperture" })
 local secSelfSpec = TabCamVis:Section({ Title = "Cinematic Director", Icon = "clapperboard", Box = true, Opened = false })
 secSelfSpec:Toggle({ Title = "Enable Cinematic Director", Default = false, Callback = function(v) toggleSelfSpec(v) end })
@@ -992,20 +962,9 @@ secFC:Toggle({ Title = "Hide All UI (Cinematic)", Default = false, Callback = fu
     notify("Cinematic", v and "UI Hidden" or "UI Shown", 1.5)
 end })
 local secPresets = TabCamVis:Section({ Title = "Presets Filter", Icon = "palette", Box = true })
-secPresets:Dropdown({ Title = "Select Filter", Values = { "Default", "Custom", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue", "Vintage", "Cyberpunk", "Sunset", "Pastel", "Noir", "Shade Soft" }, Default = "Default", Callback = applyFilter })
-local secFX = TabCamVis:Section({ Title = "Custom FX", Icon = "sliders", Box = true, Opened = false })
-secFX:Slider({ Title = "Saturation", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.saturation = v; applyCustomFilter() end })
-secFX:Slider({ Title = "Contrast", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.contrast = v; applyCustomFilter() end })
-secFX:Slider({ Title = "Brightness", Step = 0.05, Value = { Min = -1, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.brightness = v; applyCustomFilter() end })
-secFX:Slider({ Title = "Exposure", Step = 0.1, Value = { Min = -5, Max = 5, Default = 0 }, Callback = function(v) State.CustomFilter.exposure = v; applyCustomFilter() end })
-secFX:Slider({ Title = "Bloom Intensity", Step = 0.1, Value = { Min = 0, Max = 2, Default = 0 }, Callback = function(v) State.CustomFilter.bloomIntensity = v; applyCustomFilter() end })
-secFX:Slider({ Title = "ClockTime", Step = 0.5, Value = { Min = 0, Max = 24, Default = 14 }, Callback = function(v) State.CustomFilter.clockTime = v; applyCustomFilter() end })
-secFX:Slider({ Title = "Shade", Step = 0.05, Value = { Min = 0, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.shade = v; applyCustomFilter() end })
-secFX:Slider({ Title = "Warmth", Step = 0.05, Value = { Min = -0.5, Max = 0.5, Default = 0 }, Callback = function(v) State.CustomFilter.warmth = v; applyCustomFilter() end })
-secFX:Slider({ Title = "Vignette", Step = 0.05, Value = { Min = 0, Max = 1, Default = 0 }, Callback = function(v) State.CustomFilter.vignette = v; applyCustomFilter() end })
-secFX:Button({ Title = "Reset Custom FX", Callback = function() for k, v in pairs({saturation=0,contrast=0,brightness=0,exposure=0,bloomIntensity=0,clockTime=14,shade=0,warmth=0,vignette=0}) do State.CustomFilter[k] = v end; applyCustomFilter(); notify("Visuals", "Custom FX Reset", 2) end })
-secFX:Button({ Title = "Reset to Default Roblox", Callback = function() resetToDefaultRoblox() end })
+secPresets:Dropdown({ Title = "Select Filter", Values = { "Default", "Mendung HD", "Cool Blue HD", "Soft Fade HD", "Adaptif Langit HD", "Edgy HD", "Full Bright HD", "Soft Pastel HD", "Cinematic Soft", "Ultra HD", "Realistic", "Night HD", "Senja", "Cinematic Film", "Golden Hour", "Moody Blue", "Vintage", "Cyberpunk", "Sunset", "Pastel", "Noir", "Shade Soft", "Shade HD" }, Default = "Default", Callback = applyFilter })
 
+-- ================================ TAB: ESP ================================
 local TabESP = Window:Tab({ Title = "ESP", Icon = "scan-search" })
 local secDetect = TabESP:Section({ Title = "Detection System", Icon = "radar", Box = true })
 secDetect:Toggle({ Title = "Enable Radar", Default = false, Callback = function(v)
@@ -1020,6 +979,7 @@ secESPCol:Colorpicker({ Title = "Normal Color", Default = State.ESP.tracerColor_
 secESPCol:Colorpicker({ Title = "Suspect Color", Default = State.ESP.tracerColor_S, Callback = function(color) State.ESP.tracerColor_S = color; State.ESP.boxColor_S = color end })
 secESPCol:Colorpicker({ Title = "Glitch Acc Color", Default = State.ESP.tracerColor_G, Callback = function(color) State.ESP.tracerColor_G = color; State.ESP.boxColor_G = color end })
 
+-- ================================ TAB: LOGGER ================================
 local TabLog = Window:Tab({ Title = "Logger", Icon = "square-terminal" })
 local secChat = TabLog:Section({ Title = "Chat Logger", Icon = "message-square", Box = true })
 local chatLogPanel = nil
@@ -1073,6 +1033,7 @@ task.spawn(function()
     end
 end)
 
+-- ================================ TAB: PROTECTION ================================
 local TabProt = Window:Tab({ Title = "Protection", Icon = "shield-half" })
 local secProt = TabProt:Section({ Title = "Protection Protocols", Icon = "shield-check", Box = true })
 local afkMainToggle = secProt:Toggle({ Title = "Anti AFK", Default = true, Callback = function(v) toggleAntiAFK(v); task.wait(0.2); pcall(function() afkMainToggle:SetState(v) end); pcall(function() afkMainToggle:SetValue(v) end) end })
@@ -1111,16 +1072,14 @@ secSrv:Button({ Title = "Server Hop", Desc = "Find a new server", Callback = fun
     end)
 end })
 
+-- ================================ TAB: SETTINGS ================================
 local TabSet = Window:Tab({ Title = "Settings", Icon = "panels-top-left" })
-TabSet:Section({ Title = "🎨 Theme", Icon = "palette", Box = true }):Dropdown({ Title = "UI Theme", Values = { "Dark", "Light", "Rose", "Sky", "Emerald", "Violet", "Red", "Amber", "Indigo", "Midnight", "Crimson", "XKID Rose Gold" }, Default = "XKID Rose Gold", Callback = function(v) WindUI:SetTheme(v) end })
-local secUIScale = TabSet:Section({ Title = "UI Size (Live)", Icon = "maximize-2", Box = true, Opened = false })
-secUIScale:Slider({ Title = "UI Scale", Desc = "Live resize", Step = 0.05, Value = { Min = 0.3, Max = 1.5, Default = UI_SCALE }, Callback = function(v) forceResizeWindow(v) end })
-secUIScale:Button({ Title = "Reset UI Size", Callback = function() forceResizeWindow(UI_SCALE); notify("UI Scale", "Reset ke " .. UI_SCALE .. "x", 1.5) end })
+TabSet:Section({ Title = "🎨 Theme", Icon = "palette", Box = true }):Dropdown({ Title = "UI Theme", Values = { "Dark", "Light", "Rose", "Sky", "Emerald", "Violet", "Red", "Amber", "Indigo", "Midnight", "Crimson" }, Default = "Crimson", Callback = function(v) WindUI:SetTheme(v) end })
 local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box = true, Opened = false })
 local cfgName = "XKID_Config_V3"; local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config_V3", Callback = function(v) cfgName = v end })
-local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiRagdoll = State.Security.antiRagdoll }, HardFling = { power = State.HardFling.power }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed, distanceMult = SS.distanceMult, heightOffset = SS.heightOffset }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD }, CustomFilter = { tintR = State.CustomFilter.tintR, tintG = State.CustomFilter.tintG, tintB = State.CustomFilter.tintB, saturation = State.CustomFilter.saturation, contrast = State.CustomFilter.contrast, brightness = State.CustomFilter.brightness, exposure = State.CustomFilter.exposure, bloomIntensity = State.CustomFilter.bloomIntensity, bloomSize = State.CustomFilter.bloomSize, clockTime = State.CustomFilter.clockTime, shade = State.CustomFilter.shade, warmth = State.CustomFilter.warmth, vignette = State.CustomFilter.vignette } }; writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)); notify("Config", "Saved: " .. cfgName, 2) end) else notify("Config", "Executor tidak support save file", 2) end end
-local function loadConfig(selected) if selected == "No config" then return end; pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if d then if d.Move then State.Move.ws = d.Move.ws or 16; State.Move.jp = d.Move.jp or 50; State.Move.flyS = d.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300; State.ESP.highlightMode = d.ESP.highlightMode or false end; if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end; if d.HardFling then State.HardFling.power = d.HardFling.power or 10000 end; if d.SelfSpec then SS.mode = d.SelfSpec.mode or "Orbit 360"; SS.radius = d.SelfSpec.radius or 8; SS.height = d.SelfSpec.height or 3; SS.speed = d.SelfSpec.speed or 1; SS.distanceMult = d.SelfSpec.distanceMult or 1; SS.heightOffset = d.SelfSpec.heightOffset or 0 end; if d.AutoLike then State.AutoLike.radius = d.AutoLike.radius or 100; State.AutoLike.minCD = d.AutoLike.minCD or 2; State.AutoLike.maxCD = d.AutoLike.maxCD or 6 end; if d.CustomFilter then for k, v in pairs(d.CustomFilter) do State.CustomFilter[k] = v end; applyCustomFilter() end; notify("Config", "Loaded: " .. selected, 2) end end end) end
+local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock, antiRagdoll = State.Security.antiRagdoll }, HardFling = { power = State.HardFling.power }, SelfSpec = { mode = SS.mode, radius = SS.radius, height = SS.height, speed = SS.speed, distanceMult = SS.distanceMult, heightOffset = SS.heightOffset }, AutoLike = { radius = State.AutoLike.radius, minCD = State.AutoLike.minCD, maxCD = State.AutoLike.maxCD } }; writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)); notify("Config", "Saved: " .. cfgName, 2) end) else notify("Config", "Executor tidak support save file", 2) end end
+local function loadConfig(selected) if selected == "No config" then return end; pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if d then if d.Move then State.Move.ws = d.Move.ws or 16; State.Move.jp = d.Move.jp or 50; State.Move.flyS = d.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300; State.ESP.highlightMode = d.ESP.highlightMode or false end; if d.Security and d.Security.shiftLock ~= State.Security.shiftLock then toggleShiftLock(d.Security.shiftLock) end; if d.HardFling then State.HardFling.power = d.HardFling.power or 10000 end; if d.SelfSpec then SS.mode = d.SelfSpec.mode or "Orbit 360"; SS.radius = d.SelfSpec.radius or 8; SS.height = d.SelfSpec.height or 3; SS.speed = d.SelfSpec.speed or 1; SS.distanceMult = d.SelfSpec.distanceMult or 1; SS.heightOffset = d.SelfSpec.heightOffset or 0 end; if d.AutoLike then State.AutoLike.radius = d.AutoLike.radius or 100; State.AutoLike.minCD = d.AutoLike.minCD or 2; State.AutoLike.maxCD = d.AutoLike.maxCD or 6 end; notify("Config", "Loaded: " .. selected, 2) end end end) end
 secFile:Button({ Title = "Save Config", Callback = saveConfig })
 local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected; loadConfig(selected) end })
 secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" and executor.has_listfiles then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json"); pcall(function() configDrop:Refresh(getConfigList()) end); currentConfig = "No config"; notify("Config", "Deleted", 2) end end) end end })
@@ -1141,5 +1100,6 @@ task.spawn(function()
     end
 end)
 
+-- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.38 AKTIF — Anti Pisang + Rose Gold", 3)
+notify("System", "XKID_HUB V3.38 AKTIF", 3)
