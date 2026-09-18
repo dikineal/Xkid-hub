@@ -1102,4 +1102,4 @@ end)
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.38 AKTIF", 3)
+notify("System", "XKID_HUB V3.38 AKTIF", 3) 
