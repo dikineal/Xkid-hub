@@ -860,7 +860,9 @@ local function applyFilter(filterName)
         if preset.sunRays then pcall(function() local sr = Instance.new("SunRaysEffect", Lighting); sr.Intensity = 0.15; sr.Spread = 0.5 end) end
         local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.TintColor = preset.tint; cc.Saturation = preset.sat or 0; cc.Contrast = preset.con or 0; cc.Brightness = preset.bri or 0
         if preset.bloomI and preset.bloomI > 0 then local b = Instance.new("BloomEffect", Lighting); b.Name = "_XKID_FILTER"; b.Intensity = preset.bloomI; b.Size = preset.bloomS or 24 end
-notify("Visuals", filterName, 2, "palette")
+        notify("Visuals", filterName, 2, "palette")
+    end
+end
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
     Title = "XKID_HUB V3.40", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
