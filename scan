@@ -1,0 +1,360 @@
+-- =================================================================
+-- @XKID ANIMAL & MINI-GAME CATCHER V3.35 (WindUI Integrated)
+-- by @WTF.XKID | Full Auto Scan, Catch & Log Exporter
+-- =================================================================
+
+repeat task.wait() until game:IsLoaded()
+
+-- ================================ WINDUI LOADER ================================
+local WindUI = (function()
+    local s, r = pcall(function() 
+        return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))() 
+    end)
+    if s then return r else error("Failed to load WindUI") end
+end)()
+
+-- ================================ SERVICES ================================
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+local LP = Players.LocalPlayer
+
+-- ================================ NOTIFY HELPER ================================
+local function notify(title, content, duration, icon)
+    pcall(function() 
+        WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) 
+    end)
+end
+
+-- ================================ CORE SCANNER & CATCHER ENGINE ================================
+local Engine = {
+    ScanRadius = 500,
+    FoundAnimals = {},
+    FoundMinigameObjs = {},
+    Logs = {},
+    SelectedAnimal = nil,
+    AutoCatchLoop = false
+}
+
+local function getLocalRoot()
+    local char = LP.Character
+    return char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head"))
+end
+
+function Engine:AddLog(msg)
+    local timestamp = os.date("%H:%M:%S")
+    local logEntry = string.format("[%s] %s", timestamp, msg)
+    table.insert(self.Logs, logEntry)
+    if #self.Logs > 100 then table.remove(self.Logs, 1) end
+end
+
+-- Auto Equip Jaring / Net
+function Engine:EquipNet()
+    local char = LP.Character
+    if not char then return false end
+    
+    -- Cek jika jaring sudah di-equip
+    for _, item in ipairs(char:GetChildren()) do
+        if item:IsA("Tool") and (item.Name:lower():find("net") or item.Name:lower():find("jaring") or item.Name:lower():find("catch")) then
+            return true
+        end
+    end
+    
+    -- Cari di Backpack
+    local backpack = LP:FindFirstChildOfClass("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and (tool.Name:lower():find("net") or tool.Name:lower():find("jaring") or tool.Name:lower():find("catch")) then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum:EquipTool(tool)
+                    self:AddLog("Equipped Tool: " .. tool.Name)
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Scan Map (Hewan & Objek Mini-game)
+function Engine:ScanMap()
+    local root = getLocalRoot()
+    if not root then return end
+
+    self.FoundAnimals = {}
+    self.FoundMinigameObjs = {}
+    
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj ~= LP.Character then
+            local hum = obj:FindFirstChildOfClass("Humanoid")
+            local hrp = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart or obj:FindFirstChild("Head")
+            
+            -- Scan Hewan
+            if hum and hrp and not Players:GetPlayerFromCharacter(obj) then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist <= self.ScanRadius then
+                    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    table.insert(self.FoundAnimals, {
+                        Model = obj,
+                        Name = obj.Name,
+                        Position = hrp.Position,
+                        CFrame = hrp.CFrame,
+                        Distance = math.floor(dist),
+                        Prompt = prompt
+                    })
+                end
+            end
+        elseif obj:IsA("ProximityPrompt") or obj:IsA("ClickDetector") then
+            -- Scan Objek Interaktif Mini-Game
+            local parentPart = obj.Parent
+            if parentPart and parentPart:IsA("BasePart") then
+                local dist = (parentPart.Position - root.Position).Magnitude
+                if dist <= self.ScanRadius then
+                    table.insert(self.FoundMinigameObjs, {
+                        Name = parentPart.Name,
+                        ClassName = obj.ClassName,
+                        Position = parentPart.Position,
+                        CFrame = parentPart.CFrame,
+                        Distance = math.floor(dist),
+                        Object = obj
+                    })
+                end
+            end
+        end
+    end
+
+    -- Sortir berdasarkan jarak
+    table.sort(self.FoundAnimals, function(a, b) return a.Distance < b.Distance end)
+    table.sort(self.FoundMinigameObjs, function(a, b) return a.Distance < b.Distance end)
+
+    self:AddLog(string.format("Scan Selesai: %d Hewan, %d Objek Mini-Game.", #self.FoundAnimals, #self.FoundMinigameObjs))
+end
+
+-- Eksekusi Tangkap Hewan
+function Engine:CatchAnimal(animalData)
+    if not animalData or not animalData.Model then return end
+    local root = getLocalRoot()
+    if not root then return end
+
+    local targetHrp = animalData.Model:FindFirstChild("HumanoidRootPart") or animalData.Model.PrimaryPart or animalData.Model:FindFirstChild("Head")
+    if targetHrp then
+        -- Teleport Ke Jarak Aman (2 stud di atas/belakang)
+        root.CFrame = targetHrp.CFrame * CFrame.new(0, 2, 2)
+        root.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.15)
+
+        -- Equip Jaring
+        self:EquipNet()
+        task.wait(0.1)
+
+        -- Eksekusi Catch
+        if animalData.Prompt then
+            fireproximityprompt(animalData.Prompt)
+            self:AddLog("Triggered ProximityPrompt: " .. animalData.Name)
+        else
+            local char = LP.Character
+            if char then
+                local tool = char:FindFirstChildOfClass("Tool")
+                if tool then
+                    tool:Activate()
+                    self:AddLog("Activated Net Tool on: " .. animalData.Name)
+                end
+            end
+        end
+    end
+end
+
+-- ================================ UI INITIALIZATION ================================
+local Window = WindUI:CreateWindow({
+    Title = "XKID Catcher V3.35",
+    Icon = "bug",
+    Author = "@WTF.XKID",
+    Folder = "XKID_Catcher",
+    Size = UDim2.fromOffset(580, 420),
+    Transparent = true,
+    Theme = "Crimson",
+    SideBarWidth = 170,
+})
+
+-- ================================ TAB: CATCHER & SCANNER ================================
+local TabScan = Window:Tab({ Title = "Animal Catcher", Icon = "radar" })
+
+local secControl = TabScan:Section({ Title = "Scanner Control", Icon = "sliders", Box = true })
+
+secControl:Slider({
+    Title = "Radius Scan (Studs)",
+    Step = 50,
+    Value = { Min = 100, Max = 3000, Default = 500 },
+    Callback = function(v) Engine.ScanRadius = v end
+})
+
+local animalDropdown
+local animalDisplayNames = { "Belum ada hasil scan" }
+
+animalDropdown = secControl:Dropdown({
+    Title = "Pilih Hewan Terdekat",
+    Values = animalDisplayNames,
+    Callback = function(selected)
+        for _, animal in ipairs(Engine.FoundAnimals) do
+            local label = string.format("%s [%dm]", animal.Name, animal.Distance)
+            if label == selected then
+                Engine.SelectedAnimal = animal
+                Engine:AddLog("Selected Target: " .. animal.Name)
+                break
+            end
+        end
+    end
+})
+
+secControl:Button({
+    Title = "Scan Map Now 🔍",
+    Callback = function()
+        Engine:ScanMap()
+        animalDisplayNames = {}
+        for _, animal in ipairs(Engine.FoundAnimals) do
+            table.insert(animalDisplayNames, string.format("%s [%dm]", animal.Name, animal.Distance))
+        end
+        if #animalDisplayNames == 0 then table.insert(animalDisplayNames, "Hewan tidak ditemukan") end
+        
+        animalDropdown:Refresh(animalDisplayNames, true)
+        notify("Scanner", string.format("Found %d Animals", #Engine.FoundAnimals), 2, "check")
+    end
+})
+
+local secAction = TabScan:Section({ Title = "Actions", Icon = "net", Box = true })
+
+secAction:Button({
+    Title = "Teleport to Selected Animal 📍",
+    Callback = function()
+        if Engine.SelectedAnimal and Engine.SelectedAnimal.Model then
+            local root = getLocalRoot()
+            if root then
+                root.CFrame = Engine.SelectedAnimal.CFrame * CFrame.new(0, 2, 3)
+                Engine:AddLog("Teleported to " .. Engine.SelectedAnimal.Name)
+                notify("Action", "Teleported to " .. Engine.SelectedAnimal.Name, 1.5, "map-pin")
+            end
+        else
+            notify("Error", "Pilih hewan dari list!", 2, "alert-circle")
+        end
+    end
+})
+
+secAction:Button({
+    Title = "Catch Selected Animal 🕸",
+    Desc = "Auto-Equip Net + Teleport + Catch",
+    Callback = function()
+        if Engine.SelectedAnimal then
+            Engine:CatchAnimal(Engine.SelectedAnimal)
+            notify("Catch", "Proses menangkap " .. Engine.SelectedAnimal.Name, 2, "sparkles")
+        else
+            notify("Error", "Pilih hewan dari list!", 2, "alert-circle")
+        end
+    end
+})
+
+secAction:Toggle({
+    Title = "Auto Loop Catch All (Farm)",
+    Default = false,
+    Callback = function(v)
+        Engine.AutoCatchLoop = v
+        if v then
+            task.spawn(function()
+                while Engine.AutoCatchLoop do
+                    Engine:ScanMap()
+                    if #Engine.FoundAnimals > 0 then
+                        for _, animal in ipairs(Engine.FoundAnimals) do
+                            if not Engine.AutoCatchLoop then break end
+                            Engine:CatchAnimal(animal)
+                            task.wait(1.5)
+                        end
+                    end
+                    task.wait(2)
+                end
+            end)
+            notify("Auto Farm", "Loop Catching ON", 1.5, "play")
+        else
+            notify("Auto Farm", "Loop Catching OFF", 1.5, "pause")
+        end
+    end
+})
+
+-- ================================ TAB: LOGS & DATA EXPORTER ================================
+local TabLog = Window:Tab({ Title = "Console & Copy Data", Icon = "file-text" })
+
+local secConsole = TabLog:Section({ Title = "Console Log", Icon = "terminal", Box = true })
+
+local logPanel = secConsole:Paragraph({ Title = "Real-time Logs", Desc = "Menunggu aktivitas scan..." })
+
+task.spawn(function()
+    while task.wait(0.5) do
+        if #Engine.Logs > 0 then
+            local logText = table.concat(Engine.Logs, "\n")
+            if #logText > 2000 then logText = logText:sub(-2000) end
+            logPanel:SetDesc(logText)
+        end
+    end
+end)
+
+secConsole:Button({
+    Title = "Clear Logs",
+    Callback = function()
+        Engine.Logs = {}
+        logPanel:SetDesc("Log dibersihkan...")
+        notify("Log", "Logs cleared", 1.5, "trash-2")
+    end
+})
+
+local secCopy = TabLog:Section({ Title = "Export & Copy Data", Icon = "copy", Box = true })
+
+secCopy:Button({
+    Title = "Copy All Console Logs 📋",
+    Callback = function()
+        if #Engine.Logs > 0 then
+            setclipboard(table.concat(Engine.Logs, "\n"))
+            notify("Exporter", "Console logs copied to clipboard!", 2, "copy")
+        else
+            notify("Error", "Log masih kosong!", 2, "alert-circle")
+        end
+    end
+})
+
+secCopy:Button({
+    Title = "Copy Detected Animals List 🐕",
+    Desc = "Copy nama, jarak, dan koordinat posisi hewan",
+    Callback = function()
+        if #Engine.FoundAnimals > 0 then
+            local exportStr = "-- DETECTED ANIMALS DATA --\n"
+            for i, a in ipairs(Engine.FoundAnimals) do
+                exportStr = exportStr .. string.format("%d. Name: %s | Dist: %dm | Pos: %.1f, %.1f, %.1f\n", i, a.Name, a.Distance, a.Position.X, a.Position.Y, a.Position.Z)
+            end
+            setclipboard(exportStr)
+            notify("Exporter", "Animals data copied to clipboard!", 2, "copy")
+        else
+            notify("Error", "Belum ada data hewan, lakukan scan terlebih dahulu!", 2, "alert-circle")
+        end
+    end
+})
+
+secCopy:Button({
+    Title = "Copy Mini-Game Interactive Objects 🎮",
+    Desc = "Copy ProximityPrompt & ClickDetector data",
+    Callback = function()
+        if #Engine.FoundMinigameObjs > 0 then
+            local exportStr = "-- INTERACTIVE MAP OBJECTS --\n"
+            for i, obj in ipairs(Engine.FoundMinigameObjs) do
+                exportStr = exportStr .. string.format("%d. Object: %s | Type: %s | Dist: %dm | Pos: %.1f, %.1f, %.1f\n", i, obj.Name, obj.ClassName, obj.Distance, obj.Position.X, obj.Position.Y, obj.Position.Z)
+            end
+            setclipboard(exportStr)
+            notify("Exporter", "Mini-game objects copied to clipboard!", 2, "copy")
+        else
+            notify("Error", "Belum ada data objek mini-game!", 2, "alert-circle")
+        end
+    end
+})
+
+-- ================================ INIT ================================
+notify("System", "XKID Catcher & Scanner Ready!", 3, "rocket")
+Engine:AddLog("XKID Catcher System initialized.")
