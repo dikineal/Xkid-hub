@@ -1,11 +1,10 @@
 -- =================================================================
--- @XKID ANIMAL CATCHER & MERCHANT V3.39 (FIXED MINIGAME CLICK)
--- by @WTF.XKID | Full Animal Support (Kupu-Kupu, Capung, DLL)
+-- @XKID DATA INSPECTOR & REMOTE SPY V1.0 (WindUI)
+-- by @WTF.XKID | Scan Hewan + Detect UI + Capture Remote Events
 -- =================================================================
 
 repeat task.wait() until game:IsLoaded()
 
--- ================================ WINDUI LOADER ================================
 local WindUI = (function()
     local s, r = pcall(function() 
         return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))() 
@@ -13,183 +12,224 @@ local WindUI = (function()
     if s then return r else error("Failed to load WindUI") end
 end)()
 
--- ================================ SERVICES ================================
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LP = Players.LocalPlayer
 
--- ================================ NOTIFY HELPER ================================
-local function notify(title, content, duration, icon)
-    pcall(function() 
-        WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) 
-    end)
-end
-
-local function getLocalRoot()
-    local char = LP.Character
-    return char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head"))
-end
-
--- ================================ OPTIMIZED CATCH ENGINE ================================
-local AutoCatchEngine = {
-    Enabled = false,
-    Interval = 0.05, -- Respon super cepat untuk memburu gambar bergerak
-    RunningThread = nil
+local Inspector = {
+    SpyActive = true,
+    CapturedRemotes = {},
+    DetectedAnimals = {},
+    DetectedUI = {},
+    Logs = {}
 }
 
-local function emulateTap(x, y)
-    VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-    task.wait(0.005)
-    VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+local function notify(title, content, duration, icon)
+    pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) end)
 end
 
-function AutoCatchEngine:Start()
-    if self.RunningThread then self.RunningThread = nil end
+function Inspector:Log(msg)
+    local t = os.date("%H:%M:%S")
+    local entry = string.format("[%s] %s", t, msg)
+    table.insert(self.Logs, entry)
+    if #self.Logs > 120 then table.remove(self.Logs, 1) end
+end
 
-    self.RunningThread = task.spawn(function()
-        while self.Enabled do
-            local playerGui = LP:FindFirstChildOfClass("PlayerGui")
-            if playerGui then
-                for _, gui in ipairs(playerGui:GetChildren()) do
-                    if gui:IsA("ScreenGui") and gui.Enabled then
-                        for _, element in ipairs(gui:GetDescendants()) do
-                            if (element:IsA("ImageButton") or element:IsA("TextButton") or element:IsA("ImageLabel")) and element.Visible then
-                                
-                                local nameLower = element.Name:lower()
-                                local parentName = element.Parent and element.Parent.Name:lower() or ""
-                                local isTarget = false
+-- ================================ 1. REMOTE EVENT SPY ENGINE ================================
+local function hookRemotes()
+    local rawMeta = getrawmetatable(game)
+    local oldNamecall = rawMeta.__namecall
+    setreadonly(rawMeta, false)
 
-                                -- 1. Deteksi Kata Kunci Hewan & Minigame
-                                if nameLower:find("net") or nameLower:find("jaring") or nameLower:find("catch") 
-                                   or nameLower:find("action") or nameLower:find("capung") or nameLower:find("kupu") 
-                                   or nameLower:find("animal") or nameLower:find("target") or parentName:find("tangkap") 
-                                   or parentName:find("minigame") then
-                                    isTarget = true
-                                end
+    rawMeta.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
 
-                                -- 2. Deteksi Elemen Gambar di Dalam Pop-up Minigame
-                                if not isTarget and (element:IsA("ImageButton") or element:IsA("ImageLabel")) then
-                                    local rootGui = element:FindFirstAncestorOfClass("ScreenGui")
-                                    if rootGui then
-                                        for _, child in ipairs(rootGui:GetDescendants()) do
-                                            if child:IsA("TextLabel") and (child.Text:lower():find("tangkap") or child.Text:lower():find("kupu") or child.Text:lower():find("capung")) then
-                                                isTarget = true
-                                                break
-                                            end
-                                        end
-                                    end
-                                end
+        if Inspector.SpyActive and (method == "FireServer" or method == "fireServer" or method == "InvokeServer" or method == "invokeServer") then
+            local remoteName = self.Name
+            local remotePath = self:GetFullName()
+            
+            -- Format argumen ke string
+            local argStrTable = {}
+            for i, v in ipairs(args) do
+                table.insert(argStrTable, tostring(v))
+            end
+            local argFormatted = table.concat(argStrTable, ", ")
 
-                                -- 3. Fallback Tombol Jaring Hijau Bawah Layar
-                                if not isTarget and element:IsA("ImageButton") and element.Image ~= "" then
-                                    local pos = element.AbsolutePosition
-                                    local vp = workspace.CurrentCamera.ViewportSize
-                                    if pos.Y > (vp.Y * 0.55) and math.abs(pos.X - (vp.X * 0.5)) < (vp.X * 0.3) then
-                                        isTarget = true
-                                    end
-                                end
+            local spyEntry = string.format("REMOTE DETECTED: %s:%s(%s)", remoteName, method, argFormatted)
+            Inspector:Log("🔥 " .. spyEntry)
 
-                                -- Eksekusi Klik Presisi & Direct Event Signal
-                                if isTarget then
-                                    -- A. Panggil Langsung Event Internal Roblox
-                                    pcall(function()
-                                        for _, conn in ipairs(getconnections(element.MouseButton1Click)) do conn:Fire() end
-                                        for _, conn in ipairs(getconnections(element.Activated)) do conn:Fire() end
-                                        for _, conn in ipairs(getconnections(element.TouchTap)) do conn:Fire() end
-                                        for _, conn in ipairs(getconnections(element.InputBegan)) do 
-                                            conn:Fire({ UserInputType = Enum.UserInputType.MouseButton1, UserInputState = Enum.UserInputState.Begin }) 
-                                        end
-                                    end)
+            table.insert(Inspector.CapturedRemotes, {
+                Name = remoteName,
+                Path = remotePath,
+                Method = method,
+                Args = args,
+                FormattedCode = string.format("game.%s:%s(%s)", remotePath, method, argFormatted)
+            })
+        end
 
-                                    -- B. Emulasi Ketukan Fisik di Tengah Gambar
-                                    local pos = element.AbsolutePosition
-                                    local size = element.AbsoluteSize
-                                    if size.X > 5 and size.Y > 5 then
-                                        emulateTap(pos.X + (size.X / 2), pos.Y + (size.Y / 2) + 36)
-                                    end
-                                end
-                            end
-                        end
-                    end
+        return oldNamecall(self, ...)
+    end)
+
+    setreadonly(rawMeta, true)
+    Inspector:Log("Remote Spy Engine Hooked successfully!")
+end
+
+pcall(hookRemotes)
+
+-- ================================ 2. SCANNER ANIMAL & MAP ================================
+function Inspector:ScanMapAnimals()
+    self.DetectedAnimals = {}
+    local count = 0
+
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj ~= LP.Character then
+            local hum = obj:FindFirstChildOfClass("Humanoid")
+            local hrp = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart or obj:FindFirstChild("Head")
+
+            if hum and hrp and not Players:GetPlayerFromCharacter(obj) then
+                count = count + 1
+                table.insert(self.DetectedAnimals, {
+                    Name = obj.Name,
+                    Model = obj,
+                    Position = hrp.Position,
+                    Path = obj:GetFullName()
+                })
+            end
+        end
+    end
+
+    self:Log(string.format("Scan Map: Ditemukan total %d hewan aktif di Workspace.", count))
+    return count
+end
+
+-- ================================ 3. SCANNER MINIGAME UI ================================
+function Inspector:ScanMinigameUI()
+    self.DetectedUI = {}
+    local pGui = LP:FindFirstChildOfClass("PlayerGui")
+    if not pGui then return end
+
+    for _, gui in ipairs(pGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled then
+            for _, btn in ipairs(gui:GetDescendants()) do
+                if (btn:IsA("ImageButton") or btn:IsA("TextButton") or btn:IsA("ImageLabel")) and btn.Visible then
+                    table.insert(self.DetectedUI, {
+                        GuiName = gui.Name,
+                        Name = btn.Name,
+                        Class = btn.ClassName,
+                        Path = btn:GetFullName(),
+                        Pos = btn.AbsolutePosition,
+                        Size = btn.AbsoluteSize
+                    })
                 end
             end
-            task.wait(self.Interval)
         end
-    end)
-end
-
-function AutoCatchEngine:Stop()
-    self.Enabled = false
-    self.RunningThread = nil
-end
-
--- ================================ MERCHANT TP ENGINE ================================
-local function teleportToMerchant()
-    local root = getLocalRoot()
-    if not root then
-        notify("Error", "Character tidak ditemukan!", 2, "alert-circle")
-        return
     end
 
-    local sellBooth = Workspace:FindFirstChild("SellBooth", true)
-    if sellBooth then
-        local targetCF = sellBooth:IsA("Model") and (sellBooth.PrimaryPart or sellBooth:FindFirstChildWhichIsA("BasePart")).CFrame or sellBooth.CFrame
-        root.CFrame = targetCF * CFrame.new(0, 3, 3)
-    else
-        root.CFrame = CFrame.new(642.5, -192.0, -980.0)
-    end
-    root.AssemblyLinearVelocity = Vector3.zero
-    notify("Merchant TP", "Berhasil Teleport ke Penjual!", 2, "store")
+    self:Log(string.format("UI Inspector: Ditemukan %d elemen UI aktif di layar.", #self.DetectedUI))
 end
 
--- ================================ UI INITIALIZATION ================================
+-- ================================ WINDUI SETUP ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID Catcher V3.39",
-    Icon = "bug",
+    Title = "XKID Inspector V1.0",
+    Icon = "search",
     Author = "@WTF.XKID",
-    Folder = "XKID_Catcher",
-    Size = UDim2.fromOffset(560, 380),
+    Folder = "XKID_Inspector",
+    Size = UDim2.fromOffset(600, 430),
     Transparent = true,
     Theme = "Crimson",
-    SideBarWidth = 160,
+    SideBarWidth = 170,
 })
 
--- ================================ TAB: CATCHER & MERCHANT ================================
-local TabMain = Window:Tab({ Title = "Auto Catch & Merchant", Icon = "net" })
+-- TAB 1: REMOTE SPY & CONSOLE
+local TabSpy = Window:Tab({ Title = "Remote Spy", Icon = "terminal" })
+local secSpy = TabSpy:Section({ Title = "Console Output & Remotes", Icon = "code", Box = true })
 
-local secCatch = TabMain:Section({ Title = "Auto Catching System (Kupu & Capung)", Icon = "zap", Box = true })
+local logParagraph = secSpy:Paragraph({ Title = "Real-Time Remote Logs", Desc = "Menunggu trigger minigame / tangkap hewan..." })
 
-secCatch:Toggle({
-    Title = "Auto Catch / Press Net Button 🕸",
-    Desc = "Auto-click presisi untuk Kupu-Kupu, Capung, dan hewan lainnya",
-    Default = false,
+task.spawn(function()
+    while task.wait(0.5) do
+        if #Inspector.Logs > 0 then
+            local text = table.concat(Inspector.Logs, "\n")
+            if #text > 2200 then text = text:sub(-2200) end
+            logParagraph:SetDesc(text)
+        end
+    end
+end)
+
+secSpy:Toggle({
+    Title = "Enable Remote Spy",
+    Default = true,
     Callback = function(v)
-        AutoCatchEngine.Enabled = v
-        if v then
-            AutoCatchEngine:Start()
-            notify("Auto Catch", "Catcher Engine V3.39 AKTIF", 2, "check")
+        Inspector.SpyActive = v
+        notify("Remote Spy", v and "ACTIVE" or "OFF", 1.5, "radio")
+    end
+})
+
+secSpy:Button({
+    Title = "Copy Captured Remote Code 📋",
+    Desc = "Copy semua RemoteEvent yang terpanggil saat tangkap hewan",
+    Callback = function()
+        if #Inspector.CapturedRemotes > 0 then
+            local codeStr = "-- CAPTURED REMOTE EVENTS & FUNCTIONS --\n"
+            for i, r in ipairs(Inspector.CapturedRemotes) do
+                codeStr = codeStr .. string.format("-- [%d] %s\n%s\n\n", i, r.Name, r.FormattedCode)
+            end
+            setclipboard(codeStr)
+            notify("Inspector", "Kode Remote berhasil di-copy ke clipboard!", 2, "copy")
         else
-            AutoCatchEngine:Stop()
-            notify("Auto Catch", "Catcher Engine OFF", 1.5, "pause")
+            notify("Error", "Belum ada Remote yang terdeteksi! Coba tangkap 1 hewan dulu.", 2, "alert-circle")
         end
     end
 })
 
-secCatch:Paragraph({
-    Title = "Pembaruan V3.39",
-    Desc = "• Menambahkan deteksi 'Kupu-Kupu' & Minigame Pop-up\n• Menggunakan Direct Signal Fire agar klik tidak meleset saat hewan bergerak\n• Mendukung semua jenis minigame hewan di map"
-})
+-- TAB 2: ANIMAL & UI SCANNER
+local TabScan = Window:Tab({ Title = "Map & UI Scan", Icon = "scan" })
+local secScan = TabScan:Section({ Title = "Data Scanner", Icon = "database", Box = true })
 
-local secMerchant = TabMain:Section({ Title = "Penjual / Merchant TP", Icon = "store", Box = true })
-
-secMerchant:Button({
-    Title = "Teleport ke Penjual (SellBooth) 🏪",
-    Desc = "Langsung teleport ke tempat jual hewan",
+secScan:Button({
+    Title = "Scan Jumlah Hewan di Map 🐕",
     Callback = function()
-        teleportToMerchant()
+        local total = Inspector:ScanMapAnimals()
+        notify("Animal Scan", string.format("Total Hewan Spawn: %d", total), 2, "check")
     end
 })
 
--- ================================ INIT ================================
-notify("System", "XKID Catcher V3.39 Fixed Ready!", 3, "rocket")
+secScan:Button({
+    Title = "Copy Animal Data Code 📋",
+    Callback = function()
+        if #Inspector.DetectedAnimals > 0 then
+            local str = "-- DETECTED ANIMALS IN WORKSPACE --\nlocal Animals = {\n"
+            for i, a in ipairs(Inspector.DetectedAnimals) do
+                str = str .. string.format("    [%d] = { Name = %q, Path = %q, Pos = Vector3.new(%.1f, %.1f, %.1f) },\n", i, a.Name, a.Path, a.Position.X, a.Position.Y, a.Position.Z)
+            end
+            str = str .. "}\nreturn Animals"
+            setclipboard(str)
+            notify("Inspector", "Data hewan berhasil di-copy!", 2, "copy")
+        else
+            notify("Error", "Klik 'Scan Jumlah Hewan' terlebih dahulu!", 2, "alert-circle")
+        end
+    end
+})
+
+secScan:Button({
+    Title = "Scan Minigame UI (Lakukan saat popup muncul) 🎮",
+    Callback = function()
+        Inspector:ScanMinigameUI()
+        if #Inspector.DetectedUI > 0 then
+            local str = "-- DETECTED MINIGAME UI ELEMENTS --\nlocal UIElements = {\n"
+            for i, u in ipairs(Inspector.DetectedUI) do
+                str = str .. string.format("    [%d] = { Gui = %q, Name = %q, Class = %q, Path = %q },\n", i, u.GuiName, u.Name, u.Class, u.Path)
+            end
+            str = str .. "}\nreturn UIElements"
+            setclipboard(str)
+            notify("Inspector", "Data UI Minigame berhasil di-copy ke clipboard!", 2, "copy")
+        else
+            notify("Error", "Buka minigame capung dulu di layar!", 2, "alert-circle")
+        end
+    end
+})
+
+notify("System", "XKID Inspector & Remote Spy Active!", 3, "rocket")
+Inspector:Log("System Ready. Silakan coba tangkap hewan di game.")
