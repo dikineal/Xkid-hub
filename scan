@@ -1,6 +1,6 @@
 -- =================================================================
--- @XKID ANIMAL CATCHER & MERCHANT V3.38 (PERFECT & OPTIMIZED)
--- by @WTF.XKID | Battery-Safe + Precise UI Click + Merchant TP
+-- @XKID ANIMAL CATCHER & MERCHANT V3.39 (FIXED MINIGAME CLICK)
+-- by @WTF.XKID | Full Animal Support (Kupu-Kupu, Capung, DLL)
 -- =================================================================
 
 repeat task.wait() until game:IsLoaded()
@@ -34,13 +34,13 @@ end
 -- ================================ OPTIMIZED CATCH ENGINE ================================
 local AutoCatchEngine = {
     Enabled = false,
-    Interval = 0.1, -- 10x per detik (Sangat aman untuk baterai & CPU HP)
+    Interval = 0.05, -- Respon super cepat untuk memburu gambar bergerak
     RunningThread = nil
 }
 
 local function emulateTap(x, y)
     VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-    task.wait(0.01)
+    task.wait(0.005)
     VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
 end
 
@@ -51,8 +51,6 @@ function AutoCatchEngine:Start()
         while self.Enabled do
             local playerGui = LP:FindFirstChildOfClass("PlayerGui")
             if playerGui then
-                local foundTarget = false
-
                 for _, gui in ipairs(playerGui:GetChildren()) do
                     if gui:IsA("ScreenGui") and gui.Enabled then
                         for _, element in ipairs(gui:GetDescendants()) do
@@ -62,12 +60,28 @@ function AutoCatchEngine:Start()
                                 local parentName = element.Parent and element.Parent.Name:lower() or ""
                                 local isTarget = false
 
-                                -- 1. Target Tombol Jaring & Minigame
-                                if nameLower:find("net") or nameLower:find("jaring") or nameLower:find("catch") or nameLower:find("action") or nameLower:find("capung") or parentName:find("tangkap") then
+                                -- 1. Deteksi Kata Kunci Hewan & Minigame
+                                if nameLower:find("net") or nameLower:find("jaring") or nameLower:find("catch") 
+                                   or nameLower:find("action") or nameLower:find("capung") or nameLower:find("kupu") 
+                                   or nameLower:find("animal") or nameLower:find("target") or parentName:find("tangkap") 
+                                   or parentName:find("minigame") then
                                     isTarget = true
                                 end
 
-                                -- 2. Fallback Position Check (Tombol Bawah Tengah Layar)
+                                -- 2. Deteksi Elemen Gambar di Dalam Pop-up Minigame
+                                if not isTarget and (element:IsA("ImageButton") or element:IsA("ImageLabel")) then
+                                    local rootGui = element:FindFirstAncestorOfClass("ScreenGui")
+                                    if rootGui then
+                                        for _, child in ipairs(rootGui:GetDescendants()) do
+                                            if child:IsA("TextLabel") and (child.Text:lower():find("tangkap") or child.Text:lower():find("kupu") or child.Text:lower():find("capung")) then
+                                                isTarget = true
+                                                break
+                                            end
+                                        end
+                                    end
+                                end
+
+                                -- 3. Fallback Tombol Jaring Hijau Bawah Layar
                                 if not isTarget and element:IsA("ImageButton") and element.Image ~= "" then
                                     local pos = element.AbsolutePosition
                                     local vp = workspace.CurrentCamera.ViewportSize
@@ -76,31 +90,31 @@ function AutoCatchEngine:Start()
                                     end
                                 end
 
-                                -- Eksekusi Klik Presisi
+                                -- Eksekusi Klik Presisi & Direct Event Signal
                                 if isTarget then
-                                    foundTarget = true
-                                    
-                                    -- A. Internal Signal Trigger
+                                    -- A. Panggil Langsung Event Internal Roblox
                                     pcall(function()
                                         for _, conn in ipairs(getconnections(element.MouseButton1Click)) do conn:Fire() end
                                         for _, conn in ipairs(getconnections(element.Activated)) do conn:Fire() end
                                         for _, conn in ipairs(getconnections(element.TouchTap)) do conn:Fire() end
+                                        for _, conn in ipairs(getconnections(element.InputBegan)) do 
+                                            conn:Fire({ UserInputType = Enum.UserInputType.MouseButton1, UserInputState = Enum.UserInputState.Begin }) 
+                                        end
                                     end)
 
-                                    -- B. Physical Tap Emulation Fallback
+                                    -- B. Emulasi Ketukan Fisik di Tengah Gambar
                                     local pos = element.AbsolutePosition
                                     local size = element.AbsoluteSize
-                                    emulateTap(pos.X + (size.X / 2), pos.Y + (size.Y / 2) + 36)
-
-                                    break
+                                    if size.X > 5 and size.Y > 5 then
+                                        emulateTap(pos.X + (size.X / 2), pos.Y + (size.Y / 2) + 36)
+                                    end
                                 end
                             end
                         end
                     end
-                    if foundTarget then break end
                 end
             end
-            task.wait(self.Interval) -- Jeda ringan agar CPU & Baterai tetap adem
+            task.wait(self.Interval)
         end
     end)
 end
@@ -131,7 +145,7 @@ end
 
 -- ================================ UI INITIALIZATION ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID Catcher V3.38",
+    Title = "XKID Catcher V3.39",
     Icon = "bug",
     Author = "@WTF.XKID",
     Folder = "XKID_Catcher",
@@ -144,17 +158,17 @@ local Window = WindUI:CreateWindow({
 -- ================================ TAB: CATCHER & MERCHANT ================================
 local TabMain = Window:Tab({ Title = "Auto Catch & Merchant", Icon = "net" })
 
-local secCatch = TabMain:Section({ Title = "Auto Catching System (Perfected)", Icon = "zap", Box = true })
+local secCatch = TabMain:Section({ Title = "Auto Catching System (Kupu & Capung)", Icon = "zap", Box = true })
 
 secCatch:Toggle({
     Title = "Auto Catch / Press Net Button 🕸",
-    Desc = "Presisi tinggi, hemat baterai, dan tidak bikin HP panas",
+    Desc = "Auto-click presisi untuk Kupu-Kupu, Capung, dan hewan lainnya",
     Default = false,
     Callback = function(v)
         AutoCatchEngine.Enabled = v
         if v then
             AutoCatchEngine:Start()
-            notify("Auto Catch", "Catcher Engine AKTIF (Mode Hemat Baterai)", 2, "check")
+            notify("Auto Catch", "Catcher Engine V3.39 AKTIF", 2, "check")
         else
             AutoCatchEngine:Stop()
             notify("Auto Catch", "Catcher Engine OFF", 1.5, "pause")
@@ -163,19 +177,19 @@ secCatch:Toggle({
 })
 
 secCatch:Paragraph({
-    Title = "Keunggulan V3.38",
-    Desc = "• Ramah Baterai & CPU (Interval 0.1s)\n• Tidak Mengganggu Kinerja HP\n• Eksekusi Tombol Jaring & Minigame Otomatis saat kamu di dekat hewan"
+    Title = "Pembaruan V3.39",
+    Desc = "• Menambahkan deteksi 'Kupu-Kupu' & Minigame Pop-up\n• Menggunakan Direct Signal Fire agar klik tidak meleset saat hewan bergerak\n• Mendukung semua jenis minigame hewan di map"
 })
 
 local secMerchant = TabMain:Section({ Title = "Penjual / Merchant TP", Icon = "store", Box = true })
 
 secMerchant:Button({
     Title = "Teleport ke Penjual (SellBooth) 🏪",
-    Desc = "Langsung teleport ke koordinat penjual",
+    Desc = "Langsung teleport ke tempat jual hewan",
     Callback = function()
         teleportToMerchant()
     end
 })
 
 -- ================================ INIT ================================
-notify("System", "XKID Catcher V3.38 Perfected Ready!", 3, "rocket")
+notify("System", "XKID Catcher V3.39 Fixed Ready!", 3, "rocket")
