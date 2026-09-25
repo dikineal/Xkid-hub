@@ -1,187 +1,467 @@
 -- =================================================================
--- @XKID ANIMAL CATCHER & SELLER V3.36 (WindUI Integrated)
+-- @XKID ANIMAL CATCHER & SELLER V3.37 (STANDALONE FULL PANEL)
 -- by @WTF.XKID | Auto Net Press + Minigame Solver + Merchant TP
+-- Universal — deteksi GUI multi-layer
 -- =================================================================
 
 repeat task.wait() until game:IsLoaded()
-
--- ================================ WINDUI LOADER ================================
-local WindUI = (function()
-    local s, r = pcall(function() 
-        return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))() 
-    end)
-    if s then return r else error("Failed to load WindUI") end
-end)()
 
 -- ================================ SERVICES ================================
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-
+local VirtualInputManager = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 local LP = Players.LocalPlayer
-
--- ================================ NOTIFY HELPER ================================
-local function notify(title, content, duration, icon)
-    pcall(function() 
-        WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) 
-    end)
-end
 
 local function getLocalRoot()
     local char = LP.Character
     return char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head"))
 end
 
--- ================================ AUTO CATCH ENGINE ================================
-local AutoCatchEngine = {
-    Enabled = false,
-    ClickDelay = 0.03,
-    Conn = nil
+-- ================================ STATE ================================
+local State = {
+    AutoCatch = true,
+    ClickDelay = 0.3,
+    ClickOffset = 36,
+    ClickCount = 0,
+    TPCount = 0,
+    LastClickTime = 0,
+    Conn = nil,
+    Minimized = false
 }
 
+-- ================================ CLICK FUNCTION ================================
 local function fireClick(x, y)
-    VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-    task.wait(0.01)
-    VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+    -- Coba VirtualInputManager dulu
+    if VirtualInputManager and VirtualInputManager.SendMouseButtonEvent then
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+            task.wait(0.01)
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+        end)
+        return true
+    end
+    return false
 end
 
-function AutoCatchEngine:Start()
-    if self.Conn then self.Conn:Disconnect() end
+-- ================================ AUTO CATCH ENGINE ================================
+local function startAutoCatch()
+    if State.Conn then State.Conn:Disconnect(); State.Conn = nil end
 
-    self.Conn = RunService.Heartbeat:Connect(function()
-        if not self.Enabled then return end
+    State.Conn = task.spawn(function()
+        while State.AutoCatch do
+            task.wait(0.1)  -- 10x/detik, hemat CPU
 
-        local playerGui = LP:FindFirstChildOfClass("PlayerGui")
-        if not playerGui then return end
+            local playerGui = LP:FindFirstChildOfClass("PlayerGui")
+            if not playerGui then continue end
 
-        for _, gui in ipairs(playerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Enabled then
+            -- Cooldown cek
+            if tick() - State.LastClickTime < State.ClickDelay then continue end
+
+            local clicked = false
+            for _, gui in ipairs(playerGui:GetChildren()) do
+                if not gui:IsA("ScreenGui") or not gui.Enabled then continue end
                 for _, element in ipairs(gui:GetDescendants()) do
-                    if (element:IsA("ImageButton") or element:IsA("TextButton") or element:IsA("ImageLabel")) and element.Visible then
-                        
-                        local isTarget = false
-                        local nameLower = element.Name:lower()
-                        local parentName = element.Parent and element.Parent.Name:lower() or ""
+                    if not (element:IsA("ImageButton") or element:IsA("TextButton") or element:IsA("ImageLabel")) then continue end
+                    if not element.Visible then continue end
 
-                        -- 1. Deteksi Tombol Jaring
-                        if nameLower:find("net") or nameLower:find("jaring") or nameLower:find("catch") or nameLower:find("action") then
+                    local isTarget = false
+                    local nameLower = element.Name:lower()
+                    local parentName = element.Parent and element.Parent.Name:lower() or ""
+
+                    -- Deteksi tombol jaring
+                    if nameLower:find("net") or nameLower:find("jaring") or nameLower:find("catch") or nameLower:find("action") then
+                        isTarget = true
+                    end
+
+                    -- Deteksi minigame
+                    if nameLower:find("capung") or nameLower:find("animal") or parentName:find("tangkap") or parentName:find("minigame") then
+                        isTarget = true
+                    end
+
+                    -- Fallback: ImageButton di bawah layar
+                    if not isTarget and element:IsA("ImageButton") and element.Image ~= "" then
+                        local pos = element.AbsolutePosition
+                        local vp = workspace.CurrentCamera.ViewportSize
+                        if pos.Y > (vp.Y * 0.5) and math.abs(pos.X - (vp.X * 0.5)) < (vp.X * 0.35) then
                             isTarget = true
                         end
+                    end
 
-                        -- 2. Deteksi Gambar Minigame (Capung/Hewan bergerak)
-                        if nameLower:find("capung") or nameLower:find("animal") or parentName:find("tangkap") or parentName:find("minigame") then
-                            isTarget = true
-                        end
-
-                        -- 3. Fallback Deteksi Tombol Aksi di Bagian Bawah Layar
-                        if not isTarget and element:IsA("ImageButton") and element.Image ~= "" then
-                            local pos = element.AbsolutePosition
-                            local vp = workspace.CurrentCamera.ViewportSize
-                            if pos.Y > (vp.Y * 0.5) and math.abs(pos.X - (vp.X * 0.5)) < (vp.X * 0.35) then
-                                isTarget = true
-                            end
-                        end
-
-                        -- Eksekusi Klik Presisi
-                        if isTarget then
-                            pcall(function()
+                    if isTarget then
+                        -- Fire connections
+                        pcall(function()
+                            if getconnections then
                                 for _, conn in ipairs(getconnections(element.MouseButton1Click)) do conn:Fire() end
                                 for _, conn in ipairs(getconnections(element.Activated)) do conn:Fire() end
                                 for _, conn in ipairs(getconnections(element.TouchTap)) do conn:Fire() end
-                            end)
+                            end
+                        end)
 
-                            local pos = element.AbsolutePosition
-                            local size = element.AbsoluteSize
-                            fireClick(pos.X + (size.X / 2), pos.Y + (size.Y / 2) + 36)
+                        -- Fallback: langsung Activate
+                        pcall(function()
+                            if element.Activate then element:Activate() end
+                        end)
 
-                            task.wait(self.ClickDelay)
-                            break
-                        end
+                        -- Fire click di posisi
+                        local pos = element.AbsolutePosition
+                        local size = element.AbsoluteSize
+                        fireClick(pos.X + (size.X / 2), pos.Y + (size.Y / 2) + State.ClickOffset)
+
+                        State.ClickCount = State.ClickCount + 1
+                        State.LastClickTime = tick()
+                        clicked = true
+                        break
                     end
                 end
+                if clicked then break end
             end
         end
     end)
 end
 
-function AutoCatchEngine:Stop()
-    self.Enabled = false
-    if self.Conn then
-        self.Conn:Disconnect()
-        self.Conn = nil
+local function stopAutoCatch()
+    if State.Conn then
+        pcall(function() task.cancel(State.Conn) end)
+        State.Conn = nil
     end
 end
 
--- ================================ MERCHANT TP ENGINE ================================
+-- ================================ MERCHANT TP ================================
 local function teleportToMerchant()
     local root = getLocalRoot()
-    if not root then
-        notify("Error", "Character tidak ditemukan!", 2, "alert-circle")
-        return
-    end
+    if not root then return end
 
-    -- Cari SellBooth di Workspace atau gunakan koordinat presisi
     local sellBooth = Workspace:FindFirstChild("SellBooth", true)
     if sellBooth then
-        local targetCFrame = sellBooth:IsA("Model") and (sellBooth.PrimaryPart or sellBooth:FindFirstChildWhichIsA("BasePart")).CFrame or sellBooth.CFrame
-        root.CFrame = targetCFrame * CFrame.new(0, 3, 3)
-        notify("Teleport", "Teleport ke Penjual (SellBooth)", 2, "store")
-    else
-        -- Fallback Koordinat dari hasil scan map kamu
-        root.CFrame = CFrame.new(642.5, -192.0, -980.0)
-        notify("Teleport", "Teleport ke Koordinat Penjual", 2, "store")
-    end
-    root.AssemblyLinearVelocity = Vector3.zero
-end
-
--- ================================ UI INITIALIZATION ================================
-local Window = WindUI:CreateWindow({
-    Title = "XKID Catcher V3.36",
-    Icon = "bug",
-    Author = "@WTF.XKID",
-    Folder = "XKID_Catcher",
-    Size = UDim2.fromOffset(560, 380),
-    Transparent = true,
-    Theme = "Crimson",
-    SideBarWidth = 160,
-})
-
--- ================================ TAB: CATCHER & MERCHANT ================================
-local TabMain = Window:Tab({ Title = "Auto Catch & Merchant", Icon = "net" })
-
-local secCatch = TabMain:Section({ Title = "Auto Catching System", Icon = "zap", Box = true })
-
-secCatch:Toggle({
-    Title = "Auto Catch / Press Net Button 🕸",
-    Desc = "Otomatis pencet tombol jaring & selesaikan minigame saat kamu mendekati hewan",
-    Default = false,
-    Callback = function(v)
-        AutoCatchEngine.Enabled = v
-        if v then
-            AutoCatchEngine:Start()
-            notify("Auto Catch", "Sistem Penangkap Otomatis AKTIF!", 2, "check")
-        else
-            AutoCatchEngine:Stop()
-            notify("Auto Catch", "Sistem OFF", 1.5, "pause")
+        local targetPart = sellBooth:IsA("Model") and (sellBooth.PrimaryPart or sellBooth:FindFirstChildWhichIsA("BasePart")) or sellBooth
+        if targetPart then
+            root.CFrame = targetPart.CFrame * CFrame.new(0, 3, 3)
+            root.AssemblyLinearVelocity = Vector3.zero
+            State.TPCount = State.TPCount + 1
+            return true
         end
     end
-})
+    -- Fallback koordinat (Hutan Voice)
+    root.CFrame = CFrame.new(642.5, -192.0, -980.0)
+    root.AssemblyLinearVelocity = Vector3.zero
+    State.TPCount = State.TPCount + 1
+    return true
+end
 
-secCatch:Paragraph({
-    Title = "Cara Kerja",
-    Desc = "1. Jalan manual mendekati hewan/capung.\n2. Begitu tombol jaring atau minigame muncul, script langsung menekan & menyelesaikannya secara cepat tanpa perlu klik manual."
-})
+-- ================================ UI — FULL PANEL ================================
+local gui = Instance.new("ScreenGui")
+gui.Name = "XKID_Catcher_UI"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+gui.Parent = CoreGui
 
-local secMerchant = TabMain:Section({ Title = "Penjual / Merchant TP", Icon = "store", Box = true })
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.fromOffset(320, 420)
+main.Position = UDim2.new(0.5, -160, 0.5, -210)
+main.BackgroundColor3 = Color3.fromRGB(20, 18, 30)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 14)
 
-secMerchant:Button({
-    Title = "Teleport ke Penjual (SellBooth) 🏪",
-    Desc = "Langsung teleport ke tempat menjual hewan",
-    Callback = function()
+local stroke = Instance.new("UIStroke", main)
+stroke.Color = Color3.fromRGB(160, 100, 255)
+stroke.Thickness = 2
+stroke.Transparency = 0.3
+
+-- Gradient header
+local header = Instance.new("Frame", main)
+header.Size = UDim2.new(1, 0, 0, 42)
+header.BackgroundColor3 = Color3.fromRGB(140, 80, 220)
+header.BorderSizePixel = 0
+Instance.new("UICorner", header).CornerRadius = UDim.new(0, 14)
+local headerCover = Instance.new("Frame", header)
+headerCover.Size = UDim2.new(1, 0, 0, 14)
+headerCover.Position = UDim2.new(0, 0, 1, -14)
+headerCover.BackgroundColor3 = Color3.fromRGB(140, 80, 220)
+headerCover.BorderSizePixel = 0
+
+local titleLabel = Instance.new("TextLabel", header)
+titleLabel.Size = UDim2.new(1, -50, 1, 0)
+titleLabel.Position = UDim2.new(0, 14, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🎯 XKID CATCHER v3.37"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 15
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Minimize button
+local minBtn = Instance.new("TextButton", header)
+minBtn.Size = UDim2.fromOffset(28, 28)
+minBtn.Position = UDim2.new(1, -34, 0, 7)
+minBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.BackgroundTransparency = 0.85
+minBtn.Text = "─"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.TextSize = 18
+minBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
+
+-- Status section
+local statusFrame = Instance.new("Frame", main)
+statusFrame.Size = UDim2.new(1, -24, 0, 70)
+statusFrame.Position = UDim2.new(0, 12, 0, 54)
+statusFrame.BackgroundColor3 = Color3.fromRGB(35, 30, 50)
+statusFrame.BorderSizePixel = 0
+Instance.new("UICorner", statusFrame).CornerRadius = UDim.new(0, 10)
+
+local statusDot = Instance.new("Frame", statusFrame)
+statusDot.Size = UDim2.fromOffset(12, 12)
+statusDot.Position = UDim2.new(0, 14, 0, 14)
+statusDot.BackgroundColor3 = Color3.fromRGB(80, 255, 120)
+statusDot.BorderSizePixel = 0
+Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
+
+local statusLabel = Instance.new("TextLabel", statusFrame)
+statusLabel.Size = UDim2.new(1, -40, 0, 20)
+statusLabel.Position = UDim2.new(0, 36, 0, 10)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "AUTO-CATCHING"
+statusLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
+statusLabel.TextSize = 14
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local counterLabel = Instance.new("TextLabel", statusFrame)
+counterLabel.Size = UDim2.new(1, -28, 0, 20)
+counterLabel.Position = UDim2.new(0, 14, 0, 38)
+counterLabel.BackgroundTransparency = 1
+counterLabel.Text = "Klik: 0x | TP: 0x"
+counterLabel.TextColor3 = Color3.fromRGB(180, 160, 220)
+counterLabel.TextSize = 13
+counterLabel.Font = Enum.Font.Gotham
+counterLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Toggle button
+local toggleBtn = Instance.new("TextButton", main)
+toggleBtn.Size = UDim2.new(1, -24, 0, 46)
+toggleBtn.Position = UDim2.new(0, 12, 0, 136)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+toggleBtn.Text = "🟢 AUTO-CATCH: ON"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 15
+toggleBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 10)
+local toggleStroke = Instance.new("UIStroke", toggleBtn)
+toggleStroke.Color = Color3.fromRGB(120, 255, 160)
+toggleStroke.Thickness = 1
+toggleStroke.Transparency = 0.5
+
+-- Click Delay slider
+local delayLabel = Instance.new("TextLabel", main)
+delayLabel.Size = UDim2.new(1, -24, 0, 18)
+delayLabel.Position = UDim2.new(0, 12, 0, 192)
+delayLabel.BackgroundTransparency = 1
+delayLabel.Text = "Click Delay: 0.3s"
+delayLabel.TextColor3 = Color3.fromRGB(200, 180, 240)
+delayLabel.TextSize = 12
+delayLabel.Font = Enum.Font.Gotham
+delayLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local delaySlider = Instance.new("TextButton", main)
+delaySlider.Size = UDim2.new(1, -24, 0, 10)
+delaySlider.Position = UDim2.new(0, 12, 0, 214)
+delaySlider.BackgroundColor3 = Color3.fromRGB(50, 40, 70)
+delaySlider.Text = ""
+delaySlider.BorderSizePixel = 0
+Instance.new("UICorner", delaySlider).CornerRadius = UDim.new(1, 0)
+
+local delayFill = Instance.new("Frame", delaySlider)
+delayFill.Size = UDim2.new(0.2, 0, 1, 0)
+delayFill.BackgroundColor3 = Color3.fromRGB(160, 100, 255)
+delayFill.BorderSizePixel = 0
+Instance.new("UICorner", delayFill).CornerRadius = UDim.new(1, 0)
+
+local delayThumb = Instance.new("Frame", delaySlider)
+delayThumb.Size = UDim2.fromOffset(18, 18)
+delayThumb.Position = UDim2.new(0.2, -9, 0.5, -9)
+delayThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+delayThumb.BorderSizePixel = 0
+Instance.new("UICorner", delayThumb).CornerRadius = UDim.new(1, 0)
+
+-- Click Offset slider
+local offsetLabel = Instance.new("TextLabel", main)
+offsetLabel.Size = UDim2.new(1, -24, 0, 18)
+offsetLabel.Position = UDim2.new(0, 12, 0, 244)
+offsetLabel.BackgroundTransparency = 1
+offsetLabel.Text = "Click Offset: +36px"
+offsetLabel.TextColor3 = Color3.fromRGB(200, 180, 240)
+offsetLabel.TextSize = 12
+offsetLabel.Font = Enum.Font.Gotham
+offsetLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local offsetSlider = Instance.new("TextButton", main)
+offsetSlider.Size = UDim2.new(1, -24, 0, 10)
+offsetSlider.Position = UDim2.new(0, 12, 0, 266)
+offsetSlider.BackgroundColor3 = Color3.fromRGB(50, 40, 70)
+offsetSlider.Text = ""
+offsetSlider.BorderSizePixel = 0
+Instance.new("UICorner", offsetSlider).CornerRadius = UDim.new(1, 0)
+
+local offsetFill = Instance.new("Frame", offsetSlider)
+offsetFill.Size = UDim2.new(0.4, 0, 1, 0)
+offsetFill.BackgroundColor3 = Color3.fromRGB(160, 100, 255)
+offsetFill.BorderSizePixel = 0
+Instance.new("UICorner", offsetFill).CornerRadius = UDim.new(1, 0)
+
+local offsetThumb = Instance.new("Frame", offsetSlider)
+offsetThumb.Size = UDim2.fromOffset(18, 18)
+offsetThumb.Position = UDim2.new(0.4, -9, 0.5, -9)
+offsetThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+offsetThumb.BorderSizePixel = 0
+Instance.new("UICorner", offsetThumb).CornerRadius = UDim.new(1, 0)
+
+-- TP Button
+local tpBtn = Instance.new("TextButton", main)
+tpBtn.Size = UDim2.new(1, -24, 0, 44)
+tpBtn.Position = UDim2.new(0, 12, 0, 296)
+tpBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 220)
+tpBtn.Text = "📍 TP MERCHANT"
+tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpBtn.TextSize = 14
+tpBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 10)
+
+-- Reset Counter Button
+local resetBtn = Instance.new("TextButton", main)
+resetBtn.Size = UDim2.new(1, -24, 0, 36)
+resetBtn.Position = UDim2.new(0, 12, 0, 348)
+resetBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 70)
+resetBtn.Text = "🔄 RESET COUNTER"
+resetBtn.TextColor3 = Color3.fromRGB(200, 180, 240)
+resetBtn.TextSize = 13
+resetBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", resetBtn).CornerRadius = UDim.new(0, 8)
+
+-- Info
+local infoLabel = Instance.new("TextLabel", main)
+infoLabel.Size = UDim2.new(1, -24, 0, 20)
+infoLabel.Position = UDim2.new(0, 12, 1, -28)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "Hotkey: [V] = TP Merchant | Drag header untuk pindah"
+infoLabel.TextColor3 = Color3.fromRGB(140, 130, 170)
+infoLabel.TextSize = 10
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+-- ================================ UI LOGIC ================================
+-- Minimize toggle
+minBtn.MouseButton1Click:Connect(function()
+    State.Minimized = not State.Minimized
+    for _, v in ipairs(main:GetChildren()) do
+        if v ~= header then v.Visible = not State.Minimized end
+    end
+    main.Size = State.Minimized and UDim2.fromOffset(320, 42) or UDim2.fromOffset(320, 420)
+end)
+
+-- Toggle Auto-Catch
+toggleBtn.MouseButton1Click:Connect(function()
+    State.AutoCatch = not State.AutoCatch
+    if State.AutoCatch then
+        toggleBtn.Text = "🟢 AUTO-CATCH: ON"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+        toggleStroke.Color = Color3.fromRGB(120, 255, 160)
+        statusDot.BackgroundColor3 = Color3.fromRGB(80, 255, 120)
+        statusLabel.Text = "AUTO-CATCHING"
+        statusLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
+        startAutoCatch()
+    else
+        toggleBtn.Text = "🔴 AUTO-CATCH: OFF"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 80)
+        toggleStroke.Color = Color3.fromRGB(255, 100, 120)
+        statusDot.BackgroundColor3 = Color3.fromRGB(255, 80, 100)
+        statusLabel.Text = "IDLE"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
+        stopAutoCatch()
+    end
+end)
+
+-- Delay slider drag
+local draggingDelay = false
+delaySlider.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingDelay = true
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingDelay = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if draggingDelay and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local mousePos = UserInputService:GetMouseLocation()
+        local sliderPos = delaySlider.AbsolutePosition
+        local sliderSize = delaySlider.AbsoluteSize
+        local relativeX = math.clamp((mousePos.X - sliderPos.X) / sliderSize.X, 0, 1)
+        delayFill.Size = UDim2.new(relativeX, 0, 1, 0)
+        delayThumb.Position = UDim2.new(relativeX, -9, 0.5, -9)
+        State.ClickDelay = math.floor((0.05 + relativeX * 0.95) * 100) / 100
+        delayLabel.Text = "Click Delay: " .. State.ClickDelay .. "s"
+    end
+end)
+
+-- Offset slider drag
+local draggingOffset = false
+offsetSlider.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingOffset = true
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingOffset = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if draggingOffset and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local mousePos = UserInputService:GetMouseLocation()
+        local sliderPos = offsetSlider.AbsolutePosition
+        local sliderSize = offsetSlider.AbsoluteSize
+        local relativeX = math.clamp((mousePos.X - sliderPos.X) / sliderSize.X, 0, 1)
+        offsetFill.Size = UDim2.new(relativeX, 0, 1, 0)
+        offsetThumb.Position = UDim2.new(relativeX, -9, 0.5, -9)
+        State.ClickOffset = math.floor(relativeX * 100)
+        offsetLabel.Text = "Click Offset: +" .. State.ClickOffset .. "px"
+    end
+end)
+
+-- TP Button
+tpBtn.MouseButton1Click:Connect(function()
+    teleportToMerchant()
+end)
+
+-- Reset Counter
+resetBtn.MouseButton1Click:Connect(function()
+    State.ClickCount = 0
+    State.TPCount = 0
+    counterLabel.Text = "Klik: 0x | TP: 0x"
+end)
+
+-- Update counter loop
+task.spawn(function()
+    while gui.Parent do
+        task.wait(0.5)
+        counterLabel.Text = "Klik: " .. State.ClickCount .. "x | TP: " .. State.TPCount .. "x"
+    end
+end)
+
+-- ================================ HOTKEY ================================
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.V then
         teleportToMerchant()
     end
-})
+end)
 
--- ================================ INIT ================================
-notify("System", "XKID Catcher V3.36 Ready!", 3, "rocket")
+-- ================================ START ================================
+startAutoCatch()
+print("[XKID Catcher V3.37] Loaded! UI di tengah layar. Hotkey V = TP.")
