@@ -1,6 +1,6 @@
 -- =================================================================
--- @XKID SCANNER & REMOTE EVENT SPY V1.0
--- by @WTF.XKID | Full Auto Inspector & Hook Tool
+-- @XKID STEALTH INSPECTOR V2.0 (Anti-Kick / Undetectable)
+-- by @WTF.XKID | Safe Scanner & Non-Hooking Remote Reader
 -- =================================================================
 
 repeat task.wait() until game:IsLoaded()
@@ -19,69 +19,47 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LP = Players.LocalPlayer
 
-local Inspector = {
-    SpyActive = true,
-    CapturedRemotes = {},
-    DetectedAnimals = {},
-    DetectedUI = {},
-    Logs = {}
+local StealthEngine = {
+    Logs = {},
+    Animals = {},
+    RemotesFound = {},
+    UIElements = {}
 }
 
 local function notify(title, content, duration, icon)
     pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) end)
 end
 
-function Inspector:Log(msg)
+function StealthEngine:Log(msg)
     local t = os.date("%H:%M:%S")
     local entry = string.format("[%s] %s", t, msg)
     table.insert(self.Logs, entry)
     if #self.Logs > 150 then table.remove(self.Logs, 1) end
 end
 
--- ================================ REMOTE EVENT SPY ENGINE ================================
-local function initRemoteSpy()
-    local rawMeta = getrawmetatable(game)
-    local oldNamecall = rawMeta.__namecall
-    setreadonly(rawMeta, false)
+-- ================================ PASSIVE REMOTE SCANNER (SAFE) ================================
+function StealthEngine:ScanReplicatedRemotes()
+    self.RemotesFound = {}
+    local count = 0
 
-    rawMeta.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-
-        if Inspector.SpyActive and (method == "FireServer" or method == "fireServer" or method == "InvokeServer" or method == "invokeServer") then
-            local remoteName = self.Name
-            local remotePath = self:GetFullName()
-            
-            -- Format Argumen
-            local argFormatted = ""
-            for i, v in ipairs(args) do
-                argFormatted = argFormatted .. tostring(v) .. (i < #args and ", " or "")
-            end
-
-            local spyText = string.format("%s:%s(%s)", remoteName, method, argFormatted)
-            Inspector:Log("🔥 REMOTE: " .. spyText)
-
-            table.insert(Inspector.CapturedRemotes, {
-                Name = remoteName,
-                Path = remotePath,
-                Method = method,
-                Args = args,
-                FullCode = string.format("game.%s:%s(%s)", remotePath, method, argFormatted)
+    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            count = count + 1
+            table.insert(self.RemotesFound, {
+                Name = obj.Name,
+                Class = obj.ClassName,
+                Path = obj:GetFullName()
             })
         end
+    end
 
-        return oldNamecall(self, ...)
-    end)
-
-    setreadonly(rawMeta, true)
-    Inspector:Log("Remote Spy Hook Berhasil Dijalankan!")
+    self:Log(string.format("Scan Safe: Ditemukan %d RemoteEvent/RemoteFunction di ReplicatedStorage.", count))
+    return count
 end
 
-pcall(initRemoteSpy)
-
--- ================================ ANIMAL & MAP SCANNER ================================
-function Inspector:ScanMapAnimals()
-    self.DetectedAnimals = {}
+-- ================================ ANIMAL SCANNER (SAFE) ================================
+function StealthEngine:ScanAnimals()
+    self.Animals = {}
     local count = 0
 
     for _, obj in ipairs(Workspace:GetDescendants()) do
@@ -91,9 +69,8 @@ function Inspector:ScanMapAnimals()
 
             if hum and hrp and not Players:GetPlayerFromCharacter(obj) then
                 count = count + 1
-                table.insert(self.DetectedAnimals, {
+                table.insert(self.Animals, {
                     Name = obj.Name,
-                    Model = obj,
                     Position = hrp.Position,
                     Path = obj:GetFullName()
                 })
@@ -101,13 +78,13 @@ function Inspector:ScanMapAnimals()
         end
     end
 
-    self:Log(string.format("Scan Workspace: Ditemukan %d hewan/NPC.", count))
+    self:Log(string.format("Scan Map: Ditemukan total %d hewan/NPC di Workspace.", count))
     return count
 end
 
--- ================================ MINIGAME UI SCANNER ================================
-function Inspector:ScanMinigameUI()
-    self.DetectedUI = {}
+-- ================================ UI MINIGAME SCANNER (SAFE) ================================
+function StealthEngine:ScanMinigameUI()
+    self.UIElements = {}
     local pGui = LP:FindFirstChildOfClass("PlayerGui")
     if not pGui then return end
 
@@ -115,111 +92,110 @@ function Inspector:ScanMinigameUI()
         if gui:IsA("ScreenGui") and gui.Enabled then
             for _, btn in ipairs(gui:GetDescendants()) do
                 if (btn:IsA("ImageButton") or btn:IsA("TextButton") or btn:IsA("ImageLabel")) and btn.Visible then
-                    table.insert(self.DetectedUI, {
+                    table.insert(self.UIElements, {
                         GuiName = gui.Name,
                         Name = btn.Name,
                         Class = btn.ClassName,
-                        Path = btn:GetFullName(),
-                        Pos = btn.AbsolutePosition
+                        Path = btn:GetFullName()
                     })
                 end
             end
         end
     end
 
-    self:Log(string.format("UI Scan: Ditemukan %d elemen UI di layar.", #self.DetectedUI))
+    self:Log(string.format("UI Scan: Ditemukan %d elemen UI aktif di layar.", #self.UIElements))
 end
 
--- ================================ UI WINDUI BUILD ================================
+-- ================================ WINDUI SETUP ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID Remote & Animal Inspector",
-    Icon = "search",
+    Title = "XKID Stealth Inspector V2.0",
+    Icon = "shield-check",
     Author = "@WTF.XKID",
-    Folder = "XKID_Inspector",
-    Size = UDim2.fromOffset(590, 430),
+    Folder = "XKID_Stealth",
+    Size = UDim2.fromOffset(590, 420),
     Transparent = true,
     Theme = "Crimson",
     SideBarWidth = 170,
 })
 
--- TAB 1: CONSOLE & REMOTE SPY
-local TabSpy = Window:Tab({ Title = "Remote Spy", Icon = "terminal" })
-local secSpy = TabSpy:Section({ Title = "Live Remote Console", Icon = "code", Box = true })
+-- TAB 1: LOGS & SAFE REMOTES
+local TabSafe = Window:Tab({ Title = "Safe Remotes", Icon = "shield" })
+local secSafe = TabSafe:Section({ Title = "Replicated Remotes Map", Icon = "code", Box = true })
 
-local logParagraph = secSpy:Paragraph({ Title = "Console Output", Desc = "Menunggu aksi tangkap hewan..." })
+secSafe:Button({
+    Title = "Scan Remote Events (Passive / Safe) 🔍",
+    Desc = "Memindai daftar RemoteEvent di ReplicatedStorage tanpa hooking",
+    Callback = function()
+        local total = StealthEngine:ScanReplicatedRemotes()
+        notify("Safe Scan", string.format("Terdeteksi %d Remote Event", total), 2, "check")
+    end
+})
+
+secSafe:Button({
+    Title = "Copy Safe Remotes Code 📋",
+    Callback = function()
+        if #StealthEngine.RemotesFound > 0 then
+            local str = "-- REPLICATEDSTORAGE REMOTES DATA --\nlocal Remotes = {\n"
+            for i, r in ipairs(StealthEngine.RemotesFound) do
+                str = str .. string.format("    [%d] = { Name = %q, Class = %q, Path = %q },\n", i, r.Name, r.Class, r.Path)
+            end
+            str = str .. "}\nreturn Remotes"
+            setclipboard(str)
+            notify("Inspector", "Data Remote berhasil di-copy!", 2, "copy")
+        else
+            notify("Error", "Klik 'Scan Remote Events' terlebih dahulu!", 2, "alert-circle")
+        end
+    end
+})
+
+local logPanel = secSafe:Paragraph({ Title = "Activity Log", Desc = "Menunggu perintah..." })
 
 task.spawn(function()
     while task.wait(0.5) do
-        if #Inspector.Logs > 0 then
-            local text = table.concat(Inspector.Logs, "\n")
-            if #text > 2200 then text = text:sub(-2200) end
-            logParagraph:SetDesc(text)
+        if #StealthEngine.Logs > 0 then
+            local text = table.concat(StealthEngine.Logs, "\n")
+            if #text > 2000 then text = text:sub(-2000) end
+            logPanel:SetDesc(text)
         end
     end
 end)
 
-secSpy:Toggle({
-    Title = "Enable Remote Spy",
-    Default = true,
-    Callback = function(v)
-        Inspector.SpyActive = v
-        notify("Remote Spy", v and "AKTIF" or "OFF", 1.5, "radio")
-    end
-})
+-- TAB 2: ANIMALS & UI SCAN
+local TabData = Window:Tab({ Title = "Scanner Data", Icon = "scan" })
+local secData = TabData:Section({ Title = "Workspace & GUI Data", Icon = "database", Box = true })
 
-secSpy:Button({
-    Title = "Copy Captured Remote Code 📋",
-    Desc = "Salin kode RemoteEvent ke clipboard",
-    Callback = function()
-        if #Inspector.CapturedRemotes > 0 then
-            local str = "-- CAPTURED REMOTE EVENTS --\n"
-            for i, r in ipairs(Inspector.CapturedRemotes) do
-                str = str .. string.format("-- [%d] %s\n%s\n\n", i, r.Name, r.FullCode)
-            end
-            setclipboard(str)
-            notify("Inspector", "Kode Remote berhasil di-copy!", 2, "copy")
-        else
-            notify("Error", "Belum ada Remote terdeteksi! Tangkap 1 hewan dulu.", 2, "alert-circle")
-        end
-    end
-})
-
--- TAB 2: ANIMAL & UI SCANNER
-local TabScan = Window:Tab({ Title = "Scanner Data", Icon = "scan" })
-local secScan = TabScan:Section({ Title = "Map & UI Data", Icon = "database", Box = true })
-
-secScan:Button({
+secData:Button({
     Title = "Scan Jumlah Hewan di Map 🐕",
     Callback = function()
-        local total = Inspector:ScanMapAnimals()
+        local total = StealthEngine:ScanAnimals()
         notify("Animal Scan", string.format("Total Hewan Spawn: %d", total), 2, "check")
     end
 })
 
-secScan:Button({
+secData:Button({
     Title = "Copy Animal Data Code 📋",
     Callback = function()
-        if #Inspector.DetectedAnimals > 0 then
+        if #StealthEngine.Animals > 0 then
             local str = "-- DETECTED ANIMALS DATA --\nlocal Animals = {\n"
-            for i, a in ipairs(Inspector.DetectedAnimals) do
+            for i, a in ipairs(StealthEngine.Animals) do
                 str = str .. string.format("    [%d] = { Name = %q, Path = %q, Pos = Vector3.new(%.1f, %.1f, %.1f) },\n", i, a.Name, a.Path, a.Position.X, a.Position.Y, a.Position.Z)
             end
             str = str .. "}\nreturn Animals"
             setclipboard(str)
             notify("Inspector", "Data hewan berhasil di-copy!", 2, "copy")
         else
-            notify("Error", "Klik 'Scan Jumlah Hewan' dulu!", 2, "alert-circle")
+            notify("Error", "Klik 'Scan Jumlah Hewan' terlebih dahulu!", 2, "alert-circle")
         end
     end
 })
 
-secScan:Button({
-    Title = "Scan UI Minigame (Saat Popup Aktif) 🎮",
+secData:Button({
+    Title = "Scan UI Minigame (Buka Minigame Dulu) 🎮",
     Callback = function()
-        Inspector:ScanMinigameUI()
-        if #Inspector.DetectedUI > 0 then
+        StealthEngine:ScanMinigameUI()
+        if #StealthEngine.UIElements > 0 then
             local str = "-- MINIGAME UI DATA --\nlocal UIElements = {\n"
-            for i, u in ipairs(Inspector.DetectedUI) do
+            for i, u in ipairs(StealthEngine.UIElements) do
                 str = str .. string.format("    [%d] = { Gui = %q, Name = %q, Class = %q, Path = %q },\n", i, u.GuiName, u.Name, u.Class, u.Path)
             end
             str = str .. "}\nreturn UIElements"
@@ -231,4 +207,4 @@ secScan:Button({
     end
 })
 
-notify("System", "XKID Inspector Ready!", 3, "rocket")
+notify("System", "XKID Stealth Inspector Ready (Anti-Kick Mode)", 3, "shield-check")
