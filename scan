@@ -1,11 +1,10 @@
 -- =================================================================
--- @XKID ANIMAL SCANNER & LOG EXPORTER V3.37 (WindUI Integrated)
--- by @WTF.XKID | Precision Scanner + Merchant TP + Full Log Exporter
+-- @XKID DATA INSPECTOR & REMOTE SPY V1.0 (WindUI)
+-- by @WTF.XKID | Scan Hewan + Detect UI + Capture Remote Events
 -- =================================================================
 
 repeat task.wait() until game:IsLoaded()
 
--- ================================ WINDUI LOADER ================================
 local WindUI = (function()
     local s, r = pcall(function() 
         return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))() 
@@ -13,281 +12,224 @@ local WindUI = (function()
     if s then return r else error("Failed to load WindUI") end
 end)()
 
--- ================================ SERVICES ================================
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LP = Players.LocalPlayer
 
--- ================================ NOTIFY HELPER ================================
-local function notify(title, content, duration, icon)
-    pcall(function() 
-        WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) 
-    end)
-end
-
-local function getLocalRoot()
-    local char = LP.Character
-    return char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Head"))
-end
-
--- ================================ CORE SCANNER & EXPORTER ENGINE ================================
-local CatcherEngine = {
-    ScanRadius = 500,
-    FoundAnimals = {},
-    FoundUIElements = {},
-    Logs = {},
-    SelectedAnimal = nil
+local Inspector = {
+    SpyActive = true,
+    CapturedRemotes = {},
+    DetectedAnimals = {},
+    DetectedUI = {},
+    Logs = {}
 }
 
-function CatcherEngine:AddLog(msg)
-    local timestamp = os.date("%H:%M:%S")
-    local entry = string.format("[%s] %s", timestamp, msg)
-    table.insert(self.Logs, entry)
-    if #self.Logs > 100 then table.remove(self.Logs, 1) end
+local function notify(title, content, duration, icon)
+    pcall(function() WindUI:Notify({ Title = title, Content = content, Duration = duration or 2, Icon = icon or "bell" }) end)
 end
 
--- 1. SCAN MAP HEWAN & INTERAKSI
-function CatcherEngine:ScanAnimals()
-    local root = getLocalRoot()
-    if not root then return {} end
+function Inspector:Log(msg)
+    local t = os.date("%H:%M:%S")
+    local entry = string.format("[%s] %s", t, msg)
+    table.insert(self.Logs, entry)
+    if #self.Logs > 120 then table.remove(self.Logs, 1) end
+end
 
-    self.FoundAnimals = {}
-    
+-- ================================ 1. REMOTE EVENT SPY ENGINE ================================
+local function hookRemotes()
+    local rawMeta = getrawmetatable(game)
+    local oldNamecall = rawMeta.__namecall
+    setreadonly(rawMeta, false)
+
+    rawMeta.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+
+        if Inspector.SpyActive and (method == "FireServer" or method == "fireServer" or method == "InvokeServer" or method == "invokeServer") then
+            local remoteName = self.Name
+            local remotePath = self:GetFullName()
+            
+            -- Format argumen ke string
+            local argStrTable = {}
+            for i, v in ipairs(args) do
+                table.insert(argStrTable, tostring(v))
+            end
+            local argFormatted = table.concat(argStrTable, ", ")
+
+            local spyEntry = string.format("REMOTE DETECTED: %s:%s(%s)", remoteName, method, argFormatted)
+            Inspector:Log("🔥 " .. spyEntry)
+
+            table.insert(Inspector.CapturedRemotes, {
+                Name = remoteName,
+                Path = remotePath,
+                Method = method,
+                Args = args,
+                FormattedCode = string.format("game.%s:%s(%s)", remotePath, method, argFormatted)
+            })
+        end
+
+        return oldNamecall(self, ...)
+    end)
+
+    setreadonly(rawMeta, true)
+    Inspector:Log("Remote Spy Engine Hooked successfully!")
+end
+
+pcall(hookRemotes)
+
+-- ================================ 2. SCANNER ANIMAL & MAP ================================
+function Inspector:ScanMapAnimals()
+    self.DetectedAnimals = {}
+    local count = 0
+
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("Model") and obj ~= LP.Character then
             local hum = obj:FindFirstChildOfClass("Humanoid")
             local hrp = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart or obj:FindFirstChild("Head")
-            
-            -- Filter Hewan / NPC Mini-game
+
             if hum and hrp and not Players:GetPlayerFromCharacter(obj) then
-                local dist = (hrp.Position - root.Position).Magnitude
-                if dist <= self.ScanRadius then
-                    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-                    table.insert(self.FoundAnimals, {
-                        Model = obj,
-                        Name = obj.Name,
-                        Position = hrp.Position,
-                        CFrame = hrp.CFrame,
-                        Distance = math.floor(dist),
-                        Prompt = prompt
-                    })
-                end
+                count = count + 1
+                table.insert(self.DetectedAnimals, {
+                    Name = obj.Name,
+                    Model = obj,
+                    Position = hrp.Position,
+                    Path = obj:GetFullName()
+                })
             end
         end
     end
 
-    table.sort(self.FoundAnimals, function(a, b) return a.Distance < b.Distance end)
-    self:AddLog(string.format("Scan Selesai: %d Hewan Terdeteksi dalam Radius %dm", #self.FoundAnimals, self.ScanRadius))
-    return self.FoundAnimals
+    self:Log(string.format("Scan Map: Ditemukan total %d hewan aktif di Workspace.", count))
+    return count
 end
 
--- 2. SCAN UI/MINIGAME ELEMENT
-function CatcherEngine:ScanActiveUI()
-    self.FoundUIElements = {}
+-- ================================ 3. SCANNER MINIGAME UI ================================
+function Inspector:ScanMinigameUI()
+    self.DetectedUI = {}
     local pGui = LP:FindFirstChildOfClass("PlayerGui")
     if not pGui then return end
 
     for _, gui in ipairs(pGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Enabled then
-            for _, element in ipairs(gui:GetDescendants()) do
-                if (element:IsA("ImageButton") or element:IsA("TextButton") or element:IsA("ImageLabel")) and element.Visible then
-                    table.insert(self.FoundUIElements, {
+            for _, btn in ipairs(gui:GetDescendants()) do
+                if (btn:IsA("ImageButton") or btn:IsA("TextButton") or btn:IsA("ImageLabel")) and btn.Visible then
+                    table.insert(self.DetectedUI, {
                         GuiName = gui.Name,
-                        Name = element.Name,
-                        Class = element.ClassName,
-                        Position = element.AbsolutePosition,
-                        Size = element.AbsoluteSize
+                        Name = btn.Name,
+                        Class = btn.ClassName,
+                        Path = btn:GetFullName(),
+                        Pos = btn.AbsolutePosition,
+                        Size = btn.AbsoluteSize
                     })
                 end
             end
         end
     end
-    self:AddLog(string.format("UI Scan: %d Elemen UI Aktif Terdeteksi", #self.FoundUIElements))
+
+    self:Log(string.format("UI Inspector: Ditemukan %d elemen UI aktif di layar.", #self.DetectedUI))
 end
 
--- ================================ MERCHANT TELEPORT ================================
-local function teleportToMerchant()
-    local root = getLocalRoot()
-    if not root then
-        notify("Error", "Character tidak ditemukan!", 2, "alert-circle")
-        return
-    end
-
-    local sellBooth = Workspace:FindFirstChild("SellBooth", true)
-    if sellBooth then
-        local targetCF = sellBooth:IsA("Model") and (sellBooth.PrimaryPart or sellBooth:FindFirstChildWhichIsA("BasePart")).CFrame or sellBooth.CFrame
-        root.CFrame = targetCF * CFrame.new(0, 3, 3)
-        CatcherEngine:AddLog("Teleport ke SellBooth via Model Target")
-    else
-        root.CFrame = CFrame.new(642.5, -192.0, -980.0)
-        CatcherEngine:AddLog("Teleport ke SellBooth via Koordinat Presisi")
-    end
-    root.AssemblyLinearVelocity = Vector3.zero
-    notify("Merchant TP", "Berhasil Teleport ke Penjual!", 2, "store")
-end
-
--- ================================ UI INITIALIZATION ================================
+-- ================================ WINDUI SETUP ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID Catcher V3.37",
-    Icon = "bug",
+    Title = "XKID Inspector V1.0",
+    Icon = "search",
     Author = "@WTF.XKID",
-    Folder = "XKID_Catcher",
-    Size = UDim2.fromOffset(580, 420),
+    Folder = "XKID_Inspector",
+    Size = UDim2.fromOffset(600, 430),
     Transparent = true,
     Theme = "Crimson",
     SideBarWidth = 170,
 })
 
--- ================================ TAB 1: SCANNER & RADAR ================================
-local TabScan = Window:Tab({ Title = "Animal Radar", Icon = "radar" })
+-- TAB 1: REMOTE SPY & CONSOLE
+local TabSpy = Window:Tab({ Title = "Remote Spy", Icon = "terminal" })
+local secSpy = TabSpy:Section({ Title = "Console Output & Remotes", Icon = "code", Box = true })
 
-local secScan = TabScan:Section({ Title = "Map Scanner", Icon = "search", Box = true })
+local logParagraph = secSpy:Paragraph({ Title = "Real-Time Remote Logs", Desc = "Menunggu trigger minigame / tangkap hewan..." })
 
-secScan:Slider({
-    Title = "Scan Radius (Studs)",
-    Step = 50,
-    Value = { Min = 100, Max = 3000, Default = 500 },
-    Callback = function(v) CatcherEngine.ScanRadius = v end
+task.spawn(function()
+    while task.wait(0.5) do
+        if #Inspector.Logs > 0 then
+            local text = table.concat(Inspector.Logs, "\n")
+            if #text > 2200 then text = text:sub(-2200) end
+            logParagraph:SetDesc(text)
+        end
+    end
+end)
+
+secSpy:Toggle({
+    Title = "Enable Remote Spy",
+    Default = true,
+    Callback = function(v)
+        Inspector.SpyActive = v
+        notify("Remote Spy", v and "ACTIVE" or "OFF", 1.5, "radio")
+    end
 })
 
-local animalDropdown
-local animalDisplayNames = { "Belum ada hasil scan" }
-
-animalDropdown = secScan:Dropdown({
-    Title = "Pilih Hewan Terdekat",
-    Values = animalDisplayNames,
-    Callback = function(selected)
-        for _, animal in ipairs(CatcherEngine.FoundAnimals) do
-            local label = string.format("%s [%dm]", animal.Name, animal.Distance)
-            if label == selected then
-                CatcherEngine.SelectedAnimal = animal
-                CatcherEngine:AddLog("Target Dipilih: " .. animal.Name)
-                break
+secSpy:Button({
+    Title = "Copy Captured Remote Code 📋",
+    Desc = "Copy semua RemoteEvent yang terpanggil saat tangkap hewan",
+    Callback = function()
+        if #Inspector.CapturedRemotes > 0 then
+            local codeStr = "-- CAPTURED REMOTE EVENTS & FUNCTIONS --\n"
+            for i, r in ipairs(Inspector.CapturedRemotes) do
+                codeStr = codeStr .. string.format("-- [%d] %s\n%s\n\n", i, r.Name, r.FormattedCode)
             end
+            setclipboard(codeStr)
+            notify("Inspector", "Kode Remote berhasil di-copy ke clipboard!", 2, "copy")
+        else
+            notify("Error", "Belum ada Remote yang terdeteksi! Coba tangkap 1 hewan dulu.", 2, "alert-circle")
+        end
+    end
+})
+
+-- TAB 2: ANIMAL & UI SCANNER
+local TabScan = Window:Tab({ Title = "Map & UI Scan", Icon = "scan" })
+local secScan = TabScan:Section({ Title = "Data Scanner", Icon = "database", Box = true })
+
+secScan:Button({
+    Title = "Scan Jumlah Hewan di Map 🐕",
+    Callback = function()
+        local total = Inspector:ScanMapAnimals()
+        notify("Animal Scan", string.format("Total Hewan Spawn: %d", total), 2, "check")
+    end
+})
+
+secScan:Button({
+    Title = "Copy Animal Data Code 📋",
+    Callback = function()
+        if #Inspector.DetectedAnimals > 0 then
+            local str = "-- DETECTED ANIMALS IN WORKSPACE --\nlocal Animals = {\n"
+            for i, a in ipairs(Inspector.DetectedAnimals) do
+                str = str .. string.format("    [%d] = { Name = %q, Path = %q, Pos = Vector3.new(%.1f, %.1f, %.1f) },\n", i, a.Name, a.Path, a.Position.X, a.Position.Y, a.Position.Z)
+            end
+            str = str .. "}\nreturn Animals"
+            setclipboard(str)
+            notify("Inspector", "Data hewan berhasil di-copy!", 2, "copy")
+        else
+            notify("Error", "Klik 'Scan Jumlah Hewan' terlebih dahulu!", 2, "alert-circle")
         end
     end
 })
 
 secScan:Button({
-    Title = "Scan Map Hewan Sekarang 🔍",
+    Title = "Scan Minigame UI (Lakukan saat popup muncul) 🎮",
     Callback = function()
-        local list = CatcherEngine:ScanAnimals()
-        animalDisplayNames = {}
-        for _, a in ipairs(list) do
-            table.insert(animalDisplayNames, string.format("%s [%dm]", a.Name, a.Distance))
-        end
-        if #animalDisplayNames == 0 then table.insert(animalDisplayNames, "Hewan tidak ditemukan") end
-        
-        animalDropdown:Refresh(animalDisplayNames, true)
-        notify("Scanner", string.format("Terdeteksi %d Hewan!", #list), 2, "check")
-    end
-})
-
-local secPos = TabScan:Section({ Title = "Target Navigation & Merchant", Icon = "map-pin", Box = true })
-
-secPos:Button({
-    Title = "Dekati Hewan (Safe Distance) 📍",
-    Desc = "Mendekati hewan yang dipilih tanpa auto-catch",
-    Callback = function()
-        if CatcherEngine.SelectedAnimal and CatcherEngine.SelectedAnimal.Model then
-            local root = getLocalRoot()
-            if root then
-                root.CFrame = CatcherEngine.SelectedAnimal.CFrame * CFrame.new(0, 2, 3)
-                root.AssemblyLinearVelocity = Vector3.zero
-                CatcherEngine:AddLog("Mendekati hewan: " .. CatcherEngine.SelectedAnimal.Name)
-                notify("Navigation", "Berada di dekat " .. CatcherEngine.SelectedAnimal.Name, 1.5, "map-pin")
+        Inspector:ScanMinigameUI()
+        if #Inspector.DetectedUI > 0 then
+            local str = "-- DETECTED MINIGAME UI ELEMENTS --\nlocal UIElements = {\n"
+            for i, u in ipairs(Inspector.DetectedUI) do
+                str = str .. string.format("    [%d] = { Gui = %q, Name = %q, Class = %q, Path = %q },\n", i, u.GuiName, u.Name, u.Class, u.Path)
             end
+            str = str .. "}\nreturn UIElements"
+            setclipboard(str)
+            notify("Inspector", "Data UI Minigame berhasil di-copy ke clipboard!", 2, "copy")
         else
-            notify("Error", "Pilih hewan dari list dulu!", 2, "alert-circle")
+            notify("Error", "Buka minigame capung dulu di layar!", 2, "alert-circle")
         end
     end
 })
 
-secPos:Button({
-    Title = "Teleport ke Penjual (SellBooth) 🏪",
-    Desc = "Langsung teleport ke tempat jual hewan",
-    Callback = function()
-        teleportToMerchant()
-    end
-})
-
--- ================================ TAB 2: EXPORTER & CODE LOGS ================================
-local TabLog = Window:Tab({ Title = "Logs & Code Exporter", Icon = "file-text" })
-
-local secLog = TabLog:Section({ Title = "Real-time Console Log", Icon = "terminal", Box = true })
-
-local logPanel = secLog:Paragraph({ Title = "Activity Log", Desc = "Menunggu aktivitas..." })
-
-task.spawn(function()
-    while task.wait(0.5) do
-        if #CatcherEngine.Logs > 0 then
-            local text = table.concat(CatcherEngine.Logs, "\n")
-            if #text > 2000 then text = text:sub(-2000) end
-            logPanel:SetDesc(text)
-        end
-    end
-end)
-
-secLog:Button({
-    Title = "Clear Log Console",
-    Callback = function()
-        CatcherEngine.Logs = {}
-        logPanel:SetDesc("Log dibersihkan...")
-        notify("Log", "Log cleared", 1.5, "trash-2")
-    end
-})
-
-local secCopy = TabLog:Section({ Title = "Export Code / Clipboard", Icon = "copy", Box = true })
-
-secCopy:Button({
-    Title = "Copy Full Console Logs 📋",
-    Callback = function()
-        if #CatcherEngine.Logs > 0 then
-            setclipboard(table.concat(CatcherEngine.Logs, "\n"))
-            notify("Exporter", "Logs berhasil di-copy ke clipboard!", 2, "copy")
-        else
-            notify("Error", "Log masih kosong!", 2, "alert-circle")
-        end
-    end
-})
-
-secCopy:Button({
-    Title = "Copy Detected Animals Code Data 🐕",
-    Desc = "Copy daftar hewan terdekat dalam format Lua Table",
-    Callback = function()
-        if #CatcherEngine.FoundAnimals > 0 then
-            local codeStr = "-- XKID SCANNER DETECTED ANIMALS DATA --\nlocal DetectedAnimals = {\n"
-            for i, a in ipairs(CatcherEngine.FoundAnimals) do
-                codeStr = codeStr .. string.format("    [%d] = { Name = %q, Distance = %d, Position = Vector3.new(%.2f, %.2f, %.2f) },\n", i, a.Name, a.Distance, a.Position.X, a.Position.Y, a.Position.Z)
-            end
-            codeStr = codeStr .. "}\nreturn DetectedAnimals"
-            setclipboard(codeStr)
-            notify("Exporter", "Kode data hewan berhasil di-copy!", 2, "copy")
-        else
-            notify("Error", "Lakukan Scan Map Hewan terlebih dahulu!", 2, "alert-circle")
-        end
-    end
-})
-
-secCopy:Button({
-    Title = "Copy Minigame UI Elements Code Data 🎮",
-    Desc = "Copy struktur UI aktif di layar saat minigame berlangsung",
-    Callback = function()
-        CatcherEngine:ScanActiveUI()
-        if #CatcherEngine.FoundUIElements > 0 then
-            local codeStr = "-- XKID MINIGAME ACTIVE UI ELEMENTS --\nlocal ActiveUI = {\n"
-            for i, elem in ipairs(CatcherEngine.FoundUIElements) do
-                codeStr = codeStr .. string.format("    [%d] = { Gui = %q, Name = %q, Class = %q, Pos = Vector2.new(%.1f, %.1f) },\n", i, elem.GuiName, elem.Name, elem.Class, elem.Position.X, elem.Position.Y)
-            end
-            codeStr = codeStr .. "}\nreturn ActiveUI"
-            setclipboard(codeStr)
-            notify("Exporter", "Kode data UI berhasil di-copy!", 2, "copy")
-        else
-            notify("Error", "Buka minigame terlebih dahulu sebelum scan UI!", 2, "alert-circle")
-        end
-    end
-})
-
--- ================================ INIT ================================
-notify("System", "XKID Catcher V3.37 Ready!", 3, "rocket")
-CatcherEngine:AddLog("XKID Catcher V3.37 Initialized.")
+notify("System", "XKID Inspector & Remote Spy Active!", 3, "rocket")
+Inspector:Log("System Ready. Silakan coba tangkap hewan di game.")
