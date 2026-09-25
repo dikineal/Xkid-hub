@@ -1,12 +1,9 @@
--- @XKID SCRIPT V3.40
+-- @XKID SCRIPT V3.41
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.40:
--- - REMOVED: Auto Like Back (engine + UI + state)
--- - REMOVED: Admin Detector
--- - REMOVED: Auto Refresh Player List
--- - REMOVED: Anti Pisang (Anti-Ragdoll)
--- - ADDED: Freeze Mode (Statue) - karakter freeze total
--- - KEPT: Semua fitur V3.39 lainnya
+-- Changelog V3.41:
+-- - NoClip final (SavedCollision method - no getar)
+-- - Filter Settings sync dengan preset (auto-update)
+-- - KEPT: Semua fitur V3.40
 
 local ERROR_NOTIFY_OK, ERROR_MSG = pcall(function()
 
@@ -38,7 +35,7 @@ local function httpRequest(options)
     return rf(options)
 end
 getgenv()._XKID_REQUEST = httpRequest
-pcall(function() if setfpscap then setfpscap(9999) end end)
+pcall(function() if setfpscap then setfpscap(120) end end)
 
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -101,6 +98,7 @@ local State = {
     Avatar = { isRefreshing = false },
     Utility = { chatLog = false, chatTargets = {}, chatHistory = {} },
     FilterSettings = { saturation = 0, contrast = 0, brightness = 0, exposure = 0, shade = 0, warmth = 0, vignette = 0, bloomI = 0, bloomS = 24, lightB = 2, clockTime = 14 },
+    FilterSliders = {},
     SelfSpec = { active = false, mode = "Orbit 360", dist = 8, height = 3, orbitYaw = 0, orbitPitch = 20, fov = 70, origFov = 70, roll = 0, radius = 8, speed = 1, distanceMult = 1, heightOffset = 0, _crashInit = nil, _crashStartRadius = 8 },
     ESP = { active = false, cache = getgenv()._XKID_ESP_CACHE, maxDrawDistance = 300, highlightMode = false, boxColor_N = Color3.fromRGB(255,0,0), boxColor_S = Color3.fromRGB(220,20,60), boxColor_G = Color3.fromRGB(255,165,0), tracerColor_N = Color3.fromRGB(255,0,0), tracerColor_S = Color3.fromRGB(220,20,60), tracerColor_G = Color3.fromRGB(255,165,0), nameColor = Color3.fromRGB(255,255,255) },
     Spec = { active = false, target = nil, mode = "third", dist = 8, origFov = 70, orbitYaw = 0, orbitPitch = 0, isSelf = false }
@@ -116,7 +114,7 @@ local function formatTime(sec) local h = math.floor(sec/3600); local m = math.fl
 local function getConfigList() local list = {}; if executor.has_isfolder and executor.has_listfiles then pcall(function() if isfolder and isfolder("XKID_HUB") then for _, f in ipairs(listfiles("XKID_HUB")) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n then table.insert(list, n) end end end end end) end; if #list == 0 then table.insert(list, "No config") end; return list end
 local function isOnGround() local r = getRoot(); if not r then return false end; local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude; params.FilterDescendantsInstances = { LP.Character }; return workspace:Raycast(r.Position, Vector3.new(0,-5,0), params) ~= nil end
 
--- ================================ NOCLIP V3.40 FINAL ================================
+-- ================================ NOCLIP V3.41 FINAL (SAVEDCOLLISION) ================================
 local Noclip = false
 local NoclipConnection = nil
 local SavedCollision = {}
@@ -161,7 +159,6 @@ local function disableNoclip()
     SavedCollision = {}
 end
 
--- Wrapper untuk UI toggle
 local function SetNoclip(state)
     if state then
         Noclip = true
@@ -177,7 +174,7 @@ TrackC(LP.CharacterAdded:Connect(function()
     if Noclip then enableNoclip() end
 end))
 
--- ================================ FREEZE MODE (STATUE) ================================
+-- ================================ FREEZE MODE ================================
 local function enableFreeze()
     State.Freeze.active = true
     local hrp = getRoot()
@@ -213,7 +210,7 @@ local function enableFreeze()
             pcall(function() h:ChangeState(Enum.HumanoidStateType.Running) end)
         end
     end))
-    notify("Freeze Mode", "ON — Statue", 2, "snowflake")
+    notify("Freeze Mode", "ON", 2, "snowflake")
 end
 local function disableFreeze()
     State.Freeze.active = false
@@ -245,7 +242,7 @@ local sharedFPS = 60
 local sharedPing = 0
 
 TrackC(RunService.RenderStepped:Connect(function(dt) if dt > 0 then sharedFPS = math.floor(1/dt) end end))
-task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(0.5); pcall(function() local item = StatsService.Network.ServerStatsItem["Data Ping"]; if item then sharedPing = math.floor(item:GetValue()) end end) end end)
+task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1); pcall(function() local item = StatsService.Network.ServerStatsItem["Data Ping"]; if item then sharedPing = math.floor(item:GetValue()) end end) end end)
 task.spawn(function() while getgenv()._XKID_RUNNING do pcall(function() if tick() - lastMapCheck > 30 or not cachedMapName then cachedMapName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name; lastMapCheck = tick() end end); task.wait(5) end end)
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(120); collectgarbage("collect") end end)
 
@@ -431,7 +428,7 @@ task.spawn(function()
             end
             table.sort(tempSorted, function(a,b) return a.dist < b.dist end); espsortedPlayers = tempSorted
         end
-        task.wait(0.5)
+        task.wait(1)
     end
 end)
 
@@ -532,7 +529,7 @@ local function toggleFly(v)
     end)
 end
 
--- ================================ FREECAM ENGINE ================================
+-- ================================ FREECAM ================================
 local FC = { active = false, pos = Vector3.zero, pitchDeg = 0, yawDeg = 0, rollDeg = 0, speed = 3, sens = 0.25, origFov = 70, savedWalkSpeed = 16, savedJumpPower = 50 }
 local I_CamVel, I_YawVel, I_PitchVel, I_RollVel, heightVelocity = Vector3.zero, 0, 0, 0, 0
 local fcMoveTouch, fcMoveSt, fcJoy, fcRotTouch, fcRotLast, fcKeysHeld, fcConns = nil, nil, Vector2.zero, nil, nil, {}, {}
@@ -657,7 +654,7 @@ local function toggleFreecam(v)
     end
 end
 
--- ================================ CINEMATIC DIRECTOR ================================
+-- ================================ CINEMATIC ================================
 local SS = State.SelfSpec
 local ssTM, ssPinch, ssPinchD, ssPan, ssConns = nil, {}, nil, Vector2.zero, {}
 local function startSSGesture()
@@ -671,7 +668,6 @@ local function startSSGesture()
     table.insert(ssConns, UserInputService.InputEnded:Connect(function(inp) if inp.UserInputType ~= Enum.UserInputType.Touch then return end for i, v in ipairs(ssPinch) do if v == inp then table.remove(ssPinch, i) break end end ssPinchD = nil; ssTM = #ssPinch == 1 and ssPinch[1] or nil end))
 end
 local function stopSSGesture() for _, c in ipairs(ssConns) do c:Disconnect() end; ssConns = {}; ssTM = nil; ssPinch = {}; ssPinchD = nil; ssPan = Vector2.zero end
-
 local function startSelfSpecLoop()
     RunService:UnbindFromRenderStep("XKIDSelfSpec")
     RunService:BindToRenderStep("XKIDSelfSpec", Enum.RenderPriority.Camera.Value + 1, function()
@@ -795,7 +791,7 @@ end
 local function stopHardFling() stopHardFlingInternal(); notify("Hard Fling", "OFF", 1.5, "rotate-cw") end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
 
--- ================================ FILTERS ================================
+-- ================================ FILTERS + SYNC ================================
 local FILTER_PRESETS = {
     Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7 },
     Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2 },
@@ -823,6 +819,22 @@ local FILTER_PRESETS = {
     Reshade_Ultra = { tint = Color3.fromRGB(215,220,235), sat = 0.2, con = 0.3, bri = 0.05, bloomI = 0.5, bloomS = 32, time = 14, lightB = 1.8, shadow = true, envSpecular = 0.8, envDiffuse = 0.6, atmosphere = true },
     Reshade_RTX = { tint = Color3.fromRGB(210,215,235), sat = 0.25, con = 0.35, bri = 0.06, bloomI = 0.7, bloomS = 36, time = 14, lightB = 2.0, shadow = true, envSpecular = 1, envDiffuse = 1, atmosphere = true, sunRays = true },
 }
+
+local function syncSlidersFromSettings()
+    local S = State.FilterSliders
+    if S.saturation then pcall(function() S.saturation:SetValue(State.FilterSettings.saturation) end) end
+    if S.contrast then pcall(function() S.contrast:SetValue(State.FilterSettings.contrast) end) end
+    if S.brightness then pcall(function() S.brightness:SetValue(State.FilterSettings.brightness) end) end
+    if S.exposure then pcall(function() S.exposure:SetValue(State.FilterSettings.exposure) end) end
+    if S.shade then pcall(function() S.shade:SetValue(State.FilterSettings.shade) end) end
+    if S.warmth then pcall(function() S.warmth:SetValue(State.FilterSettings.warmth) end) end
+    if S.vignette then pcall(function() S.vignette:SetValue(State.FilterSettings.vignette) end) end
+    if S.bloomI then pcall(function() S.bloomI:SetValue(State.FilterSettings.bloomI) end) end
+    if S.bloomS then pcall(function() S.bloomS:SetValue(State.FilterSettings.bloomS) end) end
+    if S.lightB then pcall(function() S.lightB:SetValue(State.FilterSettings.lightB) end) end
+    if S.clockTime then pcall(function() S.clockTime:SetValue(State.FilterSettings.clockTime) end) end
+end
+
 local function resetFilterOnly() for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" or v.Name == "_XKID_SHADE" or v.Name == "_XKID_WARMTH" or v.Name == "_XKID_VIGNETTE" or v.Name == "_XKID_ATMO" then v:Destroy() end end end
 local function resetToDefaultRoblox()
     resetFilterOnly()
@@ -845,10 +857,19 @@ local function applyFilterSettings()
     if fs.vignette > 0 then local v = Instance.new("BloomEffect", Lighting); v.Name = "_XKID_VIGNETTE"; v.Intensity = fs.vignette / 20; v.Size = 10; v.Threshold = 0.5 end
     if fs.bloomI > 0 then local b = Instance.new("BloomEffect", Lighting); b.Name = "_XKID_FILTER"; b.Intensity = fs.bloomI / 5; b.Size = fs.bloomS end
 end
+
 local function applyFilter(filterName)
     resetFilterOnly()
     Lighting.ClockTime = originalLighting.ClockTime; Lighting.Brightness = originalLighting.Brightness; Lighting.Ambient = originalLighting.Ambient; Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient; Lighting.GlobalShadows = originalLighting.GlobalShadows; Lighting.FogEnd = originalLighting.FogEnd; Lighting.ExposureCompensation = originalLighting.ExposureCompensation
-    if filterName == "Default" then resetToDefaultRoblox(); return end
+    if filterName == "Default" then 
+        State.FilterSettings.saturation = 0; State.FilterSettings.contrast = 0; State.FilterSettings.brightness = 0
+        State.FilterSettings.exposure = 0; State.FilterSettings.shade = 0; State.FilterSettings.warmth = 0
+        State.FilterSettings.vignette = 0; State.FilterSettings.bloomI = 0; State.FilterSettings.bloomS = 24
+        State.FilterSettings.lightB = 2; State.FilterSettings.clockTime = 14
+        syncSlidersFromSettings()
+        resetToDefaultRoblox(); 
+        return 
+    end
     local preset = FILTER_PRESETS[filterName:gsub(" ", "_")]
     if preset then
         Lighting.ClockTime = preset.time or 14; Lighting.Brightness = preset.lightB or 1; Lighting.ExposureCompensation = preset.exp or 0; Lighting.GlobalShadows = preset.shadow ~= false
@@ -859,27 +880,28 @@ local function applyFilter(filterName)
         if preset.atmosphere then pcall(function() local atmo = Instance.new("Atmosphere", Lighting); atmo.Name = "_XKID_ATMO"; atmo.Density = 0.3; atmo.Haze = 0.5; atmo.Glare = 0.1 end) end
         if preset.sunRays then pcall(function() local sr = Instance.new("SunRaysEffect", Lighting); sr.Intensity = 0.15; sr.Spread = 0.5 end) end
         local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.TintColor = preset.tint; cc.Saturation = preset.sat or 0; cc.Contrast = preset.con or 0; cc.Brightness = preset.bri or 0
-        if preset then
-    ... (kode preset)
-    
-    -- Sync
-    State.FilterSettings.saturation = (preset.sat or 0) * 10
-    State.FilterSettings.contrast = (preset.con or 0) * 10
-    State.FilterSettings.brightness = (preset.bri or 0) * 10
-    State.FilterSettings.exposure = (preset.exp or 0) * 10
-    State.FilterSettings.shade = 0
-    State.FilterSettings.warmth = 0
-    State.FilterSettings.vignette = 0
-    State.FilterSettings.bloomI = (preset.bloomI or 0) * 5
-    State.FilterSettings.bloomS = preset.bloomS or 24
-    State.FilterSettings.lightB = preset.lightB or 2
-    State.FilterSettings.clockTime = preset.time or 14
-    
-    notify("Visuals", filterName, 2, "palette")
-end  
+        if preset.bloomI and preset.bloomI > 0 then local b = Instance.new("BloomEffect", Lighting); b.Name = "_XKID_FILTER"; b.Intensity = preset.bloomI; b.Size = preset.bloomS or 24 end
+        
+        -- SYNC: preset → FilterSettings + sliders
+        State.FilterSettings.saturation = (preset.sat or 0) * 10
+        State.FilterSettings.contrast = (preset.con or 0) * 10
+        State.FilterSettings.brightness = (preset.bri or 0) * 10
+        State.FilterSettings.exposure = (preset.exp or 0) * 10
+        State.FilterSettings.shade = 0
+        State.FilterSettings.warmth = 0
+        State.FilterSettings.vignette = 0
+        State.FilterSettings.bloomI = (preset.bloomI or 0) * 5
+        State.FilterSettings.bloomS = preset.bloomS or 24
+        State.FilterSettings.lightB = preset.lightB or 2
+        State.FilterSettings.clockTime = preset.time or 14
+        syncSlidersFromSettings()
+        
+        notify("Visuals", filterName, 2, "palette")
+    end
+end
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.40", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.41", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -888,7 +910,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.40", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.41", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -928,9 +950,8 @@ secAbi:Toggle({ Title = "Fly", Default = false, Callback = function(v) toggleFly
 secAbi:Slider({ Title = "Fly Speed", Step = 1, Value = { Min = 10, Max = 300, Default = 60 }, Callback = function(v) State.Move.flyS = v end })
 secAbi:Toggle({ Title = "NoClip", Default = false, Callback = function(v) SetNoclip(v); notify("NoClip", v and "ON" or "OFF", 1.5, "ghost") end })
 
--- FREEZE MODE SECTION
 local secFreeze = TabChar:Section({ Title = "Freeze / Statue Mode", Icon = "snowflake", Box = true })
-secFreeze:Toggle({ Title = "Freeze Mode (Statue)", Desc = "Karakter diam seperti patung — tidak bisa di-ragdoll/fling/push", Default = false, Callback = function(v) if v then enableFreeze() else disableFreeze() end end })
+secFreeze:Toggle({ Title = "Freeze Mode (Statue)", Desc = "Karakter diam seperti patung", Default = false, Callback = function(v) if v then enableFreeze() else disableFreeze() end end })
 secFreeze:Paragraph({ Title = "Info", Desc = "ON → freeze total.\nOFF → normal." })
 
 local secCamLock = TabChar:Section({ Title = "Camera Lock", Icon = "lock", Box = true })
@@ -1017,20 +1038,22 @@ secPresets:Dropdown({ Title = "Select Filter", Values = { "Default", "Mendung HD
 
 -- ================================ FILTER SETTINGS ================================
 local secFS = TabCamVis:Section({ Title = "Filter Settings", Icon = "sliders", Box = true })
-secFS:Slider({ Title = "Saturation", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.saturation = v; applyFilterSettings() end })
-secFS:Slider({ Title = "Contrast", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.contrast = v; applyFilterSettings() end })
-secFS:Slider({ Title = "Brightness", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.brightness = v; applyFilterSettings() end })
-secFS:Slider({ Title = "Exposure", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.exposure = v; applyFilterSettings() end })
-secFS:Slider({ Title = "Shade (Bayangan)", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.shade = v; applyFilterSettings() end })
-secFS:Slider({ Title = "Warmth (Suhu Warna)", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.warmth = v; applyFilterSettings() end })
-secFS:Slider({ Title = "Vignette", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.vignette = v; applyFilterSettings() end })
-secFS:Slider({ Title = "Bloom Intensity", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.bloomI = v; applyFilterSettings() end })
-secFS:Slider({ Title = "Bloom Size", Step = 1, Value = { Min = 0, Max = 56, Default = 24 }, Callback = function(v) State.FilterSettings.bloomS = v; applyFilterSettings() end })
-secFS:Slider({ Title = "Lighting Brightness", Step = 0.5, Value = { Min = 0, Max = 10, Default = 2 }, Callback = function(v) State.FilterSettings.lightB = v; applyFilterSettings() end })
-secFS:Slider({ Title = "ClockTime", Step = 0.5, Value = { Min = 0, Max = 24, Default = 14 }, Callback = function(v) State.FilterSettings.clockTime = v; applyFilterSettings() end })
+State.FilterSliders.saturation = secFS:Slider({ Title = "Saturation", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.saturation = v; applyFilterSettings() end })
+State.FilterSliders.contrast = secFS:Slider({ Title = "Contrast", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.contrast = v; applyFilterSettings() end })
+State.FilterSliders.brightness = secFS:Slider({ Title = "Brightness", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.brightness = v; applyFilterSettings() end })
+State.FilterSliders.exposure = secFS:Slider({ Title = "Exposure", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.exposure = v; applyFilterSettings() end })
+State.FilterSliders.shade = secFS:Slider({ Title = "Shade (Bayangan)", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.shade = v; applyFilterSettings() end })
+State.FilterSliders.warmth = secFS:Slider({ Title = "Warmth (Suhu Warna)", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.warmth = v; applyFilterSettings() end })
+State.FilterSliders.vignette = secFS:Slider({ Title = "Vignette", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.vignette = v; applyFilterSettings() end })
+State.FilterSliders.bloomI = secFS:Slider({ Title = "Bloom Intensity", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.bloomI = v; applyFilterSettings() end })
+State.FilterSliders.bloomS = secFS:Slider({ Title = "Bloom Size", Step = 1, Value = { Min = 0, Max = 56, Default = 24 }, Callback = function(v) State.FilterSettings.bloomS = v; applyFilterSettings() end })
+State.FilterSliders.lightB = secFS:Slider({ Title = "Lighting Brightness", Step = 0.5, Value = { Min = 0, Max = 10, Default = 2 }, Callback = function(v) State.FilterSettings.lightB = v; applyFilterSettings() end })
+State.FilterSliders.clockTime = secFS:Slider({ Title = "ClockTime", Step = 0.5, Value = { Min = 0, Max = 24, Default = 14 }, Callback = function(v) State.FilterSettings.clockTime = v; applyFilterSettings() end })
 secFS:Button({ Title = "Reset Filter Settings", Callback = function()
     for k, v in pairs({saturation=0,contrast=0,brightness=0,exposure=0,shade=0,warmth=0,vignette=0,bloomI=0,bloomS=24,lightB=2,clockTime=14}) do State.FilterSettings[k] = v end
-    applyFilterSettings(); notify("Filter", "Reset", 1.5, "rotate-ccw")
+    syncSlidersFromSettings()
+    applyFilterSettings()
+    notify("Filter", "Reset", 1.5, "rotate-ccw")
 end })
 
 -- ================================ TAB: ESP ================================
@@ -1142,7 +1165,7 @@ local secFile = TabSet:Section({ Title = "File Management", Icon = "folder", Box
 local cfgName = "XKID_Config_V3"; local currentConfig = "No config"
 secFile:Input({ Title = "Config Name", Value = "XKID_Config_V3", Callback = function(v) cfgName = v end })
 local function saveConfig() if executor.has_writefile then pcall(function() if not isfolder("XKID_HUB") then makefolder("XKID_HUB") end; local d = { Move = { ws = State.Move.ws, jp = State.Move.jp, flyS = State.Move.flyS }, ESP = { maxDrawDistance = State.ESP.maxDrawDistance, highlightMode = State.ESP.highlightMode }, Security = { shiftLock = State.Security.shiftLock }, HardFling = { power = State.HardFling.power }, FilterSettings = State.FilterSettings }; writefile("XKID_HUB/" .. cfgName .. ".json", HttpService:JSONEncode(d)); notify("Config", "Saved: " .. cfgName, 2, "save") end) else notify("Config", "Executor tidak support save file", 2, "circle-alert") end end
-local function loadConfig(selected) if selected == "No config" then return end; pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if d then if d.Move then State.Move.ws = d.Move.ws or 16; State.Move.jp = d.Move.jp or 50; State.Move.flyS = d.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300; State.ESP.highlightMode = d.ESP.highlightMode or false end; if d.HardFling then State.HardFling.power = d.HardFling.power or 10000 end; if d.FilterSettings then for k, v in pairs(d.FilterSettings) do State.FilterSettings[k] = v end; applyFilterSettings() end; notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
+local function loadConfig(selected) if selected == "No config" then return end; pcall(function() if executor.has_readfile and isfile and isfile("XKID_HUB/" .. selected .. ".json") then local d = HttpService:JSONDecode(readfile("XKID_HUB/" .. selected .. ".json")); if d then if d.Move then State.Move.ws = d.Move.ws or 16; State.Move.jp = d.Move.jp or 50; State.Move.flyS = d.Move.flyS or 60; local h = getHum(); if h then h.WalkSpeed = State.Move.ws; h.UseJumpPower = true; h.JumpPower = State.Move.jp end end; if d.ESP then State.ESP.maxDrawDistance = d.ESP.maxDrawDistance or 300; State.ESP.highlightMode = d.ESP.highlightMode or false end; if d.HardFling then State.HardFling.power = d.HardFling.power or 10000 end; if d.FilterSettings then for k, v in pairs(d.FilterSettings) do State.FilterSettings[k] = v end; syncSlidersFromSettings(); applyFilterSettings() end; notify("Config", "Loaded: " .. selected, 2, "folder-open") end end end) end
 secFile:Button({ Title = "Save Config", Callback = saveConfig })
 local configDrop = secFile:Dropdown({ Title = "Load Config", Values = getConfigList(), Callback = function(selected) currentConfig = selected; loadConfig(selected) end })
 secFile:Button({ Title = "Delete Config", Callback = function() if currentConfig ~= "No config" and currentConfig ~= "" and executor.has_listfiles then pcall(function() if isfile and delfile and isfile("XKID_HUB/" .. currentConfig .. ".json") then delfile("XKID_HUB/" .. currentConfig .. ".json"); pcall(function() configDrop:Refresh(getConfigList()) end); currentConfig = "No config"; notify("Config", "Deleted", 2, "trash-2") end end) end end })
@@ -1150,18 +1173,18 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.40 AKTIF", 3, "rocket")
+notify("System", "XKID_HUB V3.41 AKTIF", 3, "rocket")
 
 end)  -- CLOSE ERROR WRAPPER
 
 if not ERROR_NOTIFY_OK and ERROR_MSG then
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "❌ XKID V3.40 ERROR",
+            Title = "❌ XKID V3.41 ERROR",
             Text = tostring(ERROR_MSG):sub(1, 300),
             Duration = 15,
             Icon = "rbxassetid://12187365364"
         })
     end)
-    warn("[XKID V3.40] Script error: " .. tostring(ERROR_MSG))
+    warn("[XKID V3.41] Script error: " .. tostring(ERROR_MSG))
 end
