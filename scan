@@ -795,96 +795,90 @@ end
 local function stopHardFling() stopHardFlingInternal(); notify("Hard Fling", "OFF", 1.5, "rotate-cw") end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
 
--- ================================ CATCHER ENGINE V3.42 (FIXED HEARTBEAT) ================================
-local function fireCatcherClick(x, y)
-    if VirtualInputManager and VirtualInputManager.SendMouseButtonEvent then
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-            task.wait(0.01)
-            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
-        end)
-        return true
-    end
-    return false
+-- ================================ CATCHER ENGINE V3.42 (VERSI ASLI KAU) ================================
+local AutoCatchEngine = {
+    Enabled = false,
+    ClickDelay = 0.03,
+    Conn = nil
+}
+
+local function fireClick(x, y)
+    VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+    task.wait(0.01)
+    VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
 end
 
-local function startCatcherEngine()
-    if State.Catcher.Conn then
-        pcall(function() task.cancel(State.Catcher.Conn) end)
-        State.Catcher.Conn = nil
-    end
-    
-    State.Catcher.Conn = task.spawn(function()
-        while State.Catcher.Enabled and getgenv()._XKID_RUNNING do
-            task.wait(0.1)
-            
-            if tick() - State.Catcher.LastClickTime < State.Catcher.ClickDelay then continue end
-            
-            local playerGui = LP:FindFirstChildOfClass("PlayerGui")
-            if not playerGui then continue end
-            
-            local clicked = false
-            for _, gui in ipairs(playerGui:GetChildren()) do
-                if not gui:IsA("ScreenGui") or not gui.Enabled then continue end
+function AutoCatchEngine:Start()
+    if self.Conn then self.Conn:Disconnect() end
+
+    self.Conn = RunService.Heartbeat:Connect(function()
+        if not self.Enabled then return end
+
+        local playerGui = LP:FindFirstChildOfClass("PlayerGui")
+        if not playerGui then return end
+
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
                 for _, element in ipairs(gui:GetDescendants()) do
-                    if not (element:IsA("ImageButton") or element:IsA("TextButton") or element:IsA("ImageLabel")) then continue end
-                    if not element.Visible then continue end
-                    
-                    local isTarget = false
-                    local nameLower = element.Name:lower()
-                    local parentName = element.Parent and element.Parent.Name:lower() or ""
-                    
-                    if nameLower:find("net") or nameLower:find("jaring") or nameLower:find("catch") or nameLower:find("action") then isTarget = true end
-                    if nameLower:find("capung") or nameLower:find("animal") or parentName:find("tangkap") or parentName:find("minigame") then isTarget = true end
-                    
-                    if not isTarget and element:IsA("ImageButton") and element.Image ~= "" then
-                        local pos = element.AbsolutePosition
-                        local vp = Camera.ViewportSize
-                        if pos.Y > (vp.Y * 0.5) and math.abs(pos.X - (vp.X * 0.5)) < (vp.X * 0.35) then isTarget = true end
-                    end
-                    
-                    if isTarget then
-                        pcall(function()
-                            if getconnections then
+                    if (element:IsA("ImageButton") or element:IsA("TextButton") or element:IsA("ImageLabel")) and element.Visible then
+                        
+                        local isTarget = false
+                        local nameLower = element.Name:lower()
+                        local parentName = element.Parent and element.Parent.Name:lower() or ""
+
+                        if nameLower:find("net") or nameLower:find("jaring") or nameLower:find("catch") or nameLower:find("action") then
+                            isTarget = true
+                        end
+
+                        if nameLower:find("capung") or nameLower:find("animal") or parentName:find("tangkap") or parentName:find("minigame") then
+                            isTarget = true
+                        end
+
+                        if not isTarget and element:IsA("ImageButton") and element.Image ~= "" then
+                            local pos = element.AbsolutePosition
+                            local vp = workspace.CurrentCamera.ViewportSize
+                            if pos.Y > (vp.Y * 0.5) and math.abs(pos.X - (vp.X * 0.5)) < (vp.X * 0.35) then
+                                isTarget = true
+                            end
+                        end
+
+                        if isTarget then
+                            pcall(function()
                                 for _, conn in ipairs(getconnections(element.MouseButton1Click)) do conn:Fire() end
                                 for _, conn in ipairs(getconnections(element.Activated)) do conn:Fire() end
                                 for _, conn in ipairs(getconnections(element.TouchTap)) do conn:Fire() end
-                            end
-                        end)
-                        
-                        pcall(function() if element.Activate then element:Activate() end end)
-                        
-                        local pos = element.AbsolutePosition
-                        local size = element.AbsoluteSize
-                        fireCatcherClick(pos.X + (size.X / 2), pos.Y + (size.Y / 2) + State.Catcher.ClickOffset)
-                        
-                        State.Catcher.ClickCount = State.Catcher.ClickCount + 1
-                        State.Catcher.LastClickTime = tick()
-                        clicked = true
-                        break
+                            end)
+
+                            local pos = element.AbsolutePosition
+                            local size = element.AbsoluteSize
+                            fireClick(pos.X + (size.X / 2), pos.Y + (size.Y / 2) + State.Catcher.ClickOffset)
+
+                            task.wait(self.ClickDelay)
+                            break
+                        end
                     end
                 end
-                if clicked then break end
             end
         end
     end)
 end
 
-local function stopCatcherEngine()
-    State.Catcher.Enabled = false
-    if State.Catcher.Conn then
-        pcall(function() task.cancel(State.Catcher.Conn) end)
-        State.Catcher.Conn = nil
+function AutoCatchEngine:Stop()
+    self.Enabled = false
+    if self.Conn then
+        self.Conn:Disconnect()
+        self.Conn = nil
     end
 end
 
 local function toggleCatcher(v)
+    AutoCatchEngine.Enabled = v
     State.Catcher.Enabled = v
     if v then
-        startCatcherEngine()
+        AutoCatchEngine:Start()
         notify("Auto Catch", "ON — Catching...", 2, "net")
     else
-        stopCatcherEngine()
+        AutoCatchEngine:Stop()
         notify("Auto Catch", "OFF", 1.5, "net")
     end
 end
