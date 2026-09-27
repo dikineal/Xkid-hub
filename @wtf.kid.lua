@@ -1,9 +1,11 @@
--- @XKID SCRIPT V3.41
+-- @XKID SCRIPT V3.43
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.41:
--- - NoClip final (SavedCollision method - no getar)
--- - Filter Settings sync dengan preset (auto-update)
--- - KEPT: Semua fitur V3.40
+-- Changelog V3.43:
+-- - FIXED: Filter Default reset ke originalLighting (bukan hardcode)
+-- - FIXED: Filter Settings sync penuh (ClockTime, Saturation, dll)
+-- - FIXED: Reshade envSpecular/sunRays/atmosphere tidak hilang
+-- - NoClip final (SavedCollision - no getar)
+-- - KEPT: Semua fitur V3.41
 
 local ERROR_NOTIFY_OK, ERROR_MSG = pcall(function()
 
@@ -55,7 +57,6 @@ local onMobile = not UserInputService.KeyboardEnabled
 getgenv()._XKID_UI_LOADING = true
 
 local originalLighting = { ClockTime = Lighting.ClockTime, Brightness = Lighting.Brightness, Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient, GlobalShadows = Lighting.GlobalShadows, ExposureCompensation = Lighting.ExposureCompensation, FogEnd = Lighting.FogEnd }
-local defaultLighting = { ClockTime = 14, Brightness = 2, Ambient = Color3.fromRGB(127,127,127), OutdoorAmbient = Color3.fromRGB(127,127,127), GlobalShadows = false, ExposureCompensation = 0, FogEnd = 100000 }
 
 if getgenv()._XKID_RUNNING then getgenv()._XKID_RUNNING = false; task.wait(0.5) end
 if getgenv()._XKID_ESP_CACHE then
@@ -97,7 +98,7 @@ local State = {
     Cinema = { hideUI = false, cachedGuis = {} },
     Avatar = { isRefreshing = false },
     Utility = { chatLog = false, chatTargets = {}, chatHistory = {} },
-    FilterSettings = { saturation = 0, contrast = 0, brightness = 0, exposure = 0, shade = 0, warmth = 0, vignette = 0, bloomI = 0, bloomS = 24, lightB = 2, clockTime = 14 },
+    FilterSettings = { saturation = 0, contrast = 0, brightness = 0, exposure = 0, shade = 0, warmth = 0, vignette = 0, bloomI = 0, bloomS = 24, lightB = originalLighting.Brightness, clockTime = originalLighting.ClockTime },
     FilterSliders = {},
     SelfSpec = { active = false, mode = "Orbit 360", dist = 8, height = 3, orbitYaw = 0, orbitPitch = 20, fov = 70, origFov = 70, roll = 0, radius = 8, speed = 1, distanceMult = 1, heightOffset = 0, _crashInit = nil, _crashStartRadius = 8 },
     ESP = { active = false, cache = getgenv()._XKID_ESP_CACHE, maxDrawDistance = 300, highlightMode = false, boxColor_N = Color3.fromRGB(255,0,0), boxColor_S = Color3.fromRGB(220,20,60), boxColor_G = Color3.fromRGB(255,165,0), tracerColor_N = Color3.fromRGB(255,0,0), tracerColor_S = Color3.fromRGB(220,20,60), tracerColor_G = Color3.fromRGB(255,165,0), nameColor = Color3.fromRGB(255,255,255) },
@@ -114,7 +115,7 @@ local function formatTime(sec) local h = math.floor(sec/3600); local m = math.fl
 local function getConfigList() local list = {}; if executor.has_isfolder and executor.has_listfiles then pcall(function() if isfolder and isfolder("XKID_HUB") then for _, f in ipairs(listfiles("XKID_HUB")) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n then table.insert(list, n) end end end end end) end; if #list == 0 then table.insert(list, "No config") end; return list end
 local function isOnGround() local r = getRoot(); if not r then return false end; local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude; params.FilterDescendantsInstances = { LP.Character }; return workspace:Raycast(r.Position, Vector3.new(0,-5,0), params) ~= nil end
 
--- ================================ NOCLIP V3.41 FINAL (SAVEDCOLLISION) ================================
+-- ================================ NOCLIP V3.43 (SAVEDCOLLISION) ================================
 local Noclip = false
 local NoclipConnection = nil
 local SavedCollision = {}
@@ -791,7 +792,7 @@ end
 local function stopHardFling() stopHardFlingInternal(); notify("Hard Fling", "OFF", 1.5, "rotate-cw") end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
 
--- ================================ FILTERS + SYNC ================================
+-- ================================ FILTERS + SYNC FIX ================================
 local FILTER_PRESETS = {
     Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7 },
     Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2 },
@@ -820,6 +821,9 @@ local FILTER_PRESETS = {
     Reshade_RTX = { tint = Color3.fromRGB(210,215,235), sat = 0.25, con = 0.35, bri = 0.06, bloomI = 0.7, bloomS = 36, time = 14, lightB = 2.0, shadow = true, envSpecular = 1, envDiffuse = 1, atmosphere = true, sunRays = true },
 }
 
+local suppressFilterSettings = false
+local _currentFilter = "Default"
+
 local function syncSlidersFromSettings()
     local S = State.FilterSliders
     if S.saturation then pcall(function() S.saturation:SetValue(State.FilterSettings.saturation) end) end
@@ -835,54 +839,137 @@ local function syncSlidersFromSettings()
     if S.clockTime then pcall(function() S.clockTime:SetValue(State.FilterSettings.clockTime) end) end
 end
 
-local function resetFilterOnly() for _, v in pairs(Lighting:GetChildren()) do if v.Name == "_XKID_FILTER" or v.Name == "_XKID_SHADE" or v.Name == "_XKID_WARMTH" or v.Name == "_XKID_VIGNETTE" or v.Name == "_XKID_ATMO" then v:Destroy() end end end
+local function resetFilterOnly() 
+    for _, v in pairs(Lighting:GetChildren()) do 
+        if v.Name == "_XKID_FILTER" or v.Name == "_XKID_SHADE" or v.Name == "_XKID_WARMTH" or v.Name == "_XKID_VIGNETTE" or v.Name == "_XKID_ATMO" or v.Name == "_XKID_RAYS" then 
+            v:Destroy() 
+        end 
+    end
+    pcall(function() Lighting.EnvironmentSpecularScale = 0 end)
+    pcall(function() Lighting.EnvironmentDiffuseScale = 0 end)
+end
+
 local function resetToDefaultRoblox()
     resetFilterOnly()
-    Lighting.ClockTime = defaultLighting.ClockTime; Lighting.Brightness = defaultLighting.Brightness
-    Lighting.Ambient = defaultLighting.Ambient; Lighting.OutdoorAmbient = defaultLighting.OutdoorAmbient
-    Lighting.GlobalShadows = defaultLighting.GlobalShadows; Lighting.ExposureCompensation = defaultLighting.ExposureCompensation; Lighting.FogEnd = defaultLighting.FogEnd
-    notify("Visuals", "Default Roblox", 1.5, "palette")
+    Lighting.ClockTime = originalLighting.ClockTime
+    Lighting.Brightness = originalLighting.Brightness
+    Lighting.Ambient = originalLighting.Ambient
+    Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+    Lighting.GlobalShadows = originalLighting.GlobalShadows
+    Lighting.ExposureCompensation = originalLighting.ExposureCompensation
+    Lighting.FogEnd = originalLighting.FogEnd
+    notify("Visuals", "Default (Original)", 1.5, "palette")
 end
+
 local function applyFilterSettings()
     resetFilterOnly()
     local fs = State.FilterSettings
     Lighting.Brightness = fs.lightB
     Lighting.ClockTime = fs.clockTime
-    local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"
+    local cc = Instance.new("ColorCorrectionEffect", Lighting)
+    cc.Name = "_XKID_FILTER"
     cc.TintColor = Color3.fromRGB(255, 255, 255)
-    cc.Saturation = fs.saturation / 10; cc.Contrast = fs.contrast / 10; cc.Brightness = fs.brightness / 10
+    cc.Saturation = fs.saturation / 10
+    cc.Contrast = fs.contrast / 10
+    cc.Brightness = fs.brightness / 10
     Lighting.ExposureCompensation = fs.exposure / 10
-    if fs.shade > 0 then local s = Instance.new("ColorCorrectionEffect", Lighting); s.Name = "_XKID_SHADE"; local sv = 1 - (fs.shade / 10); s.TintColor = Color3.fromRGB(sv*255,sv*255,sv*255); s.Brightness = -fs.shade / 30; s.Contrast = fs.shade / 50 end
-    if fs.warmth ~= 0 then local w = Instance.new("ColorCorrectionEffect", Lighting); w.Name = "_XKID_WARMTH"; local wv = math.clamp(fs.warmth / 10, -1, 1); if wv > 0 then w.TintColor = Color3.fromRGB(255, 255 - wv*150, 255 - wv*200) else local w2 = -wv; w.TintColor = Color3.fromRGB(255 - w2*150, 255 - w2*50, 255) end end
-    if fs.vignette > 0 then local v = Instance.new("BloomEffect", Lighting); v.Name = "_XKID_VIGNETTE"; v.Intensity = fs.vignette / 20; v.Size = 10; v.Threshold = 0.5 end
-    if fs.bloomI > 0 then local b = Instance.new("BloomEffect", Lighting); b.Name = "_XKID_FILTER"; b.Intensity = fs.bloomI / 5; b.Size = fs.bloomS end
+    if fs.shade > 0 then 
+        local s = Instance.new("ColorCorrectionEffect", Lighting)
+        s.Name = "_XKID_SHADE"
+        local sv = 1 - (fs.shade / 10)
+        s.TintColor = Color3.fromRGB(sv*255,sv*255,sv*255)
+        s.Brightness = -fs.shade / 30
+        s.Contrast = fs.shade / 50
+    end
+    if fs.warmth ~= 0 then 
+        local w = Instance.new("ColorCorrectionEffect", Lighting)
+        w.Name = "_XKID_WARMTH"
+        local wv = math.clamp(fs.warmth / 10, -1, 1)
+        if wv > 0 then 
+            w.TintColor = Color3.fromRGB(255, 255 - wv*150, 255 - wv*200) 
+        else 
+            local w2 = -wv
+            w.TintColor = Color3.fromRGB(255 - w2*150, 255 - w2*50, 255) 
+        end 
+    end
+    if fs.vignette > 0 then 
+        local v = Instance.new("BloomEffect", Lighting)
+        v.Name = "_XKID_VIGNETTE"
+        v.Intensity = fs.vignette / 20
+        v.Size = 10
+        v.Threshold = 0.5 
+    end
+    if fs.bloomI > 0 then 
+        local b = Instance.new("BloomEffect", Lighting)
+        b.Name = "_XKID_FILTER"
+        b.Intensity = fs.bloomI / 5
+        b.Size = fs.bloomS 
+    end
 end
 
 local function applyFilter(filterName)
+    _currentFilter = filterName
     resetFilterOnly()
-    Lighting.ClockTime = originalLighting.ClockTime; Lighting.Brightness = originalLighting.Brightness; Lighting.Ambient = originalLighting.Ambient; Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient; Lighting.GlobalShadows = originalLighting.GlobalShadows; Lighting.FogEnd = originalLighting.FogEnd; Lighting.ExposureCompensation = originalLighting.ExposureCompensation
+    
+    Lighting.ClockTime = originalLighting.ClockTime
+    Lighting.Brightness = originalLighting.Brightness
+    Lighting.Ambient = originalLighting.Ambient
+    Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+    Lighting.GlobalShadows = originalLighting.GlobalShadows
+    Lighting.FogEnd = originalLighting.FogEnd
+    Lighting.ExposureCompensation = originalLighting.ExposureCompensation
+    pcall(function() Lighting.EnvironmentSpecularScale = 0 end)
+    pcall(function() Lighting.EnvironmentDiffuseScale = 0 end)
+    
     if filterName == "Default" then 
-        State.FilterSettings.saturation = 0; State.FilterSettings.contrast = 0; State.FilterSettings.brightness = 0
-        State.FilterSettings.exposure = 0; State.FilterSettings.shade = 0; State.FilterSettings.warmth = 0
-        State.FilterSettings.vignette = 0; State.FilterSettings.bloomI = 0; State.FilterSettings.bloomS = 24
-        State.FilterSettings.lightB = 2; State.FilterSettings.clockTime = 14
+        State.FilterSettings.saturation = 0
+        State.FilterSettings.contrast = 0
+        State.FilterSettings.brightness = 0
+        State.FilterSettings.exposure = 0
+        State.FilterSettings.shade = 0
+        State.FilterSettings.warmth = 0
+        State.FilterSettings.vignette = 0
+        State.FilterSettings.bloomI = 0
+        State.FilterSettings.bloomS = 24
+        State.FilterSettings.lightB = originalLighting.Brightness or 2
+        State.FilterSettings.clockTime = originalLighting.ClockTime or 14
+        
+        suppressFilterSettings = true
         syncSlidersFromSettings()
-        resetToDefaultRoblox(); 
+        suppressFilterSettings = false
+        
+        resetToDefaultRoblox() 
         return 
     end
+    
     local preset = FILTER_PRESETS[filterName:gsub(" ", "_")]
     if preset then
-        Lighting.ClockTime = preset.time or 14; Lighting.Brightness = preset.lightB or 1; Lighting.ExposureCompensation = preset.exp or 0; Lighting.GlobalShadows = preset.shadow ~= false
+        Lighting.ClockTime = preset.time or 14
+        Lighting.Brightness = preset.lightB or 1
+        Lighting.ExposureCompensation = preset.exp or 0
+        Lighting.GlobalShadows = preset.shadow ~= false
+        
         if preset.ambient then Lighting.Ambient = preset.ambient end
         if preset.outdoor then Lighting.OutdoorAmbient = preset.outdoor end
         if preset.envSpecular then pcall(function() Lighting.EnvironmentSpecularScale = preset.envSpecular end) end
         if preset.envDiffuse then pcall(function() Lighting.EnvironmentDiffuseScale = preset.envDiffuse end) end
         if preset.atmosphere then pcall(function() local atmo = Instance.new("Atmosphere", Lighting); atmo.Name = "_XKID_ATMO"; atmo.Density = 0.3; atmo.Haze = 0.5; atmo.Glare = 0.1 end) end
-        if preset.sunRays then pcall(function() local sr = Instance.new("SunRaysEffect", Lighting); sr.Intensity = 0.15; sr.Spread = 0.5 end) end
-        local cc = Instance.new("ColorCorrectionEffect", Lighting); cc.Name = "_XKID_FILTER"; cc.TintColor = preset.tint; cc.Saturation = preset.sat or 0; cc.Contrast = preset.con or 0; cc.Brightness = preset.bri or 0
-        if preset.bloomI and preset.bloomI > 0 then local b = Instance.new("BloomEffect", Lighting); b.Name = "_XKID_FILTER"; b.Intensity = preset.bloomI; b.Size = preset.bloomS or 24 end
+        if preset.sunRays then pcall(function() local sr = Instance.new("SunRaysEffect", Lighting); sr.Name = "_XKID_RAYS"; sr.Intensity = 0.15; sr.Spread = 0.5 end) end
         
-        -- SYNC: preset → FilterSettings + sliders
+        local cc = Instance.new("ColorCorrectionEffect", Lighting)
+        cc.Name = "_XKID_FILTER"
+        cc.TintColor = preset.tint
+        cc.Saturation = preset.sat or 0
+        cc.Contrast = preset.con or 0
+        cc.Brightness = preset.bri or 0
+        
+        if preset.bloomI and preset.bloomI > 0 then 
+            local b = Instance.new("BloomEffect", Lighting)
+            b.Name = "_XKID_FILTER"
+            b.Intensity = preset.bloomI
+            b.Size = preset.bloomS or 24
+        end
+        
         State.FilterSettings.saturation = (preset.sat or 0) * 10
         State.FilterSettings.contrast = (preset.con or 0) * 10
         State.FilterSettings.brightness = (preset.bri or 0) * 10
@@ -894,14 +981,17 @@ local function applyFilter(filterName)
         State.FilterSettings.bloomS = preset.bloomS or 24
         State.FilterSettings.lightB = preset.lightB or 2
         State.FilterSettings.clockTime = preset.time or 14
+        
+        suppressFilterSettings = true
         syncSlidersFromSettings()
+        suppressFilterSettings = false
         
         notify("Visuals", filterName, 2, "palette")
     end
 end
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.41", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB V3.43", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -910,7 +1000,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.41", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "V3.43", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end)
 
 -- ================================ TAB: INFORMASI ================================
@@ -1038,22 +1128,39 @@ secPresets:Dropdown({ Title = "Select Filter", Values = { "Default", "Mendung HD
 
 -- ================================ FILTER SETTINGS ================================
 local secFS = TabCamVis:Section({ Title = "Filter Settings", Icon = "sliders", Box = true })
-State.FilterSliders.saturation = secFS:Slider({ Title = "Saturation", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.saturation = v; applyFilterSettings() end })
-State.FilterSliders.contrast = secFS:Slider({ Title = "Contrast", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.contrast = v; applyFilterSettings() end })
-State.FilterSliders.brightness = secFS:Slider({ Title = "Brightness", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.brightness = v; applyFilterSettings() end })
-State.FilterSliders.exposure = secFS:Slider({ Title = "Exposure", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.exposure = v; applyFilterSettings() end })
-State.FilterSliders.shade = secFS:Slider({ Title = "Shade (Bayangan)", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.shade = v; applyFilterSettings() end })
-State.FilterSliders.warmth = secFS:Slider({ Title = "Warmth (Suhu Warna)", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.warmth = v; applyFilterSettings() end })
-State.FilterSliders.vignette = secFS:Slider({ Title = "Vignette", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.vignette = v; applyFilterSettings() end })
-State.FilterSliders.bloomI = secFS:Slider({ Title = "Bloom Intensity", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) State.FilterSettings.bloomI = v; applyFilterSettings() end })
-State.FilterSliders.bloomS = secFS:Slider({ Title = "Bloom Size", Step = 1, Value = { Min = 0, Max = 56, Default = 24 }, Callback = function(v) State.FilterSettings.bloomS = v; applyFilterSettings() end })
-State.FilterSliders.lightB = secFS:Slider({ Title = "Lighting Brightness", Step = 0.5, Value = { Min = 0, Max = 10, Default = 2 }, Callback = function(v) State.FilterSettings.lightB = v; applyFilterSettings() end })
-State.FilterSliders.clockTime = secFS:Slider({ Title = "ClockTime", Step = 0.5, Value = { Min = 0, Max = 24, Default = 14 }, Callback = function(v) State.FilterSettings.clockTime = v; applyFilterSettings() end })
+
+local function updateFilterSetting(key, value)
+    State.FilterSettings[key] = value
+    if not suppressFilterSettings then
+        applyFilterSettings()
+    end
+end
+
+State.FilterSliders.saturation = secFS:Slider({ Title = "Saturation", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) updateFilterSetting("saturation", v) end })
+State.FilterSliders.contrast = secFS:Slider({ Title = "Contrast", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) updateFilterSetting("contrast", v) end })
+State.FilterSliders.brightness = secFS:Slider({ Title = "Brightness", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) updateFilterSetting("brightness", v) end })
+State.FilterSliders.exposure = secFS:Slider({ Title = "Exposure", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) updateFilterSetting("exposure", v) end })
+State.FilterSliders.shade = secFS:Slider({ Title = "Shade (Bayangan)", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) updateFilterSetting("shade", v) end })
+State.FilterSliders.warmth = secFS:Slider({ Title = "Warmth (Suhu Warna)", Step = 0.5, Value = { Min = -10, Max = 10, Default = 0 }, Callback = function(v) updateFilterSetting("warmth", v) end })
+State.FilterSliders.vignette = secFS:Slider({ Title = "Vignette", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) updateFilterSetting("vignette", v) end })
+State.FilterSliders.bloomI = secFS:Slider({ Title = "Bloom Intensity", Step = 0.5, Value = { Min = 0, Max = 10, Default = 0 }, Callback = function(v) updateFilterSetting("bloomI", v) end })
+State.FilterSliders.bloomS = secFS:Slider({ Title = "Bloom Size", Step = 1, Value = { Min = 0, Max = 56, Default = 24 }, Callback = function(v) updateFilterSetting("bloomS", v) end })
+State.FilterSliders.lightB = secFS:Slider({ Title = "Lighting Brightness", Step = 0.5, Value = { Min = 0, Max = 10, Default = originalLighting.Brightness }, Callback = function(v) updateFilterSetting("lightB", v) end })
+State.FilterSliders.clockTime = secFS:Slider({ Title = "ClockTime", Step = 0.5, Value = { Min = 0, Max = 24, Default = originalLighting.ClockTime }, Callback = function(v) updateFilterSetting("clockTime", v) end })
+
 secFS:Button({ Title = "Reset Filter Settings", Callback = function()
-    for k, v in pairs({saturation=0,contrast=0,brightness=0,exposure=0,shade=0,warmth=0,vignette=0,bloomI=0,bloomS=24,lightB=2,clockTime=14}) do State.FilterSettings[k] = v end
+    for k, v in pairs({
+        saturation = 0, contrast = 0, brightness = 0, exposure = 0,
+        shade = 0, warmth = 0, vignette = 0,
+        bloomI = 0, bloomS = 24,
+        lightB = originalLighting.Brightness or 2,
+        clockTime = originalLighting.ClockTime or 14
+    }) do State.FilterSettings[k] = v end
+    suppressFilterSettings = true
     syncSlidersFromSettings()
+    suppressFilterSettings = false
     applyFilterSettings()
-    notify("Filter", "Reset", 1.5, "rotate-ccw")
+    notify("Filter", "Reset ke Original", 1.5, "rotate-ccw")
 end })
 
 -- ================================ TAB: ESP ================================
@@ -1173,18 +1280,18 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.41 AKTIF", 3, "rocket")
+notify("System", "XKID_HUB V3.43 AKTIF — Filter Sync Fixed", 3, "rocket")
 
 end)  -- CLOSE ERROR WRAPPER
 
 if not ERROR_NOTIFY_OK and ERROR_MSG then
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "❌ XKID V3.41 ERROR",
+            Title = "❌ XKID V3.43 ERROR",
             Text = tostring(ERROR_MSG):sub(1, 300),
             Duration = 15,
             Icon = "rbxassetid://12187365364"
         })
     end)
-    warn("[XKID V3.41] Script error: " .. tostring(ERROR_MSG))
+    warn("[XKID V3.43] Script error: " .. tostring(ERROR_MSG))
 end
