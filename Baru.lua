@@ -134,8 +134,7 @@ local function CleanupAll()
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
     end)
 
-    collectgarbage("collect")
-end
+    pcall(function() collectgarbage("count") end)
 
 -- Jalankan pembersihan menyeluruh sebelum inisialisasi baru
 if getgenv()._XKID_LOADED then
