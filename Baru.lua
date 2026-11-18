@@ -1,6 +1,6 @@
--- @XKID SCRIPT V3.44
+-- @XKID SCRIPT FINAL
 -- by @WTF.XKID | Roblox Build For Mobile/PC
--- Changelog V3.44:
+-- Changelog FINAL:
 -- - FIXED: Complete Cleanup Engine (Zero leak, aman saat re-execute)
 -- - FIXED: Dark screen saat execute (EnvironmentScale restore)
 -- - FIXED: Filter Default reset ke originalLighting
@@ -242,7 +242,7 @@ local function formatTime(sec) local h = math.floor(sec/3600); local m = math.fl
 local function getConfigList() local list = {}; if executor.has_isfolder and executor.has_listfiles then pcall(function() if isfolder and isfolder("XKID_HUB") then for _, f in ipairs(listfiles("XKID_HUB")) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n then table.insert(list, n) end end end end end) end; if #list == 0 then table.insert(list, "No config") end; return list end
 local function isOnGround() local r = getRoot(); if not r then return false end; local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude; params.FilterDescendantsInstances = { LP.Character }; return workspace:Raycast(r.Position, Vector3.new(0,-5,0), params) ~= nil end
 
--- ================================ NOCLIP V3.44 ================================
+-- ================================ NOCLIP FINAL ================================
 local Noclip = false
 local NoclipConnection = nil
 local SavedCollision = {}
@@ -924,7 +924,7 @@ end
 local function stopHardFling() stopHardFlingInternal(); notify("Hard Fling", "OFF", 1.5, "rotate-cw") end
 TrackC(LP.CharacterAdded:Connect(function() if State.HardFling.active then stopHardFlingInternal() end end))
 
--- ================================ FILTERS V3.44 (DARK SCREEN FIX) ================================
+-- ================================ FILTERS FINAL (DARK SCREEN FIX) ================================
 local FILTER_PRESETS = {
     Mendung_HD = { tint = Color3.fromRGB(180,185,200), sat = -0.3, con = 0.1, bri = -0.15, bloomI = 0.05, bloomS = 24, time = 10, lightB = 0.7 },
     Cool_Blue_HD = { tint = Color3.fromRGB(180,200,255), sat = 0.1, con = 0.15, bri = 0.05, bloomI = 0.2, bloomS = 24, time = 12, lightB = 1.2 },
@@ -1126,7 +1126,7 @@ end
 
 -- ================================ UI WINDOW ================================
 local Window = WindUI:CreateWindow({
-    Title = "XKID_HUB V3.44", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
+    Title = "XKID_HUB FINAL", Icon = "bluetooth", Author = "@WTF.XKID", Folder = "XKIDHub",
     Size = UDim2.fromOffset(360, 320), Transparent = true, Theme = "Crimson", SideBarWidth = 160,
     User = { Enabled = true, Anonymous = false }, Topbar = { Height = 40, ButtonsType = "Default" },
 })
@@ -1135,7 +1135,7 @@ pcall(function() WindUI:SetNotificationLower(true) end)
 pcall(function() Window.User:SetDisplayName(LP.DisplayName); Window.User:SetUsername("@" .. LP.Name) end)
 Window:EditOpenButton({ Title = "WTF.XKID", Icon = "github", CornerRadius = UDim.new(1,0), StrokeThickness = 2, StrokeColor = Color3.fromRGB(255,70,120), Enabled = true, Draggable = true, Scale = 0.72 })
 local FpsTag = Window:Tag({ Title = "FPS: -- | Ping: --", Color = Color3.fromRGB(255,215,0), Icon = "activity" })
-local VerTag = Window:Tag({ Title = "V3.44", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
+local VerTag = Window:Tag({ Title = "FINAL", Color = Color3.fromRGB(255,215,0), Icon = "tag" })
 TrackT(task.spawn(function() while getgenv()._XKID_RUNNING do task.wait(1) if FpsTag and FpsTag.SetTitle then FpsTag:SetTitle("FPS: " .. sharedFPS .. " | Ping: " .. sharedPing .. "ms") end end end))
 
 -- ================================ TAB: INFORMASI ================================
@@ -1444,18 +1444,18 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.44 AKTIF — ", 3, "rocket")
+notify("System", "XKID_HUB AKTIF!!", 3, "rocket")
 
 end)  -- CLOSE ERROR WRAPPER
 
 if not ERROR_NOTIFY_OK and ERROR_MSG then
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "❌ XKID V3.44 ERROR",
+            Title = "❌ XKID FINAL ERROR",
             Text = tostring(ERROR_MSG):sub(1, 300),
             Duration = 15,
             Icon = "rbxassetid://12187365364"
         })
     end)
-    warn("[XKID V3.44] Script error: " .. tostring(ERROR_MSG))
+    warn("[XKID FINAL] Script error: " .. tostring(ERROR_MSG))
 end
