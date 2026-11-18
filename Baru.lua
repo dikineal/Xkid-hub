@@ -1329,9 +1329,17 @@ chatLogPanel = secChat:Paragraph({ Title = "Console", Desc = "Belum ada chat..."
 secChat:Button({ Title = "Clear Log", Callback = function() State.Utility.chatHistory = {}; pcall(function() chatLogPanel:SetDesc("Belum ada chat...") end); notify("Logger", "Log cleared", 1.5, "message-square") end })
 
 TrackT(task.spawn(function()
+    local lastMsgCache = {}
     local function onChat(senderName, senderDisplay, message)
         if not State.Utility.chatLog then return end
         if #State.Utility.chatTargets == 0 then return end
+
+        local key = senderName .. ":" .. tostring(message)
+        if lastMsgCache[key] and (tick() - lastMsgCache[key]) < 0.5 then
+            return
+        end
+        lastMsgCache[key] = tick()
+
         local csN = senderName:lower():match("^%s*(.-)%s*$")
         local csD = senderDisplay and senderDisplay:lower():match("^%s*(.-)%s*$") or ""
         for _, target in ipairs(State.Utility.chatTargets) do
@@ -1345,7 +1353,8 @@ TrackT(task.spawn(function()
             end
         end
     end
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
         pcall(function()
             TrackC(TextChatService.MessageReceived:Connect(function(msg)
                 if msg.TextSource then
@@ -1371,6 +1380,7 @@ TrackT(task.spawn(function()
             if p ~= LP then connectLegacyChat(p) end
         end))
     end
+end))
 
 TrackT(task.spawn(function()
     while getgenv()._XKID_RUNNING do
@@ -1434,7 +1444,7 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.44 AKTIF", 3, "rocket")
+notify("System", "XKID_HUB V3.44 AKTIF — ", 3, "rocket")
 
 end)  -- CLOSE ERROR WRAPPER
 
