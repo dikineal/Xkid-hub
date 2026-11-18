@@ -681,7 +681,7 @@ makeFCBtn("BtnRollL","L",UDim2.new(1,-156,0.5,-66),"rollLeft"); makeFCBtn("BtnRo
 makeFCBtn("BtnUp","↑",UDim2.new(1,-107,0.5,-110),"up"); makeFCBtn("BtnDown","↓",UDim2.new(1,-107,0.5,-22),"down")
 makeFCBtn("BtnZIn","+",UDim2.new(1,-156,0.5,-22),"zoomIn"); makeFCBtn("BtnZOut","-",UDim2.new(1,-58,0.5,-22),"zoomOut")
 
-local eyeBtn = Instance.new("TextButton", FCUI); eyeBtn.Size = UDim2.new(0,22,0,22); eyeBtn.Position = UDim2.new(1,-107,0.5,-66); eyeBtn.BackgroundColor3 = Color3.fromRGB(15,15,15); eyeBtn.BackgroundTransparency = 0.6; eyeBtn.Text = "👁"; eyeBtn.TextColor3 = Color3.fromRGB(255,255,255); eyeBtn.TextSize = 18; eyeBtn.Font = Enum.Font.GothamBold; eyeBtn.AutoButtonColor = false
+local eyeBtn = Instance.new("TextButton", FCUI); eyeBtn.Size = UDim2.new(0,44,0,44); eyeBtn.Position = UDim2.new(1,-107,0.5,-66); eyeBtn.BackgroundColor3 = Color3.fromRGB(15,15,15); eyeBtn.BackgroundTransparency = 0.6; eyeBtn.Text = "👁"; eyeBtn.TextColor3 = Color3.fromRGB(255,255,255); eyeBtn.TextSize = 18; eyeBtn.Font = Enum.Font.GothamBold; eyeBtn.AutoButtonColor = false
 Instance.new("UICorner", eyeBtn).CornerRadius = UDim.new(0,10)
 local es = Instance.new("UIStroke", eyeBtn); es.Color = Color3.fromRGB(220,20,60); es.Thickness = 2; es.Transparency = 0.5
 local function toggleFCEye() FC_UI_Hidden = not FC_UI_Hidden; eyeBtn.Text = FC_UI_Hidden and "👁‍🗨" or "👁"; for _, b in ipairs(fcButtons) do b.Visible = not FC_UI_Hidden end end
@@ -1345,13 +1345,33 @@ TrackT(task.spawn(function()
             end
         end
     end
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        pcall(function() TrackC(TextChatService.MessageReceived:Connect(function(msg) if msg.TextSource then local player = Players:GetPlayerByUserId(msg.TextSource.UserId); if player then onChat(player.Name, player.DisplayName, msg.Text) end end end)) end)
+        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        pcall(function()
+            TrackC(TextChatService.MessageReceived:Connect(function(msg)
+                if msg.TextSource then
+                    local player = Players:GetPlayerByUserId(msg.TextSource.UserId)
+                    if player then
+                        onChat(player.Name, player.DisplayName, msg.Text)
+                    end
+                end
+            end))
+        end)
+    else
+        local function connectLegacyChat(player)
+            pcall(function()
+                TrackC(player.Chatted:Connect(function(msg)
+                    onChat(player.Name, player.DisplayName, msg)
+                end))
+            end)
+        end
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LP then connectLegacyChat(p) end
+        end
+        TrackC(Players.PlayerAdded:Connect(function(p)
+            if p ~= LP then connectLegacyChat(p) end
+        end))
     end
-    local function connectLegacyChat(player) pcall(function() TrackC(player.Chatted:Connect(function(msg) onChat(player.Name, player.DisplayName, msg) end)) end) end
-    for _, p in pairs(Players:GetPlayers()) do if p ~= LP then connectLegacyChat(p) end end
-    TrackC(Players.PlayerAdded:Connect(function(p) if p ~= LP then connectLegacyChat(p) end end))
-end))
+
 TrackT(task.spawn(function()
     while getgenv()._XKID_RUNNING do
         task.wait(0.5)
@@ -1414,7 +1434,7 @@ secFile:Button({ Title = "Refresh Files", Callback = function() pcall(function()
 
 -- ================================ INIT ================================
 getgenv()._XKID_UI_LOADING = false
-notify("System", "XKID_HUB V3.44 AKTIF — Dark Screen Fixed", 3, "rocket")
+notify("System", "XKID_HUB V3.44 AKTIF", 3, "rocket")
 
 end)  -- CLOSE ERROR WRAPPER
 
